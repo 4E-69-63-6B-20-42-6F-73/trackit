@@ -12,8 +12,13 @@ scripts/flow/*/.flowconfig
 _SpecRunner.html
 __benchmarks__
 build/
+android/.gradle/
+android/app/build/
+android/local.properties
 remote-repo/
 coverage/
+test-results/
+playwright-report/
 .module-cache
 fixtures/dom/public/react-dom.js
 fixtures/dom/public/react.js
