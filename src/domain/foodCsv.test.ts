@@ -1,0 +1,23 @@
+import { describe, expect, it } from 'vitest'
+import { parseFoodCsv } from './foodCsv'
+
+describe('food CSV adapter', () => {
+    it('imports quoted names, nutrients, serving data, and favorites', () => {
+        const [food] = parseFoodCsv(
+            'name,brand,calories_per_100g,protein_per_100g,serving_name,serving_grams,favorite\n"Oats, rolled",Local,389,16.9,bowl,50,yes',
+        )
+        expect(food).toMatchObject({
+            name: 'Oats, rolled',
+            brand: 'Local',
+            servingName: 'bowl',
+            servingGrams: 50,
+            favorite: true,
+            per100g: { calories: 389, protein: 16.9 },
+        })
+    })
+
+    it('rejects missing required columns and invalid values', () => {
+        expect(() => parseFoodCsv('name\nOats')).toThrow('calories_per_100g')
+        expect(() => parseFoodCsv('name,calories_per_100g\nOats,nope')).toThrow('calories_per_100g')
+    })
+})

@@ -66,7 +66,7 @@ const jsxLayout = {
 }
 
 export default tseslint.config(
-    { ignores: ['dist', 'node_modules', 'coverage', '*.d.ts'] },
+    { ignores: ['dist', 'node_modules', 'coverage', 'android/**/build', '*.d.ts'] },
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
@@ -89,6 +89,10 @@ export default tseslint.config(
             ],
             'no-console': ['warn', { allow: ['warn', 'error'] }],
         },
+    },
+    {
+        files: ['scripts/**/*.mjs'],
+        languageOptions: { globals: globals.node },
     },
     prettierConfig,
     {

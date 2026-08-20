@@ -1,9 +1,6 @@
-import { ActionIcon, Badge, Button, Progress, Text } from '@mantine/core'
+import { ActionIcon, Alert, Badge, Button, Progress, Skeleton, Text } from '@mantine/core'
 import {
     IconActivity,
-    IconApple,
-    IconArrowUpRight,
-    IconChevronDown,
     IconChevronRight,
     IconDroplet,
     IconHeartRateMonitor,
@@ -17,48 +14,119 @@ import {
     AreaChart,
     CartesianGrid,
     ResponsiveContainer,
-    Tooltip as ChartTooltip,
+    Tooltip,
     XAxis,
     YAxis,
 } from 'recharts'
+import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { MetricCard } from '../components/MetricCard'
-import { eventVisual, trend } from '../domain/data'
+import { eventVisual } from '../domain/data'
+import { displayValue, type Observation } from '../domain/health'
 import type { JournalEvent } from '../domain/types'
+import { useTodayHealth } from '../hooks/useTodayHealth'
+
+const reading = (
+    record: Observation | null,
+    units: 'metric' | 'imperial' = 'metric',
+    empty = 'No reading today',
+) => {
+    if (!record) return empty
+    const displayUnit =
+        units === 'imperial' && record.canonicalUnit === 'kg' ? 'lb' : record.canonicalUnit
+    const value = displayValue(record.canonicalValue, record.canonicalUnit, displayUnit)
+    return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${displayUnit}`
+}
+
+const sleepReading = (record: Observation | null) => {
+    if (!record) return 'No sleep record'
+    const value = Math.round(
+        record.canonicalUnit === 'hours' ? record.canonicalValue * 60 : record.canonicalValue,
+    )
+    return `${Math.floor(value / 60)}h ${value % 60}m`
+}
+
+const percentage = (value: number, target?: number) =>
+    target && target > 0 ? Math.min(100, (value / target) * 100) : 0
 
 export function Today({
     events,
     insight,
     dismissInsight,
     openJournal,
+    openTrends,
 }: {
     events: JournalEvent[]
     insight: boolean
     dismissInsight: () => void
     openJournal: () => void
+    openTrends: () => void
 }) {
+    const health = useTodayHealth()
+    const now = new Date()
+    const locale = health.preferences?.locale
+    const timezone = health.preferences?.timezone
+    const localHour = Number(
+        new Intl.DateTimeFormat('en-US', {
+            timeZone: timezone,
+            hour: 'numeric',
+            hourCycle: 'h23',
+        }).format(now),
+    )
+    const stepsTarget = health.stepsGoal?.targetValue
+    const waterTarget = health.waterGoal?.targetValue
+
     return (
         <div className="page-content">
             <section className="welcome">
                 <div>
-                    <Text className="date">Thursday, 20 August</Text>
-                    <h1>Good afternoon, Nick.</h1>
-                    <Text className="subhead">Here’s the shape of your day so far.</Text>
+                    <Text className="date">
+                        {now.toLocaleDateString(locale, {
+                            timeZone: timezone,
+                            weekday: 'long',
+                            day: 'numeric',
+                            month: 'long',
+                        })}
+                    </Text>
+                    <h1>
+                        Good {localHour < 12 ? 'morning' : localHour < 18 ? 'afternoon' : 'evening'}
+                        {health.preferences?.displayName
+                            ? `, ${health.preferences.displayName}.`
+                            : '.'}
+                    </h1>
+                    <Text className="subhead">Here&apos;s the shape of your day so far.</Text>
                 </div>
-                <button className="date-button">
-                    Today
-                    <IconChevronDown size={15} />
-                </button>
             </section>
-            {insight && (
+            {health.unavailable && (
+                <Alert
+                    color="orange"
+                    title="Health data is unavailable"
+                    styles={{ title: { color: '#7a2e0b' } }}
+                >
+                    TrackIt could not load your observations. No representative values are shown.
+                </Alert>
+            )}
+            {insight && health.sleepBaseline && (
                 <section className="insight">
                     <div className="insight-icon">
                         <IconSparkles size={20} />
                     </div>
                     <div>
-                        <Text className="eyebrow teal-text">TODAY’S NOTE</Text>
-                        <Text fw={650}>You slept 42 minutes longer than your recent average.</Text>
+                        <Text className="eyebrow teal-text">TODAY&apos;S NOTE</Text>
+                        <Text fw={650}>
+                            Your sleep was{' '}
+                            {Math.abs(
+                                Math.round(
+                                    health.sleepToday?.canonicalUnit === 'hours'
+                                        ? health.sleepBaseline.delta * 60
+                                        : health.sleepBaseline.delta,
+                                ),
+                            )}{' '}
+                            minutes {health.sleepBaseline.delta >= 0 ? 'longer' : 'shorter'} than
+                            your rolling baseline.
+                        </Text>
                         <Text size="sm" c="dimmed">
-                            Your resting heart rate is also 3 bpm lower this morning.
+                            Calculated from {health.sleepBaseline.sampleSize} recorded days; missing
+                            days are excluded.
                         </Text>
                     </div>
                     <ActionIcon
@@ -72,37 +140,49 @@ export function Today({
                     </ActionIcon>
                 </section>
             )}
-            <section className="metric-grid">
-                <MetricCard
-                    icon={IconMoon}
-                    tone="indigo"
-                    label="Sleep"
-                    value="7h 38m"
-                    note="91% efficiency"
-                    delta="42m"
+            {health.loading ? (
+                <Skeleton
+                    role="status"
+                    height={124}
+                    radius="lg"
+                    aria-label="Loading today health data"
                 />
-                <MetricCard
-                    icon={IconHeartRateMonitor}
-                    tone="rose"
-                    label="Resting heart rate"
-                    value="58 bpm"
-                    note="Your 30-day range: 56–64"
-                />
-                <MetricCard
-                    icon={IconSparkles}
-                    tone="violet"
-                    label="Energy"
-                    value="8 / 10"
-                    note="Checked in at 12:40"
-                />
-                <MetricCard
-                    icon={IconScale}
-                    tone="blue"
-                    label="Weight"
-                    value="—"
-                    note="No reading today"
-                />
-            </section>
+            ) : (
+                <section className="metric-grid">
+                    <MetricCard
+                        icon={IconMoon}
+                        tone="indigo"
+                        label="Sleep"
+                        value={sleepReading(health.sleepToday)}
+                        note="Latest recorded sleep"
+                    />
+                    <MetricCard
+                        icon={IconHeartRateMonitor}
+                        tone="rose"
+                        label="Resting heart rate"
+                        value={reading(health.restingHeartRate)}
+                        note={
+                            health.restingBaseline
+                                ? `${Math.abs(Math.round(health.restingBaseline.delta))} bpm ${health.restingBaseline.delta <= 0 ? 'below' : 'above'} baseline`
+                                : 'No baseline available'
+                        }
+                    />
+                    <MetricCard
+                        icon={IconSparkles}
+                        tone="violet"
+                        label="Energy"
+                        value={reading(health.energy)}
+                        note="Latest check-in today"
+                    />
+                    <MetricCard
+                        icon={IconScale}
+                        tone="blue"
+                        label="Weight"
+                        value={reading(health.weight, health.preferences?.units)}
+                        note="Latest reading today"
+                    />
+                </section>
+            )}
             <section className="dashboard-grid">
                 <article className="panel movement">
                     <div className="panel-head">
@@ -111,6 +191,7 @@ export function Today({
                             <h2>Daily rhythm</h2>
                         </div>
                         <Button
+                            onClick={openTrends}
                             variant="subtle"
                             color="gray"
                             size="xs"
@@ -126,11 +207,21 @@ export function Today({
                                 Steps
                             </span>
                             <strong>
-                                7,240
-                                <small>of 10,000</small>
+                                {health.steps.toLocaleString()}
+                                <small>
+                                    {stepsTarget
+                                        ? `of ${stepsTarget.toLocaleString()}`
+                                        : 'no goal set'}
+                                </small>
                             </strong>
                         </div>
-                        <Progress value={72.4} color="teal" radius="xl" size="sm" />
+                        <Progress
+                            value={percentage(health.steps, stepsTarget)}
+                            color="trackit"
+                            radius="xl"
+                            size="sm"
+                            aria-label="Daily steps progress"
+                        />
                     </div>
                     <div className="progress-row">
                         <div className="progress-label">
@@ -139,23 +230,23 @@ export function Today({
                                 Water
                             </span>
                             <strong>
-                                1.6 L<small>of 2.4 L</small>
+                                {health.water.toLocaleString()} ml
+                                <small>
+                                    {waterTarget
+                                        ? `of ${waterTarget.toLocaleString()} ${health.waterGoal?.canonicalUnit ?? ''}`
+                                        : 'no goal set'}
+                                </small>
                             </strong>
                         </div>
-                        <Progress value={67} color="cyan" radius="xl" size="sm" />
+                        <Progress
+                            value={percentage(health.water, waterTarget)}
+                            color="cyan"
+                            radius="xl"
+                            size="sm"
+                            aria-label="Daily water progress"
+                        />
                     </div>
-                    <div className="progress-row">
-                        <div className="progress-label">
-                            <span>
-                                <IconApple size={18} />
-                                Protein
-                            </span>
-                            <strong>
-                                84 g<small>of 115 g</small>
-                            </strong>
-                        </div>
-                        <Progress value={73} color="orange" radius="xl" size="sm" />
-                    </div>
+                    <DailyNutritionPanel />
                 </article>
                 <article className="panel mini-chart">
                     <div className="panel-head">
@@ -163,54 +254,38 @@ export function Today({
                             <Text className="eyebrow">PAST 7 DAYS</Text>
                             <h2>Sleep duration</h2>
                         </div>
-                        <Badge
-                            variant="light"
-                            color="teal"
-                            leftSection={<IconArrowUpRight size={12} />}
-                        >
-                            +6%
-                        </Badge>
+                        {health.sleepBaseline && (
+                            <Badge variant="light" color="trackit">
+                                {health.sleepBaseline.delta >= 0 ? '+' : ''}
+                                {health.sleepToday?.canonicalUnit === 'hours'
+                                    ? `${Math.round(health.sleepBaseline.delta * 60)}m`
+                                    : `${Math.round(health.sleepBaseline.delta)}m`}
+                            </Badge>
+                        )}
                     </div>
                     <ResponsiveContainer width="100%" height={155}>
                         <AreaChart
-                            data={trend}
+                            data={health.sleepSeries}
                             margin={{ top: 12, right: 5, left: -30, bottom: 0 }}
                         >
-                            <defs>
-                                <linearGradient id="sleep" x1="0" y1="0" x2="0" y2="1">
-                                    <stop offset="0" stopColor="#486f69" stopOpacity={0.28} />
-                                    <stop offset="1" stopColor="#486f69" stopOpacity={0} />
-                                </linearGradient>
-                            </defs>
                             <CartesianGrid vertical={false} stroke="#ebe9e1" />
-                            <XAxis
-                                dataKey="day"
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fontSize: 11, fill: '#8a8d87' }}
-                            />
-                            <YAxis
-                                domain={[5, 9]}
-                                axisLine={false}
-                                tickLine={false}
-                                tick={{ fontSize: 11, fill: '#8a8d87' }}
-                            />
-                            <ChartTooltip
-                                contentStyle={{
-                                    borderRadius: 10,
-                                    border: '1px solid #e3e0d7',
-                                    fontSize: 12,
-                                }}
-                            />
+                            <XAxis dataKey="day" axisLine={false} tickLine={false} />
+                            <YAxis axisLine={false} tickLine={false} />
+                            <Tooltip />
                             <Area
                                 type="monotone"
                                 dataKey="sleep"
+                                connectNulls={false}
                                 stroke="#38645e"
-                                strokeWidth={2.5}
-                                fill="url(#sleep)"
+                                fill="#486f6947"
                             />
                         </AreaChart>
                     </ResponsiveContainer>
+                    {!health.sleepSeries.some(point => point.sleep !== null) && (
+                        <Text size="sm" c="dimmed">
+                            No sleep observations in this period.
+                        </Text>
+                    )}
                 </article>
             </section>
             <section className="panel timeline">

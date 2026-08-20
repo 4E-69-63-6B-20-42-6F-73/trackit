@@ -1,12 +1,18 @@
 import { useState } from 'react'
-import { Button, Modal, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { Modal, Stack, Text } from '@mantine/core'
 import {
     IconChevronRight,
     IconDatabase,
     IconSettings,
+    IconShieldLock,
     IconTrendingUp,
     IconUser,
 } from '@tabler/icons-react'
+import { SecurityPanel } from '../components/SecurityPanel'
+import { GoalsPanel } from '../components/GoalsPanel'
+import { BackupPanel } from '../components/BackupPanel'
+import { PrivacyPanel } from '../components/PrivacyPanel'
+import { PreferencesPanel } from '../components/PreferencesPanel'
 
 export function Settings() {
     const [active, setActive] = useState<string | null>(null)
@@ -14,6 +20,7 @@ export function Settings() {
         ['Profile & units', 'Timezone, locale and measurement units', IconUser],
         ['Goals', 'Optional daily targets and ranges', IconTrendingUp],
         ['Privacy & retention', 'Data categories, retention and deletion', IconDatabase],
+        ['Security', 'Passkeys, sessions and access history', IconShieldLock],
         ['System', 'Backups, updates and diagnostics', IconSettings],
     ] as const
     return (
@@ -40,32 +47,21 @@ export function Settings() {
             <Modal opened={!!active} onClose={() => setActive(null)} title={active} centered>
                 <Stack>
                     {active === 'Profile & units' ? (
-                        <>
-                            <TextInput label="Display name" defaultValue="Nick" />
-                            <Select
-                                label="Units"
-                                defaultValue="Metric"
-                                data={['Metric', 'Imperial']}
-                            />
-                            <Select
-                                label="Timezone"
-                                defaultValue="Europe/Amsterdam"
-                                data={['Europe/Amsterdam', 'UTC', 'America/New_York']}
-                            />
-                        </>
+                        <PreferencesPanel onSaved={() => setActive(null)} />
                     ) : active === 'Goals' ? (
-                        <>
-                            <NumberInput label="Daily steps" defaultValue={10000} />
-                            <NumberInput label="Water" defaultValue={2400} suffix=" ml" />
-                            <NumberInput label="Protein" defaultValue={115} suffix=" g" />
-                        </>
+                        <GoalsPanel />
+                    ) : active === 'Security' ? (
+                        <SecurityPanel />
+                    ) : active === 'Privacy & retention' ? (
+                        <PrivacyPanel />
+                    ) : active === 'System' ? (
+                        <BackupPanel />
                     ) : (
                         <Text size="sm" c="dimmed">
                             This control will be connected to the self-hosted server configuration
                             in the backend phase.
                         </Text>
                     )}
-                    <Button onClick={() => setActive(null)}>Save changes</Button>
                 </Stack>
             </Modal>
         </div>

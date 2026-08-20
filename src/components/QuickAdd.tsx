@@ -13,16 +13,20 @@ import {
 import { IconSearch } from '@tabler/icons-react'
 import type { JournalEvent } from '../domain/types'
 
+export type QuickAddKind = 'Meal' | 'Water' | 'Weight' | 'Check-in'
+
 export function QuickAdd({
     opened,
     close,
     add,
+    initialKind,
 }: {
     opened: boolean
     close: () => void
     add: (event: JournalEvent) => void
+    initialKind?: QuickAddKind
 }) {
-    const [kind, setKind] = useState('Meal')
+    const [kind, setKind] = useState<QuickAddKind>(initialKind ?? 'Meal')
     const [meal, setMeal] = useState('Lunch')
     const [description, setDescription] = useState('')
     const [amount, setAmount] = useState<number | string>(250)
@@ -48,6 +52,12 @@ export function QuickAdd({
                 title: 'Water',
                 detail: `${amount || 0} ml`,
                 source: 'You',
+                observation: {
+                    metric: 'water',
+                    value: Number(amount) || 0,
+                    unit: 'ml',
+                    observedAt: new Date().toISOString(),
+                },
             }
         else if (kind === 'Weight')
             event = {
@@ -57,6 +67,12 @@ export function QuickAdd({
                 title: 'Weight',
                 detail: `${amount || 0} kg`,
                 source: 'You',
+                observation: {
+                    metric: 'weight',
+                    value: Number(amount) || 0,
+                    unit: 'kg',
+                    observedAt: new Date().toISOString(),
+                },
             }
         else
             event = {
@@ -66,6 +82,12 @@ export function QuickAdd({
                 title: 'Energy check-in',
                 detail: `${energy?.split(' ')[0] || 5} out of 10${note ? ` · ${note}` : ''}`,
                 source: 'You',
+                observation: {
+                    metric: 'energy',
+                    value: Number(energy?.split(' ')[0]) || 5,
+                    unit: 'score',
+                    observedAt: new Date().toISOString(),
+                },
             }
         add(event)
         setDescription('')
@@ -78,6 +100,7 @@ export function QuickAdd({
             onClose={close}
             centered
             radius="lg"
+            closeButtonProps={{ 'aria-label': 'Close quick add' }}
             title={
                 <div>
                     <Text fw={700} size="lg">
@@ -93,7 +116,7 @@ export function QuickAdd({
                 <SegmentedControl
                     fullWidth
                     value={kind}
-                    onChange={setKind}
+                    onChange={value => setKind(value as QuickAddKind)}
                     data={['Meal', 'Water', 'Weight', 'Check-in']}
                 />
                 {kind === 'Meal' && (
@@ -165,8 +188,14 @@ export function QuickAdd({
                     <Button variant="subtle" color="gray" onClick={close}>
                         Cancel
                     </Button>
-                    <Button color="teal" onClick={submit}>
-                        Add to journal
+                    <Button color="trackit" onClick={submit}>
+                        {kind === 'Water'
+                            ? `Log ${amount || 0} ml`
+                            : kind === 'Weight'
+                              ? 'Save weight'
+                              : kind === 'Check-in'
+                                ? 'Save check-in'
+                                : 'Save meal'}
                     </Button>
                 </Group>
             </Stack>

@@ -1,0 +1,144 @@
+import { readFile } from 'node:fs/promises'
+import { PGlite } from '@electric-sql/pglite'
+import { drizzle } from 'drizzle-orm/pglite'
+import { describe, expect, it } from 'vitest'
+import * as schema from '../db/schema.js'
+import { McpAccessService } from './service.js'
+
+const migrations = [
+    '0000_handy_rattler.sql',
+    '0001_noisy_leo.sql',
+    '0002_mute_drax.sql',
+    '0003_chief_lord_tyger.sql',
+    '0004_strange_mephistopheles.sql',
+    '0005_warm_mongoose.sql',
+    '0006_mighty_micromacro.sql',
+    '0007_huge_mandarin.sql',
+    '0008_public_mephistopheles.sql',
+    '0009_nappy_alex_power.sql',
+    '0010_nice_masked_marvel.sql',
+]
+
+describe('MCP client access', () => {
+    it('is disabled by default and immediately rejects a revoked scoped credential', async () => {
+        const client = new PGlite()
+        for (const file of migrations) {
+            const migration = await readFile(`server/db/migrations/${file}`, 'utf8')
+            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
+        }
+        const database = drizzle(client, { schema })
+        const service = new McpAccessService(database as never)
+        const expiresAt = new Date(Date.now() + 60_000).toISOString()
+
+        expect(await service.list()).toHaveLength(0)
+        await service.setEnabled(true)
+        expect(await service.list()).toHaveLength(0)
+        await service.setEnabled(false)
+
+        const issued = await service.issue({
+            name: 'Assistant',
+            scopes: ['meals'],
+            expiresAt,
+        })
+        expect(await service.authenticate(issued.token)).toBeNull()
+
+        await service.setEnabled(true)
+        const authenticated = await service.authenticate(issued.token)
+        expect(authenticated).toMatchObject({ name: 'Assistant', scopes: ['meals'] })
+        await service.auditRequest(authenticated!, 'list_meals')
+        expect(await service.listAccessEvents()).toEqual([
+            expect.objectContaining({
+                actor: `mcp:${authenticated!.id}`,
+                action: 'mcp.request',
+                targetId: 'list_meals',
+            }),
+        ])
+
+        await service.revoke(issued.client.id)
+        expect(await service.authenticate(issued.token)).toBeNull()
+        await client.close()
+    })
+
+    it('deduplicates actions and binds one-time confirmations to client, action, and target', async () => {
+        const client = new PGlite()
+        for (const file of migrations) {
+            const migration = await readFile(`server/db/migrations/${file}`, 'utf8')
+            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
+        }
+        const database = drizzle(client, { schema })
+        const service = new McpAccessService(database as never)
+        await service.setEnabled(true)
+        const issued = await service.issue({
+            name: 'Writer',
+            scopes: ['checkins:write', 'journal:delete'],
+            expiresAt: new Date(Date.now() + 60_000).toISOString(),
+        })
+        const authenticated = (await service.authenticate(issued.token))!
+        let calls = 0
+        const first = await service.runIdempotent(
+            authenticated,
+            'checkin',
+            'same-key',
+            async () => ({
+                sequence: ++calls,
+            }),
+        )
+        const retry = await service.runIdempotent(
+            authenticated,
+            'checkin',
+            'same-key',
+            async () => ({
+                sequence: ++calls,
+            }),
+        )
+        expect(first).toEqual({ result: { sequence: 1 }, duplicate: false })
+        expect(retry).toEqual({ result: { sequence: 1 }, duplicate: true })
+        expect(calls).toBe(1)
+
+        const confirmation = await service.issueConfirmation(
+            authenticated,
+            'delete_journal',
+            'record-one',
+        )
+        expect(
+            await service.consumeConfirmation(
+                authenticated,
+                confirmation.token,
+                'delete_journal',
+                'record-two',
+            ),
+        ).toBe(false)
+        expect(
+            await service.consumeConfirmation(
+                authenticated,
+                confirmation.token,
+                'delete_journal',
+                'record-one',
+            ),
+        ).toBe(true)
+        expect(
+            await service.consumeConfirmation(
+                authenticated,
+                confirmation.token,
+                'delete_journal',
+                'record-one',
+            ),
+        ).toBe(false)
+
+        const revokedConfirmation = await service.issueConfirmation(
+            authenticated,
+            'delete_journal',
+            'record-after-revocation',
+        )
+        await service.revoke(authenticated.id)
+        expect(
+            await service.consumeConfirmation(
+                authenticated,
+                revokedConfirmation.token,
+                'delete_journal',
+                'record-after-revocation',
+            ),
+        ).toBe(false)
+        await client.close()
+    })
+})

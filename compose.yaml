@@ -1,0 +1,44 @@
+services:
+    app:
+        build: .
+        restart: unless-stopped
+        environment:
+            HOST: 0.0.0.0
+            PORT: 3000
+            DATABASE_URL: postgres://trackit:${TRACKIT_DB_PASSWORD:-trackit}@db:5432/trackit
+            WEB_ORIGIN: ${TRACKIT_ORIGIN:-http://localhost:3000}
+            TRUST_PROXY: ${TRACKIT_TRUST_PROXY:-false}
+            BACKUPS_ENABLED: ${TRACKIT_BACKUPS_ENABLED:-false}
+            BACKUP_ENCRYPTION_KEY: ${TRACKIT_BACKUP_KEY:-}
+            BACKUP_DIR: /backups
+        ports:
+            - '${TRACKIT_PORT:-3000}:3000'
+        depends_on:
+            db:
+                condition: service_healthy
+        healthcheck:
+            test: ['CMD', 'wget', '--spider', '-q', 'http://localhost:3000/api/health']
+            interval: 10s
+            timeout: 5s
+            retries: 10
+        volumes:
+            - trackit-backups:/backups
+
+    db:
+        image: postgres:17-alpine
+        restart: unless-stopped
+        environment:
+            POSTGRES_DB: trackit
+            POSTGRES_USER: trackit
+            POSTGRES_PASSWORD: ${TRACKIT_DB_PASSWORD:-trackit}
+        volumes:
+            - trackit-data:/var/lib/postgresql/data
+        healthcheck:
+            test: ['CMD-SHELL', 'pg_isready -U trackit -d trackit']
+            interval: 5s
+            timeout: 5s
+            retries: 10
+
+volumes:
+    trackit-data:
+    trackit-backups:

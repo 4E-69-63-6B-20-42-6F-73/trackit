@@ -23,7 +23,7 @@ export const trend = [
 
 export const initialEvents: JournalEvent[] = [
     {
-        id: 'energy',
+        id: '10000000-0000-4000-8000-000000000001',
         time: '12:40',
         category: 'Check-ins',
         title: 'Energy check-in',
@@ -31,7 +31,7 @@ export const initialEvents: JournalEvent[] = [
         source: 'You',
     },
     {
-        id: 'walk',
+        id: '10000000-0000-4000-8000-000000000002',
         time: '09:02',
         category: 'Activity',
         title: 'Morning walk',
@@ -39,7 +39,7 @@ export const initialEvents: JournalEvent[] = [
         source: 'Health Connect',
     },
     {
-        id: 'breakfast',
+        id: '10000000-0000-4000-8000-000000000003',
         time: '08:10',
         category: 'Meals',
         title: 'Breakfast',
@@ -47,7 +47,7 @@ export const initialEvents: JournalEvent[] = [
         source: 'You',
     },
     {
-        id: 'sleep',
+        id: '10000000-0000-4000-8000-000000000004',
         time: '07:48',
         category: 'Sleep',
         title: 'Sleep',
@@ -69,6 +69,7 @@ export const eventVisual = (category: Category) =>
 
 export const nav: { label: Page; icon: typeof IconDashboard }[] = [
     { label: 'Today', icon: IconDashboard },
+    { label: 'Nutrition', icon: IconApple },
     { label: 'Journal', icon: IconNotes },
     { label: 'Trends', icon: IconTrendingUp },
     { label: 'Connections', icon: IconLink },

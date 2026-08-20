@@ -1,6 +1,6 @@
 # TrackIt — Iteration Plan
 
-Status: working delivery plan
+Status: Iterations 0–11 implemented; release gates remain mandatory
 
 This plan turns the product design into small, reviewable increments. Each iteration should end with a usable application, a short demonstration, passing checks, and an explicit decision to continue or adjust.
 
@@ -447,6 +447,6 @@ These features should not interrupt the core sequence unless user validation cha
 | Controlled automation |         10 | Are write grants and confirmations understandable and safe?               |
 | Public release        |         11 | Is the application supportable as a long-lived self-hosted product?       |
 
-## Immediate next iteration
+## Current release gate
 
-Proceed with Iteration 1. It reduces the risk of every later change and gives us routing, tests, a coherent theme, and maintainable feature boundaries before server contracts make the frontend structure more expensive to change.
+Iterations 0–11 are implemented. Before publishing any version, run the local verification commands and the environment-dependent PostgreSQL, clean-restore, container-build, container-scan, and signed Android gates defined in `docs/DELIVERY_EVIDENCE.md`. Any failed criterion reopens its owning iteration; passing a narrower check never substitutes for the full release gate.

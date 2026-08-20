@@ -1,0 +1,34 @@
+import { describe, expect, it } from 'vitest'
+import { ExportService } from './export.js'
+
+describe('portable export', () => {
+    it('emits a versioned complete JSON snapshot and deterministic CSV envelope', async () => {
+        const data = {
+            listSources: async () => [{ id: 'source', name: 'Health Connect' }],
+            listObservations: async () => [{ id: 'observation' }],
+            listMeals: async () => [{ id: 'meal', nutrientSnapshot: { protein: 20 } }],
+            getPreferences: async () => ({ timezone: 'Europe/Amsterdam' }),
+            listFoods: async () => [{ id: 'food' }],
+            listRecipes: async () => [{ id: 'recipe' }],
+            listGoals: async () => [{ id: 'goal' }],
+            listSavedTrendViews: async () => [{ id: 'view' }],
+        }
+        const journal = { list: async () => [{ id: 'journal' }] }
+        const service = new ExportService(data as never, journal as never)
+        const snapshot = await service.snapshot()
+
+        expect(snapshot).toMatchObject({
+            schema: 'net.trackit.export',
+            version: 1,
+            data: {
+                journal: [{ id: 'journal' }],
+                observations: [{ id: 'observation' }],
+                meals: [{ id: 'meal', nutrientSnapshot: { protein: 20 } }],
+                sources: [{ id: 'source', name: 'Health Connect' }],
+            },
+        })
+        const csv = await service.csv()
+        expect(csv.split('\n')[0]).toBe('"collection","record"')
+        expect(csv).toContain('"observations"')
+    })
+})

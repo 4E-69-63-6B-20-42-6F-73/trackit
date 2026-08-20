@@ -1,0 +1,1 @@
+ALTER TABLE "saved_trend_views" ADD COLUMN "granularity" text DEFAULT 'daily' NOT NULL;

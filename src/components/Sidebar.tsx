@@ -39,6 +39,8 @@ export function Sidebar({
             <nav>
                 {nav.map(({ label, icon: Icon }) => (
                     <button
+                        aria-label={label}
+                        aria-current={page === label ? 'page' : undefined}
                         className={`nav-item ${page === label ? 'active' : ''}`}
                         key={label}
                         onClick={() => setPage(label)}
@@ -50,6 +52,8 @@ export function Sidebar({
             </nav>
             <div className="sidebar-foot">
                 <button
+                    aria-label="Settings"
+                    aria-current={page === 'Settings' ? 'page' : undefined}
                     className={`nav-item ${page === 'Settings' ? 'active' : ''}`}
                     onClick={() => setPage('Settings')}
                 >

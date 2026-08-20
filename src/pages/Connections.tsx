@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Badge, Button, Modal, Stack, Switch, Text, TextInput } from '@mantine/core'
+import { Alert, Badge, Button, Modal, Stack, Text } from '@mantine/core'
 import {
     IconArrowDownRight,
     IconChevronRight,
@@ -8,26 +8,25 @@ import {
     IconDeviceMobile,
     IconTools,
 } from '@tabler/icons-react'
-import type { JournalEvent } from '../domain/types'
+import { McpPanel } from '../components/McpPanel'
+import { DevicePanel } from '../components/DevicePanel'
+import { downloadExport } from '../lib/lifecycleApi'
 
-export function Connections({ events }: { events: JournalEvent[] }) {
+export function Connections() {
     const [dialog, setDialog] = useState<'health' | 'mcp' | 'export' | null>(null)
-    const [mcp, setMcp] = useState(() => localStorage.getItem('trackit-mcp') === 'true')
-    const toggleMcp = (value: boolean) => {
-        setMcp(value)
-        localStorage.setItem('trackit-mcp', String(value))
-    }
-    const exportData = () => {
-        const blob = new Blob(
-            [JSON.stringify({ version: 1, exportedAt: new Date().toISOString(), events }, null, 2)],
-            { type: 'application/json' },
-        )
-        const url = URL.createObjectURL(blob)
-        const link = document.createElement('a')
-        link.href = url
-        link.download = 'trackit-export.json'
-        link.click()
-        URL.revokeObjectURL(url)
+    const [mcp, setMcp] = useState(false)
+    const [exportError, setExportError] = useState('')
+    const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
+    const exportData = async (format: 'json' | 'csv') => {
+        setExporting(format)
+        setExportError('')
+        try {
+            await downloadExport(format)
+        } catch {
+            setExportError('The export could not be downloaded. Try again.')
+        } finally {
+            setExporting(null)
+        }
     }
     const cards = [
         {
@@ -72,7 +71,7 @@ export function Connections({ events }: { events: JournalEvent[] }) {
                             <h2>{title}</h2>
                             <Badge
                                 variant="light"
-                                color={status === 'Enabled' || i === 2 ? 'teal' : 'gray'}
+                                color={status === 'Enabled' || i === 2 ? 'trackit' : 'gray'}
                             >
                                 {status}
                             </Badge>
@@ -84,7 +83,7 @@ export function Connections({ events }: { events: JournalEvent[] }) {
                             <Button
                                 onClick={() => setDialog(key)}
                                 variant={i === 0 ? 'filled' : 'default'}
-                                color="teal"
+                                color="trackit"
                             >
                                 {i === 0 ? 'Set up' : 'Manage'}
                             </Button>
@@ -109,13 +108,7 @@ export function Connections({ events }: { events: JournalEvent[] }) {
                 title="Health Connect"
                 centered
             >
-                <Stack>
-                    <Text size="sm">
-                        Health Connect is stored on your Android device. Pairing requires the
-                        TrackIt Android companion, which will be built in the next platform phase.
-                    </Text>
-                    <Button disabled>Generate pairing code</Button>
-                </Stack>
+                <DevicePanel />
             </Modal>
             <Modal
                 opened={dialog === 'mcp'}
@@ -123,25 +116,7 @@ export function Connections({ events }: { events: JournalEvent[] }) {
                 title="MCP server"
                 centered
             >
-                <Stack>
-                    <Text size="sm" c="dimmed">
-                        Expose read-only health tools to explicitly authorized MCP clients. No token
-                        is issued until the server backend is configured.
-                    </Text>
-                    <Switch
-                        checked={mcp}
-                        onChange={e => toggleMcp(e.currentTarget.checked)}
-                        label="Enable MCP endpoint"
-                        description="Read-only by default"
-                    />
-                    <TextInput
-                        readOnly
-                        value={
-                            mcp ? 'http://localhost:3000/mcp' : 'Enable the endpoint to see its URL'
-                        }
-                        label="Endpoint"
-                    />
-                </Stack>
+                <McpPanel onEnabledChange={setMcp} />
             </Modal>
             <Modal
                 opened={dialog === 'export'}
@@ -151,12 +126,24 @@ export function Connections({ events }: { events: JournalEvent[] }) {
             >
                 <Stack>
                     <Text size="sm" c="dimmed">
-                        Download a portable JSON copy of all journal records currently stored in
-                        this browser.
+                        Download a versioned portable copy of journal, health, nutrition, goals, and
+                        preferences from your server.
                     </Text>
-                    <Button onClick={exportData} leftSection={<IconArrowDownRight size={17} />}>
+                    <Button
+                        loading={exporting === 'json'}
+                        onClick={() => void exportData('json')}
+                        leftSection={<IconArrowDownRight size={17} />}
+                    >
                         Download JSON export
                     </Button>
+                    <Button
+                        variant="default"
+                        loading={exporting === 'csv'}
+                        onClick={() => void exportData('csv')}
+                    >
+                        Download CSV export
+                    </Button>
+                    {exportError && <Alert color="orange">{exportError}</Alert>}
                 </Stack>
             </Modal>
         </div>

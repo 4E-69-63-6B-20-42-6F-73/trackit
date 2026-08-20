@@ -1,4 +1,4 @@
-import { Badge, Text } from '@mantine/core'
+import { Badge, Button, Text } from '@mantine/core'
 import { IconArrowUpRight } from '@tabler/icons-react'
 import type { IconMoon } from '@tabler/icons-react'
 
@@ -9,6 +9,7 @@ export function MetricCard({
     note,
     delta,
     tone,
+    action,
 }: {
     icon: typeof IconMoon
     label: string
@@ -16,6 +17,10 @@ export function MetricCard({
     note: string
     delta?: string
     tone: string
+    action?: {
+        label: string
+        onClick: () => void
+    }
 }) {
     return (
         <article className="metric-card">
@@ -27,7 +32,7 @@ export function MetricCard({
                 {delta && (
                     <Badge
                         variant="light"
-                        color="teal"
+                        color="trackit"
                         size="sm"
                         leftSection={<IconArrowUpRight size={11} />}
                     >
@@ -35,7 +40,19 @@ export function MetricCard({
                     </Badge>
                 )}
             </div>
-            <Text className="metric-value">{value}</Text>
+            {action ? (
+                <Button
+                    className="metric-action"
+                    onClick={action.onClick}
+                    variant="subtle"
+                    color="trackit"
+                    size="compact-sm"
+                >
+                    {action.label}
+                </Button>
+            ) : (
+                <Text className="metric-value">{value}</Text>
+            )}
             <Text className="metric-note">{note}</Text>
         </article>
     )

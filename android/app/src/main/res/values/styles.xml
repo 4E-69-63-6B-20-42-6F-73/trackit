@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.TrackIt" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#38645e</item>
+    </style>
+</resources>
