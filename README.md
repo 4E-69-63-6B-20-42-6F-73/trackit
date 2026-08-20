@@ -19,7 +19,10 @@ Production build:
 npm run build
 ```
 
-The product and architecture proposal is in `docs/PRODUCT_DESIGN.md`.
+Planning documents:
+
+- `docs/PRODUCT_DESIGN.md` — product, UX, architecture, and security direction.
+- `docs/ITERATION_PLAN.md` — implementation increments and acceptance criteria.
 
 ## Current boundaries
 

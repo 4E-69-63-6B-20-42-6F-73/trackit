@@ -1,34 +1,40 @@
 {
-  "name": "trackit",
-  "private": true,
-  "version": "0.1.0",
-  "type": "module",
-  "scripts": {
-    "dev": "vite",
-    "build": "tsc -b && vite build",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
-  "dependencies": {
-    "@mantine/core": "latest",
-    "@mantine/hooks": "latest",
-    "@tabler/icons-react": "latest",
-    "dayjs": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "recharts": "latest"
-  },
-  "devDependencies": {
-    "@eslint/js": "latest",
-    "@types/react": "latest",
-    "@types/react-dom": "latest",
-    "@vitejs/plugin-react": "latest",
-    "eslint": "latest",
-    "eslint-plugin-react-hooks": "latest",
-    "eslint-plugin-react-refresh": "latest",
-    "globals": "latest",
-    "typescript": "latest",
-    "typescript-eslint": "latest",
-    "vite": "latest"
-  }
+    "name": "trackit",
+    "private": true,
+    "version": "0.1.0",
+    "type": "module",
+    "scripts": {
+        "dev": "vite",
+        "build": "tsc -b && vite build",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write .",
+        "format:check": "prettier --check .",
+        "check": "npm run format:check && npm run lint && npm run build",
+        "preview": "vite preview"
+    },
+    "dependencies": {
+        "@mantine/core": "latest",
+        "@mantine/hooks": "latest",
+        "@tabler/icons-react": "latest",
+        "dayjs": "latest",
+        "react": "latest",
+        "react-dom": "latest",
+        "recharts": "latest"
+    },
+    "devDependencies": {
+        "@eslint/js": "latest",
+        "@types/react": "latest",
+        "@types/react-dom": "latest",
+        "@vitejs/plugin-react": "latest",
+        "eslint": "latest",
+        "eslint-config-prettier": "^10.1.8",
+        "eslint-plugin-react-hooks": "latest",
+        "eslint-plugin-react-refresh": "latest",
+        "globals": "latest",
+        "prettier": "^3.9.6",
+        "typescript": "latest",
+        "typescript-eslint": "latest",
+        "vite": "latest"
+    }
 }

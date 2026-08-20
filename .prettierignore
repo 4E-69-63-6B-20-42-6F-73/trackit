@@ -1,0 +1,7 @@
+node_modules
+dist
+coverage
+package-lock.json
+*.tsbuildinfo
+vite.config.js
+vite.config.d.ts

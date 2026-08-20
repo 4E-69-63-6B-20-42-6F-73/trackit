@@ -1,1 +1,1 @@
-{"root":["./src/app.tsx","./src/main.tsx"],"version":"6.0.3"}
+{"root":["./src/app.tsx","./src/main.tsx","./src/components/header.tsx","./src/components/metriccard.tsx","./src/components/quickadd.tsx","./src/components/sidebar.tsx","./src/domain/data.ts","./src/domain/types.ts","./src/pages/connections.tsx","./src/pages/journal.tsx","./src/pages/settings.tsx","./src/pages/today.tsx","./src/pages/trends.tsx"],"version":"6.0.3"}

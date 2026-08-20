@@ -367,4 +367,3 @@ Exit: MCP clients can answer bounded questions with traceable data, and all acce
 3. Which five imported categories matter most to the first users? Proposed: steps, sleep, weight, heart rate, and exercise.
 4. Should nutrition begin with manual/local foods only, or ship with an external food catalog adapter? Recommendation: local-first with an optional adapter.
 5. Should MCP ship read-only initially? Recommendation: yes, then add separately scoped writes after review.
-
