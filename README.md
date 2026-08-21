@@ -41,6 +41,8 @@ docker compose up --build
 ```
 
 Production installations must use HTTPS. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+For a Proxmox VM or LXC deployment, follow [docs/PROXMOX.md](docs/PROXMOX.md); a fresh VM can create
+its secrets and start the complete stack with one bootstrap command.
 Backup, restore, export, retention, and deletion are documented in
 [docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md).
 

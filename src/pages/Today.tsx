@@ -300,8 +300,10 @@ export function Today({
                 <article className="panel movement">
                     <div className="panel-head">
                         <div>
-                            <Text className="eyebrow">TODAY</Text>
-                            <h2>Daily rhythm</h2>
+                            <h2>Today’s progress</h2>
+                            <Text size="xs" c="dimmed">
+                                Daily totals against your optional goals
+                            </Text>
                         </div>
                         <Button
                             onClick={openTrends}
@@ -310,7 +312,7 @@ export function Today({
                             size="xs"
                             rightSection={<IconChevronRight size={14} />}
                         >
-                            Details
+                            View trends
                         </Button>
                     </div>
                     <div className="progress-row">
@@ -381,7 +383,7 @@ export function Today({
                             </Button>
                         )}
                     </div>
-                    <DailyNutritionPanel />
+                    <DailyNutritionPanel openGoals={openGoals} />
                 </article>
                 <article className="panel mini-chart">
                     <div className="panel-head">

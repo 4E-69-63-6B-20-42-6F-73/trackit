@@ -50,7 +50,7 @@ describe('Today', () => {
         expect(screen.queryByLabelText('Daily water progress')).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Check in now' })).toBeInTheDocument()
         expect(screen.getByText('No sleep trend yet')).toBeInTheDocument()
-        await userEvent.click(screen.getByRole('button', { name: 'Details' }))
+        await userEvent.click(screen.getByRole('button', { name: 'View trends' }))
         expect(openTrends).toHaveBeenCalledOnce()
     })
 })

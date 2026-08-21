@@ -112,7 +112,6 @@ export function GoalsPanel() {
         () => goals.filter(goal => goal.effectiveTo && new Date(goal.effectiveTo) <= new Date()),
         [goals],
     )
-    const selectedMetricAlreadyActive = activeGoals.some(goal => goal.metric === metric)
     const invalidDateRange = Boolean(effectiveTo && effectiveTo < effectiveDate)
 
     const save = async (event: FormEvent) => {
@@ -210,13 +209,6 @@ export function GoalsPanel() {
                             data={weekdays}
                             styles={{ description: { color: '#5b615b' } }}
                         />
-                        {selectedMetricAlreadyActive && (
-                            <Alert color="orange">
-                                An active {selectedDefinition?.label.toLowerCase()} goal already
-                                exists. Retire it before adding a replacement so progress stays
-                                unambiguous.
-                            </Alert>
-                        )}
                         {invalidDateRange && (
                             <Alert color="orange">
                                 The end date must be on or after the start date.
@@ -225,12 +217,7 @@ export function GoalsPanel() {
                         <Button
                             type="submit"
                             loading={saving}
-                            disabled={
-                                !metric ||
-                                Number(target) <= 0 ||
-                                selectedMetricAlreadyActive ||
-                                invalidDateRange
-                            }
+                            disabled={!metric || Number(target) <= 0 || invalidDateRange}
                         >
                             Add goal
                         </Button>
@@ -243,7 +230,8 @@ export function GoalsPanel() {
                     <div>
                         <h2 id="your-goals-title">Your goals</h2>
                         <Text size="sm" c="dimmed">
-                            Current targets first, with history kept for past records.
+                            Current targets first, with history kept for past records. When goals
+                            overlap, Today uses the most recently effective matching goal.
                         </Text>
                     </div>
                     <Badge variant="outline" color="dark">
@@ -258,7 +246,7 @@ export function GoalsPanel() {
                 {error && <Alert color="orange">{error}</Alert>}
                 {loading ? (
                     <Loader role="status" aria-label="Loading goals" />
-                ) : goals.length === 0 ? (
+                ) : error ? null : goals.length === 0 ? (
                     <div className="goal-empty">
                         <IconTargetArrow size={28} />
                         <Text fw={700}>No goals yet</Text>

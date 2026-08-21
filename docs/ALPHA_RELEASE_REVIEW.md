@@ -26,7 +26,7 @@ exact release artifacts. The app must continue to avoid diagnostic or prescripti
 - Journal mutations have confirmation, undo, duplicate protection, editing, deletion, and useful
   provenance.
 - Goals have a dedicated destination, focused creation form, active/history separation, full state
-  feedback, and protection against ambiguous overlapping active targets.
+  feedback, and support for multiple schedules with deterministic overlap handling.
 - Navigation uses real links, visible focus, a skip link, route focus management, native controls,
   and Mantine dialog focus trapping.
 
@@ -35,7 +35,8 @@ exact release artifacts. The app must continue to avoid diagnostic or prescripti
 1. Move Goals to `/goals`, redirect the old URL, and expose it in desktop/mobile navigation.
 2. Replace the dense Goals settings form with a responsive create-and-review layout, the complete
    metric catalog, useful defaults, schedules, history, state feedback, and retirement.
-3. Prevent multiple active goals for one metric until conflict semantics exist in the data model.
+3. Allow multiple scheduled goals while applying the most recently effective matching goal to
+   Today when schedules overlap.
 4. Remove the hard-coded account identity from the sidebar.
 5. Use semantic links for primary and Settings navigation, moving focus to main content after route
    changes while preserving first-load skip-link behavior.

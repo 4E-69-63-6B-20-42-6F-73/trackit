@@ -12,7 +12,7 @@ services:
             BACKUP_ENCRYPTION_KEY: ${TRACKIT_BACKUP_KEY:-}
             BACKUP_DIR: /backups
         ports:
-            - '${TRACKIT_PORT:-3000}:3000'
+            - '${TRACKIT_BIND_ADDRESS:-0.0.0.0}:${TRACKIT_PORT:-3000}:3000'
         depends_on:
             db:
                 condition: service_healthy

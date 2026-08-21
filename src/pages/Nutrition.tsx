@@ -473,7 +473,7 @@ export function Nutrition() {
                                 </Group>
                             ))
                         ) : (
-                            <div className="compact-empty">
+                            <div className="compact-empty recipe-empty">
                                 <Text c="dimmed" size="sm">
                                     No recipes yet. Saved recipes show nutrition per serving and
                                     make repeat logging faster.

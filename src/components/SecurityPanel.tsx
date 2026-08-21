@@ -77,6 +77,7 @@ export function SecurityPanel() {
                         color="red"
                         variant="light"
                         loading={busy}
+                        disabled={sessions.length === 0}
                         onClick={() => void revokeAll()}
                     >
                         Sign out all devices
@@ -84,6 +85,11 @@ export function SecurityPanel() {
                 </Group>
             </Group>
             {message && <Alert>{message}</Alert>}
+            {sessions.length === 0 && (
+                <Text size="sm" c="dimmed">
+                    No active sessions are currently reported.
+                </Text>
+            )}
             {sessions.map(session => (
                 <Group key={session.id} justify="space-between" wrap="nowrap">
                     <div>
@@ -107,6 +113,11 @@ export function SecurityPanel() {
             ))}
             <Divider />
             <Text fw={650}>Recent security activity</Text>
+            {events.length === 0 && (
+                <Text size="sm" c="dimmed">
+                    Security events such as sign-ins and revoked sessions will appear here.
+                </Text>
+            )}
             {events.slice(0, 8).map(event => (
                 <Group key={event.id} justify="space-between">
                     <Text size="sm">{event.action.replaceAll('.', ' ')}</Text>

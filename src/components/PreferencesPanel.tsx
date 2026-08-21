@@ -10,7 +10,9 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
     useEffect(() => {
         void getPreferences()
             .then(setValue)
-            .catch(error => setMessage(error instanceof Error ? error.message : 'Load failed'))
+            .catch(() =>
+                setMessage('Preferences are unavailable. Connect to the TrackIt server and retry.'),
+            )
     }, [])
 
     if (!value && !message) return <Loader role="status" aria-label="Loading preferences" />
@@ -23,8 +25,8 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             setValue(await updatePreferences(value))
             setMessage('Preferences saved.')
             onSaved?.()
-        } catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Save failed')
+        } catch {
+            setMessage('Preferences could not be saved. Check the connection and try again.')
         } finally {
             setSaving(false)
         }

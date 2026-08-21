@@ -91,10 +91,12 @@ export function Journal({
                                 <Text size="sm" c="dimmed">
                                     {event.detail}
                                 </Text>
+                                {event.source !== 'You' && (
+                                    <Badge variant="light" color="gray">
+                                        {event.source}
+                                    </Badge>
+                                )}
                             </div>
-                            <Badge variant="light" color="gray">
-                                {event.source}
-                            </Badge>
                             <Menu>
                                 <Menu.Target>
                                     <ActionIcon

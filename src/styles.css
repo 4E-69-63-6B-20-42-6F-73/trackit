@@ -402,7 +402,9 @@ textarea:focus-visible,
     margin: 2px 0;
 }
 .progress-row {
-    margin: 17px 0;
+    border-top: 1px solid #eeece5;
+    margin: 0;
+    padding: 16px 0;
 }
 .progress-row > .mantine-Button-root {
     margin-left: -8px;
@@ -424,6 +426,7 @@ textarea:focus-visible,
     font-size: 13px;
 }
 .progress-label small {
+    margin-left: 5px;
     font-weight: 400;
     color: var(--muted);
 }
@@ -450,9 +453,12 @@ textarea:focus-visible,
     min-height: 65px;
     border-top: 1px solid #eeece5;
     display: grid;
-    grid-template-columns: 50px 38px 1fr auto 20px;
+    grid-template-columns: 50px 38px 1fr 20px;
     gap: 10px;
     align-items: center;
+}
+.event-copy .mantine-Badge-root {
+    margin-top: 5px;
 }
 .event time {
     font-size: 12px;
@@ -506,6 +512,9 @@ textarea:focus-visible,
     display: flex;
     gap: 7px;
     margin: 25px 0 15px;
+}
+.filter-row .mantine-Button-root {
+    flex: 0 0 auto;
 }
 .day-divider {
     display: flex;
@@ -898,9 +907,6 @@ textarea:focus-visible,
     .event {
         grid-template-columns: 42px 34px 1fr 18px;
     }
-    .event .mantine-Badge-root {
-        display: none;
-    }
     .mobile-nav {
         position: fixed;
         display: flex;
@@ -935,6 +941,8 @@ textarea:focus-visible,
     }
     .section-title {
         align-items: flex-start;
+        flex-direction: column;
+        gap: 16px;
     }
     .section-title .mantine-TextInput-root {
         width: 100%;
@@ -942,6 +950,7 @@ textarea:focus-visible,
     .filter-row {
         overflow: auto;
         padding-bottom: 4px;
+        scrollbar-width: thin;
     }
     .question-grid {
         margin-top: 24px;
@@ -953,7 +962,7 @@ textarea:focus-visible,
         margin-top: 24px;
     }
     .connection-card {
-        min-height: 225px;
+        min-height: 190px;
     }
     .topbar .mantine-Button-root {
         padding-inline: 12px;
@@ -1109,6 +1118,23 @@ textarea:focus-visible,
     .settings-back {
         display: inline-flex;
     }
+    .settings-layout:not(.has-active-settings) .settings-overview {
+        display: none;
+    }
+    .nutrition-admin {
+        flex-wrap: wrap;
+        width: 100%;
+    }
+    .nutrition-admin .mantine-Button-root {
+        flex: 1 1 auto;
+    }
+}
+.recipe-empty {
+    align-items: flex-start;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding-top: 8px;
 }
 .trend-controls {
     align-items: center;
