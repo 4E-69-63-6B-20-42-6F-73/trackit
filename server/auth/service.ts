@@ -14,7 +14,14 @@ import type {
 import { and, desc, eq, gt, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { authChallenges, auditEvents, owners, passkeys, sessions } from '../db/schema.js'
+import {
+    authChallenges,
+    auditEvents,
+    owners,
+    passkeys,
+    recoveryCodes,
+    sessions,
+} from '../db/schema.js'
 import { config } from '../config.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -34,15 +41,17 @@ export class AuthService {
 
     async setup(password: string, context: SessionContext) {
         if (await this.configured()) throw new Error('already_configured')
-        const recoveryCodes = Array.from({ length: 8 }, recoveryCode)
-        await this.database.insert(owners).values({
-            id: 'owner',
-            passwordHash: await hash(password),
-            recoveryCodeHashes: recoveryCodes.map(digest),
+        const generatedCodes = Array.from({ length: 8 }, recoveryCode)
+        const passwordHash = await hash(password)
+        const session = await this.database.transaction(async transaction => {
+            await transaction.insert(owners).values({ id: 'owner', passwordHash })
+            await transaction
+                .insert(recoveryCodes)
+                .values(generatedCodes.map(code => ({ codeHash: digest(code), ownerId: 'owner' })))
+            return this.issueSession(context, transaction as Database)
         })
-        const session = await this.issueSession(context)
         await this.audit('owner', 'owner.setup', 'owner', 'owner')
-        return { session, recoveryCodes }
+        return { session, recoveryCodes: generatedCodes }
     }
 
     async login(password: string, context: SessionContext) {
@@ -54,21 +63,23 @@ export class AuthService {
     }
 
     async recover(code: string, context: SessionContext) {
-        const [owner] = await this.database.select().from(owners).limit(1)
-        if (!owner) return null
-        const hashes = owner.recoveryCodeHashes as string[]
         const codeHash = digest(code.trim().toUpperCase())
-        if (!hashes.includes(codeHash)) return null
-        await this.database
-            .update(owners)
-            .set({ recoveryCodeHashes: hashes.filter(item => item !== codeHash) })
-            .where(eq(owners.id, 'owner'))
-        const session = await this.issueSession(context)
+        const session = await this.database.transaction(async transaction => {
+            const [consumed] = await transaction
+                .delete(recoveryCodes)
+                .where(
+                    and(eq(recoveryCodes.codeHash, codeHash), eq(recoveryCodes.ownerId, 'owner')),
+                )
+                .returning({ codeHash: recoveryCodes.codeHash })
+            if (!consumed) return null
+            return this.issueSession(context, transaction as Database)
+        })
+        if (!session) return null
         await this.audit('owner', 'auth.recovery_login', 'session', session.id)
         return session
     }
 
-    async registrationOptions() {
+    async registrationOptions(browserBinding: string) {
         const credentials = await this.database.select().from(passkeys)
         const options = await generateRegistrationOptions({
             rpName: 'TrackIt',
@@ -85,12 +96,20 @@ export class AuthService {
                 userVerification: 'required',
             },
         })
-        await this.saveChallenge('registration', options.challenge)
-        return options
+        const attemptId = await this.saveChallenge(
+            'registration',
+            options.challenge,
+            browserBinding,
+        )
+        return { attemptId, options }
     }
 
-    async registerPasskey(response: RegistrationResponseJSON) {
-        const challenge = await this.challenge('registration')
+    async registerPasskey(
+        response: RegistrationResponseJSON,
+        attemptId: string,
+        browserBinding: string,
+    ) {
+        const challenge = await this.consumeChallenge('registration', attemptId, browserBinding)
         const verification = await verifyRegistrationResponse({
             response,
             expectedChallenge: challenge,
@@ -115,7 +134,7 @@ export class AuthService {
         return true
     }
 
-    async authenticationOptions() {
+    async authenticationOptions(browserBinding: string) {
         const credentials = await this.database.select().from(passkeys)
         const options = await generateAuthenticationOptions({
             rpID: relyingParty.hostname,
@@ -125,11 +144,20 @@ export class AuthService {
                 transports: item.transports as AuthenticatorTransportFuture[],
             })),
         })
-        await this.saveChallenge('authentication', options.challenge)
-        return options
+        const attemptId = await this.saveChallenge(
+            'authentication',
+            options.challenge,
+            browserBinding,
+        )
+        return { attemptId, options }
     }
 
-    async authenticatePasskey(response: AuthenticationResponseJSON, context: SessionContext) {
+    async authenticatePasskey(
+        response: AuthenticationResponseJSON,
+        context: SessionContext,
+        attemptId: string,
+        browserBinding: string,
+    ) {
         const [credential] = await this.database
             .select()
             .from(passkeys)
@@ -138,7 +166,11 @@ export class AuthService {
         if (!credential) return null
         const verification = await verifyAuthenticationResponse({
             response,
-            expectedChallenge: await this.challenge('authentication'),
+            expectedChallenge: await this.consumeChallenge(
+                'authentication',
+                attemptId,
+                browserBinding,
+            ),
             expectedOrigin: relyingParty.origin,
             expectedRPID: relyingParty.hostname,
             requireUserVerification: true,
@@ -234,9 +266,9 @@ export class AuthService {
         return this.audit('owner', action, targetType, targetId)
     }
 
-    private async issueSession(context: SessionContext) {
+    private async issueSession(context: SessionContext, database: Database = this.database) {
         const rawToken = token()
-        const [record] = await this.database
+        const [record] = await database
             .insert(sessions)
             .values({
                 tokenHash: digest(rawToken),
@@ -252,22 +284,31 @@ export class AuthService {
         await this.database.insert(auditEvents).values({ actor, action, targetType, targetId })
     }
 
-    private async saveChallenge(kind: string, challenge: string) {
-        await this.database
+    private async saveChallenge(kind: string, challenge: string, browserBinding: string) {
+        const [record] = await this.database
             .insert(authChallenges)
-            .values({ kind, challenge, expiresAt: new Date(Date.now() + 5 * 60 * 1000) })
-            .onConflictDoUpdate({
-                target: authChallenges.kind,
-                set: { challenge, expiresAt: new Date(Date.now() + 5 * 60 * 1000) },
+            .values({
+                kind,
+                challenge,
+                browserBindingHash: digest(browserBinding),
+                expiresAt: new Date(Date.now() + 5 * 60 * 1000),
             })
+            .returning({ attemptId: authChallenges.attemptId })
+        return record.attemptId
     }
 
-    private async challenge(kind: string) {
+    private async consumeChallenge(kind: string, attemptId: string, browserBinding: string) {
         const [record] = await this.database
-            .select()
-            .from(authChallenges)
-            .where(and(eq(authChallenges.kind, kind), gt(authChallenges.expiresAt, new Date())))
-            .limit(1)
+            .delete(authChallenges)
+            .where(
+                and(
+                    eq(authChallenges.attemptId, attemptId),
+                    eq(authChallenges.kind, kind),
+                    eq(authChallenges.browserBindingHash, digest(browserBinding)),
+                    gt(authChallenges.expiresAt, new Date()),
+                ),
+            )
+            .returning({ challenge: authChallenges.challenge })
         if (!record) throw new Error('challenge_expired')
         return record.challenge
     }

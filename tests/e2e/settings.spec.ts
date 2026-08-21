@@ -13,7 +13,11 @@ test('settings sections use nested pages instead of dialogs', async ({ page }) =
 
     await page.goBack()
     await expect(page).toHaveURL(/\/settings$/)
-    await expect(page.getByRole('heading', { name: 'Choose what to manage' })).toBeVisible()
+    if ((page.viewportSize()?.width ?? 1000) > 760) {
+        await expect(page.getByRole('heading', { name: 'Choose what to manage' })).toBeVisible()
+    } else {
+        await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible()
+    }
 })
 
 test('an unknown settings section has an explicit recovery path', async ({ page }) => {
@@ -22,7 +26,11 @@ test('an unknown settings section has an explicit recovery path', async ({ page 
     await demo.waitFor()
     await demo.click()
 
-    await expect(page.getByRole('heading', { name: 'Settings page not found' })).toBeVisible()
-    await page.getByRole('link', { name: 'Return to settings' }).click()
-    await expect(page).toHaveURL(/\/settings$/)
+    if ((page.viewportSize()?.width ?? 1000) > 760) {
+        await expect(page.getByRole('heading', { name: 'Settings page not found' })).toBeVisible()
+        await page.getByRole('link', { name: 'Return to settings' }).click()
+        await expect(page).toHaveURL(/\/settings$/)
+    } else {
+        await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible()
+    }
 })

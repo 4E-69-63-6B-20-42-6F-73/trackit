@@ -174,27 +174,46 @@ export class McpAccessService {
         client: McpClient,
         tool: string,
         idempotencyKey: string,
-        operation: () => Promise<T>,
+        operation: (transaction: Database) => Promise<T>,
     ): Promise<{ result: T; duplicate: boolean }> {
         if (!(await this.clientIsActive(client.id))) throw new Error('inactive_mcp_client')
-        const [existing] = await this.database
-            .select({ result: mcpActionReceipts.result })
-            .from(mcpActionReceipts)
-            .where(
-                and(
-                    eq(mcpActionReceipts.clientId, client.id),
-                    eq(mcpActionReceipts.tool, tool),
-                    eq(mcpActionReceipts.idempotencyKey, idempotencyKey),
-                ),
-            )
-            .limit(1)
-        if (existing) return { result: existing.result as T, duplicate: true }
-        const result = await operation()
-        await this.database
-            .insert(mcpActionReceipts)
-            .values({ clientId: client.id, tool, idempotencyKey, result: result as object })
-            .onConflictDoNothing()
-        return { result, duplicate: false }
+        return this.database.transaction(async transaction => {
+            const [claim] = await transaction
+                .insert(mcpActionReceipts)
+                .values({
+                    clientId: client.id,
+                    tool,
+                    idempotencyKey,
+                    result: { state: 'in_progress' },
+                })
+                .onConflictDoNothing()
+                .returning({ id: mcpActionReceipts.id })
+
+            if (!claim) {
+                const [existing] = await transaction
+                    .select({ result: mcpActionReceipts.result })
+                    .from(mcpActionReceipts)
+                    .where(
+                        and(
+                            eq(mcpActionReceipts.clientId, client.id),
+                            eq(mcpActionReceipts.tool, tool),
+                            eq(mcpActionReceipts.idempotencyKey, idempotencyKey),
+                        ),
+                    )
+                    .limit(1)
+                if (!existing || (existing.result as { state?: string }).state === 'in_progress') {
+                    throw new Error('idempotency_claim_incomplete')
+                }
+                return { result: existing.result as T, duplicate: true }
+            }
+
+            const result = await operation(transaction as Database)
+            await transaction
+                .update(mcpActionReceipts)
+                .set({ result: result as object })
+                .where(eq(mcpActionReceipts.id, claim.id))
+            return { result, duplicate: false }
+        })
     }
 
     async issueConfirmation(

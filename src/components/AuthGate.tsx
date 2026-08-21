@@ -23,6 +23,7 @@ type AuthState = 'loading' | 'offline' | 'setup' | 'login' | 'recovery' | 'authe
 export function AuthGate({ children }: { children: ReactNode }) {
     const [state, setState] = useState<AuthState>('loading')
     const [password, setPassword] = useState('')
+    const [bootstrapSecret, setBootstrapSecret] = useState('')
     const [recoveryCode, setRecoveryCode] = useState('')
     const [error, setError] = useState('')
     const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
@@ -60,12 +61,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
         const response = await fetch(`${environment.VITE_API_URL}/api/auth/${endpoint}`, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'content-type': 'application/json' },
+            headers: {
+                'content-type': 'application/json',
+                ...(state === 'setup' ? { 'x-trackit-bootstrap-secret': bootstrapSecret } : {}),
+            },
             body: JSON.stringify({ password }),
         })
         if (!response.ok) {
             setError(
-                state === 'setup' ? 'Use at least 12 characters.' : 'That password is incorrect.',
+                state === 'setup'
+                    ? 'Check the setup secret and use a password of at least 12 characters.'
+                    : 'That password is incorrect.',
             )
             return
         }
@@ -95,8 +101,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
                     headers: { 'x-csrf-token': csrfToken() ?? '' },
                 },
             )
-            const optionsJSON =
-                (await optionsResponse.json()) as PublicKeyCredentialCreationOptionsJSON
+            const attempt = (await optionsResponse.json()) as {
+                attemptId: string
+                options: PublicKeyCredentialCreationOptionsJSON
+            }
+            const optionsJSON = attempt.options
             const response = await startRegistration({ optionsJSON })
             const verification = await fetch(
                 `${environment.VITE_API_URL}/api/auth/passkey/register/verify`,
@@ -107,7 +116,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                         'content-type': 'application/json',
                         'x-csrf-token': csrfToken() ?? '',
                     },
-                    body: JSON.stringify(response),
+                    body: JSON.stringify({ attemptId: attempt.attemptId, response }),
                 },
             )
             if (!verification.ok) throw new Error('verification_failed')
@@ -124,8 +133,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 `${environment.VITE_API_URL}/api/auth/passkey/authenticate/options`,
                 { method: 'POST', credentials: 'same-origin' },
             )
-            const optionsJSON =
-                (await optionsResponse.json()) as PublicKeyCredentialRequestOptionsJSON
+            const attempt = (await optionsResponse.json()) as {
+                attemptId: string
+                options: PublicKeyCredentialRequestOptionsJSON
+            }
+            const optionsJSON = attempt.options
             const response = await startAuthentication({ optionsJSON })
             const verification = await fetch(
                 `${environment.VITE_API_URL}/api/auth/passkey/authenticate/verify`,
@@ -133,7 +145,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                     method: 'POST',
                     credentials: 'same-origin',
                     headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify(response),
+                    body: JSON.stringify({ attemptId: attempt.attemptId, response }),
                 },
             )
             if (!verification.ok) throw new Error('verification_failed')
@@ -265,8 +277,22 @@ export function AuthGate({ children }: { children: ReactNode }) {
                                     state === 'setup' ? 'new-password' : 'current-password'
                                 }
                             />
+                            {state === 'setup' && (
+                                <PasswordInput
+                                    label="Owner setup secret"
+                                    description="Shown by the deployment script and stored in the server .env file."
+                                    value={bootstrapSecret}
+                                    onChange={event =>
+                                        setBootstrapSecret(event.currentTarget.value)
+                                    }
+                                    autoComplete="off"
+                                />
+                            )}
                             {error && <Alert color="red">{error}</Alert>}
-                            <Button onClick={() => void submit()}>
+                            <Button
+                                disabled={state === 'setup' && !bootstrapSecret}
+                                onClick={() => void submit()}
+                            >
                                 {state === 'setup' ? 'Create owner account' : 'Sign in'}
                             </Button>
                             {state === 'login' && (

@@ -30,8 +30,8 @@ jobs:
             BACKUP_ENCRYPTION_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
             TRACKIT_POSTGRES_INTEGRATION: 'true'
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-node@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-node@v5
               with:
                   node-version: 22
                   cache: npm
@@ -48,7 +48,7 @@ jobs:
             - name: Build runtime container
               run: docker build --tag trackit-ci:test .
             - name: Scan container image
-              uses: aquasecurity/trivy-action@0.33.1
+              uses: aquasecurity/trivy-action@v0.36.0
               with:
                   scan-type: image
                   image-ref: trackit-ci:test
@@ -60,8 +60,8 @@ jobs:
     android:
         runs-on: ubuntu-latest
         steps:
-            - uses: actions/checkout@v4
-            - uses: actions/setup-java@v4
+            - uses: actions/checkout@v5
+            - uses: actions/setup-java@v5
               with:
                   distribution: temurin
                   java-version: 17

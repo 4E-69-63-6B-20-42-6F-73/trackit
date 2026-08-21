@@ -4,12 +4,15 @@ import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import Fastify from 'fastify'
 import type { FastifyReply } from 'fastify'
-import { randomBytes } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { AuthService } from './auth/service.js'
 import type { DataRepository } from './data/types.js'
+import { PostgresDataRepository } from './data/postgres-repository.js'
+import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import type * as schemaType from './db/schema.js'
 import {
     foodInputSchema,
     foodUpdateSchema,
@@ -25,6 +28,7 @@ import {
     savedTrendViewInputSchema,
 } from './data/types.js'
 import type { JournalRepository } from './journal/types.js'
+import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { createJournalEntrySchema, updateJournalEntrySchema } from './journal/types.js'
 import { openApiContract } from './openapi.js'
 import type { McpAccessService } from './mcp/service.js'
@@ -45,6 +49,8 @@ export async function createApp(
         backup?: BackupService
         lifecycle?: DataLifecycleService
         trustProxy?: boolean
+        bootstrapSecret?: string
+        database?: PostgresJsDatabase<typeof schemaType>
     },
 ) {
     const app = Fastify({
@@ -107,6 +113,23 @@ export async function createApp(
     ])
     const sessionCookie = 'trackit_session'
     const csrfCookie = 'trackit_csrf'
+    const authBrowserCookie = 'trackit_auth_browser'
+    const browserBinding = (
+        request: { cookies: Record<string, string | undefined> },
+        reply: FastifyReply,
+    ) => {
+        const existing = request.cookies[authBrowserCookie]
+        if (existing) return existing
+        const value = randomBytes(32).toString('base64url')
+        reply.setCookie(authBrowserCookie, value, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            path: '/api/auth/passkey',
+            maxAge: 10 * 60,
+        })
+        return value
+    }
     const setSession = (reply: FastifyReply, session: { token: string; expiresAt: Date }) => {
         const secure = process.env.NODE_ENV === 'production'
         reply.setCookie(sessionCookie, session.token, {
@@ -146,6 +169,17 @@ export async function createApp(
             authenticated: Boolean(await auth.authenticate(request.cookies[sessionCookie])),
         }))
         app.post('/api/auth/setup', async (request, reply) => {
+            const suppliedSecret = request.headers['x-trackit-bootstrap-secret']
+            if (!options.bootstrapSecret) {
+                return reply.code(503).send({ error: 'bootstrap_not_configured' })
+            }
+            if (
+                typeof suppliedSecret !== 'string' ||
+                suppliedSecret.length !== options.bootstrapSecret.length ||
+                !Buffer.from(suppliedSecret).equals(Buffer.from(options.bootstrapSecret))
+            ) {
+                return reply.code(403).send({ error: 'invalid_bootstrap_secret' })
+            }
             const input = passwordSchema.safeParse(request.body)
             if (!input.success) return reply.code(400).send({ error: 'invalid_password' })
             try {
@@ -189,20 +223,38 @@ export async function createApp(
                 return { status: 'ok' }
             },
         )
-        app.post('/api/auth/passkey/register/options', async () => auth.registrationOptions())
+        app.post('/api/auth/passkey/register/options', async (request, reply) =>
+            auth.registrationOptions(browserBinding(request, reply)),
+        )
         app.post('/api/auth/passkey/register/verify', async (request, reply) => {
-            const verified = await auth.registerPasskey(request.body as RegistrationResponseJSON)
+            const input = z
+                .object({ attemptId: z.string().uuid(), response: z.unknown() })
+                .safeParse(request.body)
+            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            const verified = await auth.registerPasskey(
+                input.data.response as RegistrationResponseJSON,
+                input.data.attemptId,
+                browserBinding(request, reply),
+            )
             if (!verified) return reply.code(400).send({ error: 'verification_failed' })
             return { verified: true }
         })
-        app.post('/api/auth/passkey/authenticate/options', async () => auth.authenticationOptions())
+        app.post('/api/auth/passkey/authenticate/options', async (request, reply) =>
+            auth.authenticationOptions(browserBinding(request, reply)),
+        )
         app.post('/api/auth/passkey/authenticate/verify', async (request, reply) => {
+            const input = z
+                .object({ attemptId: z.string().uuid(), response: z.unknown() })
+                .safeParse(request.body)
+            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
             const session = await auth.authenticatePasskey(
-                request.body as AuthenticationResponseJSON,
+                input.data.response as AuthenticationResponseJSON,
                 {
                     userAgent: request.headers['user-agent'],
                     ipAddress: request.ip,
                 },
+                input.data.attemptId,
+                browserBinding(request, reply),
             )
             if (!session) return reply.code(401).send({ error: 'verification_failed' })
             setSession(reply, session)
@@ -429,6 +481,14 @@ export async function createApp(
                 typeof request.headers['x-device-timestamp'] === 'string'
                     ? request.headers['x-device-timestamp']
                     : undefined,
+            deviceId:
+                typeof request.headers['x-device-id'] === 'string'
+                    ? request.headers['x-device-id']
+                    : undefined,
+            nonce:
+                typeof request.headers['x-device-nonce'] === 'string'
+                    ? request.headers['x-device-nonce']
+                    : undefined,
             signature:
                 typeof request.headers['x-device-signature'] === 'string'
                     ? request.headers['x-device-signature']
@@ -488,11 +548,14 @@ export async function createApp(
         })
         app.post('/api/device/upload', async (request, reply) => {
             const credentials = deviceCredentials(request)
-            const device = await devices.authenticate(
-                credentials.credential,
-                credentials.timestamp,
-                credentials.signature,
-            )
+            const device = await devices.authenticate({
+                ...credentials,
+                method: request.method,
+                path: request.url.split('?')[0],
+                bodyHash: createHash('sha256')
+                    .update(JSON.stringify(request.body ?? null))
+                    .digest('hex'),
+            })
             if (!device) return reply.code(401).send({ error: 'unauthorized' })
             const input = z
                 .object({
@@ -509,11 +572,14 @@ export async function createApp(
         })
         app.put('/api/device/cursor', async (request, reply) => {
             const credentials = deviceCredentials(request)
-            const device = await devices.authenticate(
-                credentials.credential,
-                credentials.timestamp,
-                credentials.signature,
-            )
+            const device = await devices.authenticate({
+                ...credentials,
+                method: request.method,
+                path: request.url.split('?')[0],
+                bodyHash: createHash('sha256')
+                    .update(JSON.stringify(request.body ?? null))
+                    .digest('hex'),
+            })
             if (!device) return reply.code(401).send({ error: 'unauthorized' })
             const input = z
                 .object({
@@ -557,12 +623,30 @@ export async function createApp(
         return reply.code(201).send({ data: record })
     })
     app.delete<{ Params: { id: string } }>('/api/journal/:id', async (request, reply) => {
-        const removed = await repository.remove(request.params.id)
+        const removeLinked = async (
+            journalRepository: JournalRepository,
+            dataRepository?: DataRepository,
+        ) => {
+            const target = (await journalRepository.list()).find(
+                record => record.id === request.params.id,
+            )
+            if (!target) return false
+            if (!(await journalRepository.remove(request.params.id))) return false
+            if (target.entityType === 'observation' && target.entityId)
+                await dataRepository?.removeObservation(target.entityId)
+            if (target.entityType === 'meal' && target.entityId)
+                await dataRepository?.removeMeal(target.entityId)
+            return true
+        }
+        const removed = options?.database
+            ? await options.database.transaction(transaction =>
+                  removeLinked(
+                      new PostgresJournalRepository(transaction),
+                      new PostgresDataRepository(transaction),
+                  ),
+              )
+            : await removeLinked(repository, options?.dataRepository)
         if (!removed) return reply.code(404).send({ error: 'not_found' })
-        await Promise.all([
-            options?.dataRepository?.removeObservation(request.params.id),
-            options?.dataRepository?.removeMeal(request.params.id),
-        ])
         await options?.auth?.recordAudit('data.record.deleted', 'journal_entry', request.params.id)
         return reply.code(204).send()
     })
@@ -611,15 +695,30 @@ export async function createApp(
         app.post('/api/meals', async (request, reply) => {
             const input = mealInputSchema.safeParse(request.body)
             if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
-            const meal = (await data.createMeal(input.data)) as { id: string }
-            await repository.create({
-                id: meal.id,
-                category: 'Meals',
-                title: input.data.name,
-                detail: 'Nutrition snapshot logged',
-                source: 'You',
-                observedAt: input.data.eatenAt,
-            })
+            const createLinked = async (
+                dataRepository: DataRepository,
+                journalRepository: JournalRepository,
+            ) => {
+                const meal = (await dataRepository.createMeal(input.data)) as { id: string }
+                await journalRepository.create({
+                    category: 'Meals',
+                    title: input.data.name,
+                    detail: 'Nutrition snapshot logged',
+                    source: 'You',
+                    observedAt: input.data.eatenAt,
+                    entityType: 'meal',
+                    entityId: meal.id,
+                })
+                return meal
+            }
+            const meal = options.database
+                ? await options.database.transaction(transaction =>
+                      createLinked(
+                          new PostgresDataRepository(transaction),
+                          new PostgresJournalRepository(transaction),
+                      ),
+                  )
+                : await createLinked(data, repository)
             return reply.code(201).send({ data: meal })
         })
         app.patch<{ Params: { id: string } }>('/api/meals/:id', async (request, reply) => {
@@ -628,10 +727,10 @@ export async function createApp(
             const updated = await data.updateMeal(request.params.id, input.data)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             const journalRecord = (await repository.list()).find(
-                record => record.id === request.params.id,
+                record => record.entityType === 'meal' && record.entityId === request.params.id,
             )
             if (journalRecord) {
-                await repository.update(request.params.id, {
+                await repository.update(journalRecord.id, {
                     title: input.data.name ?? journalRecord.title,
                     detail: 'Nutrition snapshot logged',
                     observedAt: input.data.eatenAt,

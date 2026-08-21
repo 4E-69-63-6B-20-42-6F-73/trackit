@@ -13,12 +13,13 @@ export const createJournalEntrySchema = z.object({
 })
 
 export type CreateJournalEntry = z.infer<typeof createJournalEntrySchema>
+export type JournalEntityLink = { entityType?: 'meal' | 'observation'; entityId?: string }
 export type JournalEntry = CreateJournalEntry & {
     id: string
     version: number
     createdAt: string
     updatedAt: string
-}
+} & JournalEntityLink
 
 export const updateJournalEntrySchema = z.object({
     title: z.string().trim().min(1).max(160).optional(),
@@ -31,7 +32,7 @@ export type UpdateJournalEntry = z.infer<typeof updateJournalEntrySchema>
 
 export interface JournalRepository {
     list(): Promise<JournalEntry[]>
-    create(input: CreateJournalEntry): Promise<JournalEntry>
+    create(input: CreateJournalEntry & JournalEntityLink): Promise<JournalEntry>
     update(id: string, input: UpdateJournalEntry): Promise<JournalEntry | null>
     remove(id: string): Promise<boolean>
     ready(): Promise<boolean>

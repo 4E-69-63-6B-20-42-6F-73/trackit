@@ -5,6 +5,7 @@ import type * as schemaType from '../db/schema.js'
 import {
     auditEvents,
     devices,
+    deviceRequestNonces,
     deviceUploadBatches,
     observations,
     pairingCodes,
@@ -104,8 +105,19 @@ export class DeviceService {
         return device ?? null
     }
 
-    async authenticate(credential?: string, timestamp?: string, signature?: string) {
-        if (!credential || !timestamp || !signature) return null
+    async authenticate(input: {
+        credential?: string
+        deviceId?: string
+        method: string
+        path: string
+        timestamp?: string
+        nonce?: string
+        bodyHash: string
+        signature?: string
+    }) {
+        const { credential, deviceId, timestamp, nonce, signature } = input
+        if (!credential || !deviceId || !timestamp || !nonce || !signature) return null
+        if (!/^[A-Za-z0-9_-]{16,200}$/.test(nonce)) return null
         const signedAt = Number(timestamp)
         if (!Number.isFinite(signedAt) || Math.abs(Date.now() - signedAt) > 60_000) return null
         const [device] = await this.database
@@ -114,6 +126,7 @@ export class DeviceService {
             .where(
                 and(
                     eq(devices.credentialHash, hash(credential)),
+                    eq(devices.id, deviceId),
                     eq(devices.status, 'confirmed'),
                     isNull(devices.revokedAt),
                 ),
@@ -125,16 +138,34 @@ export class DeviceService {
             format: 'der',
             type: 'spki',
         })
+        const canonical = [
+            input.method.toUpperCase(),
+            input.path,
+            timestamp,
+            nonce,
+            input.bodyHash,
+            device.id,
+        ].join('\n')
         if (
             !verify(
                 'sha256',
-                Buffer.from(timestamp),
+                Buffer.from(canonical),
                 publicKey,
                 Buffer.from(signature, 'base64url'),
             )
         ) {
             return null
         }
+        const [claimed] = await this.database
+            .insert(deviceRequestNonces)
+            .values({
+                nonceHash: hash(`${device.id}:${nonce}`),
+                deviceId: device.id,
+                expiresAt: new Date(signedAt + 60_000),
+            })
+            .onConflictDoNothing()
+            .returning({ nonceHash: deviceRequestNonces.nonceHash })
+        if (!claimed) return null
         await this.database
             .update(devices)
             .set({ lastSeenAt: new Date() })

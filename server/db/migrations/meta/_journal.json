@@ -134,6 +134,27 @@
             "when": 1787241000000,
             "tag": "0018_nutrition_details",
             "breakpoints": true
+        },
+        {
+            "idx": 19,
+            "version": "7",
+            "when": 1787242000000,
+            "tag": "0019_security_auth",
+            "breakpoints": true
+        },
+        {
+            "idx": 20,
+            "version": "7",
+            "when": 1787243000000,
+            "tag": "0020_device_request_nonces",
+            "breakpoints": true
+        },
+        {
+            "idx": 21,
+            "version": "7",
+            "when": 1787244000000,
+            "tag": "0021_journal_entity_link",
+            "breakpoints": true
         }
     ]
 }

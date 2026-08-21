@@ -12,9 +12,9 @@ host and is not a TrackIt concern.
 - A separate Proxmox backup schedule for the VM in addition to TrackIt's encrypted backups.
 - DNS for the chosen TrackIt hostname pointing to a reverse proxy.
 
-Install Docker Engine and its Compose plugin from Docker's official Debian or Ubuntu repository,
-then clone or copy the TrackIt release bundle into `/opt/trackit`. Do not run the application from a
-temporary directory.
+Clone or copy the TrackIt release bundle into `/opt/trackit`. Do not run the application from a
+temporary directory. The deployment script installs its host dependencies and configures Docker's
+official package repository when Docker Engine or the Compose plugin is missing.
 
 ## First deployment
 
@@ -24,9 +24,19 @@ From `/opt/trackit`, run:
 sh scripts/proxmox-deploy.sh https://trackit.example.com
 ```
 
-The command validates Docker, creates a private `.env` with random database and backup secrets,
-builds the application, starts PostgreSQL and TrackIt, and prints container status. It never
-overwrites an existing `.env`.
+On Debian and Ubuntu, the command installs CA certificates, curl, Git, GnuPG, OpenSSL, Docker
+Engine, Buildx, and the Docker Compose plugin when needed. It may prompt for the deployment user's
+sudo password. It then creates a private `.env` with random database and backup secrets, builds the
+application, starts PostgreSQL and TrackIt, and prints container status. It never overwrites an
+existing `.env`.
+
+On first installation, enter the printed owner setup secret in TrackIt's setup screen. This stops
+another network visitor from claiming the instance before the owner account exists. The secret is
+also stored in the private `.env`; after an owner exists, setup cannot create another one.
+
+The automatic installer intentionally stops on other Linux distributions instead of changing
+unknown package sources. Install Docker Engine, the Compose plugin, OpenSSL, curl, and Git manually
+there, then run the same command again.
 
 Before depending on backups, copy `TRACKIT_BACKUP_KEY` from `.env` into a password manager or
 offline secret store. The database and encrypted backup archives are held in Docker volumes named

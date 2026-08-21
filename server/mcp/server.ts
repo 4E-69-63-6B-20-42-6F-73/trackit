@@ -1,7 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { DataRepository } from '../data/types.js'
+import { PostgresDataRepository } from '../data/postgres-repository.js'
 import type { JournalRepository } from '../journal/types.js'
+import { PostgresJournalRepository } from '../journal/postgres-repository.js'
 import type { McpAccessService, McpClient } from './service.js'
 
 type DatedRecord = Record<string, unknown> & { observedAt?: Date | string; eatenAt?: Date | string }
@@ -17,6 +19,11 @@ const denied = (reason: string) => ({
 
 const inGrant = (client: McpClient, value: Date) =>
     (!client.dateFrom || value >= client.dateFrom) && (!client.dateTo || value <= client.dateTo)
+
+const validGrantTimestamp = (client: McpClient, value: string) => {
+    const timestamp = new Date(value)
+    return !Number.isNaN(timestamp.valueOf()) && inGrant(client, timestamp)
+}
 
 const filterDates = (client: McpClient, records: DatedRecord[]) =>
     records.filter(record => {
@@ -315,6 +322,9 @@ export function createTrackItMcpServer(
         },
         async input => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
+            if (!validGrantTimestamp(client, input.eatenAt)) {
+                return denied('The meal timestamp is outside this client grant.')
+            }
             const preview = {
                 name: input.name,
                 mealType: input.mealType,
@@ -326,7 +336,9 @@ export function createTrackItMcpServer(
                     client,
                     'log_meal',
                     input.idempotencyKey,
-                    async () => {
+                    async transaction => {
+                        const transactionalData = new PostgresDataRepository(transaction)
+                        const transactionalJournal = new PostgresJournalRepository(transaction)
                         const confirmed = await access.consumeConfirmation(
                             client,
                             input.confirmationToken,
@@ -335,7 +347,7 @@ export function createTrackItMcpServer(
                             preview,
                         )
                         if (!confirmed) throw new Error('confirmation_required')
-                        const meal = await data.createMeal({
+                        const meal = await transactionalData.createMeal({
                             name: input.name,
                             mealType: input.mealType,
                             eatenAt: input.eatenAt,
@@ -343,12 +355,14 @@ export function createTrackItMcpServer(
                             favorite: false,
                             nutritionQuality: 'complete',
                         })
-                        const journalEntry = await journal.create({
+                        const journalEntry = await transactionalJournal.create({
                             category: 'Meals',
                             title: input.name,
                             detail: 'Meal nutrient snapshot created by an authorized assistant',
                             source: `MCP: ${client.name}`,
                             observedAt: input.eatenAt,
+                            entityType: 'meal',
+                            entityId: meal.id,
                         })
                         return { meal, journalEntryId: journalEntry.id }
                     },
@@ -376,24 +390,31 @@ export function createTrackItMcpServer(
             if (!scoped('observations:write') || !access) {
                 return denied('Scope observations:write is required.')
             }
+            if (!validGrantTimestamp(client, input.observedAt)) {
+                return denied('The measurement timestamp is outside this client grant.')
+            }
             const operation = await access.runIdempotent(
                 client,
                 'log_measurement',
                 input.idempotencyKey,
-                async () => {
-                    const observation = await data.createObservation({
+                async transaction => {
+                    const transactionalData = new PostgresDataRepository(transaction)
+                    const transactionalJournal = new PostgresJournalRepository(transaction)
+                    const observation = await transactionalData.createObservation({
                         metric: input.metric,
                         value: input.value,
                         unit: input.unit,
                         observedAt: input.observedAt,
                         source: `MCP: ${client.name}`,
                     })
-                    const journalEntry = await journal.create({
+                    const journalEntry = await transactionalJournal.create({
                         category: 'Measurements',
                         title: input.metric,
                         detail: `${input.value} ${input.unit}`,
                         source: `MCP: ${client.name}`,
                         observedAt: input.observedAt,
+                        entityType: 'observation',
+                        entityId: observation.id,
                     })
                     return { observation, journalEntryId: journalEntry.id }
                 },
@@ -417,12 +438,15 @@ export function createTrackItMcpServer(
             if (!scoped('checkins:write') || !access) {
                 return denied('Scope checkins:write is required.')
             }
+            if (!validGrantTimestamp(client, input.observedAt)) {
+                return denied('The check-in timestamp is outside this client grant.')
+            }
             const operation = await access.runIdempotent(
                 client,
                 'log_checkin',
                 input.idempotencyKey,
-                () =>
-                    journal.create({
+                transaction =>
+                    new PostgresJournalRepository(transaction).create({
                         category: 'Check-ins',
                         title: input.title,
                         detail: input.detail,
@@ -446,9 +470,12 @@ export function createTrackItMcpServer(
             }
             const record = (await journal.list()).find(item => item.id === id)
             if (!record) return denied('Journal record not found.')
+            if (!validGrantTimestamp(client, record.observedAt)) {
+                return denied('The journal record is outside this client grant.')
+            }
             const confirmation = await access.issueConfirmation(client, 'delete_journal', id)
             return textResult({
-                target: record,
+                target: scoped('journal') ? record : { id: record.id, contentAvailable: false },
                 confirmationToken: confirmation.token,
                 expiresAt: confirmation.expiresAt,
             })
@@ -465,6 +492,11 @@ export function createTrackItMcpServer(
         async ({ id, confirmationToken }) => {
             if (!scoped('journal:delete') || !access) {
                 return denied('Scope journal:delete is required.')
+            }
+            const record = (await journal.list()).find(item => item.id === id)
+            if (!record) return denied('Journal record not found.')
+            if (!validGrantTimestamp(client, record.observedAt)) {
+                return denied('The journal record is outside this client grant.')
             }
             const confirmed = await access.consumeConfirmation(
                 client,

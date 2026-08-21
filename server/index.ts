@@ -34,6 +34,8 @@ const app = await createApp(new PostgresJournalRepository(db), {
     backup,
     lifecycle,
     trustProxy: config.TRUST_PROXY,
+    bootstrapSecret: config.BOOTSTRAP_SECRET,
+    database: db,
 })
 const webRoot = resolve('dist')
 

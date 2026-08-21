@@ -66,4 +66,5 @@ identity, and confirm the pending device in the web application.
 For installation, upgrades, reverse proxies, backup and recovery, and troubleshooting, follow
 [docs/OPERATIONS.md](docs/OPERATIONS.md). Security assumptions and the pre-release review checklist
 are in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md). Requirement-to-test traceability is recorded in
-[docs/DELIVERY_EVIDENCE.md](docs/DELIVERY_EVIDENCE.md).
+[docs/DELIVERY_EVIDENCE.md](docs/DELIVERY_EVIDENCE.md). Security-sensitive upgrade behavior is in
+[docs/SECURITY_HARDENING.md](docs/SECURITY_HARDENING.md).

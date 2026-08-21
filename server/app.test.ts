@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
 import type {
     CreateJournalEntry,
@@ -143,9 +143,15 @@ describe('journal API', () => {
         })
         expect(created.statusCode).toBe(201)
         expect(repository.entries).toContainEqual(
-            expect.objectContaining({ id: mealId, title: 'Lentil bowl', source: 'You' }),
+            expect.objectContaining({
+                entityId: mealId,
+                entityType: 'meal',
+                title: 'Lentil bowl',
+                source: 'You',
+            }),
         )
-        await app.inject({ method: 'DELETE', url: `/api/journal/${mealId}` })
+        const linkedJournalId = repository.entries.find(entry => entry.entityId === mealId)!.id
+        await app.inject({ method: 'DELETE', url: `/api/journal/${linkedJournalId}` })
         expect(removedMeals).toEqual([mealId])
         await app.close()
     })
@@ -164,6 +170,40 @@ describe('journal API', () => {
         expect(healthResponse.headers['x-content-type-options']).toBe('nosniff')
         expect(healthResponse.headers['x-frame-options']).toBe('SAMEORIGIN')
         expect(healthResponse.headers['referrer-policy']).toBe('no-referrer')
+        await app.close()
+    })
+
+    it('requires the configured bootstrap secret for first-owner setup', async () => {
+        const auth = {
+            configured: async () => false,
+            authenticate: async () => null,
+            setup: vi.fn(async () => ({
+                session: { token: 'token', expiresAt: new Date(Date.now() + 60_000) },
+                recoveryCodes: [],
+            })),
+        }
+        const app = await createApp(new MemoryJournalRepository(), {
+            auth: auth as never,
+            bootstrapSecret: 'a-secure-bootstrap-secret-with-32-characters',
+        })
+        const payload = { password: 'a-secure-owner-password' }
+        expect(
+            (await app.inject({ method: 'POST', url: '/api/auth/setup', payload })).statusCode,
+        ).toBe(403)
+        expect(
+            (
+                await app.inject({
+                    method: 'POST',
+                    url: '/api/auth/setup',
+                    headers: {
+                        'x-trackit-bootstrap-secret':
+                            'a-secure-bootstrap-secret-with-32-characters',
+                    },
+                    payload,
+                })
+            ).statusCode,
+        ).toBe(201)
+        expect(auth.setup).toHaveBeenCalledTimes(1)
         await app.close()
     })
 

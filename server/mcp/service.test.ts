@@ -1,31 +1,14 @@
-import { readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
+import { applyTestMigrations } from '../db/test-migrations.js'
 import { McpAccessService } from './service.js'
-
-const migrations = [
-    '0000_handy_rattler.sql',
-    '0001_noisy_leo.sql',
-    '0002_mute_drax.sql',
-    '0003_chief_lord_tyger.sql',
-    '0004_strange_mephistopheles.sql',
-    '0005_warm_mongoose.sql',
-    '0006_mighty_micromacro.sql',
-    '0007_huge_mandarin.sql',
-    '0008_public_mephistopheles.sql',
-    '0009_nappy_alex_power.sql',
-    '0010_nice_masked_marvel.sql',
-]
 
 describe('MCP client access', () => {
     it('is disabled by default and immediately rejects a revoked scoped credential', async () => {
         const client = new PGlite()
-        for (const file of migrations) {
-            const migration = await readFile(`server/db/migrations/${file}`, 'utf8')
-            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
-        }
+        await applyTestMigrations(client)
         const database = drizzle(client, { schema })
         const service = new McpAccessService(database as never)
         const expiresAt = new Date(Date.now() + 60_000).toISOString()
@@ -61,10 +44,7 @@ describe('MCP client access', () => {
 
     it('deduplicates actions and binds one-time confirmations to client, action, and target', async () => {
         const client = new PGlite()
-        for (const file of migrations) {
-            const migration = await readFile(`server/db/migrations/${file}`, 'utf8')
-            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
-        }
+        await applyTestMigrations(client)
         const database = drizzle(client, { schema })
         const service = new McpAccessService(database as never)
         await service.setEnabled(true)
@@ -94,6 +74,32 @@ describe('MCP client access', () => {
         expect(first).toEqual({ result: { sequence: 1 }, duplicate: false })
         expect(retry).toEqual({ result: { sequence: 1 }, duplicate: true })
         expect(calls).toBe(1)
+
+        let releaseOperation!: () => void
+        const operationStarted = new Promise<void>(resolve => {
+            releaseOperation = resolve
+        })
+        let concurrentCalls = 0
+        const concurrentOperation = async () => {
+            concurrentCalls += 1
+            if (concurrentCalls === 1) {
+                await new Promise<void>(resolve => setTimeout(resolve, 20))
+                releaseOperation()
+            }
+            return { sequence: concurrentCalls }
+        }
+        const concurrent = await Promise.all([
+            service.runIdempotent(authenticated, 'checkin', 'concurrent-key', concurrentOperation),
+            service.runIdempotent(authenticated, 'checkin', 'concurrent-key', concurrentOperation),
+            operationStarted,
+        ])
+        expect(concurrentCalls).toBe(1)
+        expect(concurrent.slice(0, 2)).toEqual(
+            expect.arrayContaining([
+                { result: { sequence: 1 }, duplicate: false },
+                { result: { sequence: 1 }, duplicate: true },
+            ]),
+        )
 
         const confirmation = await service.issueConfirmation(
             authenticated,

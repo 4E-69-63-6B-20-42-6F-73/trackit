@@ -40,6 +40,8 @@ export const journalEntries = pgTable(
         sourceLabel: text('source_label').notNull(),
         observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
         externalId: text('external_id'),
+        entityType: text('entity_type'),
+        entityId: uuid('entity_id'),
         version: integer('version').notNull().default(1),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
@@ -49,6 +51,7 @@ export const journalEntries = pgTable(
         uniqueIndex('journal_external_source_idx').on(table.sourceId, table.externalId),
         index('journal_observed_at_idx').on(table.observedAt),
         index('journal_category_observed_idx').on(table.category, table.observedAt),
+        index('journal_entity_idx').on(table.entityType, table.entityId),
     ],
 )
 
@@ -231,6 +234,15 @@ export const devices = pgTable('devices', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const deviceRequestNonces = pgTable('device_request_nonces', {
+    nonceHash: text('nonce_hash').primaryKey(),
+    deviceId: uuid('device_id')
+        .notNull()
+        .references(() => devices.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const deviceUploadBatches = pgTable(
     'device_upload_batches',
     {
@@ -310,6 +322,14 @@ export const owners = pgTable('owners', {
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
+export const recoveryCodes = pgTable('recovery_codes', {
+    codeHash: text('code_hash').primaryKey(),
+    ownerId: text('owner_id')
+        .notNull()
+        .references(() => owners.id, { onDelete: 'cascade' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+})
+
 export const sessions = pgTable('sessions', {
     id: uuid('id').primaryKey().defaultRandom(),
     tokenHash: text('token_hash').notNull().unique(),
@@ -341,7 +361,9 @@ export const passkeys = pgTable('passkeys', {
 })
 
 export const authChallenges = pgTable('auth_challenges', {
-    kind: text('kind').primaryKey(),
+    attemptId: uuid('attempt_id').primaryKey().defaultRandom(),
+    kind: text('kind').notNull(),
     challenge: text('challenge').notNull(),
+    browserBindingHash: text('browser_binding_hash').notNull(),
     expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
 })

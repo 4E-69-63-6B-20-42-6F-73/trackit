@@ -1,33 +1,11 @@
-import { readFile } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { describe, expect, it } from 'vitest'
+import { applyTestMigrations, migrationFiles } from './test-migrations.js'
 
 describe('database migration', () => {
     it('creates the persistent health record tables in PostgreSQL', async () => {
         const database = new PGlite()
-        for (const file of [
-            '0000_handy_rattler.sql',
-            '0001_noisy_leo.sql',
-            '0002_mute_drax.sql',
-            '0003_chief_lord_tyger.sql',
-            '0004_strange_mephistopheles.sql',
-            '0005_warm_mongoose.sql',
-            '0006_mighty_micromacro.sql',
-            '0007_huge_mandarin.sql',
-            '0008_public_mephistopheles.sql',
-            '0009_nappy_alex_power.sql',
-            '0010_nice_masked_marvel.sql',
-            '0011_powerful_elektra.sql',
-            '0012_hesitant_swordsman.sql',
-            '0013_stale_the_stranger.sql',
-            '0014_marvelous_sleeper.sql',
-            '0015_harsh_quasimodo.sql',
-            '0016_wooden_steve_rogers.sql',
-            '0017_narrow_ben_parker.sql',
-        ]) {
-            const migration = await readFile(`server/db/migrations/${file}`, 'utf8')
-            await database.exec(migration.replaceAll('--> statement-breakpoint', ''))
-        }
+        await applyTestMigrations(database)
         const result = await database.query<{ table_name: string }>(
             `select table_name from information_schema.tables
              where table_schema = 'public' order by table_name`,
@@ -59,6 +37,8 @@ describe('database migration', () => {
                 'retention_rules',
                 'mcp_action_receipts',
                 'mcp_confirmations',
+                'recovery_codes',
+                'device_request_nonces',
             ]),
         )
         await database.close()
@@ -66,26 +46,11 @@ describe('database migration', () => {
 
     it('upgrades the previous schema without losing records or historical defaults', async () => {
         const database = new PGlite()
-        const previousMigrations = [
-            '0000_handy_rattler.sql',
-            '0001_noisy_leo.sql',
-            '0002_mute_drax.sql',
-            '0003_chief_lord_tyger.sql',
-            '0004_strange_mephistopheles.sql',
-            '0005_warm_mongoose.sql',
-            '0006_mighty_micromacro.sql',
-            '0007_huge_mandarin.sql',
-            '0008_public_mephistopheles.sql',
-            '0009_nappy_alex_power.sql',
-            '0010_nice_masked_marvel.sql',
-            '0011_powerful_elektra.sql',
-            '0012_hesitant_swordsman.sql',
-            '0013_stale_the_stranger.sql',
-        ]
-        for (const file of previousMigrations) {
-            const migration = await readFile(`server/db/migrations/${file}`, 'utf8')
-            await database.exec(migration.replaceAll('--> statement-breakpoint', ''))
-        }
+        const files = await migrationFiles()
+        await applyTestMigrations(
+            database,
+            files.filter(file => file < '0014_'),
+        )
         await database.exec(`
             insert into foods (id, name, calories_per_100g)
             values ('00000000-0000-4000-8000-000000000001', 'Upgrade oats', 389);
@@ -102,23 +67,10 @@ describe('database migration', () => {
             insert into saved_trend_views (id, name, metric, range_days)
             values ('00000000-0000-4000-8000-000000000004', 'Upgrade view', 'weight', 30);
         `)
-        const upgrade = await readFile('server/db/migrations/0014_marvelous_sleeper.sql', 'utf8')
-        await database.exec(upgrade.replaceAll('--> statement-breakpoint', ''))
-        const sourceVersionUpgrade = await readFile(
-            'server/db/migrations/0015_harsh_quasimodo.sql',
-            'utf8',
+        await applyTestMigrations(
+            database,
+            files.filter(file => file >= '0014_'),
         )
-        await database.exec(sourceVersionUpgrade.replaceAll('--> statement-breakpoint', ''))
-        const trendGranularityUpgrade = await readFile(
-            'server/db/migrations/0016_wooden_steve_rogers.sql',
-            'utf8',
-        )
-        await database.exec(trendGranularityUpgrade.replaceAll('--> statement-breakpoint', ''))
-        const foodRecencyUpgrade = await readFile(
-            'server/db/migrations/0017_narrow_ben_parker.sql',
-            'utf8',
-        )
-        await database.exec(foodRecencyUpgrade.replaceAll('--> statement-breakpoint', ''))
         await database.exec(`
             insert into observations (
                 metric, canonical_value, canonical_unit, original_value, original_unit,

@@ -19,7 +19,7 @@ test('quick add persists and can be deleted from the journal', async ({ page }) 
     await expect(mealDescription).toHaveValue('Lentil soup')
     await page.getByRole('button', { name: 'Save meal' }).click()
 
-    await page.getByRole('button', { name: 'Journal', exact: true }).first().click()
+    await page.getByRole('link', { name: 'Journal', exact: true }).first().click()
     await expect(page.getByText('Lentil soup')).toBeVisible()
     await page.reload()
     await enterDemo(page)

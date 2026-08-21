@@ -1,4 +1,4 @@
-import { inArray, lt } from 'drizzle-orm'
+import { and, eq, inArray, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -80,45 +80,53 @@ export class DataLifecycleService {
         const rules = await this.listRetentionRules()
         for (const rule of rules.filter(item => item.enabled)) {
             const cutoff = new Date(Date.now() - rule.days * 24 * 60 * 60 * 1000)
-            if (rule.category === 'observations') {
-                const linked = await this.database
-                    .select({ id: observations.id })
-                    .from(observations)
-                    .where(lt(observations.observedAt, cutoff))
-                if (linked.length) {
-                    await this.database.delete(journalEntries).where(
-                        inArray(
-                            journalEntries.id,
-                            linked.map(record => record.id),
-                        ),
-                    )
+            await this.database.transaction(async transaction => {
+                if (rule.category === 'observations') {
+                    const linked = await transaction
+                        .select({ id: observations.id })
+                        .from(observations)
+                        .where(lt(observations.observedAt, cutoff))
+                    if (linked.length)
+                        await transaction.delete(journalEntries).where(
+                            and(
+                                eq(journalEntries.entityType, 'observation'),
+                                inArray(
+                                    journalEntries.entityId,
+                                    linked.map(record => record.id),
+                                ),
+                            ),
+                        )
+                    await transaction
+                        .delete(observations)
+                        .where(lt(observations.observedAt, cutoff))
+                } else if (rule.category === 'meals') {
+                    const linked = await transaction
+                        .select({ id: meals.id })
+                        .from(meals)
+                        .where(lt(meals.eatenAt, cutoff))
+                    if (linked.length)
+                        await transaction.delete(journalEntries).where(
+                            and(
+                                eq(journalEntries.entityType, 'meal'),
+                                inArray(
+                                    journalEntries.entityId,
+                                    linked.map(record => record.id),
+                                ),
+                            ),
+                        )
+                    await transaction.delete(meals).where(lt(meals.eatenAt, cutoff))
+                } else if (rule.category === 'journal') {
+                    await transaction
+                        .delete(journalEntries)
+                        .where(lt(journalEntries.observedAt, cutoff))
                 }
-                await this.database.delete(observations).where(lt(observations.observedAt, cutoff))
-            } else if (rule.category === 'meals') {
-                const linked = await this.database
-                    .select({ id: meals.id })
-                    .from(meals)
-                    .where(lt(meals.eatenAt, cutoff))
-                if (linked.length) {
-                    await this.database.delete(journalEntries).where(
-                        inArray(
-                            journalEntries.id,
-                            linked.map(record => record.id),
-                        ),
-                    )
-                }
-                await this.database.delete(meals).where(lt(meals.eatenAt, cutoff))
-            } else if (rule.category === 'journal') {
-                await this.database
-                    .delete(journalEntries)
-                    .where(lt(journalEntries.observedAt, cutoff))
-            }
-            await this.database.insert(auditEvents).values({
-                actor: 'system',
-                action: 'retention.applied',
-                targetType: 'category',
-                targetId: rule.category,
-                metadata: { cutoff: cutoff.toISOString(), days: rule.days },
+                await transaction.insert(auditEvents).values({
+                    actor: 'system',
+                    action: 'retention.applied',
+                    targetType: 'category',
+                    targetId: rule.category,
+                    metadata: { cutoff: cutoff.toISOString(), days: rule.days },
+                })
             })
         }
     }
@@ -129,9 +137,12 @@ export class DataLifecycleService {
                 const linked = await transaction.select({ id: observations.id }).from(observations)
                 if (linked.length) {
                     await transaction.delete(journalEntries).where(
-                        inArray(
-                            journalEntries.id,
-                            linked.map(record => record.id),
+                        and(
+                            eq(journalEntries.entityType, 'observation'),
+                            inArray(
+                                journalEntries.entityId,
+                                linked.map(record => record.id),
+                            ),
                         ),
                     )
                 }
@@ -141,9 +152,12 @@ export class DataLifecycleService {
                 const linked = await transaction.select({ id: meals.id }).from(meals)
                 if (linked.length) {
                     await transaction.delete(journalEntries).where(
-                        inArray(
-                            journalEntries.id,
-                            linked.map(record => record.id),
+                        and(
+                            eq(journalEntries.entityType, 'meal'),
+                            inArray(
+                                journalEntries.entityId,
+                                linked.map(record => record.id),
+                            ),
                         ),
                     )
                 }

@@ -1,6 +1,6 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createTrackItMcpServer } from './server.js'
 import type { McpClient } from './service.js'
 
@@ -14,6 +14,119 @@ const grant: McpClient = {
 }
 
 describe('TrackIt MCP tools', () => {
+    it('enforces the grant window on every mutation and hides delete contents without read scope', async () => {
+        const outsideId = '20000000-0000-4000-8000-000000000001'
+        const insideId = '20000000-0000-4000-8000-000000000002'
+        const data = {
+            getPreferences: async () => ({ timezone: 'UTC' }),
+            createMeal: vi.fn(),
+            createObservation: vi.fn(),
+        }
+        const journal = {
+            create: vi.fn(),
+            remove: vi.fn(),
+            list: async () => [
+                {
+                    id: outsideId,
+                    title: 'Sensitive outside note',
+                    detail: 'Must not be disclosed',
+                    source: 'You',
+                    category: 'Check-ins',
+                    observedAt: '2026-02-10T10:00:00Z',
+                },
+                {
+                    id: insideId,
+                    title: 'Sensitive inside note',
+                    detail: 'Delete-only clients must not read this',
+                    source: 'You',
+                    category: 'Check-ins',
+                    observedAt: '2026-01-10T10:00:00Z',
+                },
+            ],
+        }
+        const access = {
+            runIdempotent: vi.fn(),
+            issueConfirmation: vi.fn(async () => ({
+                token: 'confirmation',
+                expiresAt: new Date('2026-01-10T10:05:00Z'),
+            })),
+            consumeConfirmation: vi.fn(),
+        }
+        const deleteOnly = {
+            ...grant,
+            scopes: ['meals:write', 'observations:write', 'checkins:write', 'journal:delete'],
+        }
+        const server = createTrackItMcpServer(
+            deleteOnly,
+            data as never,
+            journal as never,
+            access as never,
+        )
+        const client = new Client({ name: 'mutation-boundary-test', version: '1.0.0' })
+        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+        const outsideTimestamp = '2026-02-10T10:00:00Z'
+        const calls = [
+            {
+                name: 'log_meal',
+                arguments: {
+                    name: 'Meal',
+                    mealType: 'Lunch',
+                    nutrients: { calories: 500 },
+                    eatenAt: outsideTimestamp,
+                    confirmationToken: 'token',
+                    idempotencyKey: '30000000-0000-4000-8000-000000000001',
+                },
+            },
+            {
+                name: 'log_measurement',
+                arguments: {
+                    metric: 'weight',
+                    value: 80,
+                    unit: 'kg',
+                    observedAt: outsideTimestamp,
+                    idempotencyKey: '30000000-0000-4000-8000-000000000002',
+                },
+            },
+            {
+                name: 'log_checkin',
+                arguments: {
+                    title: 'Energy',
+                    detail: 'Fine',
+                    observedAt: outsideTimestamp,
+                    idempotencyKey: '30000000-0000-4000-8000-000000000003',
+                },
+            },
+            { name: 'preview_delete_journal', arguments: { id: outsideId } },
+            {
+                name: 'delete_journal',
+                arguments: { id: outsideId, confirmationToken: 'token' },
+            },
+        ]
+        for (const request of calls) {
+            expect((await client.callTool(request)).isError).toBe(true)
+        }
+        expect(access.runIdempotent).not.toHaveBeenCalled()
+        expect(access.consumeConfirmation).not.toHaveBeenCalled()
+        expect(journal.remove).not.toHaveBeenCalled()
+
+        const preview = await client.callTool({
+            name: 'preview_delete_journal',
+            arguments: { id: insideId },
+        })
+        const previewText = (preview as { content: { text: string }[] }).content[0].text
+        expect(JSON.parse(previewText).target).toEqual({
+            id: insideId,
+            contentAvailable: false,
+        })
+        expect(previewText).not.toContain('Sensitive inside note')
+        expect(previewText).not.toContain('Delete-only clients')
+
+        await client.close()
+        await server.close()
+    })
+
     it('enforces category/date grants and labels journal notes as untrusted data', async () => {
         const data = {
             listObservations: async () => [

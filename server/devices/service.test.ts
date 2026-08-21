@@ -25,12 +25,34 @@ describe('Android device pairing and upload', () => {
         })
         const publicKey = keyPair.publicKey.toString('base64')
         const fingerprint = createHash('sha256').update(keyPair.publicKey).digest('base64url')
-        const authenticate = (credential?: string) => {
-            const timestamp = Date.now().toString()
-            const signature = sign('sha256', Buffer.from(timestamp), keyPair.privateKey).toString(
+        const authenticate = (credential?: string, overrides: Record<string, string> = {}) => {
+            const timestamp = overrides.timestamp ?? Date.now().toString()
+            const request = {
+                credential,
+                deviceId: overrides.deviceId ?? requested?.deviceId ?? randomUUID(),
+                method: overrides.method ?? 'POST',
+                path: overrides.path ?? '/api/device/upload',
+                timestamp,
+                nonce: overrides.nonce ?? randomUUID(),
+                bodyHash: overrides.bodyHash ?? createHash('sha256').update('{}').digest('hex'),
+            }
+            const canonical = [
+                request.method,
+                request.path,
+                timestamp,
+                request.nonce,
+                request.bodyHash,
+                request.deviceId,
+            ].join('\n')
+            const signature = sign('sha256', Buffer.from(canonical), keyPair.privateKey).toString(
                 'base64url',
             )
-            return service.authenticate(credential, timestamp, signature)
+            return service.authenticate({
+                ...request,
+                path: overrides.submittedPath ?? request.path,
+                bodyHash: overrides.submittedBodyHash ?? request.bodyHash,
+                signature,
+            })
         }
         const pairing = await service.createPairingCode()
         const requested = await service.requestPairing(
@@ -54,6 +76,32 @@ describe('Android device pairing and upload', () => {
 
         await service.confirm(requested!.deviceId)
         expect(await authenticate(requested?.credential)).not.toBeNull()
+        expect(
+            await authenticate(requested?.credential, {
+                timestamp: String(Date.now() - 120_000),
+            }),
+        ).toBeNull()
+        const replayNonce = randomUUID()
+        expect(await authenticate(requested?.credential, { nonce: replayNonce })).not.toBeNull()
+        expect(await authenticate(requested?.credential, { nonce: replayNonce })).toBeNull()
+        const validBodyHash = createHash('sha256').update('{}').digest('hex')
+        expect(
+            await authenticate(requested?.credential, {
+                bodyHash: validBodyHash,
+                path: '/api/device/cursor',
+            }),
+        ).not.toBeNull()
+        expect(
+            await authenticate(requested?.credential, {
+                path: '/api/device/upload',
+                submittedPath: '/api/device/cursor',
+            }),
+        ).toBeNull()
+        expect(
+            await authenticate(requested?.credential, {
+                submittedBodyHash: createHash('sha256').update('{"tampered":true}').digest('hex'),
+            }),
+        ).toBeNull()
         const batch = randomUUID()
         const records = [
             {

@@ -6,7 +6,7 @@ const configSchema = z.object({
     LOG_LEVEL: z
         .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
         .default('info'),
-    DATABASE_URL: z.string().default('postgres://trackit:trackit@localhost:5432/trackit'),
+    DATABASE_URL: z.string().min(1),
     WEB_ORIGIN: z.string().url().default('http://localhost:5173'),
     TRUST_PROXY: z
         .enum(['true', 'false'])
@@ -19,6 +19,14 @@ const configSchema = z.object({
     BACKUP_DIR: z.string().default('./backups'),
     BACKUP_INTERVAL_HOURS: z.coerce.number().positive().default(24),
     BACKUP_ENCRYPTION_KEY: z.string().optional(),
+    BOOTSTRAP_SECRET: z.string().min(32).optional(),
 })
 
-export const config = configSchema.parse(process.env)
+export const config = configSchema.parse({
+    ...process.env,
+    DATABASE_URL:
+        process.env.DATABASE_URL ??
+        (process.env.NODE_ENV === 'production'
+            ? undefined
+            : 'postgres://trackit:trackit@localhost:5432/trackit'),
+})

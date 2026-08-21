@@ -4,6 +4,7 @@ import type * as schemaType from '../db/schema.js'
 import { journalEntries } from '../db/schema.js'
 import type {
     CreateJournalEntry,
+    JournalEntityLink,
     JournalEntry,
     JournalRepository,
     UpdateJournalEntry,
@@ -22,6 +23,8 @@ const toEntry = (row: typeof journalEntries.$inferSelect): JournalEntry => ({
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    entityType: row.entityType ? (row.entityType as 'meal' | 'observation') : undefined,
+    entityId: row.entityId ?? undefined,
 })
 
 export class PostgresJournalRepository implements JournalRepository {
@@ -36,7 +39,7 @@ export class PostgresJournalRepository implements JournalRepository {
         return rows.map(toEntry)
     }
 
-    async create(input: CreateJournalEntry) {
+    async create(input: CreateJournalEntry & JournalEntityLink) {
         const [row] = await this.database
             .insert(journalEntries)
             .values({
@@ -47,6 +50,8 @@ export class PostgresJournalRepository implements JournalRepository {
                 sourceLabel: input.source,
                 observedAt: new Date(input.observedAt),
                 externalId: input.externalId,
+                entityType: input.entityType,
+                entityId: input.entityId,
             })
             .onConflictDoUpdate({
                 target: journalEntries.id,
