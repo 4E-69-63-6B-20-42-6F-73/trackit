@@ -55,14 +55,16 @@ describe('Android device pairing and upload', () => {
             })
         }
         const pairing = await service.createPairingCode()
-        const requested = await service.requestPairing(
+        const result = await service.requestPairing(
             pairing.code,
             'Pixel',
             fingerprint,
             publicKey,
             pairing.serverIdentity,
         )
-        expect(requested?.status).toBe('pending')
+        expect(result).not.toBeNull()
+        const requested = result as { deviceId: string; credential: string; status: string; serverIdentity: string }
+        expect(requested.status).toBe('pending')
         expect(
             await service.requestPairing(
                 pairing.code,

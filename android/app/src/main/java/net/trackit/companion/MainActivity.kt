@@ -122,16 +122,24 @@ class MainActivity : ComponentActivity() {
                                             val expiresAt = java.time.Instant.parse(
                                                 payload.getString("expiresAt"),
                                             )
-                                            require(expiresAt.isAfter(java.time.Instant.now())) {
-                                                "Pairing code has expired"
+                                            val now = java.time.Instant.now()
+                                            val isExpired = expiresAt.isBefore(now)
+                                            
+                                            if (isExpired) {
+                                                status = "Pairing code has expired. Generate a new code in TrackIt."
+                                                return@runCatching
                                             }
+                                            
                                             serverUrl = payload.getString("serverUrl")
                                             serverIdentity = payload.getString("serverIdentity")
                                             code = payload.getString("code")
                                             status = "QR read. Verify the server identity, then request pairing."
                                         }.onFailure {
-                                            status = "That is not a valid TrackIt pairing QR code."
+                                            status = "QR scanning failed: ${it.message}"
                                         }
+                                    }
+                                    .addOnFailureListener {
+                                        status = "QR scanning was unavailable. You can enter the details manually."
                                     }
                                     .addOnFailureListener {
                                         status = "QR scanning was unavailable. You can enter the details manually."
@@ -143,12 +151,31 @@ class MainActivity : ComponentActivity() {
                         OutlinedTextField(serverUrl, { serverUrl = it }, label = { Text("HTTPS server URL") })
                         OutlinedTextField(serverIdentity, { serverIdentity = it }, label = { Text("Server identity") })
                         OutlinedTextField(code, { code = it }, label = { Text("Pairing code") })
+                        if (status.contains("expired", ignoreCase = true)) {
+                            Text("This pairing code is no longer valid. Please generate a fresh code.")
+                        }
                         Button(onClick = {
                             scope.launch {
-                                status = runCatching {
+                                val result = runCatching {
                                     PairingClient(this@MainActivity).pair(serverUrl, serverIdentity, code)
-                                    "Waiting for confirmation in TrackIt"
-                                }.getOrElse { "Pairing failed: ${it.message}" }
+                                }.getOrDefault(PairingClient.Result.Failure("Network error", null))
+                                status = when {
+                                    result.success -> {
+                                        // Paired successfully
+                                        credentialStore.save(
+                                            serverUrl,
+                                            result.serverIdentity,
+                                            result.deviceId,
+                                            result.credential,
+                                        )
+                                        "Paired successfully. Ready to sync."
+                                    }
+                                    result.serverIdentity != null -> {
+                                        // Waiting for confirmation
+                                        "Pairing requested. Please confirm on TrackIt web."
+                                    }
+                                    else -> "Pairing failed: ${result.message}"
+                                }
                             }
                         }) { Text("Request pairing") }
                         Text(status)

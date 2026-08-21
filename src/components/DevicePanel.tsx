@@ -1,6 +1,6 @@
 import { Alert, Button, Code, Group, Stack, Text } from '@mantine/core'
 import { QRCodeSVG } from 'qrcode.react'
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
     confirmDevice,
     createPairingCode,
@@ -17,6 +17,12 @@ export function DevicePanel() {
         serverIdentity: string
     } | null>(null)
     const [error, setError] = useState('')
+    const [pollingActive, setPollingActive] = useState(false)
+    const [newPendingCount, setNewPendingCount] = useState(0)
+    const [showPendingName, setShowPendingName] = useState(false)
+    const pollingRef = useRef<number | null>(null)
+    const prevPendingCountRef = useRef<number>(0)
+    const pendingDeviceIdRef = useRef<string | null>(null)
 
     const refresh = useCallback(
         () =>
@@ -30,6 +36,40 @@ export function DevicePanel() {
         void refresh()
     }, [refresh])
 
+    // Start polling when a pairing code is active
+    useEffect(() => {
+        if (pairing && !pollingActive) {
+            setPollingActive(true)
+            prevPendingCountRef.current = devices.filter(d => d.status === 'pending').length
+            pendingDeviceIdRef.current = null
+            pollingRef.current = setInterval(() => {
+                refresh().then(() => {
+                    const currentPendingDevices = devices.filter(d => d.status === 'pending')
+                    const currentPendingCount = currentPendingDevices.length
+                    const newPendingId = currentPendingDevices[0]?.id
+                    if (currentPendingCount > prevPendingCountRef.current) {
+                        setNewPendingCount(currentPendingCount)
+                        prevPendingCountRef.current = currentPendingCount
+                        pendingDeviceIdRef.current = newPendingId
+                        setShowPendingName(true)
+                    } else if (newPendingId && pendingDeviceIdRef.current !== newPendingId) {
+                        // New pending device detected
+                        setShowPendingName(true)
+                        pendingDeviceIdRef.current = newPendingId
+                    }
+                })
+            }, 1500) // Poll every 1.5 seconds
+        }
+
+        return () => {
+            if (pollingRef.current) {
+                clearInterval(pollingRef.current)
+                pollingRef.current = null
+            }
+            setPollingActive(false)
+        }
+    }, [pairing, pollingActive, devices, refresh])
+
     const create = async () => {
         try {
             setPairing(await createPairingCode())
@@ -39,10 +79,22 @@ export function DevicePanel() {
         }
     }
 
+    const stopPolling = useCallback(() => {
+        if (pollingRef.current) {
+            clearInterval(pollingRef.current)
+            pollingRef.current = null
+        }
+        setPollingActive(false)
+        setShowPendingName(false)
+        pendingDeviceIdRef.current = null
+    }, [])
+
     const confirm = async (id: string) => {
         try {
             await confirmDevice(id)
             await refresh()
+            stopPolling()
+            setShowPendingName(false)
             setError('')
         } catch {
             setError('The device could not be confirmed. The code may have expired.')
@@ -53,10 +105,30 @@ export function DevicePanel() {
         try {
             await revokeDevice(id)
             await refresh()
+            stopPolling()
             setError('')
         } catch {
             setError('The device could not be revoked. Try again.')
         }
+    }
+
+    const closePairing = useCallback(() => {
+        setPairing(null)
+        setError('')
+        stopPolling()
+    }, [stopPolling])
+
+    const calculateTimeRemaining = (expiresAt: string): string => {
+        const now = new Date()
+        const expires = new Date(expiresAt)
+        const diffMs = expires.getTime() - now.getTime()
+        const diffMins = Math.floor(diffMs / 60000)
+        const diffSeconds = diffMins % 60
+        const remainingMins = Math.floor(diffMs / 60000)
+        const remainingSeconds = (diffMs % 60000) / 1000
+        const mins = Math.min(remainingMins, 59)
+        const secs = Math.min(remainingSeconds, 59)
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
     }
 
     const qrValue = pairing
@@ -86,10 +158,23 @@ export function DevicePanel() {
                         <Text size="xs" mt="xs">
                             Verify server: {pairing.serverIdentity}
                         </Text>
+                        <Text size="xs" c="dimmed">
+                            Expires in {calculateTimeRemaining(pairing.expiresAt)}
+                        </Text>
                     </div>
                 </Group>
             )}
             {error && <Alert color="orange">{error}</Alert>}
+            {showPendingName && (
+                <Alert color="teal" variant="light" mt="sm">
+                    <Text>
+                        <Text fw={600} size="sm">
+                            New device detected
+                        </Text>
+                        {' — scanning for pending pairing requests...'}
+                    </Text>
+                </Alert>
+            )}
             {devices.map(device => (
                 <Group key={device.id} justify="space-between" wrap="nowrap" align="flex-start">
                     <div>
@@ -118,7 +203,7 @@ export function DevicePanel() {
                     </div>
                     {device.status === 'pending' ? (
                         <Button size="xs" onClick={() => void confirm(device.id)}>
-                            Confirm
+                            Confirm device
                         </Button>
                     ) : (
                         <Button
