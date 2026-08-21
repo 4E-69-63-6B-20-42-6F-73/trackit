@@ -2,6 +2,8 @@
 
 A privacy-first, self-hosted health and nutrition dashboard.
 
+This is project is currently in ALPHA. The fundaments are there, but expect some friction here and there.
+
 ## Start everything
 
 With Docker Desktop or Docker Engine installed, one command starts PostgreSQL, applies migrations,
