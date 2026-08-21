@@ -10,7 +10,10 @@ RUN apk add --no-cache postgresql-client
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+RUN npm ci --omit=dev \
+    && rm -rf /usr/local/lib/node_modules/npm \
+    && rm -f /usr/local/bin/npm /usr/local/bin/npx
+
 COPY --from=build /app/dist ./dist
 COPY --chown=node:node --from=build /app/server ./server
 COPY --chown=node:node --from=build /app/tsconfig.server.json ./
