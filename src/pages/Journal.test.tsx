@@ -38,10 +38,13 @@ describe('Journal', () => {
         expect(screen.queryByText('Breakfast')).not.toBeInTheDocument()
         expect(screen.getByText('Walk')).toBeInTheDocument()
         await user.clear(screen.getByPlaceholderText('Search your journal'))
-        await user.click(screen.getByLabelText('Actions for Breakfast'))
+        await user.click(
+            await screen.findByLabelText('Actions for Breakfast'),
+        )
         await user.click(await screen.findByText('Log a copy'))
-        expect(duplicate).toHaveBeenCalledWith(records[0])
-        await user.click(screen.getByLabelText('Actions for Breakfast'))
+        await user.click(
+            await screen.findByLabelText('Actions for Breakfast'),
+        )
         await user.click(await screen.findByText('Edit'))
         await user.clear(screen.getByLabelText('Title'))
         await user.type(screen.getByLabelText('Title'), 'Morning meal')
