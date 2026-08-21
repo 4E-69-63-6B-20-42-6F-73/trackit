@@ -1,7 +1,8 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+
 import { Journal } from './Journal'
 import type { JournalEvent } from '../domain/types'
 
@@ -28,26 +29,54 @@ describe('Journal', () => {
     it('filters records and exposes owner actions', async () => {
         const duplicate = vi.fn()
         const update = vi.fn().mockResolvedValue(true)
+
         render(
             <MantineProvider>
                 <Journal events={records} remove={vi.fn()} duplicate={duplicate} update={update} />
             </MantineProvider>,
         )
+
         const user = userEvent.setup()
-        await user.type(screen.getByPlaceholderText('Search your journal'), 'walk')
+        const search = screen.getByPlaceholderText('Search your journal')
+
+        await user.type(search, 'walk')
+
         expect(screen.queryByText('Breakfast')).not.toBeInTheDocument()
         expect(screen.getByText('Walk')).toBeInTheDocument()
-        await user.clear(screen.getByPlaceholderText('Search your journal'))
+
+        await user.clear(search)
+
         await user.click(await screen.findByLabelText('Actions for Breakfast'))
         await user.click(await screen.findByText('Log a copy'))
+
+        expect(duplicate).toHaveBeenCalledWith(records[0])
+
+        await waitFor(() => {
+            expect(screen.queryByText('Log a copy')).not.toBeInTheDocument()
+        })
+
         await user.click(await screen.findByLabelText('Actions for Breakfast'))
         await user.click(await screen.findByText('Edit'))
-        await user.clear(screen.getByLabelText('Title'))
-        await user.type(screen.getByLabelText('Title'), 'Morning meal')
-        await user.click(screen.getByRole('button', { name: 'Save changes' }))
-        expect(update).toHaveBeenCalledWith(
-            records[0],
-            expect.objectContaining({ title: 'Morning meal' }),
+
+        const dialog = await screen.findByRole('dialog')
+        const titleInput = within(dialog).getByLabelText('Title')
+
+        await user.clear(titleInput)
+        await user.type(titleInput, 'Morning meal')
+
+        await user.click(
+            within(dialog).getByRole('button', {
+                name: 'Save changes',
+            }),
         )
+
+        await waitFor(() => {
+            expect(update).toHaveBeenCalledWith(
+                records[0],
+                expect.objectContaining({
+                    title: 'Morning meal',
+                }),
+            )
+        })
     })
 })
