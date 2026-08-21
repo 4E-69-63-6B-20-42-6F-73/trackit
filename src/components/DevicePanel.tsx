@@ -18,11 +18,11 @@ export function DevicePanel() {
     } | null>(null)
     const [error, setError] = useState('')
     const [pollingActive, setPollingActive] = useState(false)
-    const [newPendingCount, setNewPendingCount] = useState(0)
     const [showPendingName, setShowPendingName] = useState(false)
     const pollingRef = useRef<number | null>(null)
     const prevPendingCountRef = useRef<number>(0)
     const pendingDeviceIdRef = useRef<string | null>(null)
+    const pollingActiveRef = useRef(false)
 
     const refresh = useCallback(
         () =>
@@ -38,7 +38,8 @@ export function DevicePanel() {
 
     // Start polling when a pairing code is active
     useEffect(() => {
-        if (pairing && !pollingActive) {
+        if (pairing && !pollingActiveRef.current) {
+            pollingActiveRef.current = true
             setPollingActive(true)
             prevPendingCountRef.current = devices.filter(d => d.status === 'pending').length
             pendingDeviceIdRef.current = null
@@ -48,7 +49,6 @@ export function DevicePanel() {
                     const currentPendingCount = currentPendingDevices.length
                     const newPendingId = currentPendingDevices[0]?.id
                     if (currentPendingCount > prevPendingCountRef.current) {
-                        setNewPendingCount(currentPendingCount)
                         prevPendingCountRef.current = currentPendingCount
                         pendingDeviceIdRef.current = newPendingId
                         setShowPendingName(true)
@@ -84,6 +84,7 @@ export function DevicePanel() {
             clearInterval(pollingRef.current)
             pollingRef.current = null
         }
+        pollingActiveRef.current = false
         setPollingActive(false)
         setShowPendingName(false)
         pendingDeviceIdRef.current = null
@@ -112,18 +113,10 @@ export function DevicePanel() {
         }
     }
 
-    const closePairing = useCallback(() => {
-        setPairing(null)
-        setError('')
-        stopPolling()
-    }, [stopPolling])
-
     const calculateTimeRemaining = (expiresAt: string): string => {
         const now = new Date()
         const expires = new Date(expiresAt)
         const diffMs = expires.getTime() - now.getTime()
-        const diffMins = Math.floor(diffMs / 60000)
-        const diffSeconds = diffMins % 60
         const remainingMins = Math.floor(diffMs / 60000)
         const remainingSeconds = (diffMs % 60000) / 1000
         const mins = Math.min(remainingMins, 59)
