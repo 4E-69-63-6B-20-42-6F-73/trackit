@@ -95,16 +95,19 @@ export class BackupService {
                 .where(eq(backupRuns.id, run.id))
                 .returning()
             return completed
-        } catch {
+        } catch (error) {
+            const diagnostic = error instanceof Error ? error.message : String(error)
+
             await this.database
                 .update(backupRuns)
                 .set({
                     status: 'failed',
-                    diagnostic: 'Backup command failed',
+                    diagnostic,
                     completedAt: new Date(),
                 })
                 .where(eq(backupRuns.id, run.id))
-            throw new Error('backup_failed')
+
+            throw new Error(`backup_failed: ${diagnostic}`, { cause: error })
         } finally {
             await unlink(encryptedPath).catch(() => undefined)
         }
