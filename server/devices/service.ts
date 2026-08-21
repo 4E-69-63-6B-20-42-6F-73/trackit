@@ -50,7 +50,11 @@ export class DeviceService {
         expectedServerIdentity: string,
     ): Promise<
         | { deviceId: string; credential: string; status: string; serverIdentity: string }
-        | { error: string; error_details: { message: string; error: string }; serverIdentity?: string }
+        | {
+              error: string
+              error_details: { message: string; error: string }
+              serverIdentity?: string
+          }
     > {
         if (expectedServerIdentity !== this.serverIdentity) {
             return {

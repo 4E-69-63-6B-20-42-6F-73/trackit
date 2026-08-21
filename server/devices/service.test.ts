@@ -63,7 +63,12 @@ describe('Android device pairing and upload', () => {
             pairing.serverIdentity,
         )
         expect(result).not.toBeNull()
-        const requested = result as { deviceId: string; credential: string; status: string; serverIdentity: string }
+        const requested = result as {
+            deviceId: string
+            credential: string
+            status: string
+            serverIdentity: string
+        }
         expect(requested.status).toBe('pending')
         expect(
             await service.requestPairing(

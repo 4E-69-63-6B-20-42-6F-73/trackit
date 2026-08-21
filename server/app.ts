@@ -513,7 +513,13 @@ export async function createApp(
                 input.data.publicKey,
                 input.data.serverIdentity,
             )
-            const isErrorResponse = (r: typeof paired): r is { error: string; error_details: { message: string; error: string }; serverIdentity?: string | undefined } => 'error' in r && r.error !== undefined
+            const isErrorResponse = (
+                r: typeof paired,
+            ): r is {
+                error: string
+                error_details: { message: string; error: string }
+                serverIdentity?: string | undefined
+            } => 'error' in r && r.error !== undefined
             if (isErrorResponse(paired)) {
                 return reply.code(401).send({
                     error: paired.error,
