@@ -92,3 +92,31 @@ and corrupted separator characters must not appear in user-facing copy.
 - Cover action selection and empty states with component tests.
 - Run formatting, linting, unit tests, and the production build.
 - Confirm responsive and keyboard behavior in browser-level tests.
+
+## Remaining-opportunity closure
+
+The following opportunities were identified during the settings, Trends, and Nutrition review and
+have now been implemented:
+
+- Trends supports every observation metric plus calories, protein, carbohydrates, fat, fiber,
+  sugar, saturated fat, sodium, and potassium. Cross-unit comparisons use independently normalized
+  series and say so beside the chart.
+- Goals retain their history. A goal can be retired with an effective end date instead of being
+  overwritten or deleted.
+- Foods, recipes, meal snapshots, CSV import, meal editing, and repeat logging preserve the
+  extended nutrient set. Sodium and potassium use milligrams; the other nutrient amounts use grams.
+- Nutrition determines “today” using the user's configured timezone, matching the rest of the
+  application rather than the browser's incidental timezone.
+- Settings sections are nested routes. Unknown settings URLs show a dedicated not-found state and
+  an explicit route back to Settings.
+
+### Further opportunities reviewed but intentionally not added
+
+- Vitamins and minerals beyond potassium are not collected yet. Adding an open-ended micronutrient
+  model deserves a separate schema design rather than more fixed columns.
+- Normalized comparison shows relative movement, not clinical correlation or causation. The product
+  deliberately avoids generating health claims from sparse personal data.
+- Nutrient targets are not inferred automatically. Users should set targets with appropriate
+  professional guidance instead of receiving invented defaults.
+
+No usability-critical opportunity from this review remains open.

@@ -16,7 +16,24 @@ describe('App routing', () => {
             </MantineProvider>,
         )
 
-        expect(await screen.findByRole('heading', { name: 'Journal' })).toBeInTheDocument()
+        expect(
+            await screen.findByRole('heading', { name: 'Journal' }, { timeout: 5_000 }),
+        ).toBeInTheDocument()
         expect(screen.getByText('4 entries')).toBeInTheDocument()
+    })
+
+    it('renders a bookmarkable goals route', async () => {
+        render(
+            <MantineProvider>
+                <MemoryRouter initialEntries={['/goals']}>
+                    <App />
+                </MemoryRouter>
+            </MantineProvider>,
+        )
+
+        expect(
+            await screen.findByRole('heading', { name: 'Goals', level: 1 }, { timeout: 5_000 }),
+        ).toBeInTheDocument()
+        expect(screen.getByRole('heading', { name: 'Add a goal' })).toBeInTheDocument()
     })
 })

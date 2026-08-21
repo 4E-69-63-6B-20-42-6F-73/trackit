@@ -35,6 +35,15 @@ body {
 button {
     font-family: inherit;
 }
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+[tabindex]:focus-visible {
+    outline: 3px solid #77a79d;
+    outline-offset: 2px;
+}
 .skip-link {
     position: fixed;
     left: 12px;
@@ -94,14 +103,24 @@ button {
 .collapse {
     margin-left: auto;
 }
-.collapsed .collapse {
-    display: none;
-}
 .sidebar nav {
     display: flex;
     flex-direction: column;
-    gap: 5px;
+    gap: 20px;
     margin-top: 36px;
+}
+.nav-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.nav-group-label {
+    color: #555c56;
+    font-size: 10px;
+    font-weight: 750;
+    letter-spacing: 0.1em;
+    padding: 0 12px 3px;
+    text-transform: uppercase;
 }
 .nav-item {
     border: 0;
@@ -135,24 +154,8 @@ button {
 .sidebar-foot {
     margin-top: auto;
 }
-.profile {
-    border-top: 1px solid #dedcd3;
-    margin-top: 10px;
-    padding: 18px 7px 0;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-}
-.avatar {
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: #d8e4df;
-    color: var(--teal);
-    display: grid;
-    place-items: center;
-    font-size: 12px;
-    font-weight: 700;
+.nav-item {
+    text-decoration: none;
 }
 .main {
     margin-left: 226px;
@@ -188,6 +191,15 @@ button {
     margin: 0 auto;
     padding: 42px 40px 70px;
 }
+.journal-page {
+    max-width: 1240px;
+}
+.trends-page {
+    max-width: 1200px;
+}
+.connections-page {
+    max-width: 1100px;
+}
 .welcome {
     display: flex;
     align-items: center;
@@ -203,7 +215,11 @@ button {
     text-transform: uppercase;
 }
 .welcome h1,
-.simple-page h1 {
+.simple-page h1,
+.settings-page > h1,
+.trends-page > h1,
+.connections-page > h1,
+.journal-page h1 {
     font-size: 30px;
     letter-spacing: -1px;
     margin: 6px 0 2px;
@@ -234,6 +250,38 @@ button {
     gap: 14px;
     position: relative;
     margin-bottom: 18px;
+}
+.next-action {
+    align-items: center;
+    background: var(--ink);
+    border-radius: 15px;
+    color: white;
+    display: grid;
+    gap: 15px;
+    grid-template-columns: auto 1fr auto;
+    margin-bottom: 18px;
+    padding: 18px 20px;
+}
+.next-action-icon {
+    align-items: center;
+    background: #ffffff17;
+    border-radius: 11px;
+    color: #b9ded5;
+    display: flex;
+    height: 42px;
+    justify-content: center;
+    width: 42px;
+}
+.next-action .teal-text {
+    color: #a8d5ca;
+}
+.next-action h2 {
+    font-size: 18px;
+    letter-spacing: -0.3px;
+    margin: 1px 0 2px;
+}
+.next-action-copy > .mantine-Text-root:last-child {
+    color: #d7dcda;
 }
 .insight-icon {
     width: 38px;
@@ -272,6 +320,10 @@ button {
     padding: 17px;
     min-height: 145px;
     position: relative;
+}
+.metric-action {
+    margin-left: -8px;
+    margin-top: 2px;
 }
 .metric-icon,
 .event-icon,
@@ -352,6 +404,9 @@ button {
 .progress-row {
     margin: 17px 0;
 }
+.progress-row > .mantine-Button-root {
+    margin-left: -8px;
+}
 .progress-label {
     display: flex;
     justify-content: space-between;
@@ -375,6 +430,22 @@ button {
 .timeline {
     padding-bottom: 5px;
 }
+.chart-empty {
+    align-items: center;
+    background: #f4f5f1;
+    border: 1px dashed #d8dad3;
+    border-radius: 12px;
+    color: var(--teal);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 155px;
+    padding: 18px;
+    text-align: center;
+}
+.chart-empty .mantine-Button-root {
+    margin-top: 8px;
+}
 .event {
     min-height: 65px;
     border-top: 1px solid #eeece5;
@@ -396,6 +467,32 @@ button {
 }
 .simple-page {
     max-width: 1050px;
+}
+.record-feedback {
+    bottom: 24px;
+    box-shadow: 0 12px 40px #1f292240;
+    max-width: calc(100vw - 32px);
+    position: fixed;
+    right: 24px;
+    width: 360px;
+    z-index: 300;
+}
+.page-empty {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 24px;
+    min-height: 300px;
+    padding: 40px;
+    text-align: center;
+}
+.page-empty h2 {
+    margin: 6px 0 0;
+}
+.page-empty .mantine-Button-root {
+    margin-top: 10px;
 }
 .section-title {
     display: flex;
@@ -484,6 +581,26 @@ button {
     gap: 14px;
     margin-top: 30px;
 }
+.connection-grid-primary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.connections-advanced {
+    border-top: 1px solid var(--line);
+    margin-top: 32px;
+    padding-top: 24px;
+}
+.connection-card-compact {
+    align-items: center;
+    display: grid;
+    gap: 16px;
+    grid-template-columns: auto 1fr auto;
+    margin-top: 14px;
+    min-height: 0;
+    padding: 18px 20px;
+}
+.connection-card-compact .connection-icon {
+    margin: 0;
+}
 .connection-card {
     padding: 22px;
     min-height: 265px;
@@ -540,6 +657,80 @@ button {
 .settings-list button:last-child {
     border-bottom: 0;
 }
+.settings-page {
+    max-width: 1180px;
+}
+.settings-layout {
+    display: grid;
+    gap: 16px;
+    grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
+    margin-top: 28px;
+}
+.settings-navigation {
+    align-self: start;
+    padding: 8px 16px;
+}
+.settings-navigation a {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    cursor: pointer;
+    display: grid;
+    gap: 12px;
+    grid-template-columns: 40px 1fr 20px;
+    min-height: 72px;
+    padding: 12px 4px;
+    text-align: left;
+    width: 100%;
+    text-decoration: none;
+}
+.settings-navigation a:last-child {
+    border-bottom: 0;
+}
+.settings-navigation a:hover,
+.settings-navigation a.active {
+    color: var(--teal);
+}
+.settings-navigation a.active {
+    background: #f2f6f3;
+    border-radius: 10px;
+    padding-inline: 10px;
+}
+.settings-detail {
+    min-width: 0;
+    padding: 24px;
+}
+.settings-detail-heading {
+    align-items: center;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    gap: 12px;
+    margin-bottom: 22px;
+    padding: 12px 0 20px;
+}
+.settings-detail-heading .settings-icon {
+    flex: 0 0 auto;
+}
+.settings-detail-heading h2,
+.settings-overview h2 {
+    margin: 0;
+}
+.settings-back {
+    display: none;
+    margin-left: -8px;
+}
+.settings-overview {
+    align-items: center;
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-height: 270px;
+    padding: 40px;
+    text-align: center;
+}
 .settings-icon {
     width: 36px;
     height: 36px;
@@ -548,6 +739,55 @@ button {
     display: grid;
     place-items: center;
     color: #636a64;
+}
+.goals-page {
+    max-width: 1180px;
+}
+.goals-layout {
+    display: grid;
+    gap: 18px;
+    grid-template-columns: minmax(320px, 0.85fr) minmax(420px, 1.15fr);
+    margin-top: 28px;
+}
+.goal-create,
+.goal-list {
+    align-self: start;
+}
+.goal-section-heading {
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    margin-bottom: 22px;
+}
+.goal-section-heading h2,
+.goal-list h2 {
+    margin: 0;
+}
+.goal-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.goal-card {
+    background: #faf9f4;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 16px;
+}
+.goal-target {
+    font-size: 20px;
+    margin-top: 3px;
+}
+.goal-empty {
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+    padding: 42px 20px;
+    text-align: center;
 }
 .mobile-nav {
     display: none;
@@ -559,9 +799,7 @@ button {
     }
     .sidebar .brand span,
     .sidebar .brand strong,
-    .sidebar .nav-item span,
-    .sidebar .profile > div:not(.avatar),
-    .collapse {
+    .sidebar .nav-item span {
         display: none;
     }
     .sidebar .nav-item {
@@ -623,6 +861,15 @@ button {
     .insight {
         padding-right: 38px;
     }
+    .next-action {
+        align-items: start;
+        grid-template-columns: auto 1fr;
+        padding: 17px;
+    }
+    .next-action .mantine-Button-root {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
     .metric-grid {
         grid-template-columns: 1fr 1fr;
         gap: 9px;
@@ -666,7 +913,7 @@ button {
         justify-content: space-around;
         padding-top: 7px;
     }
-    .mobile-nav button {
+    .mobile-nav a {
         border: 0;
         background: transparent;
         color: #626862;
@@ -677,10 +924,14 @@ button {
         font-size: 10px;
         flex: 1;
         min-width: 48px;
+        text-decoration: none;
     }
-    .mobile-nav button.active {
+    .mobile-nav a.active {
         color: var(--teal);
         font-weight: 700;
+    }
+    .goals-layout {
+        grid-template-columns: 1fr;
     }
     .section-title {
         align-items: flex-start;
@@ -722,10 +973,75 @@ button {
     gap: 18px;
     margin-top: 20px;
 }
+.food-browser-heading {
+    margin-bottom: 16px;
+}
+.food-browser-heading h2 {
+    margin: 0 0 2px;
+}
+.nutrition-context {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+.nutrition-context-grid {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: repeat(3, 1fr);
+}
+.nutrition-context-grid > div {
+    background: #f3f5f2;
+    border-radius: 10px;
+    padding: 12px;
+}
+.trend-primary-controls {
+    align-items: end;
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(200px, 1fr) 150px auto auto;
+    margin-bottom: 18px;
+}
+.trend-compare {
+    margin-bottom: 14px;
+    max-width: 320px;
+}
+.trend-summary {
+    background: #f3f5f2;
+    border-radius: 12px;
+    display: grid;
+    gap: 1px;
+    grid-template-columns: repeat(4, 1fr);
+    margin: 18px 0 4px;
+    overflow: hidden;
+}
+.trend-summary > div {
+    background: #f8f9f6;
+    padding: 13px 15px;
+}
+.trend-metric-empty {
+    align-items: center;
+    background: #f4f5f1;
+    border: 1px dashed #d8dad3;
+    border-radius: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    justify-content: center;
+    min-height: 240px;
+    padding: 28px;
+    text-align: center;
+}
+.trend-metric-empty .mantine-Button-root {
+    margin-top: 8px;
+}
+.nutrition-macros {
+    display: block;
+    margin: -3px 0 8px 26px;
+}
 
 .nutrition-secondary {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     gap: 18px;
     margin-top: 18px;
 }
@@ -773,6 +1089,26 @@ button {
     .nutrition-secondary {
         grid-template-columns: 1fr;
     }
+    .connection-grid-primary,
+    .trend-summary {
+        grid-template-columns: 1fr;
+    }
+    .connection-card-compact {
+        align-items: start;
+        grid-template-columns: auto 1fr;
+    }
+    .connection-card-compact .mantine-Button-root {
+        grid-column: 1 / -1;
+    }
+    .settings-layout {
+        grid-template-columns: 1fr;
+    }
+    .has-active-settings .settings-navigation {
+        display: none;
+    }
+    .settings-back {
+        display: inline-flex;
+    }
 }
 .trend-controls {
     align-items: center;
@@ -785,5 +1121,15 @@ button {
         align-items: stretch;
         flex-direction: column;
         width: 100%;
+    }
+    .trend-primary-controls {
+        align-items: stretch;
+        grid-template-columns: 1fr 1fr;
+    }
+    .record-feedback {
+        bottom: 78px;
+        left: 16px;
+        right: 16px;
+        width: auto;
     }
 }

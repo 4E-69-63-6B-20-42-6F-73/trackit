@@ -27,9 +27,10 @@ const records: JournalEvent[] = [
 describe('Journal', () => {
     it('filters records and exposes owner actions', async () => {
         const duplicate = vi.fn()
+        const update = vi.fn().mockResolvedValue(true)
         render(
             <MantineProvider>
-                <Journal events={records} remove={vi.fn()} duplicate={duplicate} />
+                <Journal events={records} remove={vi.fn()} duplicate={duplicate} update={update} />
             </MantineProvider>,
         )
         const user = userEvent.setup()
@@ -38,7 +39,16 @@ describe('Journal', () => {
         expect(screen.getByText('Walk')).toBeInTheDocument()
         await user.clear(screen.getByPlaceholderText('Search your journal'))
         await user.click(screen.getByLabelText('Actions for Breakfast'))
-        await user.click(await screen.findByText('Duplicate'))
+        await user.click(await screen.findByText('Log a copy'))
         expect(duplicate).toHaveBeenCalledWith(records[0])
+        await user.click(screen.getByLabelText('Actions for Breakfast'))
+        await user.click(await screen.findByText('Edit'))
+        await user.clear(screen.getByLabelText('Title'))
+        await user.type(screen.getByLabelText('Title'), 'Morning meal')
+        await user.click(screen.getByRole('button', { name: 'Save changes' }))
+        expect(update).toHaveBeenCalledWith(
+            records[0],
+            expect.objectContaining({ title: 'Morning meal' }),
+        )
     })
 })

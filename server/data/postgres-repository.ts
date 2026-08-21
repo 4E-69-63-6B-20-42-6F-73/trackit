@@ -260,9 +260,23 @@ export class PostgresDataRepository implements DataRepository {
                         nutrients.carbs += food.carbsPer100g * factor
                         nutrients.fat += food.fatPer100g * factor
                         nutrients.fiber += food.fiberPer100g * factor
+                        nutrients.sugar += food.sugarPer100g * factor
+                        nutrients.saturatedFat += food.saturatedFatPer100g * factor
+                        nutrients.sodium += food.sodiumPer100g * factor
+                        nutrients.potassium += food.potassiumPer100g * factor
                         return nutrients
                     },
-                    { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0 },
+                    {
+                        calories: 0,
+                        protein: 0,
+                        carbs: 0,
+                        fat: 0,
+                        fiber: 0,
+                        sugar: 0,
+                        saturatedFat: 0,
+                        sodium: 0,
+                        potassium: 0,
+                    },
                 )
                 return {
                     ...recipe,
@@ -333,6 +347,15 @@ export class PostgresDataRepository implements DataRepository {
             })
             .returning()
         return record
+    }
+
+    async retireGoal(id: string, effectiveTo: string) {
+        const [record] = await this.database
+            .update(goals)
+            .set({ effectiveTo: new Date(effectiveTo) })
+            .where(eq(goals.id, id))
+            .returning()
+        return record ?? null
     }
 
     listSavedTrendViews() {

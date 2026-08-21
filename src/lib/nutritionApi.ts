@@ -11,6 +11,10 @@ type FoodRecord = {
     carbsPer100g: number
     fatPer100g: number
     fiberPer100g: number
+    sugarPer100g: number
+    saturatedFatPer100g: number
+    sodiumPer100g: number
+    potassiumPer100g: number
     servingName: string
     servingGrams: number
     favorite: boolean
@@ -50,6 +54,10 @@ const toFood = (record: FoodRecord): Food => ({
         carbs: record.carbsPer100g,
         fat: record.fatPer100g,
         fiber: record.fiberPer100g,
+        sugar: record.sugarPer100g,
+        saturatedFat: record.saturatedFatPer100g,
+        sodium: record.sodiumPer100g,
+        potassium: record.potassiumPer100g,
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
@@ -84,6 +92,10 @@ export async function createFood(food: Omit<Food, 'id'>) {
             carbsPer100g: food.per100g.carbs,
             fatPer100g: food.per100g.fat,
             fiberPer100g: food.per100g.fiber,
+            sugarPer100g: food.per100g.sugar ?? 0,
+            saturatedFatPer100g: food.per100g.saturatedFat ?? 0,
+            sodiumPer100g: food.per100g.sodium ?? 0,
+            potassiumPer100g: food.per100g.potassium ?? 0,
         }),
     })
     if (!response.ok) throw new Error('Could not create food')
@@ -109,6 +121,10 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
             carbsPer100g: changes.per100g.carbs,
             fatPer100g: changes.per100g.fat,
             fiberPer100g: changes.per100g.fiber,
+            sugarPer100g: changes.per100g.sugar ?? 0,
+            saturatedFatPer100g: changes.per100g.saturatedFat ?? 0,
+            sodiumPer100g: changes.per100g.sodium ?? 0,
+            potassiumPer100g: changes.per100g.potassium ?? 0,
         }),
     })
     if (response.status === 409) throw new Error('Food changed elsewhere. Reload and try again.')

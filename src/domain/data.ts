@@ -7,6 +7,7 @@ import {
     IconNotes,
     IconScale,
     IconSparkles,
+    IconTargetArrow,
     IconTrendingUp,
 } from '@tabler/icons-react'
 import type { Category, JournalEvent, Page } from './types'
@@ -71,6 +72,7 @@ export const nav: { label: Page; icon: typeof IconDashboard }[] = [
     { label: 'Today', icon: IconDashboard },
     { label: 'Nutrition', icon: IconApple },
     { label: 'Journal', icon: IconNotes },
+    { label: 'Goals', icon: IconTargetArrow },
     { label: 'Trends', icon: IconTrendingUp },
     { label: 'Connections', icon: IconLink },
 ]

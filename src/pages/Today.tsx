@@ -5,8 +5,10 @@ import {
     IconDroplet,
     IconHeartRateMonitor,
     IconMoon,
+    IconPlugConnected,
     IconScale,
     IconSparkles,
+    IconTargetArrow,
     IconX,
 } from '@tabler/icons-react'
 import {
@@ -20,6 +22,7 @@ import {
 } from 'recharts'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { MetricCard } from '../components/MetricCard'
+import type { QuickAddKind } from '../components/QuickAdd'
 import { eventVisual } from '../domain/data'
 import { displayValue, type Observation } from '../domain/health'
 import type { JournalEvent } from '../domain/types'
@@ -54,12 +57,18 @@ export function Today({
     dismissInsight,
     openJournal,
     openTrends,
+    openConnections,
+    openGoals,
+    quickAdd,
 }: {
     events: JournalEvent[]
     insight: boolean
     dismissInsight: () => void
     openJournal: () => void
     openTrends: () => void
+    openConnections?: () => void
+    openGoals?: () => void
+    quickAdd?: (kind: QuickAddKind) => void
 }) {
     const health = useTodayHealth()
     const now = new Date()
@@ -74,6 +83,63 @@ export function Today({
     )
     const stepsTarget = health.stepsGoal?.targetValue
     const waterTarget = health.waterGoal?.targetValue
+    const sleepPointCount = health.sleepSeries.filter(point => point.sleep !== null).length
+    const missingCount = [
+        health.sleepToday,
+        health.restingHeartRate,
+        health.energy,
+        health.weight,
+    ].filter(value => !value).length
+    const dailySummary = health.unavailable
+        ? 'Your health data needs attention before today can be summarized.'
+        : missingCount === 0
+          ? 'Your key readings are in. Review how today compares with your recent pattern.'
+          : `${missingCount} of your key daily readings ${missingCount === 1 ? 'still needs' : 'still need'} an update.`
+    const nextAction = health.unavailable
+        ? {
+              eyebrow: 'DATA NEEDS ATTENTION',
+              title: 'Reconnect your health data',
+              detail: 'Review your data sources and restore today’s observations.',
+              label: 'Review connections',
+              icon: IconPlugConnected,
+              run: openConnections,
+          }
+        : !health.energy
+          ? {
+                eyebrow: 'NEXT UP',
+                title: 'How’s your energy?',
+                detail: 'A quick check-in adds context to sleep, activity, and nutrition.',
+                label: 'Check in now',
+                icon: IconSparkles,
+                run: () => quickAdd?.('Check-in'),
+            }
+          : !health.weight
+            ? {
+                  eyebrow: 'NEXT UP',
+                  title: 'Add today’s weight',
+                  detail: 'Log it now if weighing in is part of your routine.',
+                  label: 'Add weight',
+                  icon: IconScale,
+                  run: () => quickAdd?.('Weight'),
+              }
+            : !stepsTarget || !waterTarget
+              ? {
+                    eyebrow: 'PERSONALIZE TODAY',
+                    title: 'Make progress more useful',
+                    detail: 'Set optional goals for the metrics that matter to you.',
+                    label: 'Set goals',
+                    icon: IconTargetArrow,
+                    run: openGoals,
+                }
+              : {
+                    eyebrow: 'TODAY IS UP TO DATE',
+                    title: 'See what’s changing',
+                    detail: 'Explore your recent patterns and recorded context.',
+                    label: 'Review trends',
+                    icon: IconActivity,
+                    run: openTrends,
+                }
+    const NextActionIcon = nextAction.icon
 
     return (
         <div className="page-content">
@@ -89,11 +155,12 @@ export function Today({
                     </Text>
                     <h1>
                         Good {localHour < 12 ? 'morning' : localHour < 18 ? 'afternoon' : 'evening'}
-                        {health.preferences?.displayName
+                        {health.preferences?.displayName &&
+                        health.preferences.displayName.toLowerCase() !== 'owner'
                             ? `, ${health.preferences.displayName}.`
                             : '.'}
                     </h1>
-                    <Text className="subhead">Here&apos;s the shape of your day so far.</Text>
+                    <Text className="subhead">{dailySummary}</Text>
                 </div>
             </section>
             {health.unavailable && (
@@ -104,6 +171,21 @@ export function Today({
                 >
                     TrackIt could not load your observations. No representative values are shown.
                 </Alert>
+            )}
+            {!health.loading && (
+                <section className="next-action" aria-labelledby="next-action-title">
+                    <div className="next-action-icon">
+                        <NextActionIcon size={22} />
+                    </div>
+                    <div className="next-action-copy">
+                        <Text className="eyebrow teal-text">{nextAction.eyebrow}</Text>
+                        <h2 id="next-action-title">{nextAction.title}</h2>
+                        <Text size="sm">{nextAction.detail}</Text>
+                    </div>
+                    <Button color="trackit" onClick={nextAction.run} disabled={!nextAction.run}>
+                        {nextAction.label}
+                    </Button>
+                </section>
             )}
             {insight && health.sleepBaseline && (
                 <section className="insight">
@@ -154,7 +236,17 @@ export function Today({
                         tone="indigo"
                         label="Sleep"
                         value={sleepReading(health.sleepToday)}
-                        note="Latest recorded sleep"
+                        note={
+                            health.sleepToday ? 'Latest recorded sleep' : 'No sleep imported today'
+                        }
+                        action={
+                            health.sleepToday
+                                ? undefined
+                                : {
+                                      label: 'Connect sleep data',
+                                      onClick: openConnections ?? (() => {}),
+                                  }
+                        }
                     />
                     <MetricCard
                         icon={IconHeartRateMonitor}
@@ -166,6 +258,14 @@ export function Today({
                                 ? `${Math.abs(Math.round(health.restingBaseline.delta))} bpm ${health.restingBaseline.delta <= 0 ? 'below' : 'above'} baseline`
                                 : 'No baseline available'
                         }
+                        action={
+                            health.restingHeartRate
+                                ? undefined
+                                : {
+                                      label: 'Connect heart data',
+                                      onClick: openConnections ?? (() => {}),
+                                  }
+                        }
                     />
                     <MetricCard
                         icon={IconSparkles}
@@ -173,6 +273,14 @@ export function Today({
                         label="Energy"
                         value={reading(health.energy)}
                         note="Latest check-in today"
+                        action={
+                            health.energy
+                                ? undefined
+                                : {
+                                      label: 'How’s your energy?',
+                                      onClick: () => quickAdd?.('Check-in'),
+                                  }
+                        }
                     />
                     <MetricCard
                         icon={IconScale}
@@ -180,6 +288,11 @@ export function Today({
                         label="Weight"
                         value={reading(health.weight, health.preferences?.units)}
                         note="Latest reading today"
+                        action={
+                            health.weight
+                                ? undefined
+                                : { label: 'Add weight', onClick: () => quickAdd?.('Weight') }
+                        }
                     />
                 </section>
             )}
@@ -215,13 +328,24 @@ export function Today({
                                 </small>
                             </strong>
                         </div>
-                        <Progress
-                            value={percentage(health.steps, stepsTarget)}
-                            color="trackit"
-                            radius="xl"
-                            size="sm"
-                            aria-label="Daily steps progress"
-                        />
+                        {stepsTarget ? (
+                            <Progress
+                                value={percentage(health.steps, stepsTarget)}
+                                color="trackit"
+                                radius="xl"
+                                size="sm"
+                                aria-label="Daily steps progress"
+                            />
+                        ) : (
+                            <Button
+                                variant="subtle"
+                                color="trackit"
+                                size="compact-sm"
+                                onClick={openGoals}
+                            >
+                                Set a steps goal
+                            </Button>
+                        )}
                     </div>
                     <div className="progress-row">
                         <div className="progress-label">
@@ -238,13 +362,24 @@ export function Today({
                                 </small>
                             </strong>
                         </div>
-                        <Progress
-                            value={percentage(health.water, waterTarget)}
-                            color="cyan"
-                            radius="xl"
-                            size="sm"
-                            aria-label="Daily water progress"
-                        />
+                        {waterTarget ? (
+                            <Progress
+                                value={percentage(health.water, waterTarget)}
+                                color="cyan"
+                                radius="xl"
+                                size="sm"
+                                aria-label="Daily water progress"
+                            />
+                        ) : (
+                            <Button
+                                variant="subtle"
+                                color="trackit"
+                                size="compact-sm"
+                                onClick={openGoals}
+                            >
+                                Set a water goal
+                            </Button>
+                        )}
                     </div>
                     <DailyNutritionPanel />
                 </article>
@@ -263,28 +398,47 @@ export function Today({
                             </Badge>
                         )}
                     </div>
-                    <ResponsiveContainer width="100%" height={155}>
-                        <AreaChart
-                            data={health.sleepSeries}
-                            margin={{ top: 12, right: 5, left: -30, bottom: 0 }}
-                        >
-                            <CartesianGrid vertical={false} stroke="#ebe9e1" />
-                            <XAxis dataKey="day" axisLine={false} tickLine={false} />
-                            <YAxis axisLine={false} tickLine={false} />
-                            <Tooltip />
-                            <Area
-                                type="monotone"
-                                dataKey="sleep"
-                                connectNulls={false}
-                                stroke="#38645e"
-                                fill="#486f6947"
-                            />
-                        </AreaChart>
-                    </ResponsiveContainer>
-                    {!health.sleepSeries.some(point => point.sleep !== null) && (
-                        <Text size="sm" c="dimmed">
-                            No sleep observations in this period.
-                        </Text>
+                    {sleepPointCount >= 2 ? (
+                        <ResponsiveContainer width="100%" height={155}>
+                            <AreaChart
+                                data={health.sleepSeries}
+                                margin={{ top: 12, right: 5, left: -30, bottom: 0 }}
+                            >
+                                <CartesianGrid vertical={false} stroke="#ebe9e1" />
+                                <XAxis dataKey="day" axisLine={false} tickLine={false} />
+                                <YAxis axisLine={false} tickLine={false} />
+                                <Tooltip />
+                                <Area
+                                    type="monotone"
+                                    dataKey="sleep"
+                                    connectNulls={false}
+                                    stroke="#38645e"
+                                    fill="#486f6947"
+                                />
+                            </AreaChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="chart-empty">
+                            <IconMoon size={24} />
+                            <Text fw={650}>
+                                {sleepPointCount === 1
+                                    ? 'One night recorded'
+                                    : 'No sleep trend yet'}
+                            </Text>
+                            <Text size="sm" c="dimmed">
+                                {sleepPointCount === 1
+                                    ? 'Add one more night to begin comparing sleep.'
+                                    : 'Import sleep on at least two days to see a trend.'}
+                            </Text>
+                            <Button
+                                variant="light"
+                                color="trackit"
+                                size="xs"
+                                onClick={openConnections}
+                            >
+                                Connect sleep data
+                            </Button>
+                        </div>
                     )}
                 </article>
             </section>
@@ -298,7 +452,7 @@ export function Today({
                         View all
                     </Button>
                 </div>
-                {events.slice(0, 5).map(event => {
+                {events.slice(0, 3).map(event => {
                     const { icon: Icon, tone } = eventVisual(event.category)
                     return (
                         <div className="event" key={event.id}>
@@ -314,9 +468,11 @@ export function Today({
                                     {event.detail}
                                 </Text>
                             </div>
-                            <Badge variant="light" color="gray" fw={500}>
-                                {event.source}
-                            </Badge>
+                            {event.source !== 'You' && (
+                                <Badge variant="light" color="gray" fw={500}>
+                                    {event.source}
+                                </Badge>
+                            )}
                             <IconChevronRight size={17} color="#a3a49e" />
                         </div>
                     )

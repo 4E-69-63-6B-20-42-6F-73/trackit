@@ -13,7 +13,13 @@ export function RecentMeals({
     onFavorite: (meal: MealRecord) => void
     onEdit: (meal: MealRecord) => void
 }) {
-    if (!meals.length) return <Text c="dimmed">Logged meals will appear here for quick reuse.</Text>
+    if (!meals.length)
+        return (
+            <Text c="dimmed" size="sm">
+                No meals have been logged yet. Log a food above and it will appear here for quick
+                reuse.
+            </Text>
+        )
     return (
         <Stack gap="xs">
             {meals.slice(0, 5).map(meal => (

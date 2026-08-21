@@ -13,7 +13,7 @@ versions.
 ## Encrypted backups
 
 Backups use `pg_dump --format=custom` followed by authenticated AES-256-GCM encryption. The archive
-contains its format marker, random nonce, authentication tag, and ciphertextâ€”never the encryption
+contains its format marker, random nonce, authentication tag, and ciphertext—never the encryption
 key. Generate and store the key outside the backup volume:
 
 ```bash

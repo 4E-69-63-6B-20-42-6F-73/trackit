@@ -46,7 +46,10 @@ describe('Today', () => {
                 Boolean(element?.tagName === 'STRONG' && element.textContent?.includes('4')),
             ),
         ).toBeInTheDocument()
-        expect(screen.getByText('no goal set')).toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Set a water goal' })).toBeInTheDocument()
+        expect(screen.queryByLabelText('Daily water progress')).not.toBeInTheDocument()
+        expect(screen.getByRole('button', { name: 'Check in now' })).toBeInTheDocument()
+        expect(screen.getByText('No sleep trend yet')).toBeInTheDocument()
         await userEvent.click(screen.getByRole('button', { name: 'Details' }))
         expect(openTrends).toHaveBeenCalledOnce()
     })

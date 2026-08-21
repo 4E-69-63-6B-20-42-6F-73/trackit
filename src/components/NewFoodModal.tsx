@@ -1,6 +1,6 @@
 import { Button, Modal, NumberInput, Stack, TextInput } from '@mantine/core'
 import { useState } from 'react'
-import type { Food } from '../domain/nutrition'
+import { emptyNutrients, type Food, type Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
 
 type NewFoodModalProps = {
@@ -9,19 +9,27 @@ type NewFoodModalProps = {
     onCreate: (food: Food) => void
 }
 
+const nutrientLabels: Record<keyof Nutrients, string> = {
+    calories: 'Calories',
+    protein: 'Protein',
+    carbs: 'Carbs',
+    fat: 'Fat',
+    fiber: 'Fiber',
+    sugar: 'Sugar',
+    saturatedFat: 'Saturated fat',
+    sodium: 'Sodium',
+    potassium: 'Potassium',
+}
+
 export function NewFoodModal({ opened, onClose, onCreate }: NewFoodModalProps) {
     const [name, setName] = useState('')
-    const [calories, setCalories] = useState<number | string>(0)
+    const [nutrients, setNutrients] = useState<Nutrients>(emptyNutrients())
 
     const save = async () => {
         const input: Omit<Food, 'id'> = {
             name,
             per100g: {
-                calories: Number(calories),
-                protein: 0,
-                carbs: 0,
-                fat: 0,
-                fiber: 0,
+                ...nutrients,
             },
             servingName: 'serving',
             servingGrams: 100,
@@ -46,12 +54,17 @@ export function NewFoodModal({ opened, onClose, onCreate }: NewFoodModalProps) {
                     value={name}
                     onChange={event => setName(event.currentTarget.value)}
                 />
-                <NumberInput
-                    label="Calories per 100 g"
-                    value={calories}
-                    onChange={setCalories}
-                    min={0}
-                />
+                {(Object.keys(nutrients) as (keyof Nutrients)[]).map(key => (
+                    <NumberInput
+                        key={key}
+                        label={`${nutrientLabels[key]} per 100 g`}
+                        value={nutrients[key]}
+                        onChange={value =>
+                            setNutrients(current => ({ ...current, [key]: Number(value) || 0 }))
+                        }
+                        min={0}
+                    />
+                ))}
                 <Button disabled={!name.trim()} onClick={() => void save()}>
                     Save food
                 </Button>

@@ -17,7 +17,7 @@ describe('QuickAdd', () => {
         )
 
         await user.type(screen.getByLabelText('What did you have?'), 'Soup and bread')
-        await user.click(screen.getByRole('button', { name: 'Add to journal' }))
+        await user.click(screen.getByRole('button', { name: 'Save meal' }))
 
         expect(add).toHaveBeenCalledWith(
             expect.objectContaining({
@@ -28,5 +28,21 @@ describe('QuickAdd', () => {
             }),
         )
         expect(close).toHaveBeenCalledOnce()
+    })
+
+    it('warns before preserving an intentional duplicate', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+
+        render(
+            <MantineProvider>
+                <QuickAdd opened close={vi.fn()} add={add} />
+            </MantineProvider>,
+        )
+
+        await user.click(screen.getByRole('button', { name: 'Save meal' }))
+        expect(screen.getByText('This may already be logged')).toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: 'Log anyway' }))
+        expect(add).toHaveBeenLastCalledWith(expect.any(Object), true)
     })
 })

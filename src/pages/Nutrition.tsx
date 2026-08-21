@@ -19,7 +19,7 @@ import { MealEditModal } from '../components/MealEditModal'
 import { RecipeYieldModal } from '../components/RecipeYieldModal'
 import { NewRecipeModal } from '../components/NewRecipeModal'
 import { RecentMeals } from '../components/RecentMeals'
-import { nutrientsFor, roundedNutrients, type Food } from '../domain/nutrition'
+import { emptyNutrients, nutrientsFor, roundedNutrients, type Food } from '../domain/nutrition'
 import {
     listMeals,
     listRecipes,
@@ -31,6 +31,7 @@ import {
     type MealRecord,
     type RecipeRecord,
 } from '../lib/nutritionApi'
+import { getPreferences } from '../lib/preferencesApi'
 
 const exampleFoods: Food[] = [
     {
@@ -66,6 +67,7 @@ export function Nutrition() {
     const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null)
     const [editingRecipe, setEditingRecipe] = useState<RecipeRecord | null>(null)
     const [editingFood, setEditingFood] = useState<Food | null>(null)
+    const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -87,11 +89,32 @@ export function Nutrition() {
 
     useEffect(() => {
         refreshNutrition()
+        void getPreferences()
+            .then(preferences => setTimezone(preferences.timezone))
+            .catch(() => undefined)
     }, [refreshNutrition])
 
     const nutrients = useMemo(
         () => (selected ? roundedNutrients(nutrientsFor(selected, Number(grams) || 0)) : null),
         [selected, grams],
+    )
+    const dayFormatter = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+    })
+    const todayKey = dayFormatter.format(new Date())
+    const todayMeals = meals.filter(
+        meal => dayFormatter.format(new Date(meal.eatenAt)) === todayKey,
+    )
+    const todayCalories = todayMeals.reduce(
+        (total, meal) => total + (meal.nutrientSnapshot.calories ?? 0),
+        0,
+    )
+    const todayProtein = todayMeals.reduce(
+        (total, meal) => total + (meal.nutrientSnapshot.protein ?? 0),
+        0,
     )
 
     const submitMeal = async () => {
@@ -118,11 +141,8 @@ export function Nutrition() {
                 meal.name,
                 meal.mealType,
                 {
-                    calories: meal.nutrientSnapshot.calories ?? 0,
-                    protein: meal.nutrientSnapshot.protein ?? 0,
-                    carbs: meal.nutrientSnapshot.carbs ?? 0,
-                    fat: meal.nutrientSnapshot.fat ?? 0,
-                    fiber: meal.nutrientSnapshot.fiber ?? 0,
+                    ...emptyNutrients(),
+                    ...meal.nutrientSnapshot,
                 },
                 meal.nutritionQuality,
             )
@@ -173,25 +193,31 @@ export function Nutrition() {
 
     return (
         <div className="page-content simple-page">
-            <div className="section-title">
+            <div className="section-title nutrition-title">
                 <div>
-                    <Text className="date">FOOD & FUEL</Text>
                     <h1>Nutrition</h1>
                     <Text className="subhead">
                         Log familiar foods quickly and keep the math visible.
                     </Text>
                 </div>
-                <Group>
+                <Group className="nutrition-admin" gap="xs">
                     <FoodCsvImport
                         onImported={imported => setFoods(current => [...imported, ...current])}
                     />
                     <Button
+                        variant="default"
+                        size="sm"
                         leftSection={<IconPlus size={17} />}
                         onClick={() => setCreateOpened(true)}
                     >
                         New food
                     </Button>
-                    <Button variant="default" onClick={() => setRecipeOpened(true)}>
+                    <Button
+                        variant="subtle"
+                        color="gray"
+                        size="sm"
+                        onClick={() => setRecipeOpened(true)}
+                    >
                         New recipe
                     </Button>
                 </Group>
@@ -199,7 +225,14 @@ export function Nutrition() {
             {message && <Alert mt="md">{message}</Alert>}
             <section className="nutrition-layout">
                 <article className="panel food-browser">
+                    <div className="food-browser-heading">
+                        <h2>Log food</h2>
+                        <Text size="sm" c="dimmed">
+                            Search your foods, favorites, and recent choices.
+                        </Text>
+                    </div>
                     <TextInput
+                        size="md"
                         value={query}
                         onChange={event => setQuery(event.currentTarget.value)}
                         placeholder="Search recent and favorite foods"
@@ -251,8 +284,7 @@ export function Nutrition() {
                     </Stack>
                 </article>
                 <article className="panel meal-composer">
-                    <Text className="eyebrow">MEAL COMPOSER</Text>
-                    <h2>{selected?.name ?? 'Choose a food'}</h2>
+                    <h2>{selected?.name ?? 'Today so far'}</h2>
                     {selected && nutrients ? (
                         <Stack>
                             <NumberInput
@@ -292,34 +324,116 @@ export function Nutrition() {
                                 data={['Breakfast', 'Lunch', 'Dinner', 'Snack']}
                             />
                             <Group grow>
-                                {(['calories', 'protein', 'carbs', 'fat'] as const).map(key => (
-                                    <div className="nutrient" key={key}>
-                                        <Text fw={700}>
-                                            {nutrients[key]}
-                                            {key === 'calories' ? '' : ' g'}
-                                        </Text>
-                                        <Text size="xs" c="dimmed">
-                                            {key === 'calories' ? 'kcal' : key}
-                                        </Text>
-                                    </div>
-                                ))}
+                                {(['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map(
+                                    key => (
+                                        <div className="nutrient" key={key}>
+                                            <Text fw={700}>
+                                                {nutrients[key]}
+                                                {key === 'calories' ? '' : ' g'}
+                                            </Text>
+                                            <Text size="xs" c="dimmed">
+                                                {key === 'calories' ? 'kcal' : key}
+                                            </Text>
+                                        </div>
+                                    ),
+                                )}
                             </Group>
-                            <Button onClick={() => void submitMeal()}>Add to {mealType}</Button>
+                            <Button onClick={() => void submitMeal()}>Log for {mealType}</Button>
                             <Button variant="default" onClick={() => setEditingFood(selected)}>
                                 Edit food details
                             </Button>
                         </Stack>
                     ) : (
-                        <Text c="dimmed" size="sm">
-                            Select a recent or favorite food to begin.
-                        </Text>
+                        <div className="nutrition-context">
+                            <Text size="sm" c="dimmed">
+                                Your logged meals and nutrients will build here as you add food.
+                            </Text>
+                            <div className="nutrition-context-grid">
+                                <div>
+                                    <Text fw={700}>{Math.round(todayCalories)}</Text>
+                                    <Text size="xs" c="dimmed">
+                                        kcal
+                                    </Text>
+                                </div>
+                                <div>
+                                    <Text fw={700}>{Math.round(todayProtein)} g</Text>
+                                    <Text size="xs" c="dimmed">
+                                        protein
+                                    </Text>
+                                </div>
+                                <div>
+                                    <Text fw={700}>
+                                        {Math.round(
+                                            todayMeals.reduce(
+                                                (total, meal) =>
+                                                    total + (meal.nutrientSnapshot.carbs ?? 0),
+                                                0,
+                                            ),
+                                        )}{' '}
+                                        g
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        carbs
+                                    </Text>
+                                </div>
+                                <div>
+                                    <Text fw={700}>
+                                        {Math.round(
+                                            todayMeals.reduce(
+                                                (total, meal) =>
+                                                    total + (meal.nutrientSnapshot.fat ?? 0),
+                                                0,
+                                            ),
+                                        )}{' '}
+                                        g
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        fat
+                                    </Text>
+                                </div>
+                                <div>
+                                    <Text fw={700}>
+                                        {Math.round(
+                                            todayMeals.reduce(
+                                                (total, meal) =>
+                                                    total + (meal.nutrientSnapshot.fiber ?? 0),
+                                                0,
+                                            ),
+                                        )}{' '}
+                                        g
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        fiber
+                                    </Text>
+                                </div>
+                                <div>
+                                    <Text fw={700}>{todayMeals.length}</Text>
+                                    <Text size="xs" c="dimmed">
+                                        meals
+                                    </Text>
+                                </div>
+                            </div>
+                            <Text size="sm" fw={600}>
+                                Quick reuse
+                            </Text>
+                            <RecentMeals
+                                meals={[...meals].sort(
+                                    (left, right) => Number(right.favorite) - Number(left.favorite),
+                                )}
+                                onCopy={meal => void copyMeal(meal)}
+                                onFavorite={meal => void toggleFavorite(meal)}
+                                onEdit={setEditingMeal}
+                            />
+                        </div>
                     )}
                 </article>
             </section>
             <section className="nutrition-secondary">
                 <article className="panel">
-                    <Text className="eyebrow">SAVED RECIPES</Text>
-                    <h2>Reusable servings</h2>
+                    <h2>Saved recipes</h2>
+                    <Text size="sm" c="dimmed">
+                        Reusable servings from your food library.
+                    </Text>
                     <Stack gap="xs">
                         {recipes.length ? (
                             recipes.map(recipe => (
@@ -359,21 +473,21 @@ export function Nutrition() {
                                 </Group>
                             ))
                         ) : (
-                            <Text c="dimmed">Create a recipe to reuse a calculated serving.</Text>
+                            <div className="compact-empty">
+                                <Text c="dimmed" size="sm">
+                                    No recipes yet. Saved recipes show nutrition per serving and
+                                    make repeat logging faster.
+                                </Text>
+                                <Button
+                                    size="xs"
+                                    variant="default"
+                                    onClick={() => setRecipeOpened(true)}
+                                >
+                                    Add recipe
+                                </Button>
+                            </div>
                         )}
                     </Stack>
-                </article>
-                <article className="panel">
-                    <Text className="eyebrow">RECENT & FAVORITE</Text>
-                    <h2>Repeat a meal</h2>
-                    <RecentMeals
-                        meals={[...meals].sort(
-                            (left, right) => Number(right.favorite) - Number(left.favorite),
-                        )}
-                        onCopy={meal => void copyMeal(meal)}
-                        onFavorite={meal => void toggleFavorite(meal)}
-                        onEdit={setEditingMeal}
-                    />
                 </article>
             </section>
             <NewFoodModal

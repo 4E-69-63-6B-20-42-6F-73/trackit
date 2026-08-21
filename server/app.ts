@@ -14,6 +14,7 @@ import {
     foodInputSchema,
     foodUpdateSchema,
     goalInputSchema,
+    goalRetireSchema,
     mealInputSchema,
     mealUpdateSchema,
     observationInputSchema,
@@ -678,6 +679,12 @@ export async function createApp(
             const input = goalInputSchema.safeParse(request.body)
             if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
             return reply.code(201).send({ data: await data.createGoal(input.data) })
+        })
+        app.patch<{ Params: { id: string } }>('/api/goals/:id', async (request, reply) => {
+            const input = goalRetireSchema.safeParse(request.body)
+            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            const updated = await data.retireGoal(request.params.id, input.data.effectiveTo)
+            return updated ? { data: updated } : reply.code(404).send({ error: 'not_found' })
         })
         app.get('/api/trend-views', async () => ({ data: await data.listSavedTrendViews() }))
         app.post('/api/trend-views', async (request, reply) => {

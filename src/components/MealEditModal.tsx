@@ -1,6 +1,19 @@
 import { useState } from 'react'
 import { Alert, Button, Group, Modal, NumberInput, Select, Stack, TextInput } from '@mantine/core'
+import { emptyNutrients } from '../domain/nutrition'
 import type { MealRecord } from '../lib/nutritionApi'
+
+const nutrientFields = [
+    { key: 'calories', label: 'Calories (kcal)' },
+    { key: 'protein', label: 'Protein (g)' },
+    { key: 'carbs', label: 'Carbs (g)' },
+    { key: 'fat', label: 'Fat (g)' },
+    { key: 'fiber', label: 'Fiber (g)' },
+    { key: 'sugar', label: 'Sugar (g)' },
+    { key: 'saturatedFat', label: 'Saturated fat (g)' },
+    { key: 'sodium', label: 'Sodium (mg)' },
+    { key: 'potassium', label: 'Potassium (mg)' },
+] as const
 
 type EditableMeal = {
     name: string
@@ -28,11 +41,8 @@ export function MealEditModal({
     const [mealType, setMealType] = useState<MealRecord['mealType']>(meal.mealType)
     const [eatenAt, setEatenAt] = useState(localDateTime(meal.eatenAt))
     const [nutrients, setNutrients] = useState<Record<string, number>>({
-        calories: meal.nutrientSnapshot.calories ?? 0,
-        protein: meal.nutrientSnapshot.protein ?? 0,
-        carbs: meal.nutrientSnapshot.carbs ?? 0,
-        fat: meal.nutrientSnapshot.fat ?? 0,
-        fiber: meal.nutrientSnapshot.fiber ?? 0,
+        ...emptyNutrients(),
+        ...meal.nutrientSnapshot,
     })
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
@@ -76,15 +86,18 @@ export function MealEditModal({
                     value={eatenAt}
                     onChange={event => setEatenAt(event.currentTarget.value)}
                 />
-                <Group grow>
-                    {(['calories', 'protein', 'carbs', 'fat', 'fiber'] as const).map(key => (
+                <Group grow align="start">
+                    {nutrientFields.map(field => (
                         <NumberInput
-                            key={key}
-                            label={key === 'calories' ? 'kcal' : `${key} (g)`}
+                            key={field.key}
+                            label={field.label}
                             min={0}
-                            value={nutrients[key] ?? 0}
+                            value={nutrients[field.key] ?? 0}
                             onChange={value =>
-                                setNutrients(current => ({ ...current, [key]: Number(value) || 0 }))
+                                setNutrients(current => ({
+                                    ...current,
+                                    [field.key]: Number(value) || 0,
+                                }))
                             }
                         />
                     ))}

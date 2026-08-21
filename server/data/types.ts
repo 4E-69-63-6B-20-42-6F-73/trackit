@@ -75,6 +75,7 @@ export const goalInputSchema = z.object({
     effectiveTo: z.string().datetime().optional(),
     schedule: z.record(z.string(), z.unknown()).default({}),
 })
+export const goalRetireSchema = z.object({ effectiveTo: z.string().datetime() })
 
 export const savedTrendViewInputSchema = z.object({
     name: z.string().trim().min(1).max(100),
@@ -97,6 +98,10 @@ export const foodInputSchema = z.object({
     carbsPer100g: z.number().finite().nonnegative().default(0),
     fatPer100g: z.number().finite().nonnegative().default(0),
     fiberPer100g: z.number().finite().nonnegative().default(0),
+    sugarPer100g: z.number().finite().nonnegative().default(0),
+    saturatedFatPer100g: z.number().finite().nonnegative().default(0),
+    sodiumPer100g: z.number().finite().nonnegative().default(0),
+    potassiumPer100g: z.number().finite().nonnegative().default(0),
     servingName: z.string().trim().min(1).max(60).default('serving'),
     servingGrams: z.number().finite().positive().default(100),
     favorite: z.boolean().default(false),
@@ -149,6 +154,7 @@ export interface DataRepository {
     updateRecipe(id: string, input: z.infer<typeof recipeUpdateSchema>): Promise<unknown | null>
     listGoals(): Promise<unknown[]>
     createGoal(input: z.infer<typeof goalInputSchema>): Promise<unknown>
+    retireGoal(id: string, effectiveTo: string): Promise<unknown | null>
     listSavedTrendViews(): Promise<unknown[]>
     createSavedTrendView(input: z.infer<typeof savedTrendViewInputSchema>): Promise<unknown>
 }

@@ -4,6 +4,10 @@ export type Nutrients = {
     carbs: number
     fat: number
     fiber: number
+    sugar?: number
+    saturatedFat?: number
+    sodium?: number
+    potassium?: number
 }
 
 export type Food = {
@@ -26,6 +30,10 @@ export const emptyNutrients = (): Nutrients => ({
     carbs: 0,
     fat: 0,
     fiber: 0,
+    sugar: 0,
+    saturatedFat: 0,
+    sodium: 0,
+    potassium: 0,
 })
 
 export const nutrientsFor = (food: Food, grams: number): Nutrients => {
@@ -38,7 +46,8 @@ export const nutrientsFor = (food: Food, grams: number): Nutrients => {
 export const totalNutrients = (items: FoodAmount[]): Nutrients =>
     items.reduce((total, item) => {
         const nutrients = nutrientsFor(item.food, item.grams)
-        for (const key of Object.keys(total) as (keyof Nutrients)[]) total[key] += nutrients[key]
+        for (const key of Object.keys(total) as (keyof Nutrients)[])
+            total[key] = (total[key] ?? 0) + (nutrients[key] ?? 0)
         return total
     }, emptyNutrients())
 

@@ -8,6 +8,7 @@ type ApiJournalEntry = {
     detail: string
     source: string
     observedAt: string
+    version: number
 }
 
 const apiUrl = (path: string) => `${environment.VITE_API_URL}${path}`
@@ -27,6 +28,7 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
         hour: '2-digit',
         minute: '2-digit',
     }),
+    version: entry.version,
 })
 
 const observedAt = (time: string) => {
@@ -34,6 +36,29 @@ const observedAt = (time: string) => {
     const [hours, minutes] = time.split(':').map(Number)
     date.setHours(hours, minutes, 0, 0)
     return date.toISOString()
+}
+
+export async function updateJournal(
+    event: JournalEvent,
+    changes: Pick<JournalEvent, 'title' | 'detail' | 'time'>,
+): Promise<JournalEvent> {
+    const response = await fetch(apiUrl(`/api/journal/${event.id}`), {
+        method: 'PATCH',
+        credentials: 'same-origin',
+        headers: {
+            'content-type': 'application/json',
+            'x-csrf-token': csrfToken() ?? '',
+        },
+        body: JSON.stringify({
+            title: changes.title,
+            detail: changes.detail,
+            observedAt: observedAt(changes.time),
+            version: event.version ?? 1,
+        }),
+    })
+    if (!response.ok) throw new Error(`Journal update failed (${response.status})`)
+    const body = (await response.json()) as { data: ApiJournalEntry }
+    return toEvent(body.data)
 }
 
 export async function listJournal(): Promise<JournalEvent[]> {

@@ -1,4 +1,5 @@
-export type Page = 'Today' | 'Nutrition' | 'Journal' | 'Trends' | 'Connections' | 'Settings'
+export type Page =
+    'Today' | 'Nutrition' | 'Journal' | 'Goals' | 'Trends' | 'Connections' | 'Settings'
 
 export type Category = 'Meals' | 'Activity' | 'Sleep' | 'Measurements' | 'Check-ins'
 
@@ -9,6 +10,7 @@ export type JournalEvent = {
     title: string
     detail: string
     source: string
+    version?: number
     observation?: {
         metric: string
         value: number

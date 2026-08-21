@@ -8,6 +8,10 @@ export const foodCsvHeaders = [
     'carbs_per_100g',
     'fat_per_100g',
     'fiber_per_100g',
+    'sugar_per_100g',
+    'saturated_fat_per_100g',
+    'sodium_per_100g',
+    'potassium_per_100g',
     'serving_name',
     'serving_grams',
     'favorite',
@@ -72,6 +76,10 @@ export function parseFoodCsv(csv: string): Omit<Food, 'id'>[] {
                 carbs: numberAt(record, 'carbs_per_100g', 0),
                 fat: numberAt(record, 'fat_per_100g', 0),
                 fiber: numberAt(record, 'fiber_per_100g', 0),
+                sugar: numberAt(record, 'sugar_per_100g', 0),
+                saturatedFat: numberAt(record, 'saturated_fat_per_100g', 0),
+                sodium: numberAt(record, 'sodium_per_100g', 0),
+                potassium: numberAt(record, 'potassium_per_100g', 0),
             },
             servingName: record.serving_name || 'serving',
             servingGrams,
@@ -90,4 +98,4 @@ export function parseFoodCsv(csv: string): Omit<Food, 'id'>[] {
     })
 }
 
-export const foodCsvTemplate = `${foodCsvHeaders.join(',')}\nRolled oats,,389,16.9,66.3,6.9,10.6,bowl,50,true,complete\n`
+export const foodCsvTemplate = `${foodCsvHeaders.join(',')}\nRolled oats,,389,16.9,66.3,6.9,10.6,0.9,1.2,2,429,bowl,50,true,complete\n`

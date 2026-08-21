@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
-import { ActionIcon, Badge, Button, Menu, Text, TextInput } from '@mantine/core'
-import { IconChevronDown, IconSearch } from '@tabler/icons-react'
+import { ActionIcon, Badge, Button, Group, Menu, Modal, Text, TextInput } from '@mantine/core'
+import { IconChevronDown, IconPlus, IconSearch } from '@tabler/icons-react'
 import { eventVisual } from '../domain/data'
 import type { Category, JournalEvent } from '../domain/types'
 
@@ -8,13 +8,22 @@ export function Journal({
     events,
     remove,
     duplicate,
+    update,
 }: {
     events: JournalEvent[]
     remove: (id: string) => void
     duplicate: (event: JournalEvent) => void
+    update: (
+        event: JournalEvent,
+        changes: Pick<JournalEvent, 'title' | 'detail' | 'time'>,
+    ) => Promise<boolean>
 }) {
     const [filter, setFilter] = useState<'All' | Category>('All')
     const [query, setQuery] = useState('')
+    const [editing, setEditing] = useState<JournalEvent | null>(null)
+    const [deleting, setDeleting] = useState<JournalEvent | null>(null)
+    const [draftTitle, setDraftTitle] = useState('')
+    const [draftDetail, setDraftDetail] = useState('')
     const shown = useMemo(
         () =>
             events.filter(
@@ -24,11 +33,16 @@ export function Journal({
             ),
         [events, filter, query],
     )
+    const beginEdit = (event: JournalEvent) => {
+        setEditing(event)
+        setDraftTitle(event.title)
+        setDraftDetail(event.detail)
+    }
+
     return (
-        <div className="page-content simple-page">
+        <div className="page-content journal-page">
             <div className="section-title">
                 <div>
-                    <Text className="date">YOUR RECORD</Text>
                     <h1>Journal</h1>
                     <Text className="subhead">
                         Everything you’ve logged and synced, in one honest timeline.
@@ -36,23 +50,23 @@ export function Journal({
                 </div>
                 <TextInput
                     value={query}
-                    onChange={e => setQuery(e.currentTarget.value)}
+                    onChange={event => setQuery(event.currentTarget.value)}
                     placeholder="Search your journal"
                     leftSection={<IconSearch size={16} />}
                 />
             </div>
-            <div className="filter-row">
+            <div className="filter-row" aria-label="Journal categories">
                 {(['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const).map(
-                    x => (
+                    category => (
                         <Button
-                            onClick={() => setFilter(x)}
-                            key={x}
-                            variant={filter === x ? 'filled' : 'default'}
-                            color={filter === x ? 'dark' : undefined}
+                            onClick={() => setFilter(category)}
+                            key={category}
+                            variant={filter === category ? 'filled' : 'default'}
+                            color={filter === category ? 'dark' : undefined}
                             radius="xl"
                             size="xs"
                         >
-                            {x}
+                            {category}
                         </Button>
                     ),
                 )}
@@ -93,28 +107,111 @@ export function Journal({
                                 </Menu.Target>
                                 <Menu.Dropdown>
                                     <Menu.Item onClick={() => duplicate(event)}>
-                                        Duplicate
+                                        Log a copy
                                     </Menu.Item>
                                     {event.source === 'You' && (
-                                        <Menu.Item onClick={() => remove(event.id)} color="red">
-                                            Delete
-                                        </Menu.Item>
+                                        <>
+                                            <Menu.Item onClick={() => beginEdit(event)}>
+                                                Edit
+                                            </Menu.Item>
+                                            <Menu.Item
+                                                onClick={() => setDeleting(event)}
+                                                color="red"
+                                            >
+                                                Delete
+                                            </Menu.Item>
+                                        </>
                                     )}
                                 </Menu.Dropdown>
                             </Menu>
                         </div>
                     )
                 })}
-                {shown.length === 0 && (
+                {shown.length === 0 && events.length > 0 && (
                     <div className="empty-state">
                         <IconSearch size={24} />
                         <Text fw={600}>Nothing matches</Text>
                         <Text size="sm" c="dimmed">
-                            Try another filter or search.
+                            No entries match this search or category. Clear a filter to see your
+                            timeline again.
+                        </Text>
+                    </div>
+                )}
+                {events.length === 0 && (
+                    <div className="empty-state">
+                        <IconPlus size={24} />
+                        <Text fw={600}>Your journal is ready</Text>
+                        <Text size="sm" c="dimmed">
+                            Meals, measurements, check-ins, and synced activity will appear here.
+                            Use Quick add to record your first entry.
                         </Text>
                     </div>
                 )}
             </section>
+            <Modal
+                opened={Boolean(editing)}
+                onClose={() => setEditing(null)}
+                title="Edit entry"
+                centered
+            >
+                <TextInput
+                    label="Title"
+                    value={draftTitle}
+                    onChange={event => setDraftTitle(event.currentTarget.value)}
+                />
+                <TextInput
+                    mt="md"
+                    label="Details"
+                    value={draftDetail}
+                    onChange={event => setDraftDetail(event.currentTarget.value)}
+                />
+                <Group justify="flex-end" mt="lg">
+                    <Button variant="default" onClick={() => setEditing(null)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        disabled={!draftTitle.trim()}
+                        onClick={async () => {
+                            if (!editing) return
+                            if (
+                                await update(editing, {
+                                    title: draftTitle,
+                                    detail: draftDetail,
+                                    time: editing.time,
+                                })
+                            )
+                                setEditing(null)
+                        }}
+                    >
+                        Save changes
+                    </Button>
+                </Group>
+            </Modal>
+            <Modal
+                opened={Boolean(deleting)}
+                onClose={() => setDeleting(null)}
+                title="Delete this entry?"
+                centered
+                size="sm"
+            >
+                <Text size="sm">
+                    This removes {deleting?.title} from your journal and associated dashboard data.
+                </Text>
+                <Group justify="flex-end" mt="lg">
+                    <Button variant="default" onClick={() => setDeleting(null)}>
+                        Keep entry
+                    </Button>
+                    <Button
+                        color="red"
+                        onClick={() => {
+                            if (deleting) remove(deleting.id)
+                            setDeleting(null)
+                        }}
+                    >
+                        Delete entry
+                    </Button>
+                </Group>
+            </Modal>
         </div>
     )
 }

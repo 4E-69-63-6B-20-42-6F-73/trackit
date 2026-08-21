@@ -22,7 +22,21 @@ export type DailyPoint = {
 }
 export type TrendGranularity = 'daily' | 'weekly'
 
-const additiveMetrics = new Set(['steps', 'sleep', 'exercise', 'water'])
+const additiveMetrics = new Set([
+    'steps',
+    'sleep',
+    'exercise',
+    'water',
+    'calories',
+    'protein',
+    'carbs',
+    'fat',
+    'fiber',
+    'sugar',
+    'saturatedFat',
+    'sodium',
+    'potassium',
+])
 
 export function displayValue(value: number, canonicalUnit: string, displayUnit: string) {
     if (canonicalUnit === displayUnit) return value

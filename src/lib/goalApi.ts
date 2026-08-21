@@ -26,3 +26,13 @@ export async function createGoal(input: Omit<GoalRecord, 'id'>) {
     if (!response.ok) throw new Error('Could not create goal')
     return ((await response.json()) as { data: GoalRecord }).data
 }
+
+export async function retireGoal(goal: GoalRecord) {
+    const response = await authRequest(`/api/goals/${goal.id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ effectiveTo: new Date().toISOString() }),
+    })
+    if (!response.ok) throw new Error('Could not retire goal')
+    return ((await response.json()) as { data: GoalRecord }).data
+}

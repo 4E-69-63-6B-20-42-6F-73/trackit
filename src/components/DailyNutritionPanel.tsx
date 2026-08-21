@@ -22,11 +22,18 @@ export function DailyNutritionPanel() {
                     {Math.round(nutrients.calories)} kcal
                     <small>
                         {unavailable
-                            ? 'server unavailable'
-                            : `${Math.round(nutrients.protein)} g protein · ${mealCount} meals`}
+                            ? 'totals unavailable'
+                            : `${mealCount} ${mealCount === 1 ? 'meal' : 'meals'} logged`}
                     </small>
                 </strong>
             </div>
+            {!unavailable && (
+                <Text className="nutrition-macros" size="xs" c="dimmed">
+                    {Math.round(nutrients.protein)} g protein · {Math.round(nutrients.carbs)} g
+                    carbs · {Math.round(nutrients.fat)} g fat · {Math.round(nutrients.fiber)} g
+                    fiber
+                </Text>
+            )}
             {proteinGoal ? (
                 <Progress
                     value={Math.min((nutrients.protein / proteinGoal) * 100, 100)}
@@ -51,7 +58,7 @@ export function DailyNutritionPanel() {
             )}
             {unavailable && (
                 <Text size="xs" c="dimmed" mt={4}>
-                    Connect to TrackIt to calculate todayâ€™s totals.
+                    Today’s calories, protein, and meal count will appear after TrackIt reconnects.
                 </Text>
             )}
         </div>

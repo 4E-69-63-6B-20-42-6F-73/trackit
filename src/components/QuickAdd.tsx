@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import {
     Button,
+    Alert,
     Group,
     Modal,
     NumberInput,
@@ -23,7 +24,7 @@ export function QuickAdd({
 }: {
     opened: boolean
     close: () => void
-    add: (event: JournalEvent) => void
+    add: (event: JournalEvent, allowDuplicate?: boolean) => boolean | void
     initialKind?: QuickAddKind
 }) {
     const [kind, setKind] = useState<QuickAddKind>(initialKind ?? 'Meal')
@@ -32,6 +33,18 @@ export function QuickAdd({
     const [amount, setAmount] = useState<number | string>(250)
     const [energy, setEnergy] = useState<string | null>('5 · Neutral')
     const [note, setNote] = useState('')
+    const [duplicate, setDuplicate] = useState<JournalEvent | null>(null)
+    const finish = (event: JournalEvent, allowDuplicate = false) => {
+        const result = allowDuplicate ? add(event, true) : add(event)
+        if (result === false) {
+            setDuplicate(event)
+            return
+        }
+        setDuplicate(null)
+        setDescription('')
+        setNote('')
+        close()
+    }
     const submit = () => {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         let event: JournalEvent
@@ -89,10 +102,7 @@ export function QuickAdd({
                     observedAt: new Date().toISOString(),
                 },
             }
-        add(event)
-        setDescription('')
-        setNote('')
-        close()
+        finish(event)
     }
     return (
         <Modal
@@ -113,6 +123,23 @@ export function QuickAdd({
             }
         >
             <Stack gap="md">
+                {duplicate && (
+                    <Alert color="orange" title="This may already be logged">
+                        An identical entry was added in the last two minutes.
+                        <Group mt="sm" gap="xs">
+                            <Button size="xs" variant="default" onClick={() => setDuplicate(null)}>
+                                Review entry
+                            </Button>
+                            <Button
+                                size="xs"
+                                color="orange"
+                                onClick={() => finish(duplicate, true)}
+                            >
+                                Log anyway
+                            </Button>
+                        </Group>
+                    </Alert>
+                )}
                 <SegmentedControl
                     fullWidth
                     value={kind}
