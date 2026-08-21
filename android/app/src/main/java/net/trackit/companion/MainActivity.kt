@@ -80,7 +80,7 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 cancelSync = false
                                 syncProgress = 0f
-                                status = "Syncing selected categoriesâ€¦"
+                                status = "Syncing selected categories…"
                                 val results = healthSync.syncSelected(
                                     selectedClasses,
                                     cancelled = { cancelSync },
@@ -141,9 +141,6 @@ class MainActivity : ComponentActivity() {
                                     .addOnFailureListener {
                                         status = "QR scanning was unavailable. You can enter the details manually."
                                     }
-                                    .addOnFailureListener {
-                                        status = "QR scanning was unavailable. You can enter the details manually."
-                                    }
                             },
                         ) {
                             Text("Scan pairing QR code")
@@ -158,23 +155,24 @@ class MainActivity : ComponentActivity() {
                             scope.launch {
                                 val result = runCatching {
                                     PairingClient(this@MainActivity).pair(serverUrl, serverIdentity, code)
-                                }.getOrDefault(PairingClient.Result.Failure("Network error", null))
-                                status = when {
-                                    result.success -> {
-                                        // Paired successfully
+                                }.getOrNull() ?: PairingResult.Failure("Network error", null)
+                                status = when (result) {
+                                    is PairingResult.Success -> {
                                         credentialStore.save(
                                             serverUrl,
-                                            result.serverIdentity,
                                             result.deviceId,
                                             result.credential,
+                                            result.serverIdentity,
                                         )
                                         "Paired successfully. Ready to sync."
                                     }
-                                    result.serverIdentity != null -> {
-                                        // Waiting for confirmation
-                                        "Pairing requested. Please confirm on TrackIt web."
+                                    is PairingResult.Failure -> {
+                                        if (result.serverIdentity != null) {
+                                            "Pairing requested. Please confirm on TrackIt web."
+                                        } else {
+                                            "Pairing failed: ${result.message}"
+                                        }
                                     }
-                                    else -> "Pairing failed: ${result.message}"
                                 }
                             }
                         }) { Text("Request pairing") }
