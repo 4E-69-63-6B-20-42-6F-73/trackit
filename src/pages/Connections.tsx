@@ -95,20 +95,20 @@ export function Connections() {
                             </div>
                             <div className="connection-title">
                                 <h2>{title}</h2>
-                            {status && (
-                                <Badge
-                                    variant="light"
-                                    color={
-                                        status === 'Connected'
-                                            ? 'trackit'
-                                            : status === 'Configured'
-                                            ? 'green'
-                                            : 'dark'
-                                    }
-                                >
-                                    {status}
-                                </Badge>
-                            )}
+                                {status && (
+                                    <Badge
+                                        variant="light"
+                                        color={
+                                            status === 'Connected'
+                                                ? 'trackit'
+                                                : status === 'Configured'
+                                                  ? 'green'
+                                                  : 'dark'
+                                        }
+                                    >
+                                        {status}
+                                    </Badge>
+                                )}
                             </div>
                             <Text c="dimmed" size="sm">
                                 {desc}

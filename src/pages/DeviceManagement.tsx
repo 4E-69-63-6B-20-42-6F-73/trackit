@@ -227,7 +227,9 @@ export function DeviceManagement() {
                                     aria-label="Android pairing QR code"
                                 />
                                 <Stack gap={4} align="center">
-                                    <Text size="xs" c="dimmed">Pairing code</Text>
+                                    <Text size="xs" c="dimmed">
+                                        Pairing code
+                                    </Text>
                                     <Text fz="xl" fw={600}>
                                         {pairing.code}
                                     </Text>
@@ -256,7 +258,11 @@ export function DeviceManagement() {
                         </Alert>
                     )}
 
-                    {error && <Alert color="orange" variant="light">{error}</Alert>}
+                    {error && (
+                        <Alert color="orange" variant="light">
+                            {error}
+                        </Alert>
+                    )}
 
                     {/* Devices List */}
                     {devices.length > 0 && (
@@ -336,8 +342,11 @@ export function DeviceManagement() {
                                                     <Stack gap={1}>
                                                         {device.sync.map(cursor => (
                                                             <Text key={cursor.recordType} size="xs">
-                                                                {cursor.recordType.replace('Record', '')}:{' '}
-                                                                {cursor.status}
+                                                                {cursor.recordType.replace(
+                                                                    'Record',
+                                                                    '',
+                                                                )}
+                                                                : {cursor.status}
                                                                 {cursor.lastSyncedAt
                                                                     ? ` · ${new Date(cursor.lastSyncedAt).toLocaleString()}`
                                                                     : ''}
@@ -357,16 +366,16 @@ export function DeviceManagement() {
                                                         : 'default'
                                                 }
                                                 color={
-                                                    device.status === 'pending'
-                                                        ? 'trackit'
-                                                        : 'red'
+                                                    device.status === 'pending' ? 'trackit' : 'red'
                                                 }
                                                 onClick={() =>
                                                     device.status === 'pending'
                                                         ? void confirm(device.id)
                                                         : void revoke(device.id)
                                                 }
-                                                disabled={device.status !== 'pending' && pollingActive}
+                                                disabled={
+                                                    device.status !== 'pending' && pollingActive
+                                                }
                                             >
                                                 {device.status === 'pending'
                                                     ? 'Confirm'

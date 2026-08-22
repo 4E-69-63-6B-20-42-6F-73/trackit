@@ -154,7 +154,9 @@ export function DevicePanel() {
                     <Stack gap={2}>
                         <Text size="sm">
                             <Text fw={600}>Step 1: Scan device</Text>
-                            {' — Open the QR code on your Android device and follow the pairing instructions.'}
+                            {
+                                ' — Open the QR code on your Android device and follow the pairing instructions.'
+                            }
                         </Text>
                         {currentStep === 'confirmed' && (
                             <Alert color="green" variant="light">
@@ -174,7 +176,7 @@ export function DevicePanel() {
                     )}
                 </Group>
             )}
-            
+
             {pairing && currentStep === 'scanning' && (
                 <Group align="flex-start">
                     <QRCodeSVG value={qrValue} size={152} aria-label="Android pairing QR code" />
@@ -192,9 +194,9 @@ export function DevicePanel() {
                     </div>
                 </Group>
             )}
-            
+
             {error && <Alert color="orange">{error}</Alert>}
-            
+
             {showPendingName && currentStep === 'scanning' && (
                 <Alert color="teal" variant="light" mt="sm">
                     <Text>
@@ -205,7 +207,7 @@ export function DevicePanel() {
                     </Text>
                 </Alert>
             )}
-            
+
             {devices.length > 0 && (
                 <Stack gap={4}>
                     <Text size="xs" c="dimmed" fw={500}>

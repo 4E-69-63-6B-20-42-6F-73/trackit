@@ -171,9 +171,10 @@ describe('Android device pairing and upload', () => {
             metadata: { source: 'Health Connect', dataOrigin: 'com.example.watch' },
         })
         // Verify configuredAt is set when device is confirmed
-        const [confirmedDevice] = await database.select().from(schema.devices).where(
-            eq(schema.devices.id, requested?.deviceId),
-        )
+        const [confirmedDevice] = await database
+            .select()
+            .from(schema.devices)
+            .where(eq(schema.devices.id, requested?.deviceId))
         expect(confirmedDevice?.configuredAt).toBeInstanceOf(Date)
         await service.upload(requested!.deviceId, randomUUID(), [
             { ...records[0], deleted: true, version: 0 },
