@@ -22,7 +22,6 @@ export function DevicePanel() {
     const [pollingActive, setPollingActive] = useState(false)
     const [showPendingName, setShowPendingName] = useState(false)
     const [currentStep, setCurrentStep] = useState<DevicePairingStep>('scanning')
-    const [devicesCount, setDevicesCount] = useState(0)
     const pollingRef = useRef<number | null>(null)
     const prevPendingCountRef = useRef<number>(0)
     const pendingDeviceIdRef = useRef<string | null>(null)
@@ -33,7 +32,6 @@ export function DevicePanel() {
             listDevices()
                 .then(devices => {
                     setDevices(devices)
-                    setDevicesCount(devices.length)
                 })
                 .catch(() => setError('Devices unavailable.')),
         [],
@@ -97,8 +95,7 @@ export function DevicePanel() {
         pollingActiveRef.current = false
         setPollingActive(false)
         setShowPendingName(false)
-        setCurrentStep('scanning')
-        setDevicesCount(0)
+        setCurrentStep('confirmed')
         pendingDeviceIdRef.current = null
     }, [])
 
@@ -109,7 +106,6 @@ export function DevicePanel() {
             stopPolling()
             setShowPendingName(false)
             setCurrentStep('confirmed')
-            setDevicesCount(prev => prev + 1)
             setError('')
         } catch {
             setError('The device could not be confirmed. The code may have expired.')

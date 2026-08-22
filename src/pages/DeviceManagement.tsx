@@ -8,7 +8,7 @@ import {
     revokeDevice,
     type DeviceRecord,
 } from '../lib/deviceApi'
-import { IconArrowLeft, IconRefresh, IconQrcode, IconX } from '@tabler/icons-react'
+import { IconArrowLeft, IconRefresh, IconQrcode } from '@tabler/icons-react'
 
 export type DevicePairingStep = 'scanning' | 'confirmed'
 
@@ -23,7 +23,6 @@ export function DeviceManagement() {
     const [pollingActive, setPollingActive] = useState(false)
     const [showPendingName, setShowPendingName] = useState(false)
     const [currentStep, setCurrentStep] = useState<DevicePairingStep>('scanning')
-    const [devicesCount, setDevicesCount] = useState(0)
     const [timeRemaining, setTimeRemaining] = useState<string>('05:00')
     const pollingRef = useRef<number | null>(null)
     const countdownRef = useRef<number | null>(null)
@@ -31,12 +30,22 @@ export function DeviceManagement() {
     const pendingDeviceIdRef = useRef<string | null>(null)
     const pollingActiveRef = useRef(false)
 
+    const calculateTimeRemaining = (expiresAt: string): string => {
+        const now = new Date()
+        const expires = new Date(expiresAt)
+        const diffMs = expires.getTime() - now.getTime()
+        const remainingMins = Math.floor(diffMs / 60000)
+        const remainingSeconds = (diffMs % 60000) / 1000
+        const mins = Math.min(remainingMins, 59)
+        const secs = Math.min(remainingSeconds, 59)
+        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+    }
+
     const refresh = useCallback(
         () =>
             listDevices()
                 .then(devices => {
                     setDevices(devices)
-                    setDevicesCount(devices.length)
                 })
                 .catch(() => setError('Devices unavailable.')),
         [],
@@ -83,15 +92,12 @@ export function DeviceManagement() {
 
     // Start countdown timer when pairing is active
     useEffect(() => {
-        if (pairing) {
-            // Update immediately
-            setTimeRemaining(calculateTimeRemaining(pairing.expiresAt))
+        if (!pairing) return
 
-            // Update every second
-            countdownRef.current = window.setInterval(() => {
-                setTimeRemaining(calculateTimeRemaining(pairing.expiresAt))
-            }, 1000)
-        }
+        // Update every second
+        countdownRef.current = window.setInterval(() => {
+            setTimeRemaining(calculateTimeRemaining(pairing.expiresAt))
+        }, 1000)
 
         return () => {
             if (countdownRef.current) {
@@ -99,7 +105,7 @@ export function DeviceManagement() {
                 countdownRef.current = null
             }
         }
-    }, [pairing])
+    }, [pairing, pairing?.expiresAt])
 
     const create = async () => {
         try {
@@ -120,7 +126,6 @@ export function DeviceManagement() {
         setPollingActive(false)
         setShowPendingName(false)
         setCurrentStep('confirmed')
-        setDevicesCount(0)
         pendingDeviceIdRef.current = null
     }, [])
 
@@ -131,7 +136,6 @@ export function DeviceManagement() {
             stopPolling()
             setShowPendingName(false)
             setCurrentStep('confirmed')
-            setDevicesCount(prev => prev + 1)
             setError('')
         } catch {
             setError('The device could not be confirmed. The code may have expired.')
@@ -147,17 +151,6 @@ export function DeviceManagement() {
         } catch {
             setError('The device could not be revoked. Try again.')
         }
-    }
-
-    const calculateTimeRemaining = (expiresAt: string): string => {
-        const now = new Date()
-        const expires = new Date(expiresAt)
-        const diffMs = expires.getTime() - now.getTime()
-        const remainingMins = Math.floor(diffMs / 60000)
-        const remainingSeconds = (diffMs % 60000) / 1000
-        const mins = Math.min(remainingMins, 59)
-        const secs = Math.min(remainingSeconds, 59)
-        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
     }
 
     const qrValue = pairing
