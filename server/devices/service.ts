@@ -119,9 +119,14 @@ export class DeviceService {
     }
 
     async confirm(id: string) {
+        const now = new Date()
         const [device] = await this.database
             .update(devices)
-            .set({ status: 'confirmed', confirmedAt: new Date() })
+            .set({
+                status: 'confirmed',
+                confirmedAt: now,
+                configuredAt: now,
+            })
             .where(
                 and(eq(devices.id, id), eq(devices.status, 'pending'), isNull(devices.revokedAt)),
             )
@@ -228,6 +233,7 @@ export class DeviceService {
                 keyFingerprint: devices.keyFingerprint,
                 status: devices.status,
                 confirmedAt: devices.confirmedAt,
+                configuredAt: devices.configuredAt,
                 revokedAt: devices.revokedAt,
                 lastSeenAt: devices.lastSeenAt,
                 createdAt: devices.createdAt,

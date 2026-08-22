@@ -6,6 +6,7 @@ export type DeviceRecord = {
     keyFingerprint: string
     status: string
     confirmedAt: string | null
+    configuredAt: string | null
     revokedAt: string | null
     lastSeenAt: string | null
     createdAt: string

@@ -39,6 +39,10 @@ class CredentialStore(context: Context) {
     fun selectedRecordTypes(): Set<String> =
         preferences.getStringSet("selectedRecordTypes", setOf("StepsRecord"))?.toSet()
             ?: setOf("StepsRecord")
+    fun saveBackgroundSyncEnabled(enabled: Boolean) =
+        preferences.edit().putBoolean("backgroundSyncEnabled", enabled).apply()
+    fun backgroundSyncEnabled(): Boolean =
+        preferences.getBoolean("backgroundSyncEnabled", false)
 
     private fun encryptionKey(): javax.crypto.SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }

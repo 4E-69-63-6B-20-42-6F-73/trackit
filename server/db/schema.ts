@@ -229,6 +229,7 @@ export const devices = pgTable('devices', {
     publicKey: text('public_key').notNull(),
     status: text('status').notNull().default('pending'),
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
+    configuredAt: timestamp('configured_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

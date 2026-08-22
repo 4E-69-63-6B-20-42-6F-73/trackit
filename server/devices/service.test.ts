@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
+import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { DeviceService } from './service.js'
@@ -169,6 +170,11 @@ describe('Android device pairing and upload', () => {
             originalUnit: 'count',
             metadata: { source: 'Health Connect', dataOrigin: 'com.example.watch' },
         })
+        // Verify configuredAt is set when device is confirmed
+        const [confirmedDevice] = await database.select().from(schema.devices).where(
+            eq(schema.devices.id, requested?.deviceId),
+        )
+        expect(confirmedDevice?.configuredAt).toBeInstanceOf(Date)
         await service.upload(requested!.deviceId, randomUUID(), [
             { ...records[0], deleted: true, version: 0 },
         ])

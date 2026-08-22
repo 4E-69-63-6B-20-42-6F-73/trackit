@@ -53,10 +53,13 @@ class PairingClient(private val context: Context) {
                     serverIdentity = serverIdentityInResponse,
                 )
 
-                responseCode == 202 -> PairingResult.Failure(
-                    message = "Waiting for confirmation in TrackIt",
-                    serverIdentity = serverIdentityInResponse,
-                )
+                responseCode == 202 -> {
+                    val deviceId = response?.optString("deviceId") ?: ""
+                    PairingResult.Pending(
+                        deviceId = deviceId,
+                        serverIdentity = serverIdentityInResponse ?: "",
+                    )
+                }
 
                 responseCode == 401 -> {
                     val errorType = response?.optString("error")?.takeIf { it.isNotBlank() }
@@ -123,8 +126,15 @@ sealed class PairingResult {
         val serverIdentity: String,
     ) : PairingResult()
 
+    data class Pending(
+        val deviceId: String,
+        val serverIdentity: String,
+    ) : PairingResult()
+
     data class Failure(
         val message: String,
         val serverIdentity: String?,
+        val serverUrl: String? = null,
+        val code: String? = null,
     ) : PairingResult()
 }

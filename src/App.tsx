@@ -22,6 +22,9 @@ const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: modu
 const Connections = lazy(() =>
     import('./pages/Connections').then(module => ({ default: module.Connections })),
 )
+const DeviceManagement = lazy(() =>
+    import('./pages/DeviceManagement').then(module => ({ default: module.DeviceManagement })),
+)
 const Settings = lazy(() =>
     import('./pages/Settings').then(module => ({ default: module.Settings })),
 )
@@ -45,7 +48,9 @@ export default function App() {
     const location = useLocation()
     const page = location.pathname.startsWith('/settings')
         ? 'Settings'
-        : (pathPages[location.pathname] ?? 'Today')
+        : location.pathname.startsWith('/connections')
+          ? 'Connections'
+          : (pathPages[location.pathname] ?? 'Today')
     const [quick, setQuick] = useState<QuickAddKind | null>(null)
     const [collapsed, setCollapsed] = useState(false)
     const [insight, setInsight] = useState(true)
@@ -163,6 +168,7 @@ export default function App() {
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
                             <Route path="/connections" element={<Connections />} />
+                            <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route
                                 path="/settings/goals"
                                 element={<Navigate to="/goals" replace />}
