@@ -3,9 +3,11 @@ services:
         build: .
         restart: unless-stopped
         environment:
-            HOST: 0.0.0.0
-            PORT: 3000
-            DATABASE_URL: postgres://trackit:${TRACKIT_DB_PASSWORD:?Set TRACKIT_DB_PASSWORD in .env}@db:5432/trackit
+        HOST: 0.0.0.0
+        PORT: 3000
+        TRACKIT_DB_HOST: db
+        TRACKIT_DB_PORT: 5432
+        TRACKIT_DB_PASSWORD: ${TRACKIT_DB_PASSWORD:?Set TRACKIT_DB_PASSWORD in .env}
             WEB_ORIGIN: ${TRACKIT_ORIGIN:-http://localhost:3000}
             TRUST_PROXY: ${TRACKIT_TRUST_PROXY:-false}
             BACKUPS_ENABLED: ${TRACKIT_BACKUPS_ENABLED:-false}

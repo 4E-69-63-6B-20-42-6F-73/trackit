@@ -36,11 +36,7 @@ If port `5432` is already in use, choose another host port:
 POSTGRES_PORT=5433 npm run dev:db
 ```
 
-and configure `DATABASE_URL` accordingly:
-
-```bash
-DATABASE_URL=postgres://trackit:trackit@localhost:5433/trackit npm run dev:api
-```
+and configure `DATABASE_PASSWORD` accordingly:
 
 ### API
 
