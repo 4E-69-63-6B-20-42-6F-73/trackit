@@ -4,69 +4,201 @@ A privacy-first, self-hosted health and nutrition dashboard.
 
 This is project is currently in ALPHA. The fundaments are there, but expect some friction here and there.
 
-## Start everything
+## Development
 
-With Docker Desktop or Docker Engine installed, one command starts PostgreSQL, applies migrations,
-builds the web application, and runs the TrackIt API:
-
-```bash
-npm start
-```
-
-Open `http://localhost:3000`. The first visit guides you through owner setup.
-
-## Local development
-
-The first frontend vertical slice includes responsive Today, Journal, Trends,
-Connections, and Settings experiences, plus an interactive quick-add flow. It
-uses React, TypeScript, Vite, Mantine, Tabler Icons, and Recharts.
+Install dependencies:
 
 ```bash
 npm install
-npm run dev
 ```
 
-`npm run dev` starts the frontend only. If the API is not running, choose **Open local demo mode**
-on the lock screen. To develop with persistent data, run PostgreSQL and `npm run dev:server`, or
-start the complete stack below.
+Dont forget create .env (See .env.example).
 
-Production build:
+### Development database
+
+Start PostgreSQL in Docker:
 
 ```bash
+npm run dev:db
+```
+
+PostgreSQL is exposed only on localhost and uses port `5432` by default.
+
+The local API defaults to:
+
+```text
+postgres://trackit:trackit@localhost:5432/trackit
+```
+
+If port `5432` is already in use, choose another host port:
+
+```bash
+POSTGRES_PORT=5433 npm run dev:db
+```
+
+and configure `DATABASE_URL` accordingly:
+
+```bash
+DATABASE_URL=postgres://trackit:trackit@localhost:5433/trackit npm run dev:api
+```
+
+### API
+
+Start the API in watch mode:
+
+```bash
+npm run dev:api
+```
+
+Database migrations are applied when the server starts.
+
+### Web app
+
+Start the Vite development server:
+
+```bash
+npm run dev:web
+```
+
+`npm run dev` is an alias for `npm run dev:web`.
+
+A typical local development setup therefore uses three terminals:
+
+```bash
+npm run dev:db
+```
+
+```bash
+npm run dev:api
+```
+
+```bash
+npm run dev:web
+```
+
+## Database migrations
+
+Trackit uses Drizzle Kit to generate and track PostgreSQL migrations.
+
+The migration directory contains both SQL migrations and Drizzle metadata:
+
+```text
+server/db/migrations/
+├── 0000_....sql
+├── 0001_....sql
+└── meta/
+    ├── _journal.json
+    ├── 0000_snapshot.json
+    └── 0001_snapshot.json
+```
+
+The files under `meta/` are part of the migration history and must be committed together with the SQL migrations.
+
+### Creating a migration
+
+First update:
+
+```text
+server/db/schema.ts
+```
+
+Then generate the migration:
+
+```bash
+npm run db:generate
+```
+
+To give the migration a descriptive name:
+
+```bash
+npm run db:generate -- --name=devices_configured_at
+```
+
+Commit all generated files, including:
+
+- the generated `.sql` migration
+- `meta/_journal.json`
+- the generated `meta/*_snapshot.json`
+
+Do not manually create numbered migration SQL files.
+
+Drizzle Kit uses its snapshots to determine what changed between schema versions. A manually-created SQL migration may update the database correctly while leaving Drizzle's schema history unchanged. The next generated migration can then incorrectly contain changes that were already made by previous migrations.
+
+### Checking migration consistency
+
+Run:
+
+```bash
+npm run db:check
+```
+
+This validates the generated Drizzle migration metadata.
+
+It is also included in the full project check:
+
+```bash
+npm run check
+```
+
+Run `npm run check` before opening a pull request.
+
+### Applying migrations
+
+The API applies pending migrations during startup, so normal development only requires:
+
+```bash
+npm run dev:api
+```
+
+Migrations can also be invoked explicitly with:
+
+```bash
+npm run db:migrate
+```
+
+### Migration workflow
+
+For normal schema changes:
+
+```text
+edit server/db/schema.ts
+        ↓
+npm run db:generate
+        ↓
+review generated SQL
+        ↓
+npm run db:check
+        ↓
+npm run check
+        ↓
+commit SQL + journal + snapshot
+```
+
+Never commit a generated SQL migration without its corresponding Drizzle metadata.
+
+## Project checks
+
+Run the complete validation suite with:
+
+```bash
+npm run check
+```
+
+This checks:
+
+1. formatting
+2. linting
+3. Drizzle migration consistency
+4. committed secrets
+5. tests
+6. production build
+
+Individual development commands are also available:
+
+```bash
+npm run format:check
+npm run lint
+npm run db:check
+npm run test
 npm run build
 ```
-
-The equivalent Docker command is:
-
-```bash
-docker compose up --build
-```
-
-Production installations must use HTTPS. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
-For a Proxmox VM or LXC deployment, follow [docs/PROXMOX.md](docs/PROXMOX.md); a fresh VM can create
-its secrets and start the complete stack with one bootstrap command.
-Backup, restore, export, retention, and deletion are documented in
-[docs/DATA_LIFECYCLE.md](docs/DATA_LIFECYCLE.md).
-
-Planning documents:
-
-- `docs/PRODUCT_DESIGN.md` — product, UX, architecture, and security direction.
-- `docs/ITERATION_PLAN.md` — implementation increments and acceptance criteria.
-
-## Included capabilities
-
-TrackIt includes PostgreSQL persistence, owner authentication, passkeys and recovery codes, a local
-food/recipe catalog, meal snapshots, effective-dated goals, truthful trends, scoped and audited MCP
-reads/writes, Android Health Connect synchronization, encrypted backups, portable exports,
-retention, and verifiable deletion.
-
-The Android companion supports Android 9 and newer. Health Connect is built into Android 14+ and is
-a separate Google app on supported earlier versions. Download the companion artifact from a TrackIt
-release, scan the short-lived pairing QR code under Connections, verify the displayed server
-identity, and confirm the pending device in the web application.
-
-For installation, upgrades, reverse proxies, backup and recovery, and troubleshooting, follow
-[docs/OPERATIONS.md](docs/OPERATIONS.md). Security assumptions and the pre-release review checklist
-are in [docs/THREAT_MODEL.md](docs/THREAT_MODEL.md). Requirement-to-test traceability is recorded in
-[docs/DELIVERY_EVIDENCE.md](docs/DELIVERY_EVIDENCE.md). Security-sensitive upgrade behavior is in
-[docs/SECURITY_HARDENING.md](docs/SECURITY_HARDENING.md).

@@ -54,3 +54,4 @@ packages/react-devtools-shell/dist
 packages/react-devtools-cdt-mcp/dist
 
 .env
+tsconfig.app.tsbuildinfo
