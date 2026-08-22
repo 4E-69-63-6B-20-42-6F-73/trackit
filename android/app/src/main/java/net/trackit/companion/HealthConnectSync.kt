@@ -2,9 +2,11 @@ package net.trackit.companion
 
 import android.content.Context
 import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
+import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.Record
@@ -35,10 +37,35 @@ class HealthConnectSync(private val context: Context) {
         ExerciseSessionRecord::class,
     )
 
-    fun permissionsFor(recordTypes: Set<KClass<out Record>>) =
+    fun permissionsFor(recordTypes: Set<KClass<out Record>>): Set<String> =
         recordTypes.map(HealthPermission::getReadPermission).toSet()
 
+    fun permissionsFor(
+        recordTypes: Set<KClass<out Record>>,
+        includeBackground: Boolean,
+    ): Set<String> {
+        val permissions = permissionsFor(recordTypes).toMutableSet()
+        if (includeBackground && supportsBackgroundRead()) {
+            permissions += PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
+        }
+        return permissions
+    }
+
     fun availability() = HealthConnectClient.getSdkStatus(context)
+
+    fun supportsBackgroundRead(): Boolean =
+        health.features.getFeatureStatus(
+            HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND,
+        ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+
+    suspend fun grantedPermissions(): Set<String> =
+        health.permissionController.getGrantedPermissions()
+
+    suspend fun hasPermissions(required: Set<String>): Boolean =
+        grantedPermissions().containsAll(required)
+
+    suspend fun hasBackgroundReadPermission(): Boolean =
+        PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in grantedPermissions()
 
     suspend fun syncSelected(
         recordTypes: Set<KClass<out Record>>,
@@ -55,7 +82,6 @@ class HealthConnectSync(private val context: Context) {
                     try {
                         api.updateCursor(key, state.cursor(key), result)
                     } catch (_: Exception) {
-                        // The category result remains local and later categories must still run.
                     }
                 }
                 onProgress(completed, total, key)
@@ -67,23 +93,27 @@ class HealthConnectSync(private val context: Context) {
         val key = recordType.simpleName.orEmpty()
         val savedToken = state.cursor(key)
         var token: String
+
         if (savedToken == null) {
+            token = newChangesToken(recordType)
             rereadWindow(recordType, cancelled)
-            token = health.getChangesToken(ChangesTokenRequest(setOf(recordType)))
         } else {
             token = savedToken
         }
+
         api.updateCursor(key, token, "syncing")
-        do {
+
+        while (true) {
             if (cancelled()) throw CancellationException("Import cancelled")
+
             val response = health.getChanges(token)
             if (response.changesTokenExpired) {
+                token = newChangesToken(recordType)
                 rereadWindow(recordType, cancelled)
-                token = health.getChangesToken(ChangesTokenRequest(setOf(recordType)))
-                state.saveCursor(key, token)
-                api.updateCursor(key, token, "complete")
-                return
+                api.updateCursor(key, token, "syncing")
+                continue
             }
+
             val uploads = response.changes.mapNotNull { change ->
                 when (change) {
                     is UpsertionChange -> mapRecord(change.record)
@@ -92,7 +122,7 @@ class HealthConnectSync(private val context: Context) {
                         metric = key,
                         value = 0.0,
                         unit = "deleted",
-                        observedAt = java.time.Instant.EPOCH.toString(),
+                        observedAt = Instant.EPOCH.toString(),
                         endedAt = null,
                         version = 9_007_199_254_740_991L,
                         dataOrigin = "Health Connect",
@@ -101,12 +131,21 @@ class HealthConnectSync(private val context: Context) {
                     else -> null
                 }
             }
-            api.upload(UUID.randomUUID().toString(), uploads)
+
+            if (uploads.isNotEmpty()) {
+                api.upload(UUID.randomUUID().toString(), uploads)
+            }
+
             token = response.nextChangesToken
-        } while (response.hasMore)
+            if (!response.hasMore) break
+        }
+
         state.saveCursor(key, token)
         api.updateCursor(key, token, "complete")
     }
+
+    private suspend fun newChangesToken(recordType: KClass<out Record>): String =
+        health.getChangesToken(ChangesTokenRequest(setOf(recordType)))
 
     private suspend fun rereadWindow(
         recordType: KClass<out Record>,
@@ -123,9 +162,12 @@ class HealthConnectSync(private val context: Context) {
             ExerciseSessionRecord::class -> readWindow(ExerciseSessionRecord::class, filter, cancelled)
             else -> emptyList()
         }
+
         records.mapNotNull(::mapRecord).chunked(500).forEach { batch ->
             if (cancelled()) throw CancellationException("Import cancelled")
-            api.upload(UUID.randomUUID().toString(), batch)
+            if (batch.isNotEmpty()) {
+                api.upload(UUID.randomUUID().toString(), batch)
+            }
         }
     }
 
@@ -136,6 +178,7 @@ class HealthConnectSync(private val context: Context) {
     ): List<Record> {
         val records = mutableListOf<Record>()
         var pageToken: String? = null
+
         do {
             if (cancelled()) throw CancellationException("Import cancelled")
             val response = health.readRecords(
@@ -149,6 +192,7 @@ class HealthConnectSync(private val context: Context) {
             records.addAll(response.records)
             pageToken = response.pageToken
         } while (pageToken != null)
+
         return records
     }
 
@@ -159,6 +203,7 @@ class HealthConnectSync(private val context: Context) {
             metadata.lastModifiedTime.toEpochMilli(),
             metadata.dataOrigin.packageName,
         )
+
         return when (record) {
             is StepsRecord -> HealthUpload(common.first, "steps", record.count.toDouble(), "count", HealthTime.serialize(record.startTime), HealthTime.serialize(record.endTime), common.second, common.third)
             is SleepSessionRecord -> HealthUpload(common.first, "sleep", HealthTime.hoursBetween(record.startTime, record.endTime), "hours", HealthTime.serialize(record.startTime), HealthTime.serialize(record.endTime), common.second, common.third)
@@ -169,5 +214,4 @@ class HealthConnectSync(private val context: Context) {
             else -> null
         }
     }
-
 }

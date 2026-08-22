@@ -1,1 +1,0 @@
-ALTER TABLE "foods" ADD COLUMN "last_used_at" timestamp with time zone;

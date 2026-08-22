@@ -47,6 +47,7 @@ const jsxLayout = {
                                 sibling =>
                                     sibling.type !== 'JSXText' || sibling.value.trim() !== '',
                             )
+
                         if (
                             !parentHasInlineText &&
                             previous &&
@@ -66,7 +67,9 @@ const jsxLayout = {
 }
 
 export default tseslint.config(
-    { ignores: ['dist', 'node_modules', 'coverage', 'android/**/build', '*.d.ts'] },
+    {
+        ignores: ['dist', 'node_modules', 'coverage', 'android/**/build', '*.d.ts', '.kilo/**'],
+    },
     js.configs.recommended,
     ...tseslint.configs.recommended,
     {
@@ -74,6 +77,9 @@ export default tseslint.config(
         languageOptions: {
             ecmaVersion: 2022,
             globals: globals.browser,
+            parserOptions: {
+                tsconfigRootDir: import.meta.dirname,
+            },
         },
         plugins: {
             'react-hooks': reactHooks,

@@ -2,6 +2,7 @@ import { readFile, readdir } from 'node:fs/promises'
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
+import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { DeviceService } from './service.js'
@@ -29,7 +30,7 @@ describe('Android device pairing and upload', () => {
             const timestamp = overrides.timestamp ?? Date.now().toString()
             const request = {
                 credential,
-                deviceId: overrides.deviceId ?? requested?.deviceId ?? randomUUID(),
+                deviceId: overrides.deviceId ?? randomUUID(),
                 method: overrides.method ?? 'POST',
                 path: overrides.path ?? '/api/device/upload',
                 timestamp,
@@ -55,14 +56,23 @@ describe('Android device pairing and upload', () => {
             })
         }
         const pairing = await service.createPairingCode()
-        const requested = await service.requestPairing(
+        const result = await service.requestPairing(
             pairing.code,
             'Pixel',
             fingerprint,
             publicKey,
             pairing.serverIdentity,
         )
-        expect(requested?.status).toBe('pending')
+        expect(result).not.toBeNull()
+        const requested = result as {
+            deviceId: string
+            credential: string
+            status: string
+            serverIdentity: string
+        }
+        expect(requested.status).toBe('pending')
+        // Second request should fail because code was already consumed by first request
+        await new Promise(r => setTimeout(r, 10))
         expect(
             await service.requestPairing(
                 pairing.code,
@@ -71,28 +81,57 @@ describe('Android device pairing and upload', () => {
                 publicKey,
                 pairing.serverIdentity,
             ),
-        ).toBeNull()
-        expect(await authenticate(requested?.credential)).toBeNull()
-
-        await service.confirm(requested!.deviceId)
-        expect(await authenticate(requested?.credential)).not.toBeNull()
+        ).toEqual({
+            error: 'expired',
+            error_details: {
+                message: 'Pairing code has expired. Please generate a new code.',
+                error: 'expired',
+            },
+        })
         expect(
             await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
+                nonce: randomUUID(),
+            }),
+        ).toBeNull()
+
+        await service.confirm(requested!.deviceId)
+        expect(
+            await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
+                nonce: randomUUID(),
+            }),
+        ).not.toBeNull()
+        expect(
+            await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
                 timestamp: String(Date.now() - 120_000),
             }),
         ).toBeNull()
         const replayNonce = randomUUID()
-        expect(await authenticate(requested?.credential, { nonce: replayNonce })).not.toBeNull()
-        expect(await authenticate(requested?.credential, { nonce: replayNonce })).toBeNull()
+        expect(
+            await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
+                nonce: replayNonce,
+            }),
+        ).not.toBeNull()
+        expect(
+            await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
+                nonce: replayNonce,
+            }),
+        ).toBeNull()
         const validBodyHash = createHash('sha256').update('{}').digest('hex')
         expect(
             await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
                 bodyHash: validBodyHash,
                 path: '/api/device/cursor',
             }),
         ).not.toBeNull()
         expect(
             await authenticate(requested?.credential, {
+                deviceId: requested?.deviceId,
                 path: '/api/device/upload',
                 submittedPath: '/api/device/cursor',
             }),
@@ -131,6 +170,12 @@ describe('Android device pairing and upload', () => {
             originalUnit: 'count',
             metadata: { source: 'Health Connect', dataOrigin: 'com.example.watch' },
         })
+        // Verify configuredAt is set when device is confirmed
+        const [confirmedDevice] = await database
+            .select()
+            .from(schema.devices)
+            .where(eq(schema.devices.id, requested?.deviceId))
+        expect(confirmedDevice?.configuredAt).toBeInstanceOf(Date)
         await service.upload(requested!.deviceId, randomUUID(), [
             { ...records[0], deleted: true, version: 0 },
         ])

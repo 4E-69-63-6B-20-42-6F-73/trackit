@@ -48,24 +48,56 @@ export class DeviceService {
         keyFingerprint: string,
         publicKey: string,
         expectedServerIdentity: string,
-    ) {
-        if (expectedServerIdentity !== this.serverIdentity) return null
+    ): Promise<
+        | { deviceId: string; credential: string; status: string; serverIdentity: string }
+        | {
+              error: string
+              error_details: { message: string; error: string }
+              serverIdentity?: string
+          }
+    > {
+        if (expectedServerIdentity !== this.serverIdentity) {
+            return {
+                error: 'identity_mismatch',
+                error_details: {
+                    message: 'Server identity mismatch. Verify the server address and identity.',
+                    error: 'identity_mismatch',
+                },
+                serverIdentity: this.serverIdentity,
+            }
+        }
         const keyBytes = Buffer.from(publicKey, 'base64')
-        if (createHash('sha256').update(keyBytes).digest('base64url') !== keyFingerprint)
-            return null
+        if (createHash('sha256').update(keyBytes).digest('base64url') !== keyFingerprint) {
+            return {
+                error: 'invalid',
+                error_details: {
+                    message: 'Invalid pairing code. Please check the code and try again.',
+                    error: 'invalid',
+                },
+            }
+        }
+        const now = new Date()
         return this.database.transaction(async transaction => {
             const [consumed] = await transaction
                 .update(pairingCodes)
-                .set({ usedAt: new Date() })
+                .set({ usedAt: now })
                 .where(
                     and(
                         eq(pairingCodes.codeHash, hash(code)),
                         isNull(pairingCodes.usedAt),
-                        gt(pairingCodes.expiresAt, new Date()),
+                        gt(pairingCodes.expiresAt, now),
                     ),
                 )
                 .returning()
-            if (!consumed) return null
+            if (!consumed) {
+                return {
+                    error: 'expired',
+                    error_details: {
+                        message: 'Pairing code has expired. Please generate a new code.',
+                        error: 'expired',
+                    },
+                }
+            }
             const credential = `trk_device_${randomBytes(32).toString('base64url')}`
             const [device] = await transaction
                 .insert(devices)
@@ -87,9 +119,14 @@ export class DeviceService {
     }
 
     async confirm(id: string) {
+        const now = new Date()
         const [device] = await this.database
             .update(devices)
-            .set({ status: 'confirmed', confirmedAt: new Date() })
+            .set({
+                status: 'confirmed',
+                confirmedAt: now,
+                configuredAt: now,
+            })
             .where(
                 and(eq(devices.id, id), eq(devices.status, 'pending'), isNull(devices.revokedAt)),
             )
@@ -196,6 +233,7 @@ export class DeviceService {
                 keyFingerprint: devices.keyFingerprint,
                 status: devices.status,
                 confirmedAt: devices.confirmedAt,
+                configuredAt: devices.configuredAt,
                 revokedAt: devices.revokedAt,
                 lastSeenAt: devices.lastSeenAt,
                 createdAt: devices.createdAt,

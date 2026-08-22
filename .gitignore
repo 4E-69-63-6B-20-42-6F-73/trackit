@@ -37,6 +37,7 @@ chrome-user-data
 /.worktrees
 .claude/*.local.*
 .claude/worktrees
+.kilo
 
 packages/react-devtools-core/dist
 packages/react-devtools-extensions/chrome/build
@@ -51,3 +52,5 @@ packages/react-devtools-fusebox/dist
 packages/react-devtools-inline/dist
 packages/react-devtools-shell/dist
 packages/react-devtools-cdt-mcp/dist
+
+.env

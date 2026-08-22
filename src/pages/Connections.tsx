@@ -9,26 +9,35 @@ import {
     IconTools,
 } from '@tabler/icons-react'
 import { McpPanel } from '../components/McpPanel'
-import { DevicePanel } from '../components/DevicePanel'
 import { downloadExport } from '../lib/lifecycleApi'
 import { listDevices } from '../lib/deviceApi'
 
 export function Connections() {
-    const [dialog, setDialog] = useState<'health' | 'mcp' | 'export' | null>(null)
+    const [dialog, setDialog] = useState<'mcp' | 'export' | null>(null)
     const [mcp, setMcp] = useState(false)
     const [exportError, setExportError] = useState('')
     const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
     const [healthStatus, setHealthStatus] = useState<
-        'Connected' | 'Setup required' | 'Unavailable'
+        'Configured' | 'Connected' | 'Setup required' | 'Unavailable'
     >('Setup required')
+    const [deviceCount, setDeviceCount] = useState(0)
     const refreshHealthStatus = useCallback(() => {
         void listDevices()
             .then(devices => {
-                setHealthStatus(
-                    devices.some(device => device.status === 'active')
-                        ? 'Connected'
-                        : 'Setup required',
+                const activeDevices = devices.filter(d => d.status === 'active')
+                const configuredDevices = devices.filter(
+                    d => d.status === 'confirmed' && d.configuredAt !== null,
                 )
+                if (activeDevices.length > 0) {
+                    setHealthStatus('Connected')
+                } else if (configuredDevices.length > 0) {
+                    setHealthStatus('Configured')
+                } else if (devices.some(d => d.status === 'pending')) {
+                    setHealthStatus('Setup required')
+                } else {
+                    setHealthStatus('Unavailable')
+                }
+                setDeviceCount(devices.length)
             })
             .catch(() => setHealthStatus('Unavailable'))
     }, [])
@@ -89,7 +98,13 @@ export function Connections() {
                                 {status && (
                                     <Badge
                                         variant="light"
-                                        color={status === 'Connected' ? 'trackit' : 'dark'}
+                                        color={
+                                            status === 'Connected'
+                                                ? 'trackit'
+                                                : status === 'Configured'
+                                                  ? 'green'
+                                                  : 'dark'
+                                        }
                                     >
                                         {status}
                                     </Badge>
@@ -100,16 +115,22 @@ export function Connections() {
                             </Text>
                             <div className="connection-action">
                                 <Button
-                                    onClick={() => setDialog(key)}
                                     variant={key === 'health' ? 'filled' : 'default'}
                                     color="trackit"
+                                    onClick={
+                                        key === 'health'
+                                            ? () => (window.location.href = '/connections/devices')
+                                            : () => setDialog(key)
+                                    }
                                 >
                                     {key === 'health'
-                                        ? healthStatus === 'Connected'
-                                            ? 'Manage Health Connect'
-                                            : healthStatus === 'Unavailable'
-                                              ? 'Review Health Connect'
-                                              : 'Connect Health Connect'
+                                        ? healthStatus === 'Connected' && deviceCount > 0
+                                            ? `${deviceCount} device${deviceCount > 1 ? 's' : ''} configured`
+                                            : healthStatus === 'Configured'
+                                              ? 'View devices'
+                                              : healthStatus === 'Unavailable'
+                                                ? 'Review Health Connect'
+                                                : 'Connect device'
                                         : 'Manage data'}
                                 </Button>
                                 <IconChevronRight size={18} />
@@ -159,17 +180,6 @@ export function Connections() {
                     </Text>
                 </div>
             </section>
-            <Modal
-                opened={dialog === 'health'}
-                onClose={() => {
-                    setDialog(null)
-                    refreshHealthStatus()
-                }}
-                title="Health Connect"
-                centered
-            >
-                <DevicePanel />
-            </Modal>
             <Modal
                 opened={dialog === 'mcp'}
                 onClose={() => setDialog(null)}

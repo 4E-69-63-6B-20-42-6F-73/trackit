@@ -1,1 +1,0 @@
-ALTER TABLE "foods" ADD COLUMN "version" integer DEFAULT 1 NOT NULL;

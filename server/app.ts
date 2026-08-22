@@ -513,8 +513,18 @@ export async function createApp(
                 input.data.publicKey,
                 input.data.serverIdentity,
             )
-            if (!paired) {
-                return reply.code(401).send({ error: 'invalid_or_expired_pairing' })
+            const isErrorResponse = (
+                r: typeof paired,
+            ): r is {
+                error: string
+                error_details: { message: string; error: string }
+                serverIdentity?: string | undefined
+            } => 'error' in r && r.error !== undefined
+            if (isErrorResponse(paired)) {
+                return reply.code(401).send({
+                    error: paired.error,
+                    error_details: paired.error_details,
+                })
             }
             return reply.code(202).send(paired)
         })

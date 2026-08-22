@@ -21,6 +21,14 @@ class CredentialStore(context: Context) {
             .apply()
     }
 
+    fun save(serverUrl: String, deviceId: String, credential: String) {
+        preferences.edit()
+            .putString("serverUrl", serverUrl)
+            .putString("deviceId", deviceId)
+            .putString("credential", encrypt(credential))
+            .apply()
+    }
+
     fun read(key: String): String? = preferences.getString(key, null)?.let {
         if (key == "credential") decrypt(it) else it
     }
@@ -31,6 +39,10 @@ class CredentialStore(context: Context) {
     fun selectedRecordTypes(): Set<String> =
         preferences.getStringSet("selectedRecordTypes", setOf("StepsRecord"))?.toSet()
             ?: setOf("StepsRecord")
+    fun saveBackgroundSyncEnabled(enabled: Boolean) =
+        preferences.edit().putBoolean("backgroundSyncEnabled", enabled).apply()
+    fun backgroundSyncEnabled(): Boolean =
+        preferences.getBoolean("backgroundSyncEnabled", false)
 
     private fun encryptionKey(): javax.crypto.SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
