@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { PreferencesPanel } from './PreferencesPanel'
 import { getPreferences, updatePreferences } from '../lib/preferencesApi'
+import { ServerDataProvider } from '../hooks/useServerData'
 
 vi.mock('../lib/preferencesApi', () => ({
     getPreferences: vi.fn(),
@@ -25,7 +26,9 @@ describe('PreferencesPanel', () => {
         }))
         render(
             <MantineProvider>
-                <PreferencesPanel />
+                <ServerDataProvider initialData={{ preferences }}>
+                    <PreferencesPanel />
+                </ServerDataProvider>
             </MantineProvider>,
         )
         const user = userEvent.setup()

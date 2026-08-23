@@ -4,14 +4,17 @@ import { createApp } from './app.js'
 import type {
     CreateJournalEntry,
     JournalEntry,
+    JournalListQuery,
     JournalRepository,
     UpdateJournalEntry,
 } from './journal/types.js'
 
 class MemoryJournalRepository implements JournalRepository {
     entries: JournalEntry[] = []
+    lastListQuery: JournalListQuery | undefined
 
-    async list() {
+    async list(query?: JournalListQuery) {
+        this.lastListQuery = query
         return this.entries
     }
 
@@ -84,6 +87,26 @@ describe('device authentication diagnostics', () => {
 })
 
 describe('journal API', () => {
+    it('validates and forwards bounded journal ranges', async () => {
+        const repository = new MemoryJournalRepository()
+        const app = await createApp(repository)
+        const response = await app.inject({
+            method: 'GET',
+            url: '/api/journal?from=2026-08-22T00%3A00%3A00.000Z&to=2026-08-23T00%3A00%3A00.000Z&limit=25',
+        })
+
+        expect(response.statusCode).toBe(200)
+        expect(repository.lastListQuery).toEqual({
+            from: '2026-08-22T00:00:00.000Z',
+            to: '2026-08-23T00:00:00.000Z',
+            limit: 25,
+        })
+        expect(
+            (await app.inject({ method: 'GET', url: '/api/journal?limit=501' })).statusCode,
+        ).toBe(400)
+        await app.close()
+    })
+
     it('creates, lists, idempotently updates, and deletes a record', async () => {
         const repository = new MemoryJournalRepository()
         const app = await createApp(repository)

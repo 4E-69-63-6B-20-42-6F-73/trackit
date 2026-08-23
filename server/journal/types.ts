@@ -33,8 +33,14 @@ export const updateJournalEntrySchema = z.object({
 
 export type UpdateJournalEntry = z.infer<typeof updateJournalEntrySchema>
 
+export type JournalListQuery = {
+    from?: string
+    to?: string
+    limit?: number
+}
+
 export interface JournalRepository {
-    list(): Promise<JournalEntry[]>
+    list(query?: JournalListQuery): Promise<JournalEntry[]>
     create(input: CreateJournalEntry & JournalEntityLink): Promise<JournalEntry>
     update(id: string, input: UpdateJournalEntry): Promise<JournalEntry | null>
     remove(id: string): Promise<boolean>

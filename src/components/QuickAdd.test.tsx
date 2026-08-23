@@ -3,6 +3,17 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { QuickAdd } from './QuickAdd'
+import { ServerDataProvider } from '../hooks/useServerData'
+
+const provider = (children: React.ReactNode) => (
+    <ServerDataProvider
+        initialData={{
+            preferences: { displayName: 'Owner', timezone: 'UTC', locale: 'en', units: 'metric' },
+        }}
+    >
+        {children}
+    </ServerDataProvider>
+)
 
 describe('QuickAdd', () => {
     it('creates a meal and closes the dialog', async () => {
@@ -12,7 +23,7 @@ describe('QuickAdd', () => {
 
         render(
             <MantineProvider>
-                <QuickAdd opened close={close} add={add} />
+                {provider(<QuickAdd opened close={close} add={add} />)}
             </MantineProvider>,
         )
 
@@ -35,7 +46,7 @@ describe('QuickAdd', () => {
 
         render(
             <MantineProvider>
-                <QuickAdd opened close={vi.fn()} add={add} />
+                {provider(<QuickAdd opened close={vi.fn()} add={add} />)}
             </MantineProvider>,
         )
 
@@ -51,13 +62,15 @@ describe('QuickAdd', () => {
 
         render(
             <MantineProvider>
-                <QuickAdd
-                    opened
-                    close={vi.fn()}
-                    add={add}
-                    initialKind="Weight"
-                    selectedDate="2026-08-20"
-                />
+                {provider(
+                    <QuickAdd
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        initialKind="Weight"
+                        selectedDate="2026-08-20"
+                    />,
+                )}
             </MantineProvider>,
         )
 

@@ -41,8 +41,8 @@ export type ExperiencePreferences = {
     dismissedWeeklyReflection?: string
 }
 
-export async function getPreferences(): Promise<Preferences> {
-    const response = await authRequest('/api/preferences')
+export async function getPreferences(signal?: AbortSignal): Promise<Preferences> {
+    const response = await authRequest('/api/preferences', { signal })
     if (!response.ok) throw new Error('Preferences unavailable')
     return ((await response.json()) as { data: Preferences }).data
 }
@@ -54,5 +54,7 @@ export async function updatePreferences(input: Partial<Preferences>): Promise<Pr
         body: JSON.stringify(input),
     })
     if (!response.ok) throw new Error('Preferences could not be saved')
-    return ((await response.json()) as { data: Preferences }).data
+    const saved = ((await response.json()) as { data: Preferences }).data
+    window.dispatchEvent(new CustomEvent('trackit:preferences-saved', { detail: saved }))
+    return saved
 }

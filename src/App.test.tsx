@@ -3,13 +3,27 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from './App'
+import { ServerDataProvider } from './hooks/useServerData'
+
+const initialData = {
+    preferences: {
+        displayName: 'Owner',
+        timezone: 'UTC',
+        locale: 'en',
+        units: 'metric' as const,
+        experience: { onboardingComplete: true },
+    },
+    goals: [],
+}
 
 describe('App routing', () => {
     it('renders a bookmarkable journal route', async () => {
         render(
             <MantineProvider>
                 <MemoryRouter initialEntries={['/journal']}>
-                    <App />
+                    <ServerDataProvider initialData={initialData}>
+                        <App />
+                    </ServerDataProvider>
                 </MemoryRouter>
             </MantineProvider>,
         )
@@ -25,7 +39,9 @@ describe('App routing', () => {
         render(
             <MantineProvider>
                 <MemoryRouter initialEntries={['/goals']}>
-                    <App />
+                    <ServerDataProvider initialData={initialData}>
+                        <App />
+                    </ServerDataProvider>
                 </MemoryRouter>
             </MantineProvider>,
         )

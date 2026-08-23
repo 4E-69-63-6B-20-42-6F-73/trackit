@@ -14,12 +14,12 @@ import {
 } from '@mantine/core'
 import { useNavigate } from 'react-router-dom'
 import {
-    getPreferences,
     updatePreferences,
     type ExperiencePreferences,
     type FocusArea,
     type Preferences,
 } from '../lib/preferencesApi'
+import { useServerData } from '../hooks/useServerData'
 
 const focusOptions: Array<{ value: FocusArea; label: string; description: string }> = [
     { value: 'energy', label: 'Energy', description: 'Understand how you feel across the day.' },
@@ -49,27 +49,27 @@ const cardsForFocus = (areas: FocusArea[]) => {
 
 export function Onboarding() {
     const navigate = useNavigate()
-    const [preferences, setPreferences] = useState<Preferences | null>(null)
+    const { preferences: sharedPreferences, loading, unavailable } = useServerData()
+    const [preferences, setPreferences] = useState<Preferences | null>(sharedPreferences)
     const [step, setStep] = useState(0)
     const [focusAreas, setFocusAreas] = useState<FocusArea[]>(['collect'])
     const [dataMode, setDataMode] = useState<'manual' | 'health-connect' | 'hybrid'>('manual')
     const [saving, setSaving] = useState(false)
-    const [loading, setLoading] = useState(true)
     const [error, setError] = useState('')
 
-    const load = () => {
-        void getPreferences()
-            .then(value => {
-                setPreferences(value)
-                setStep(value.experience?.onboardingStep ?? 0)
-                setFocusAreas(value.experience?.focusAreas ?? ['collect'])
-                setDataMode(value.experience?.dataMode ?? 'manual')
-            })
-            .catch(() => setError('TrackIt could not load setup from your server.'))
-            .finally(() => setLoading(false))
-    }
-
-    useEffect(load, [])
+    useEffect(() => {
+        queueMicrotask(() => {
+            if (!sharedPreferences) {
+                if (unavailable) setError('TrackIt could not load setup from your server.')
+                return
+            }
+            setError('')
+            setPreferences(sharedPreferences)
+            setStep(sharedPreferences.experience?.onboardingStep ?? 0)
+            setFocusAreas(sharedPreferences.experience?.focusAreas ?? ['collect'])
+            setDataMode(sharedPreferences.experience?.dataMode ?? 'manual')
+        })
+    }, [sharedPreferences, unavailable])
 
     if (loading || preferences?.experience?.onboardingComplete) return null
 
@@ -82,7 +82,6 @@ export function Onboarding() {
                 experience: { ...preferences.experience, ...next },
             })
             setPreferences(saved)
-            window.dispatchEvent(new Event('trackit:preferences-changed'))
             return true
         } catch {
             setError('Setup could not be saved to your server. Nothing was stored in this browser.')
@@ -162,9 +161,8 @@ export function Onboarding() {
                     {!preferences && (
                         <Button
                             onClick={() => {
-                                setLoading(true)
                                 setError('')
-                                load()
+                                window.dispatchEvent(new Event('trackit:preferences-changed'))
                             }}
                             size="xs"
                             ml="sm"

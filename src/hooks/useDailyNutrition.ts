@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import { emptyNutrients, type Nutrients } from '../domain/nutrition'
 import { listMeals } from '../lib/nutritionApi'
-import { listGoals } from '../lib/goalApi'
-import { getPreferences } from '../lib/preferencesApi'
+import { useServerData } from './useServerData'
 
 export type DailyNutritionState = {
     nutrients: Nutrients
@@ -13,7 +12,8 @@ export type DailyNutritionState = {
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
 }
 
-export function useDailyNutrition(): DailyNutritionState {
+export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
+    const { goals, preferences } = useServerData()
     const [state, setState] = useState<DailyNutritionState>({
         nutrients: emptyNutrients(),
         mealCount: 0,
@@ -24,78 +24,43 @@ export function useDailyNutrition(): DailyNutritionState {
     })
 
     useEffect(() => {
-        const start = new Date()
+        const controller = new AbortController()
+        const start = new Date(selectedDate)
         start.setHours(0, 0, 0, 0)
         const end = new Date(start)
         end.setDate(end.getDate() + 1)
-        end.setMilliseconds(-1)
-        const queryStart = new Date(start)
-        queryStart.setDate(queryStart.getDate() - 1)
-        const queryEnd = new Date(end)
-        queryEnd.setDate(queryEnd.getDate() + 1)
-        void Promise.all([
-            listMeals({ from: queryStart.toISOString(), to: queryEnd.toISOString() }),
-            listGoals().catch(() => []),
-            getPreferences().catch(() => null),
-        ])
-            .then(([meals, goals, preferences]) => {
-                const now = new Date()
-                const timezone =
-                    preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-                const dayFormatter = new Intl.DateTimeFormat('en-CA', {
-                    timeZone: timezone,
-                    year: 'numeric',
-                    month: '2-digit',
-                    day: '2-digit',
-                })
-                const today = dayFormatter.format(now)
-                const todaysMeals = meals.filter(
-                    meal => dayFormatter.format(new Date(meal.eatenAt)) === today,
-                )
-                const nutrients = todaysMeals.reduce((total, meal) => {
+        void listMeals({ from: start.toISOString(), to: end.toISOString() }, controller.signal)
+            .then(meals => {
+                const nutrients = meals.reduce((total, meal) => {
                     for (const key of Object.keys(total) as (keyof Nutrients)[]) {
                         total[key] += meal.nutrientSnapshot[key] ?? 0
                     }
                     return total
                 }, emptyNutrients())
+                const weekday = selectedDate.getDay()
                 setState({
                     nutrients,
-                    mealCount: todaysMeals.length,
+                    mealCount: meals.length,
                     loading: false,
                     unavailable: false,
                     proteinGoal:
-                        goals.find(goal => {
-                            const weekday = new Intl.DateTimeFormat('en-US', {
-                                timeZone: timezone,
-                                weekday: 'short',
-                            }).format(now)
-                            const weekdayNumber = [
-                                'Sun',
-                                'Mon',
-                                'Tue',
-                                'Wed',
-                                'Thu',
-                                'Fri',
-                                'Sat',
-                            ].indexOf(weekday)
-                            return (
+                        goals.find(
+                            goal =>
                                 goal.metric === 'protein' &&
-                                new Date(goal.effectiveFrom) <= now &&
-                                (!goal.effectiveTo || new Date(goal.effectiveTo) >= now) &&
+                                new Date(goal.effectiveFrom) <= selectedDate &&
+                                (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
                                 (!goal.schedule.weekdays?.length ||
-                                    goal.schedule.weekdays.includes(weekdayNumber))
-                            )
-                        })?.targetValue ?? null,
-                    nutritionQuality: todaysMeals.some(
-                        meal => meal.nutritionQuality === 'incomplete',
-                    )
+                                    goal.schedule.weekdays.includes(weekday)),
+                        )?.targetValue ?? null,
+                    nutritionQuality: meals.some(meal => meal.nutritionQuality === 'incomplete')
                         ? 'incomplete'
-                        : todaysMeals.some(meal => meal.nutritionQuality === 'estimated')
+                        : meals.some(meal => meal.nutritionQuality === 'estimated')
                           ? 'estimated'
                           : 'complete',
                 })
             })
-            .catch(() =>
+            .catch(error => {
+                if (error instanceof DOMException && error.name === 'AbortError') return
                 setState({
                     nutrients: emptyNutrients(),
                     mealCount: 0,
@@ -103,9 +68,10 @@ export function useDailyNutrition(): DailyNutritionState {
                     unavailable: true,
                     proteinGoal: null,
                     nutritionQuality: 'complete',
-                }),
-            )
-    }, [])
+                })
+            })
+        return () => controller.abort()
+    }, [goals, preferences?.timezone, selectedDate])
 
     return state
 }

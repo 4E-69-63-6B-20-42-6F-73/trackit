@@ -478,7 +478,7 @@ export function Today({
                                 </Button>
                             )}
                         </div>
-                        <DailyNutritionPanel openGoals={openGoals} />
+                        <DailyNutritionPanel openGoals={openGoals} selectedDate={selectedDate} />
                     </article>
                 )}
                 {visible('trend') && (
@@ -634,7 +634,6 @@ export function Today({
                                         visibleCards: draftCards,
                                     },
                                 })
-                                window.dispatchEvent(new Event('trackit:preferences-changed'))
                                 setCustomizing(false)
                             } finally {
                                 setSavingCards(false)
