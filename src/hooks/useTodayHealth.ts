@@ -1,135 +1,172 @@
-import { useEffect, useMemo, useState } from 'react'
-import { dailySeries, rollingBaselineDelta, type Observation } from '../domain/health'
-import { listGoals, type GoalRecord } from '../lib/goalApi'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type { Observation } from '../domain/health'
+import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { listObservations } from '../lib/observationApi'
-import { getPreferences, type Preferences } from '../lib/preferencesApi'
+import { useServerData } from './useServerData'
+
+const dateKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const asObservation = (row: DailyMetric): Observation => ({
+    id: `daily:${row.date}:${row.metric}`,
+    metric: row.metric,
+    canonicalValue: row.value,
+    canonicalUnit: row.unit,
+    originalValue: row.value,
+    originalUnit: row.unit,
+    observedAt: `${row.date}T12:00:00.000Z`,
+    excluded: false,
+    version: row.derivationVersion,
+})
 
 export function useTodayHealth(selectedDate: Date = new Date()) {
-    const [observations, setObservations] = useState<Observation[]>([])
-    const [goals, setGoals] = useState<GoalRecord[]>([])
+    const {
+        preferences,
+        goals,
+        loading: sharedLoading,
+        unavailable: sharedUnavailable,
+    } = useServerData()
+    const [daily, setDaily] = useState<DailyMetric[]>([])
+    const [details, setDetails] = useState<Observation[]>([])
     const [loading, setLoading] = useState(true)
     const [unavailable, setUnavailable] = useState(false)
-    const [preferences, setPreferences] = useState<Preferences | null>(null)
-
-    useEffect(() => {
-        let active = true
-        let controller: AbortController | null = null
-        const loadObservations = () => {
-            controller?.abort()
-            controller = new AbortController()
-            const from = new Date(selectedDate)
-            from.setDate(from.getDate() - 30)
-            const to = new Date(selectedDate)
-            to.setDate(to.getDate() + 1)
-            void listObservations({ from: from.toISOString(), to: to.toISOString() }, controller.signal)
-                .then(records => {
-                    if (!active) return
-                    setObservations(records)
+    const selectedKey = dateKey(selectedDate)
+    const load = useCallback(
+        (signal: AbortSignal) => {
+            const fromDate = new Date(selectedDate)
+            fromDate.setDate(fromDate.getDate() - 29)
+            const dayStart = new Date(selectedDate)
+            dayStart.setHours(0, 0, 0, 0)
+            const dayEnd = new Date(dayStart)
+            dayEnd.setDate(dayEnd.getDate() + 1)
+            queueMicrotask(() => {
+                if (!signal.aborted) setLoading(true)
+            })
+            return Promise.all([
+                listDailyMetrics({ from: dateKey(fromDate), to: selectedKey }, signal),
+                listObservations(
+                    { from: dayStart.toISOString(), to: dayEnd.toISOString() },
+                    signal,
+                ),
+            ])
+                .then(([metrics, observations]) => {
+                    setDaily(metrics)
+                    setDetails(observations)
                     setUnavailable(false)
                 })
                 .catch(error => {
-                    if (active && !(error instanceof DOMException && error.name === 'AbortError'))
-                        setUnavailable(true)
+                    if (error instanceof DOMException && error.name === 'AbortError') return
+                    setUnavailable(true)
                 })
-                .finally(() => active && setLoading(false))
+                .finally(() => {
+                    if (!signal.aborted) setLoading(false)
+                })
+        },
+        [selectedDate, selectedKey],
+    )
+
+    useEffect(() => {
+        let controller = new AbortController()
+        void load(controller.signal)
+        const refresh = () => {
+            controller.abort()
+            controller = new AbortController()
+            void load(controller.signal)
         }
-        loadObservations()
-        window.addEventListener('trackit:observations-changed', loadObservations)
+        window.addEventListener('trackit:observations-changed', refresh)
         return () => {
-            active = false
-            controller?.abort()
-            window.removeEventListener('trackit:observations-changed', loadObservations)
+            controller.abort()
+            window.removeEventListener('trackit:observations-changed', refresh)
         }
-    }, [selectedDate])
-
-    useEffect(() => {
-        const loadGoals = () => void listGoals().then(setGoals).catch(() => setUnavailable(true))
-        loadGoals()
-        window.addEventListener('trackit:goals-changed', loadGoals)
-        return () => window.removeEventListener('trackit:goals-changed', loadGoals)
-    }, [])
-
-    useEffect(() => {
-        const loadPreferences = () => void getPreferences().then(setPreferences).catch(() => null)
-        loadPreferences()
-        window.addEventListener('trackit:preferences-changed', loadPreferences)
-        return () => window.removeEventListener('trackit:preferences-changed', loadPreferences)
-    }, [])
+    }, [load])
 
     return useMemo(() => {
-        const now = selectedDate
-        const timezone = preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-        const dayFormatter = new Intl.DateTimeFormat('en-CA', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-        })
-        const todayKey = dayFormatter.format(now)
-        const today = observations.filter(
-            record => dayFormatter.format(new Date(record.observedAt)) === todayKey,
-        )
-        const metric = (name: string) =>
-            today
-                .filter(record => record.metric === name && !record.excluded)
-                .sort((left, right) => right.observedAt.localeCompare(left.observedAt))
-        const sum = (name: string) =>
-            metric(name).reduce((total, record) => total + record.canonicalValue, 0)
-        const latest = (name: string) => metric(name)[0] ?? null
-        const sleepStart = new Date(now)
-        sleepStart.setUTCHours(12, 0, 0, 0)
-        sleepStart.setUTCDate(sleepStart.getUTCDate() - 6)
-        const sleep = dailySeries(
-            observations.filter(record => record.metric === 'sleep'),
-            sleepStart,
-            7,
-            timezone,
-        ).map(point => ({
-            day: new Date(`${point.date}T00:00:00Z`).toLocaleDateString(preferences?.locale, {
-                weekday: 'short',
-                timeZone: 'UTC',
-            }),
-            sleep: point.value,
-            recordIds: point.recordIds,
-        }))
-        const activeGoal = (name: string) =>
+        const todayRows = daily.filter(row => row.date === selectedKey)
+        const dailyMetric = (metric: string) => todayRows.find(row => row.metric === metric) ?? null
+        const latestDetail = (metric: string) =>
+            details
+                .filter(row => row.metric === metric && !row.excluded)
+                .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0] ??
+            (dailyMetric(metric) ? asObservation(dailyMetric(metric)!) : null)
+        const aggregateDetail = (metric: string) => {
+            const rows = details.filter(row => row.metric === metric && !row.excluded)
+            const aggregate = dailyMetric(metric)
+            if (aggregate) return asObservation(aggregate)
+            if (!rows.length) return null
+            return {
+                ...rows[0],
+                canonicalValue: rows.reduce((sum, row) => sum + row.canonicalValue, 0),
+            }
+        }
+        const values = (metric: string) =>
+            daily.filter(row => row.metric === metric).sort((a, b) => a.date.localeCompare(b.date))
+        const baseline = (metric: string) => {
+            const rows = values(metric)
+            const current = rows.find(row => row.date === selectedKey)
+            const prior = rows.filter(row => row.date !== selectedKey)
+            if (!current || prior.length < 2) return null
+            const average = prior.reduce((sum, row) => sum + row.value, 0) / prior.length
+            return {
+                current: current.value,
+                baseline: average,
+                delta: current.value - average,
+                sampleSize: prior.length,
+            }
+        }
+        const activeGoal = (metric: string) =>
             goals.find(goal => {
-                const starts = new Date(goal.effectiveFrom) <= now
-                const ends = !goal.effectiveTo || new Date(goal.effectiveTo) >= now
-                const weekday = new Intl.DateTimeFormat('en-US', {
-                    timeZone: timezone,
-                    weekday: 'short',
-                }).format(now)
-                const weekdayNumber = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(
-                    weekday,
+                const weekday = selectedDate.getDay()
+                return (
+                    goal.metric === metric &&
+                    new Date(goal.effectiveFrom) <= selectedDate &&
+                    (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
+                    (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))
                 )
-                const scheduled =
-                    !goal.schedule.weekdays?.length ||
-                    goal.schedule.weekdays.includes(weekdayNumber)
-                return goal.metric === name && starts && ends && scheduled
             }) ?? null
+        const sleepByDate = new Map(values('sleep').map(row => [row.date, row]))
+        const sleepRows = Array.from({ length: 7 }, (_, offset) => {
+            const date = new Date(selectedDate)
+            date.setDate(date.getDate() - 6 + offset)
+            const key = dateKey(date)
+            return { key, row: sleepByDate.get(key) }
+        })
+        const detailSum = (metric: string) =>
+            details
+                .filter(row => row.metric === metric && !row.excluded)
+                .reduce((sum, row) => sum + row.canonicalValue, 0)
         return {
-            loading,
-            unavailable,
-            steps: sum('steps'),
-            water: sum('water'),
-            sleepToday: latest('sleep')
-                ? { ...latest('sleep')!, canonicalValue: sum('sleep') }
-                : null,
-            restingHeartRate: latest('resting_heart_rate'),
-            energy: latest('energy'),
-            weight: latest('weight'),
-            sleepSeries: sleep,
-            sleepBaseline: rollingBaselineDelta(observations, 'sleep', now, timezone),
-            restingBaseline: rollingBaselineDelta(
-                observations,
-                'resting_heart_rate',
-                now,
-                timezone,
-            ),
+            loading: loading || sharedLoading,
+            unavailable: unavailable || sharedUnavailable,
+            steps: dailyMetric('steps')?.value ?? detailSum('steps'),
+            water: dailyMetric('water')?.value ?? detailSum('water'),
+            sleepToday: aggregateDetail('sleep'),
+            restingHeartRate: latestDetail('resting_heart_rate'),
+            energy: latestDetail('energy'),
+            weight: latestDetail('weight'),
+            sleepSeries: sleepRows.map(({ key, row }) => ({
+                day: new Date(`${key}T00:00:00Z`).toLocaleDateString(preferences?.locale, {
+                    weekday: 'short',
+                    timeZone: 'UTC',
+                }),
+                sleep: row?.value ?? null,
+                recordIds: [],
+            })),
+            sleepBaseline: baseline('sleep'),
+            restingBaseline: baseline('resting_heart_rate'),
             stepsGoal: activeGoal('steps'),
             waterGoal: activeGoal('water'),
             preferences,
         }
-    }, [goals, loading, observations, preferences, selectedDate, unavailable])
+    }, [
+        daily,
+        details,
+        goals,
+        loading,
+        preferences,
+        selectedDate,
+        selectedKey,
+        sharedLoading,
+        sharedUnavailable,
+        unavailable,
+    ])
 }

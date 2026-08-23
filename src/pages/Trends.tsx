@@ -18,6 +18,7 @@ import {
 } from '@tabler/icons-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useServerData } from '../hooks/useServerData'
 import { CorrelationNote } from '../components/CorrelationNote'
 import { ObservationRecords } from '../components/ObservationRecords'
 import { TrendChart } from '../components/TrendChart'
@@ -34,7 +35,7 @@ import { formatMetricValue } from '../domain/formatting'
 import type { Nutrients } from '../domain/nutrition'
 import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
-import { getPreferences, updatePreferences, type Preferences } from '../lib/preferencesApi'
+import { updatePreferences } from '../lib/preferencesApi'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
 
 const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
@@ -70,7 +71,7 @@ export function Trends() {
     const [savedViews, setSavedViews] = useState<TrendViewRecord[]>([])
     const [selectedView, setSelectedView] = useState<string | null>(null)
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
-    const [preferences, setPreferences] = useState<Preferences | null>(null)
+    const { preferences } = useServerData()
     const [actionError, setActionError] = useState('')
     const [experimentOpen, setExperimentOpen] = useState(false)
     const [experimentQuestion, setExperimentQuestion] = useState('')
@@ -78,7 +79,8 @@ export function Trends() {
     useEffect(() => {
         const from = new Date()
         from.setUTCDate(from.getUTCDate() - 180)
-        void listObservations({ from: from.toISOString() })
+        const to = new Date().toISOString()
+        void listObservations({ from: from.toISOString(), to })
             .then(records => {
                 setObservations(records)
                 const preferred = ['sleep', 'steps', 'weight', 'energy'].find(candidate =>
@@ -88,7 +90,7 @@ export function Trends() {
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
-        void listMeals({ from: from.toISOString() })
+        void listMeals({ from: from.toISOString(), to })
             .then(records => {
                 setMeals(records)
                 setMetric(current => current ?? (records.length ? 'calories' : null))
@@ -97,9 +99,6 @@ export function Trends() {
             .finally(() => setMealsLoading(false))
         void listTrendViews()
             .then(setSavedViews)
-            .catch(() => undefined)
-        void getPreferences()
-            .then(setPreferences)
             .catch(() => undefined)
     }, [])
 
@@ -607,7 +606,7 @@ export function Trends() {
                                     if (!preferences || !metric) return
                                     const experience = preferences.experience ?? {}
                                     try {
-                                        const saved = await updatePreferences({
+                                        await updatePreferences({
                                             experience: {
                                                 ...experience,
                                                 experiments: [
@@ -624,7 +623,6 @@ export function Trends() {
                                                 ],
                                             },
                                         })
-                                        setPreferences(saved)
                                         setExperimentQuestion('')
                                         setExperimentOpen(false)
                                     } catch {

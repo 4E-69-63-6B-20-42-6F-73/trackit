@@ -19,9 +19,10 @@ import {
 import { IconDots, IconTargetArrow } from '@tabler/icons-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
-import { createGoal, listGoals, retireGoal, updateGoal, type GoalRecord } from '../lib/goalApi'
+import { createGoal, retireGoal, updateGoal, type GoalRecord } from '../lib/goalApi'
 import { formatMetricValue } from '../domain/formatting'
-import { listDailyMetrics, type DailyMetric } from '../lib/observationApi'
+import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
+import { useServerData } from '../hooks/useServerData'
 
 const metricDefaults: Record<string, number> = {
     steps: 10_000,
@@ -148,13 +149,12 @@ function GoalCard({
 }
 
 export function GoalsPanel() {
-    const [goals, setGoals] = useState<GoalRecord[]>([])
+    const { goals, loading } = useServerData()
     const [metric, setMetric] = useState<string | null>('steps')
     const [target, setTarget] = useState<number | string>(10_000)
     const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10))
     const [effectiveTo, setEffectiveTo] = useState('')
     const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>([])
-    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [metrics, setMetrics] = useState<DailyMetric[]>([])
     const [editing, setEditing] = useState<GoalRecord | null>(null)
@@ -162,12 +162,6 @@ export function GoalsPanel() {
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
 
-    useEffect(() => {
-        void listGoals()
-            .then(setGoals)
-            .catch(() => setError('Goals are unavailable. Check the server connection and retry.'))
-            .finally(() => setLoading(false))
-    }, [])
     useEffect(() => {
         const to = new Date()
         const from = new Date()
@@ -179,7 +173,6 @@ export function GoalsPanel() {
             .then(setMetrics)
             .catch(() => undefined)
     }, [])
-
     const selectedDefinition = metricDefinition(metric)
     const activeGoals = useMemo(
         () => goals.filter(goal => !goal.effectiveTo || new Date(goal.effectiveTo) > new Date()),
@@ -205,7 +198,7 @@ export function GoalsPanel() {
         setMessage('')
         setError('')
         try {
-            const goal = await createGoal({
+            await createGoal({
                 metric,
                 targetValue: Number(target),
                 canonicalUnit: selectedDefinition.unit,
@@ -213,8 +206,6 @@ export function GoalsPanel() {
                 effectiveTo: effectiveTo ? new Date(`${effectiveTo}T23:59:59`).toISOString() : null,
                 schedule: { weekdays: selectedWeekdays.map(Number) },
             })
-            setGoals(current => [goal, ...current])
-            window.dispatchEvent(new Event('trackit:goals-changed'))
             setMessage(`${selectedDefinition.label} goal added.`)
         } catch {
             setError('The goal could not be saved. Check the values and try again.')
@@ -227,9 +218,7 @@ export function GoalsPanel() {
         setError('')
         setMessage('')
         try {
-            const retired = await retireGoal(goal)
-            setGoals(current => current.map(item => (item.id === retired.id ? retired : item)))
-            window.dispatchEvent(new Event('trackit:goals-changed'))
+            await retireGoal(goal)
             setMessage(`${metricDefinition(goal.metric)?.label ?? goal.metric} goal retired.`)
         } catch {
             setError('The goal could not be retired. Try again.')
@@ -240,8 +229,7 @@ export function GoalsPanel() {
         setSaving(true)
         try {
             const saved = await updateGoal(editing.id, { targetValue: Number(editTarget) })
-            setGoals(current => current.map(goal => (goal.id === saved.id ? saved : goal)))
-            window.dispatchEvent(new Event('trackit:goals-changed'))
+            window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
             setEditing(null)
             setMessage('Goal updated.')
         } catch {

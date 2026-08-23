@@ -6,6 +6,7 @@ import type {
     CreateJournalEntry,
     JournalEntityLink,
     JournalEntry,
+    JournalListQuery,
     JournalRepository,
     UpdateJournalEntry,
 } from './types.js'
@@ -36,7 +37,7 @@ const toEntry = (
 export class PostgresJournalRepository implements JournalRepository {
     constructor(private readonly database: Database) {}
 
-    async list(filters: Parameters<JournalRepository['list']>[0] = {}) {
+    async list(filters: JournalListQuery = {}) {
         const conditions = [
             isNull(journalEntries.deletedAt),
             ...(filters.from ? [gte(journalEntries.observedAt, new Date(filters.from))] : []),

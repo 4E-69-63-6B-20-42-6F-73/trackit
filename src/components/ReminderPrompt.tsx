@@ -1,67 +1,56 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Button, Notification } from '@mantine/core'
 import { IconBell } from '@tabler/icons-react'
-import { getPreferences } from '../lib/preferencesApi'
+import { useServerData } from '../hooks/useServerData'
 import type { QuickAddKind } from './QuickAdd'
 
+const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
+
 export function ReminderPrompt({ open }: { open: (kind: QuickAddKind) => void }) {
-    const [reminder, setReminder] = useState<{
-        id: string
-        label: string
-        kind: QuickAddKind
-    } | null>(null)
+    const { preferences } = useServerData()
+    const [now, setNow] = useState(() => new Date())
     const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
+    const reminders = useMemo(
+        () => preferences?.experience?.reminders ?? [],
+        [preferences?.experience?.reminders],
+    )
+    const today = dayKey(now)
+    const currentMinutes = now.getHours() * 60 + now.getMinutes()
+    const reminder = useMemo(
+        () =>
+            reminders.find(item => {
+                const [hours, minutes] = item.time.split(':').map(Number)
+                return (
+                    item.enabled &&
+                    hours * 60 + minutes <= currentMinutes &&
+                    !dismissed.has(`${today}:${item.id}`)
+                )
+            }) ?? null,
+        [currentMinutes, dismissed, reminders, today],
+    )
 
     useEffect(() => {
-        let timer: number | undefined
-        let active = true
-        const schedule = () => {
-            if (timer !== undefined) window.clearTimeout(timer)
-            void getPreferences()
-                .then(preferences => {
-                    if (!active) return
-                    const enabled = (preferences.experience?.reminders ?? []).filter(
-                        item => item.enabled && !dismissed.has(item.id),
-                    )
-                    if (!enabled.length) return
-                    const formatter = new Intl.DateTimeFormat('en-GB', {
-                        timeZone: preferences.timezone,
-                        hour: '2-digit',
-                        minute: '2-digit',
-                        hourCycle: 'h23',
-                    })
-                    const now = Date.now()
-                    let next: { delay: number; item: (typeof enabled)[number] } | null = null
-                    for (let minute = 0; minute <= 24 * 60; minute += 1) {
-                        const candidate = new Date(now + minute * 60_000)
-                        const time = formatter.format(candidate)
-                        const item = enabled.find(value => value.time === time)
-                        if (item) {
-                            next = { delay: Math.max(0, candidate.getTime() - now), item }
-                            break
-                        }
-                    }
-                    if (next)
-                        timer = window.setTimeout(
-                            () => active && setReminder(next!.item),
-                            next.delay,
-                        )
-                })
-                .catch(() => undefined)
-        }
-        schedule()
-        window.addEventListener('trackit:preferences-changed', schedule)
-        return () => {
-            active = false
-            if (timer !== undefined) window.clearTimeout(timer)
-            window.removeEventListener('trackit:preferences-changed', schedule)
-        }
-    }, [dismissed])
+        const future = reminders
+            .filter(item => item.enabled)
+            .map(item => {
+                const [hours, minutes] = item.time.split(':').map(Number)
+                const date = new Date(now)
+                date.setHours(hours, minutes, 0, 0)
+                if (date <= now) date.setDate(date.getDate() + 1)
+                return date.getTime()
+            })
+        const nextMidnight = new Date(now)
+        nextMidnight.setDate(nextMidnight.getDate() + 1)
+        nextMidnight.setHours(0, 0, 1, 0)
+        const next = Math.min(nextMidnight.getTime(), ...future)
+        const timer = window.setTimeout(() => setNow(new Date()), Math.max(250, next - Date.now()))
+        return () => window.clearTimeout(timer)
+    }, [now, reminders])
 
     if (!reminder) return null
     const dismiss = () => {
-        setDismissed(current => new Set([...current, reminder.id]))
-        setReminder(null)
+        setDismissed(current => new Set([...current, `${today}:${reminder.id}`]))
+        setNow(new Date())
     }
 
     return (

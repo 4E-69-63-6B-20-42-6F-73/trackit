@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
     Alert,
     Button,
@@ -10,12 +10,8 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import {
-    getPreferences,
-    updatePreferences,
-    type ExperiencePreferences,
-    type Preferences,
-} from '../lib/preferencesApi'
+import { updatePreferences, type ExperiencePreferences } from '../lib/preferencesApi'
+import { useServerData } from '../hooks/useServerData'
 
 const reminderKinds = ['Meal', 'Water', 'Weight', 'Check-in', 'Symptom', 'Note'] as const
 const nextOccurrence = (time: string, timezone: string) => {
@@ -30,7 +26,7 @@ const nextOccurrence = (time: string, timezone: string) => {
 }
 
 export function ExperiencePanel() {
-    const [preferences, setPreferences] = useState<Preferences | null>(null)
+    const { preferences } = useServerData()
     const [label, setLabel] = useState('Evening check-in')
     const [kind, setKind] = useState<(typeof reminderKinds)[number]>('Check-in')
     const [time, setTime] = useState('20:00')
@@ -38,21 +34,13 @@ export function ExperiencePanel() {
     const [message, setMessage] = useState('')
     const [saving, setSaving] = useState(false)
 
-    useEffect(() => {
-        void getPreferences()
-            .then(setPreferences)
-            .catch(() => setMessage('Experience settings are unavailable.'))
-    }, [])
-
     const save = async (experience: ExperiencePreferences, success: string) => {
         if (!preferences) return
         setSaving(true)
         setMessage('')
         try {
-            const saved = await updatePreferences({ experience })
-            setPreferences(saved)
+            await updatePreferences({ experience })
             setMessage(success)
-            window.dispatchEvent(new Event('trackit:preferences-changed'))
         } catch {
             setMessage('Changes could not be saved to your server.')
         } finally {

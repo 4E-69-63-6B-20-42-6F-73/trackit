@@ -22,6 +22,7 @@ import { NewRecipeModal } from '../components/NewRecipeModal'
 import { RecentMeals } from '../components/RecentMeals'
 import { PageHeader } from '../components/PageHeader'
 import { emptyNutrients, nutrientsFor, roundedNutrients, type Food } from '../domain/nutrition'
+import { useServerData } from '../hooks/useServerData'
 import {
     listMeals,
     listRecipes,
@@ -33,7 +34,6 @@ import {
     type MealRecord,
     type RecipeRecord,
 } from '../lib/nutritionApi'
-import { getPreferences } from '../lib/preferencesApi'
 
 const dateKey = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -60,7 +60,6 @@ export function Nutrition({
     const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null)
     const [editingRecipe, setEditingRecipe] = useState<RecipeRecord | null>(null)
     const [editingFood, setEditingFood] = useState<Food | null>(null)
-    const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
     const [selectedDate, setSelectedDate] = useState(selectedDateProp ?? dateKey(new Date()))
     const selectedTimestamp = () => {
         const now = new Date()
@@ -68,6 +67,8 @@ export function Nutrition({
         date.setHours(now.getHours(), now.getMinutes(), 0, 0)
         return date.toISOString()
     }
+    const { preferences } = useServerData()
+    const timezone = preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -104,9 +105,6 @@ export function Nutrition({
 
     useEffect(() => {
         refreshNutrition()
-        void getPreferences()
-            .then(preferences => setTimezone(preferences.timezone))
-            .catch(() => undefined)
     }, [refreshNutrition])
 
     const nutrients = useMemo(

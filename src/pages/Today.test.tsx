@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { Today } from './Today'
+import { ServerDataProvider } from '../hooks/useServerData'
 
 vi.mock('../hooks/useTodayHealth', () => ({
     useTodayHealth: () => ({
@@ -28,13 +29,24 @@ describe('Today', () => {
         const openTrends = vi.fn()
         render(
             <MantineProvider>
-                <Today
-                    events={[]}
-                    insight={false}
-                    dismissInsight={vi.fn()}
-                    openJournal={vi.fn()}
-                    openTrends={openTrends}
-                />
+                <ServerDataProvider
+                    initialData={{
+                        preferences: {
+                            displayName: 'Owner',
+                            timezone: 'UTC',
+                            locale: 'en',
+                            units: 'metric',
+                        },
+                    }}
+                >
+                    <Today
+                        events={[]}
+                        insight={false}
+                        dismissInsight={vi.fn()}
+                        openJournal={vi.fn()}
+                        openTrends={openTrends}
+                    />
+                </ServerDataProvider>
             </MantineProvider>,
         )
 

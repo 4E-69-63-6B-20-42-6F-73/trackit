@@ -2,9 +2,15 @@ import { Badge, Button, Progress, Skeleton, Text } from '@mantine/core'
 import { IconApple } from '@tabler/icons-react'
 import { useDailyNutrition } from '../hooks/useDailyNutrition'
 
-export function DailyNutritionPanel({ openGoals }: { openGoals?: () => void }) {
+export function DailyNutritionPanel({
+    openGoals,
+    selectedDate,
+}: {
+    openGoals?: () => void
+    selectedDate: Date
+}) {
     const { nutrients, mealCount, loading, unavailable, proteinGoal, nutritionQuality } =
-        useDailyNutrition()
+        useDailyNutrition(selectedDate)
 
     if (loading)
         return (

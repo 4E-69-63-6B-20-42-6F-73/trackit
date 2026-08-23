@@ -1,6 +1,7 @@
 import { environment } from '../app/env'
 import type { Food, Nutrients } from '../domain/nutrition'
 import { authRequest } from './authApi'
+import { sharedJsonRequest } from './sharedRequest'
 
 type FoodRecord = {
     id: string
@@ -312,13 +313,14 @@ export async function updateRecipeYield(recipe: RecipeRecord, servings: number) 
     if (!response.ok) throw new Error('Could not update recipe yield')
 }
 
-export async function listMeals(range: { from?: string; to?: string } = {}) {
+export async function listMeals(range: { from?: string; to?: string } = {}, signal?: AbortSignal) {
     const query = new URLSearchParams(
         Object.entries(range).filter((entry): entry is [string, string] => Boolean(entry[1])),
     )
-    const response = await fetch(`${environment.VITE_API_URL}/api/meals?${query}`, {
-        credentials: 'same-origin',
-    })
-    if (!response.ok) throw new Error('Meals unavailable')
-    return ((await response.json()) as { data: MealRecord[] }).data
+    return (
+        await sharedJsonRequest<{ data: MealRecord[] }>(
+            `${environment.VITE_API_URL}/api/meals?${query}`,
+            signal,
+        )
+    ).data
 }

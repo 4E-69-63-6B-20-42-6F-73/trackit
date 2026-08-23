@@ -4,7 +4,8 @@ import { createJournal, deleteJournal, listJournal, updateJournal } from '../lib
 
 export type ServerStatus = 'connecting' | 'online' | 'offline'
 
-export function useJournal() {
+export function useJournal(query: { from?: string; to?: string; limit: number }) {
+    const { from, to, limit } = query
     const [events, setEvents] = useState<JournalEvent[]>([])
     const [status, setStatus] = useState<ServerStatus>('connecting')
     const [loadingOlder, setLoadingOlder] = useState(false)
@@ -16,7 +17,8 @@ export function useJournal() {
 
     useEffect(() => {
         let active = true
-        listJournal({ limit: 100 })
+        const controller = new AbortController()
+        listJournal({ from, to, limit }, controller.signal)
             .then(records => {
                 if (!active) return
                 setStatus('online')
@@ -31,7 +33,7 @@ export function useJournal() {
                     message:
                         'The journal could not be loaded from your server. No local copy is being shown.',
                     retry: async () => {
-                        setEvents(await listJournal())
+                        setEvents(await listJournal({ from, to, limit }))
                         setStatus('online')
                         setFailure(null)
                     },
@@ -39,8 +41,9 @@ export function useJournal() {
             })
         return () => {
             active = false
+            controller.abort()
         }
-    }, [])
+    }, [from, limit, to])
 
     const loadOlder = async () => {
         const oldest = events.at(-1)?.observedAt

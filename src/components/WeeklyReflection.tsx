@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo } from 'react'
 import { Button, Group, Text } from '@mantine/core'
 import { IconCalendarStats } from '@tabler/icons-react'
 import type { JournalEvent } from '../domain/types'
-import { getPreferences, updatePreferences, type Preferences } from '../lib/preferencesApi'
+import { updatePreferences } from '../lib/preferencesApi'
+import { useServerData } from '../hooks/useServerData'
 
 const weekKey = () => {
     const date = new Date()
@@ -18,13 +19,8 @@ export function WeeklyReflection({
     events: JournalEvent[]
     openJournal: () => void
 }) {
-    const [preferences, setPreferences] = useState<Preferences | null>(null)
+    const { preferences } = useServerData()
     const currentWeek = weekKey()
-    useEffect(() => {
-        void getPreferences()
-            .then(setPreferences)
-            .catch(() => undefined)
-    }, [])
     const recent = useMemo(() => {
         const from = new Date(`${currentWeek}T00:00:00`).getTime()
         return events.filter(
@@ -55,13 +51,12 @@ export function WeeklyReflection({
                     variant="subtle"
                     color="gray"
                     onClick={async () => {
-                        const saved = await updatePreferences({
+                        await updatePreferences({
                             experience: {
                                 ...preferences.experience,
                                 dismissedWeeklyReflection: currentWeek,
                             },
                         })
-                        setPreferences(saved)
                     }}
                 >
                     Not this week

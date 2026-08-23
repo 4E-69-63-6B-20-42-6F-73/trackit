@@ -57,6 +57,26 @@ const pathPages = Object.fromEntries(
     Object.entries(pagePaths).map(([page, path]) => [path, page]),
 ) as Record<string, Page>
 
+const localDateKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+const dayRange = (value: string) => {
+    const from = new Date(`${value}T00:00:00`)
+    const to = new Date(from)
+    to.setDate(to.getDate() + 1)
+    return { from: from.toISOString(), to: to.toISOString() }
+}
+
+const currentWeekRange = () => {
+    const from = new Date()
+    from.setHours(0, 0, 0, 0)
+    from.setDate(from.getDate() - ((from.getDay() + 6) % 7))
+    const to = new Date()
+    to.setDate(to.getDate() + 1)
+    to.setHours(0, 0, 0, 0)
+    return { from: from.toISOString(), to: to.toISOString() }
+}
+
 export default function App() {
     const navigate = useNavigate()
     const location = useLocation()
@@ -66,13 +86,24 @@ export default function App() {
           ? 'Connections'
           : (pathPages[location.pathname] ?? 'Today')
     const [quick, setQuick] = useState<QuickAddKind | null>(null)
-    const [selectedDay, setSelectedDay] = useState<string | null>(null)
+    const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
     const [insight, setInsight] = useState(true)
     const [observationRetry, setObservationRetry] = useState<JournalEvent | null>(null)
+    const journalQuery =
+        page === 'Today' && selectedDay
+            ? {
+                  ...(selectedDay === localDateKey(new Date())
+                      ? currentWeekRange()
+                      : dayRange(selectedDay)),
+                  limit: 100,
+              }
+            : page === 'Journal' && selectedDay
+              ? { ...dayRange(selectedDay), limit: 100 }
+              : { limit: page === 'Journal' ? 100 : 10 }
     const { events, add, remove, update, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
-        useJournal()
+        useJournal(journalQuery)
     const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
@@ -178,7 +209,15 @@ export default function App() {
                                     />
                                 }
                             />
-                            <Route path="/nutrition" element={<Nutrition selectedDate={selectedDay} onSelectedDateChange={setSelectedDay} />} />
+                            <Route
+                                path="/nutrition"
+                                element={
+                                    <Nutrition
+                                        selectedDate={selectedDay}
+                                        onSelectedDateChange={setSelectedDay}
+                                    />
+                                }
+                            />
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
                             <Route path="/connections" element={<Connections />} />

@@ -2,6 +2,7 @@ import { environment } from '../app/env'
 import type { Observation } from '../domain/health'
 import type { JournalEvent } from '../domain/types'
 import { authRequest } from './authApi'
+import { sharedJsonRequest } from './sharedRequest'
 
 export async function createObservation(
     id: string,
@@ -23,25 +24,12 @@ export async function listObservations(
     const query = new URLSearchParams(
         Object.entries(range).filter((entry): entry is [string, string] => Boolean(entry[1])),
     )
-    const response = await fetch(`${environment.VITE_API_URL}/api/observations?${query}`, {
-        credentials: 'same-origin',
-        signal,
-    })
-    if (!response.ok) throw new Error('Observations unavailable')
-    return ((await response.json()) as { data: Observation[] }).data
-}
-
-export type DailyMetric = { date: string; metric: string; value: number; unit: string }
-export async function listDailyMetrics(range: {
-    from: string
-    to: string
-}): Promise<DailyMetric[]> {
-    const query = new URLSearchParams(range)
-    const response = await fetch(`${environment.VITE_API_URL}/api/daily-metrics?${query}`, {
-        credentials: 'same-origin',
-    })
-    if (!response.ok) throw new Error('Daily metrics unavailable')
-    return ((await response.json()) as { data: DailyMetric[] }).data
+    return (
+        await sharedJsonRequest<{ data: Observation[] }>(
+            `${environment.VITE_API_URL}/api/observations?${query}`,
+            signal,
+        )
+    ).data
 }
 
 export async function setObservationExcluded(observation: Observation, excluded: boolean) {
