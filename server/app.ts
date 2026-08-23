@@ -3,7 +3,7 @@ import cookie from '@fastify/cookie'
 import helmet from '@fastify/helmet'
 import rateLimit from '@fastify/rate-limit'
 import Fastify from 'fastify'
-import type { FastifyReply } from 'fastify'
+import type { FastifyReply, FastifyRequest } from 'fastify'
 import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
@@ -94,6 +94,42 @@ export async function createApp(
     await app.register(cors, { origin: false })
     await app.register(rateLimit, { max: 120, timeWindow: '1 minute' })
 
+    const badRequest = (
+        request: FastifyRequest,
+        reply: FastifyReply,
+        options?: {
+            error?: string
+            validation?: z.ZodError
+            includeIssues?: boolean
+        },
+    ) => {
+        const responseError = options?.error ?? 'invalid_request'
+        const issues = options?.validation?.issues.map(issue => ({
+            path: issue.path.join('.'),
+            code: issue.code,
+            message: issue.message,
+        }))
+
+        request.log.warn(
+            {
+                requestId: request.id,
+                method: request.method,
+                url: request.url,
+                reason: responseError,
+                issues,
+            },
+            'bad request',
+        )
+
+        return reply
+            .code(400)
+            .send(
+                options?.includeIssues && issues
+                    ? { error: responseError, issues }
+                    : { error: responseError },
+            )
+    }
+
     const passwordSchema = z.object({ password: z.string().min(12).max(256) })
     const publicPaths = new Set([
         '/api/health',
@@ -181,7 +217,11 @@ export async function createApp(
                 return reply.code(403).send({ error: 'invalid_bootstrap_secret' })
             }
             const input = passwordSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_password' })
+            if (!input.success)
+                return badRequest(request, reply, {
+                    error: 'invalid_password',
+                    validation: input.error,
+                })
             try {
                 const result = await auth.setup(input.data.password, {
                     userAgent: request.headers['user-agent'],
@@ -198,7 +238,7 @@ export async function createApp(
             { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
             async (request, reply) => {
                 const input = passwordSchema.safeParse(request.body)
-                if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+                if (!input.success) return badRequest(request, reply, { validation: input.error })
                 const session = await auth.login(input.data.password, {
                     userAgent: request.headers['user-agent'],
                     ipAddress: request.ip,
@@ -213,7 +253,7 @@ export async function createApp(
             { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } },
             async (request, reply) => {
                 const input = z.object({ code: z.string().min(12).max(32) }).safeParse(request.body)
-                if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+                if (!input.success) return badRequest(request, reply, { validation: input.error })
                 const session = await auth.recover(input.data.code, {
                     userAgent: request.headers['user-agent'],
                     ipAddress: request.ip,
@@ -230,13 +270,13 @@ export async function createApp(
             const input = z
                 .object({ attemptId: z.string().uuid(), response: z.unknown() })
                 .safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const verified = await auth.registerPasskey(
                 input.data.response as RegistrationResponseJSON,
                 input.data.attemptId,
                 browserBinding(request, reply),
             )
-            if (!verified) return reply.code(400).send({ error: 'verification_failed' })
+            if (!verified) return badRequest(request, reply, { error: 'verification_failed' })
             return { verified: true }
         })
         app.post('/api/auth/passkey/authenticate/options', async (request, reply) =>
@@ -246,7 +286,7 @@ export async function createApp(
             const input = z
                 .object({ attemptId: z.string().uuid(), response: z.unknown() })
                 .safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const session = await auth.authenticatePasskey(
                 input.data.response as AuthenticationResponseJSON,
                 {
@@ -338,8 +378,9 @@ export async function createApp(
                 const input = z
                     .object({ days: z.number().int().min(1).max(36500), enabled: z.boolean() })
                     .safeParse(request.body)
-                if (!category.success || !input.success)
-                    return reply.code(400).send({ error: 'invalid_request' })
+                if (!category.success)
+                    return badRequest(request, reply, { validation: category.error })
+                if (!input.success) return badRequest(request, reply, { validation: input.error })
                 return {
                     data: await lifecycle.setRetentionRule(
                         category.data,
@@ -355,7 +396,11 @@ export async function createApp(
                 const category = z
                     .enum(['observations', 'meals', 'journal'])
                     .safeParse(request.params.category)
-                if (!category.success) return reply.code(400).send({ error: 'invalid_category' })
+                if (!category.success)
+                    return badRequest(request, reply, {
+                        error: 'invalid_category',
+                        validation: category.error,
+                    })
                 await options.backup?.purge()
                 await lifecycle.deleteCategory(category.data)
                 return reply.code(204).send()
@@ -365,7 +410,11 @@ export async function createApp(
             const input = z
                 .object({ confirmation: z.literal('DELETE ALL TRACKIT DATA') })
                 .safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'confirmation_required' })
+            if (!input.success)
+                return badRequest(request, reply, {
+                    error: 'confirmation_required',
+                    validation: input.error,
+                })
             await options.backup?.purge()
             await lifecycle.deleteOwnerData()
             reply.clearCookie(sessionCookie, { path: '/' })
@@ -414,13 +463,13 @@ export async function createApp(
         app.get('/api/mcp/access-log', async () => ({ data: await mcp.listAccessEvents() }))
         app.patch('/api/mcp/status', async (request, reply) => {
             const input = z.object({ enabled: z.boolean() }).safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             await mcp.setEnabled(input.data.enabled)
             return { enabled: input.data.enabled }
         })
         app.post('/api/mcp/clients', async (request, reply) => {
             const input = issueSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send(await mcp.issue(input.data))
         })
         app.delete<{ Params: { id: string } }>('/api/mcp/clients/:id', async (request, reply) => {
@@ -505,7 +554,7 @@ export async function createApp(
                     serverIdentity: z.string().min(1).max(500),
                 })
                 .safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const paired = await devices.requestPairing(
                 input.data.code,
                 input.data.name,
@@ -577,7 +626,7 @@ export async function createApp(
                     records: z.array(uploadRecordSchema).max(1000),
                 })
                 .safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return devices.upload(
                 device.id,
                 input.data.idempotencyKey,
@@ -602,7 +651,7 @@ export async function createApp(
                     status: z.enum(['idle', 'syncing', 'complete', 'permission_revoked', 'error']),
                 })
                 .safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             await devices.updateCursor(
                 device.id,
                 input.data.recordType,
@@ -625,13 +674,7 @@ export async function createApp(
     app.post('/api/journal', async (request, reply) => {
         const result = createJournalEntrySchema.safeParse(request.body)
         if (!result.success) {
-            return reply.code(400).send({
-                error: 'invalid_request',
-                issues: result.error.issues.map(issue => ({
-                    path: issue.path.join('.'),
-                    message: issue.message,
-                })),
-            })
+            return badRequest(request, reply, { validation: result.error, includeIssues: true })
         }
         const record = await repository.create(result.data)
         return reply.code(201).send({ data: record })
@@ -666,7 +709,7 @@ export async function createApp(
     })
     app.patch<{ Params: { id: string } }>('/api/journal/:id', async (request, reply) => {
         const input = updateJournalEntrySchema.safeParse(request.body)
-        if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+        if (!input.success) return badRequest(request, reply, { validation: input.error })
         const updated = await repository.update(request.params.id, input.data)
         if (!updated) return reply.code(409).send({ error: 'version_conflict' })
         return { data: updated }
@@ -682,18 +725,22 @@ export async function createApp(
             '/api/observations',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)
-                if (!range.success) return reply.code(400).send({ error: 'invalid_range' })
+                if (!range.success)
+                    return badRequest(request, reply, {
+                        error: 'invalid_range',
+                        validation: range.error,
+                    })
                 return { data: await data.listObservations(range.data) }
             },
         )
         app.post('/api/observations', async (request, reply) => {
             const input = observationInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send({ data: await data.createObservation(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
             const input = observationUpdateSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.updateObservation(request.params.id, input.data)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             return { data: updated }
@@ -702,13 +749,17 @@ export async function createApp(
             '/api/meals',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)
-                if (!range.success) return reply.code(400).send({ error: 'invalid_range' })
+                if (!range.success)
+                    return badRequest(request, reply, {
+                        error: 'invalid_range',
+                        validation: range.error,
+                    })
                 return { data: await data.listMeals(range.data) }
             },
         )
         app.post('/api/meals', async (request, reply) => {
             const input = mealInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const createLinked = async (
                 dataRepository: DataRepository,
                 journalRepository: JournalRepository,
@@ -737,7 +788,7 @@ export async function createApp(
         })
         app.patch<{ Params: { id: string } }>('/api/meals/:id', async (request, reply) => {
             const input = mealUpdateSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.updateMeal(request.params.id, input.data)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             const journalRecord = (await repository.list()).find(
@@ -756,7 +807,7 @@ export async function createApp(
         app.get('/api/preferences', async () => ({ data: await data.getPreferences() }))
         app.patch('/api/preferences', async (request, reply) => {
             const input = preferencesInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return { data: await data.updatePreferences(input.data) }
         })
         app.get<{ Querystring: { q?: string } }>('/api/foods', async request => ({
@@ -764,12 +815,12 @@ export async function createApp(
         }))
         app.post('/api/foods', async (request, reply) => {
             const input = foodInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send({ data: await data.createFood(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/foods/:id', async (request, reply) => {
             const input = foodUpdateSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.updateFood(request.params.id, input.data)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             return { data: updated }
@@ -777,12 +828,12 @@ export async function createApp(
         app.get('/api/recipes', async () => ({ data: await data.listRecipes() }))
         app.post('/api/recipes', async (request, reply) => {
             const input = recipeInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send({ data: await data.createRecipe(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/recipes/:id', async (request, reply) => {
             const input = recipeUpdateSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.updateRecipe(request.params.id, input.data)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             return { data: updated }
@@ -790,19 +841,19 @@ export async function createApp(
         app.get('/api/goals', async () => ({ data: await data.listGoals() }))
         app.post('/api/goals', async (request, reply) => {
             const input = goalInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send({ data: await data.createGoal(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/goals/:id', async (request, reply) => {
             const input = goalRetireSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.retireGoal(request.params.id, input.data.effectiveTo)
             return updated ? { data: updated } : reply.code(404).send({ error: 'not_found' })
         })
         app.get('/api/trend-views', async () => ({ data: await data.listSavedTrendViews() }))
         app.post('/api/trend-views', async (request, reply) => {
             const input = savedTrendViewInputSchema.safeParse(request.body)
-            if (!input.success) return reply.code(400).send({ error: 'invalid_request' })
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send({ data: await data.createSavedTrendView(input.data) })
         })
     }
