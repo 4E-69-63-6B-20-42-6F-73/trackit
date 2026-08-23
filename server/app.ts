@@ -40,6 +40,7 @@ import type { BackupService } from './backup/service.js'
 import type { DataLifecycleService } from './data-lifecycle/service.js'
 import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
+import { config } from './config.js'
 
 export async function createApp(
     repository: JournalRepository,
