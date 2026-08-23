@@ -13,23 +13,26 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 
-data class HealthUpload(
+data class TrackItHealthRecord(
+    val provider: String = "health_connect",
+    val recordType: String,
     val externalId: String,
-    val metric: String,
-    val value: Double,
-    val unit: String,
-    val observedAt: String,
-    val endedAt: String?,
-    val version: Long,
-    val dataOrigin: String,
+    val externalVersion: Long,
+    val startTime: String,
+    val endTime: String?,
+    val dataOrigin: String?,
+    val recordingMethod: String?,
+    val device: JSONObject,
+    val payload: JSONObject,
+    val lastModifiedTime: String?,
     val deleted: Boolean = false,
 )
 
 class TrackItApi(context: Context) {
     private val credentials = CredentialStore(context)
 
-    suspend fun upload(idempotencyKey: String, records: List<HealthUpload>) = request(
-        "/api/device/upload",
+    suspend fun upload(idempotencyKey: String, records: List<TrackItHealthRecord>) = request(
+        "/api/device/health-records",
         JSONObject()
             .put("idempotencyKey", idempotencyKey)
             .put("records", JSONArray(records.map(::toJson))),
@@ -72,14 +75,17 @@ class TrackItApi(context: Context) {
             require(connection.responseCode in 200..299) { "Upload rejected (${connection.responseCode})" }
         }
 
-    private fun toJson(record: HealthUpload) = JSONObject()
+    private fun toJson(record: TrackItHealthRecord) = JSONObject()
+        .put("provider", record.provider)
+        .put("recordType", record.recordType)
         .put("externalId", record.externalId)
-        .put("metric", record.metric)
-        .put("value", record.value)
-        .put("unit", record.unit)
-        .put("observedAt", record.observedAt)
-        .put("endedAt", record.endedAt)
-        .put("version", record.version)
+        .put("externalVersion", record.externalVersion)
+        .put("startTime", record.startTime)
+        .put("endTime", record.endTime)
         .put("dataOrigin", record.dataOrigin)
+        .put("recordingMethod", record.recordingMethod)
+        .put("device", record.device)
+        .put("payload", record.payload)
+        .put("lastModifiedTime", record.lastModifiedTime)
         .put("deleted", record.deleted)
 }

@@ -22,6 +22,13 @@
             "when": 1787491669236,
             "tag": "0002_food_catalog_barcode",
             "breakpoints": true
+        },
+        {
+            "idx": 3,
+            "version": "7",
+            "when": 1787493238912,
+            "tag": "0003_health_connect_records",
+            "breakpoints": true
         }
     ]
 }

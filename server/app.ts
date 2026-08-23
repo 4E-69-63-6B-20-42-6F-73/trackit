@@ -35,6 +35,7 @@ import { openApiContract } from './openapi.js'
 import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
 import type { DeviceService, DeviceUploadRecord } from './devices/service.js'
+import type { CanonicalHealthRecordInput } from './health-records/types.js'
 import type { BackupService } from './backup/service.js'
 import type { DataLifecycleService } from './data-lifecycle/service.js'
 import { ExportService } from './data-lifecycle/export.js'
@@ -148,6 +149,7 @@ export async function createApp(
         '/api/devices/pair/request',
         '/api/device/status',
         '/api/device/upload',
+        '/api/device/health-records',
         '/api/device/cursor',
     ])
     const sessionCookie = 'trackit_session'
@@ -612,6 +614,20 @@ export async function createApp(
             dataOrigin: z.string().min(1).max(300),
             deleted: z.boolean().optional(),
         })
+        const healthRecordSchema = z.object({
+            provider: z.string().min(1).max(100),
+            recordType: z.string().min(1).max(150),
+            externalId: z.string().min(1).max(500),
+            externalVersion: z.number().int().nonnegative(),
+            startTime: z.string().datetime(),
+            endTime: z.string().datetime().optional(),
+            dataOrigin: z.string().max(300).optional(),
+            recordingMethod: z.string().max(100).optional(),
+            device: z.record(z.string(), z.unknown()).optional(),
+            payload: z.record(z.string(), z.unknown()),
+            lastModifiedTime: z.string().datetime().optional(),
+            deleted: z.boolean().optional(),
+        })
         app.post('/api/device/upload', async (request, reply) => {
             const credentials = deviceCredentials(request)
             const device = await devices.authenticate({
@@ -636,6 +652,33 @@ export async function createApp(
                 input.data.records as DeviceUploadRecord[],
             )
         })
+        app.post('/api/device/health-records', async (request, reply) => {
+            const credentials = deviceCredentials(request)
+            const device = await devices.authenticate({
+                ...credentials,
+                method: request.method,
+                path: request.url.split('?')[0],
+                bodyHash: createHash('sha256')
+                    .update(JSON.stringify(request.body ?? null))
+                    .digest('hex'),
+            })
+            if (!device) return reply.code(401).send({ error: 'unauthorized' })
+            const input = z
+                .object({
+                    idempotencyKey: z.string().uuid(),
+                    records: z.array(healthRecordSchema).max(1000),
+                })
+                .safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            return devices.uploadHealthRecords(
+                device.id,
+                input.data.idempotencyKey,
+                input.data.records as CanonicalHealthRecordInput[],
+            )
+        })
+        app.post('/api/health-records/rebuild', async () => ({
+            data: await devices.rebuildHealthRecordObservations(),
+        }))
         app.put('/api/device/cursor', async (request, reply) => {
             const credentials = deviceCredentials(request)
             const device = await devices.authenticate({
@@ -734,6 +777,20 @@ export async function createApp(
                         validation: range.error,
                     })
                 return { data: await data.listObservations(range.data) }
+            },
+        )
+        app.get<{ Querystring: { from?: string; to?: string } }>(
+            '/api/daily-metrics',
+            async (request, reply) => {
+                const dateRange = z
+                    .object({
+                        from: z.string().date().optional(),
+                        to: z.string().date().optional(),
+                    })
+                    .safeParse(request.query)
+                if (!dateRange.success)
+                    return badRequest(request, reply, { validation: dateRange.error })
+                return { data: (await data.listDailyMetrics?.(dateRange.data)) ?? [] }
             },
         )
         app.post('/api/observations', async (request, reply) => {

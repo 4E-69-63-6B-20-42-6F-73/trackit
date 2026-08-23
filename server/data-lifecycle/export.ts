@@ -24,6 +24,8 @@ export class ExportService {
             goals,
             trendViews,
             sources,
+            healthRecords,
+            dailyMetrics,
         ] = await Promise.all([
             this.journal.list(),
             this.data.listObservations(),
@@ -34,6 +36,8 @@ export class ExportService {
             this.data.listGoals(),
             this.data.listSavedTrendViews(),
             this.data.listSources(),
+            this.data.listHealthRecords?.() ?? Promise.resolve([]),
+            this.data.listDailyMetrics?.() ?? Promise.resolve([]),
         ])
         return {
             schema: 'net.trackit.export',
@@ -49,6 +53,8 @@ export class ExportService {
                 goals,
                 trendViews,
                 sources,
+                healthRecords,
+                dailyMetrics,
             },
         }
     }

@@ -210,6 +210,92 @@ describe('Android device pairing and upload', () => {
         })
         expect(deletedBeforeImport?.deletedAt).toBeInstanceOf(Date)
 
+        const sourceId = 'canonical-heart-rate'
+        const canonical = {
+            provider: 'health_connect',
+            recordType: 'HeartRateRecord',
+            externalId: sourceId,
+            externalVersion: 100,
+            startTime: '2026-08-23T08:00:00Z',
+            endTime: '2026-08-23T08:02:00Z',
+            dataOrigin: 'com.example.watch',
+            recordingMethod: 'automatic',
+            device: { type: 'watch', manufacturer: 'Example', model: 'One' },
+            payload: {
+                samples: [
+                    { time: '2026-08-23T08:00:00Z', bpm: 60 },
+                    { time: '2026-08-23T08:01:00Z', bpm: 80 },
+                ],
+            },
+            lastModifiedTime: '2026-08-23T08:03:00Z',
+        }
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [canonical])
+        const [source] = await database
+            .select()
+            .from(schema.healthRecords)
+            .where(eq(schema.healthRecords.externalId, sourceId))
+        expect(source).toMatchObject({
+            recordType: 'HeartRateRecord',
+            dataOrigin: 'com.example.watch',
+            payload: canonical.payload,
+            device: canonical.device,
+        })
+        let projections = (await database.select().from(schema.observations)).filter(
+            observation => observation.sourceRecordId === source.id,
+        )
+        expect(projections).toHaveLength(6)
+        expect(projections.find(item => item.metric === 'heart_rate')).toMatchObject({
+            canonicalValue: 70,
+            derivation: 'heart_rate_summary',
+            derivationVersion: 1,
+        })
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            {
+                ...canonical,
+                externalVersion: 101,
+                payload: { samples: [{ time: '2026-08-23T08:00:00Z', bpm: 90 }] },
+            },
+        ])
+        projections = (await database.select().from(schema.observations)).filter(
+            observation => observation.sourceRecordId === source.id,
+        )
+        expect(projections).toHaveLength(6)
+        expect(projections.find(item => item.metric === 'heart_rate')?.canonicalValue).toBe(90)
+        const daily = await database.select().from(schema.dailyMetrics)
+        expect(daily.find(item => item.metric === 'heart_rate')).toMatchObject({
+            value: 90,
+            unit: 'bpm',
+        })
+        expect(await service.rebuildHealthRecordObservations()).toEqual({ records: 1 })
+        expect(await service.rebuildHealthRecordObservations()).toEqual({ records: 1 })
+        expect(
+            (await database.select().from(schema.observations)).filter(
+                observation => observation.sourceRecordId === source.id,
+            ),
+        ).toHaveLength(6)
+
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            {
+                ...canonical,
+                recordType: 'StepsRecord',
+                externalVersion: Number.MAX_SAFE_INTEGER,
+                startTime: '1970-01-01T00:00:00Z',
+                endTime: undefined,
+                payload: {},
+                deleted: true,
+            },
+        ])
+        const [tombstone] = await database
+            .select()
+            .from(schema.healthRecords)
+            .where(eq(schema.healthRecords.externalId, sourceId))
+        expect(tombstone.deletedAt).toBeInstanceOf(Date)
+        expect(
+            (await database.select().from(schema.observations)).filter(
+                observation => observation.sourceRecordId === source.id,
+            ),
+        ).toHaveLength(0)
+
         await service.revoke(requested!.deviceId)
         expect(await authenticate(requested?.credential)).toBeNull()
         await client.close()

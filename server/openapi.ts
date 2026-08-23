@@ -35,6 +35,34 @@ export const openApiContract = {
             get: { responses: { '200': { description: 'Observations' } } },
             post: { responses: { '201': { description: 'Created' } } },
         },
+        '/api/daily-metrics': {
+            get: {
+                responses: {
+                    '200': { description: 'Query-optimized UTC daily metric aggregates' },
+                },
+            },
+        },
+        '/api/device/health-records': {
+            post: {
+                security: [],
+                responses: {
+                    '200': {
+                        description: 'Canonical Health Connect records accepted idempotently',
+                    },
+                    '401': { description: 'Device authentication failed' },
+                },
+            },
+        },
+        '/api/health-records/rebuild': {
+            post: {
+                responses: {
+                    '200': {
+                        description:
+                            'Rebuilt disposable observations and daily metrics from canonical records',
+                    },
+                },
+            },
+        },
         '/api/meals': {
             get: { responses: { '200': { description: 'Meals' } } },
             post: { responses: { '201': { description: 'Created' } } },
