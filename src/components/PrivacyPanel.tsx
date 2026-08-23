@@ -10,8 +10,29 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { useState } from 'react'
-import { deleteCategory, deleteOwnerData, setRetention } from '../lib/lifecycleApi'
+import { useEffect, useState } from 'react'
+import {
+    deleteCategory,
+    deleteOwnerData,
+    getDataCategorySummary,
+    setRetention,
+    type DataCategorySummary,
+} from '../lib/lifecycleApi'
+
+const categories = {
+    observations: {
+        label: 'Health measurements',
+        impact: 'Synced and manual measurements, derived metrics, and affected daily summaries',
+    },
+    meals: {
+        label: 'Meals and nutrition',
+        impact: 'Meal history and saved nutrient snapshots; foods and recipes remain available',
+    },
+    journal: {
+        label: 'Journal entries',
+        impact: 'The visible timeline entries linked to manual and synced records',
+    },
+} as const
 
 export function PrivacyPanel() {
     const [category, setCategory] = useState<string | null>('observations')
@@ -21,6 +42,18 @@ export function PrivacyPanel() {
     const [message, setMessage] = useState('')
     const [pendingCategory, setPendingCategory] = useState<string | null>(null)
     const [busy, setBusy] = useState(false)
+    const [summary, setSummary] = useState<DataCategorySummary | null>(null)
+
+    useEffect(() => {
+        if (!category) return
+        let active = true
+        void getDataCategorySummary(category)
+            .then(value => active && setSummary(value))
+            .catch(() => active && setSummary(null))
+        return () => {
+            active = false
+        }
+    }, [category])
 
     const save = async () => {
         if (!category) return
@@ -42,7 +75,9 @@ export function PrivacyPanel() {
         setBusy(true)
         try {
             await deleteCategory(pendingCategory)
-            setMessage(`${pendingCategory} were permanently deleted from the live database.`)
+            setMessage(
+                `${categories[pendingCategory as keyof typeof categories].label} were permanently deleted from the live database.`,
+            )
             setPendingCategory(null)
         } catch {
             setMessage('The category could not be deleted. No success was recorded.')
@@ -72,8 +107,41 @@ export function PrivacyPanel() {
                 label="Category"
                 value={category}
                 onChange={setCategory}
-                data={['observations', 'meals', 'journal']}
+                data={Object.entries(categories).map(([value, item]) => ({
+                    value,
+                    label: item.label,
+                }))}
             />
+            {category && (
+                <Alert color="blue" title="What this rule affects">
+                    {categories[category as keyof typeof categories].impact}. Changes do not restore
+                    records already removed. TrackIt-managed backups are purged for immediate
+                    deletion.
+                </Alert>
+            )}
+            {summary && (
+                <div className="data-impact-summary">
+                    <Text size="sm">
+                        <strong>{summary.count.toLocaleString()}</strong> records
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                        Coverage:{' '}
+                        {summary.oldest
+                            ? new Date(summary.oldest).toLocaleDateString()
+                            : 'No records'}
+                        {summary.newest
+                            ? ` to ${new Date(summary.newest).toLocaleDateString()}`
+                            : ''}
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                        Last retention run:{' '}
+                        {summary.lastRetentionRun
+                            ? new Date(summary.lastRetentionRun).toLocaleString()
+                            : 'Never recorded'}{' '}
+                        · next run follows the server schedule
+                    </Text>
+                </div>
+            )}
             <NumberInput label="Keep for" suffix=" days" min={1} value={days} onChange={setDays} />
             <Switch
                 label="Enable automatic retention"
@@ -84,7 +152,11 @@ export function PrivacyPanel() {
                 Save retention rule
             </Button>
             <Button color="red" variant="light" onClick={() => setPendingCategory(category)}>
-                Delete this category now
+                Delete{' '}
+                {category
+                    ? categories[category as keyof typeof categories].label.toLowerCase()
+                    : 'category'}{' '}
+                now
             </Button>
             <TextInput
                 label="Delete installation data"
@@ -104,13 +176,18 @@ export function PrivacyPanel() {
             <Modal
                 opened={Boolean(pendingCategory)}
                 onClose={() => setPendingCategory(null)}
-                title={`Delete all ${pendingCategory ?? ''}?`}
+                title={`Delete all ${pendingCategory ? categories[pendingCategory as keyof typeof categories].label.toLowerCase() : ''}?`}
                 centered
             >
                 <Stack>
                     <Alert color="red">
-                        This permanently removes the category from the live database and purges
-                        TrackIt-managed backup archives.
+                        This permanently removes{' '}
+                        {pendingCategory
+                            ? categories[
+                                  pendingCategory as keyof typeof categories
+                              ].impact.toLowerCase()
+                            : 'this category'}{' '}
+                        from the live database and purges TrackIt-managed backup archives.
                     </Alert>
                     <Group justify="flex-end">
                         <Button variant="default" onClick={() => setPendingCategory(null)}>

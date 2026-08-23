@@ -22,6 +22,7 @@ import { useServerData } from '../hooks/useServerData'
 import { CorrelationNote } from '../components/CorrelationNote'
 import { ObservationRecords } from '../components/ObservationRecords'
 import { TrendChart } from '../components/TrendChart'
+import { PageHeader } from '../components/PageHeader'
 import {
     dailySeries,
     displayValue,
@@ -30,6 +31,7 @@ import {
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
+import { formatMetricValue } from '../domain/formatting'
 import type { Nutrients } from '../domain/nutrition'
 import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
@@ -253,8 +255,10 @@ export function Trends() {
 
     return (
         <div className="page-content trends-page">
-            <h1>Trends</h1>
-            <Text className="subhead">See how your recorded health changes over time.</Text>
+            <PageHeader
+                title="Trends"
+                description="See how your recorded health changes over time."
+            />
             {!pageLoading && ((error && meals.length === 0) || allObservations.length === 0) ? (
                 <section className="panel page-empty">
                     <IconChartLine size={28} />
@@ -432,10 +436,7 @@ export function Trends() {
                                     Average
                                 </Text>
                                 <Text fw={700}>
-                                    {average.toLocaleString(undefined, {
-                                        maximumFractionDigits: 1,
-                                    })}{' '}
-                                    {displayUnit}
+                                    {formatMetricValue(average, displayUnit ?? '')}
                                 </Text>
                             </div>
                             <div>
@@ -445,7 +446,9 @@ export function Trends() {
                                 <Text fw={700}>
                                     {change === null
                                         ? 'Needs 2 points'
-                                        : `${change > 0 ? '+' : ''}${change.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${displayUnit ?? ''}`}
+                                        : formatMetricValue(change, displayUnit ?? '', undefined, {
+                                              signed: true,
+                                          })}
                                 </Text>
                             </div>
                             <div>
@@ -453,10 +456,7 @@ export function Trends() {
                                     Variation
                                 </Text>
                                 <Text fw={700}>
-                                    {variation?.toLocaleString(undefined, {
-                                        maximumFractionDigits: 1,
-                                    })}{' '}
-                                    {displayUnit}
+                                    {formatMetricValue(variation ?? 0, displayUnit ?? '')}
                                 </Text>
                             </div>
                             <div>

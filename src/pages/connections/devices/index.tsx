@@ -2,19 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
 import { IconArrowLeft, IconDeviceMobile, IconRefresh, IconX } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
-import { confirmDevice, listDevices, rejectDevice, type DeviceRecord } from '../../../lib/deviceApi'
+import {
+    confirmDevice,
+    healthConnectStatus,
+    listDevices,
+    rejectDevice,
+    type DeviceRecord,
+    type HealthConnectStatus,
+} from '../../../lib/deviceApi'
 
 export function Devices() {
     const navigate = useNavigate()
     const [devices, setDevices] = useState<DeviceRecord[]>([])
-    const [healthStatus, setHealthStatus] = useState<
-        | 'Configured'
-        | 'Connected'
-        | 'Setup required'
-        | 'Not configured'
-        | 'Sync delayed'
-        | 'Unavailable'
-    >('Not configured')
+    const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
+        'Not connected',
+    )
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(true)
     const hasLoaded = useRef(false)
@@ -26,28 +28,7 @@ export function Devices() {
             const nextDevices = await listDevices()
             setDevices(nextDevices)
 
-            const activeDevices = nextDevices.filter(d => d.status === 'active')
-            const configuredDevices = nextDevices.filter(
-                d => d.status === 'confirmed' && d.configuredAt !== null,
-            )
-            if (activeDevices.length > 0) {
-                const latest = Math.max(
-                    ...activeDevices.map(device =>
-                        device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0,
-                    ),
-                )
-                setHealthStatus(
-                    latest > 0 && Date.now() - latest > 24 * 60 * 60 * 1000
-                        ? 'Sync delayed'
-                        : 'Connected',
-                )
-            } else if (configuredDevices.length > 0) {
-                setHealthStatus('Configured')
-            } else if (nextDevices.some(d => d.status === 'pending')) {
-                setHealthStatus('Setup required')
-            } else {
-                setHealthStatus('Not configured')
-            }
+            setHealthStatus(healthConnectStatus(nextDevices))
         } catch {
             setError('Devices unavailable')
             setHealthStatus('Unavailable')
@@ -174,7 +155,7 @@ export function Devices() {
                 <Group justify="space-between">
                     <Group>
                         <div
-                            className={`connection-icon ${healthStatus === 'Connected' ? 'green' : healthStatus === 'Configured' ? 'green' : 'dark'}`}
+                            className={`connection-icon ${healthStatus === 'Up to date' ? 'green' : healthStatus === 'Permission required' ? 'amber' : 'dark'}`}
                         >
                             <IconDeviceMobile size={24} />
                         </div>
@@ -183,17 +164,23 @@ export function Devices() {
                                 Health Connect Status
                             </Text>
                             <Text size="xs" c="dimmed">
-                                {healthStatus === 'Connected'
+                                {healthStatus === 'Up to date'
                                     ? `${activeDevices.length} device${activeDevices.length > 1 ? 's' : ''} actively syncing`
-                                    : healthStatus === 'Configured'
-                                      ? 'Devices configured, syncing pending'
-                                      : healthStatus === 'Setup required'
+                                    : healthStatus === 'Connected'
+                                      ? 'Connected and waiting for the first Health Connect upload'
+                                      : healthStatus === 'Syncing'
+                                        ? 'A Health Connect upload is currently in progress'
+                                        : healthStatus === 'Authentication failed'
+                                          ? 'Authentication failed; reconnect the phone to renew access'
+                                          : healthStatus === 'Device unreachable'
+                                            ? 'No upload has arrived for more than seven days; check the phone'
+                                    : healthStatus === 'Permission required'
                                         ? pendingDevices.length > 0
                                             ? `${pendingDevices.length} device${pendingDevices.length > 1 ? 's' : ''} awaiting approval`
                                             : 'No devices configured'
-                                        : healthStatus === 'Sync delayed'
+                                        : healthStatus === 'Delayed'
                                           ? 'The last upload is more than 24 hours old'
-                                          : healthStatus === 'Not configured'
+                                          : healthStatus === 'Not connected'
                                             ? 'No phone has been paired yet'
                                             : 'The server could not load device status'}
                             </Text>

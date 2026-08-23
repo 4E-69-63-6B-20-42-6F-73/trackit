@@ -1,5 +1,6 @@
 import { environment } from '../app/env'
 import type { JournalEvent } from '../domain/types'
+import { friendlySourceName } from '../domain/formatting'
 import { sharedJsonRequest } from './sharedRequest'
 
 type ApiJournalEntry = {
@@ -8,6 +9,7 @@ type ApiJournalEntry = {
     title: string
     detail: string
     source: string
+    deviceName?: string
     observedAt: string
     version: number
 }
@@ -24,7 +26,8 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     category: entry.category,
     title: entry.title,
     detail: entry.detail,
-    source: entry.source,
+    source: friendlySourceName(entry.source),
+    deviceName: entry.deviceName,
     observedAt: entry.observedAt,
     time: new Date(entry.observedAt).toLocaleTimeString([], {
         hour: '2-digit',
@@ -64,7 +67,14 @@ export async function updateJournal(
 }
 
 export async function listJournal(
-    query: { from?: string; to?: string; limit?: number } = {},
+    query: {
+        from?: string
+        to?: string
+        before?: string
+        category?: JournalEvent['category']
+        source?: string
+        limit?: number
+    } = {},
     signal?: AbortSignal,
 ): Promise<JournalEvent[]> {
     const search = new URLSearchParams(

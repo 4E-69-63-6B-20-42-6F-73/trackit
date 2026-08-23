@@ -148,6 +148,9 @@ class FiveYearData implements DataRepository {
     async retireGoal(): Promise<unknown | null> {
         return null
     }
+    async updateGoal(): Promise<unknown | null> {
+        return null
+    }
 
     async listSavedTrendViews(): Promise<unknown[]> {
         return []

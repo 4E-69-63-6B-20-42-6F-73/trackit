@@ -131,6 +131,7 @@ export const goalInputSchema = z.object({
     schedule: z.record(z.string(), z.unknown()).default({}),
 })
 export const goalRetireSchema = z.object({ effectiveTo: z.string().datetime() })
+export const goalUpdateSchema = goalInputSchema.partial()
 
 export const savedTrendViewInputSchema = z.object({
     name: z.string().trim().min(1).max(100),
@@ -155,15 +156,15 @@ export const foodInputSchema = z.object({
         .optional(),
     catalogSource: z.string().trim().max(80).optional(),
     catalogId: z.string().trim().max(160).optional(),
-    caloriesPer100g: z.number().finite().nonnegative(),
-    proteinPer100g: z.number().finite().nonnegative().default(0),
-    carbsPer100g: z.number().finite().nonnegative().default(0),
-    fatPer100g: z.number().finite().nonnegative().default(0),
-    fiberPer100g: z.number().finite().nonnegative().default(0),
-    sugarPer100g: z.number().finite().nonnegative().default(0),
-    saturatedFatPer100g: z.number().finite().nonnegative().default(0),
-    sodiumPer100g: z.number().finite().nonnegative().default(0),
-    potassiumPer100g: z.number().finite().nonnegative().default(0),
+    caloriesPer100g: z.number().finite().nonnegative().nullish(),
+    proteinPer100g: z.number().finite().nonnegative().nullish(),
+    carbsPer100g: z.number().finite().nonnegative().nullish(),
+    fatPer100g: z.number().finite().nonnegative().nullish(),
+    fiberPer100g: z.number().finite().nonnegative().nullish(),
+    sugarPer100g: z.number().finite().nonnegative().nullish(),
+    saturatedFatPer100g: z.number().finite().nonnegative().nullish(),
+    sodiumPer100g: z.number().finite().nonnegative().nullish(),
+    potassiumPer100g: z.number().finite().nonnegative().nullish(),
     servingName: z.string().trim().min(1).max(60).default('serving'),
     servingGrams: z.number().finite().positive().default(100),
     favorite: z.boolean().default(false),
@@ -225,6 +226,7 @@ export interface DataRepository {
     listGoals(): Promise<unknown[]>
     createGoal(input: z.infer<typeof goalInputSchema>): Promise<unknown>
     retireGoal(id: string, effectiveTo: string): Promise<unknown | null>
+    updateGoal(id: string, input: z.infer<typeof goalUpdateSchema>): Promise<unknown | null>
     listSavedTrendViews(): Promise<unknown[]>
     createSavedTrendView(input: z.infer<typeof savedTrendViewInputSchema>): Promise<unknown>
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Badge, Button, Divider, Group, Stack, Text } from '@mantine/core'
+import { Alert, Badge, Button, Divider, Group, Select, Stack, Text } from '@mantine/core'
 import { authRequest } from '../lib/authApi'
 
 type Session = {
@@ -8,13 +8,50 @@ type Session = {
     ipAddress: string | null
     createdAt: string
     expiresAt: string
+    current: boolean
 }
 
 type AuditEvent = {
     id: string
     action: string
+    actor: string
+    targetType: string | null
+    targetId: string | null
     createdAt: string
 }
+
+const deviceName = (agent: string | null) => {
+    if (!agent) return 'Unknown browser and device'
+    const browser = agent.includes('Edg/')
+        ? 'Microsoft Edge'
+        : agent.includes('Chrome/')
+          ? 'Chrome'
+          : agent.includes('Firefox/')
+            ? 'Firefox'
+            : agent.includes('Safari/')
+              ? 'Safari'
+              : 'Browser'
+    const os = agent.includes('Windows')
+        ? 'Windows'
+        : agent.includes('Android')
+          ? 'Android'
+          : /iPhone|iPad/.test(agent)
+            ? 'iOS'
+            : agent.includes('Mac OS')
+              ? 'macOS'
+              : agent.includes('Linux')
+                ? 'Linux'
+                : 'unknown OS'
+    return `${browser} on ${os}`
+}
+const actionLabel = (action: string) =>
+    ({
+        'auth.session_revoke': 'Session revoked',
+        'data.record.deleted': 'Journal record deleted',
+        'data.exported': 'Data export downloaded',
+        'backup.created': 'Encrypted backup created',
+        'backup.verified': 'Backup verified',
+    })[action] ?? action.replaceAll('.', ' ').replace(/^./, letter => letter.toUpperCase())
 
 export function SecurityPanel() {
     const [sessions, setSessions] = useState<Session[]>([])
@@ -22,6 +59,8 @@ export function SecurityPanel() {
     const [unavailable, setUnavailable] = useState(false)
     const [message, setMessage] = useState('')
     const [busy, setBusy] = useState(false)
+    const [auditFilter, setAuditFilter] = useState('all')
+    const [visibleEvents, setVisibleEvents] = useState(10)
 
     const load = () =>
         Promise.all([authRequest('/api/auth/sessions'), authRequest('/api/auth/audit')])
@@ -65,6 +104,13 @@ export function SecurityPanel() {
     if (unavailable) {
         return <Text c="dimmed">Session management is available when connected to the server.</Text>
     }
+    const filteredEvents = events.filter(event => {
+        if (auditFilter === 'all') return true
+        if (auditFilter === 'authentication') return event.action.startsWith('auth.')
+        if (auditFilter === 'data') return event.action.startsWith('data.')
+        if (auditFilter === 'backup') return event.action.startsWith('backup.')
+        return event.action.startsWith('retention.')
+    })
 
     return (
         <Stack>
@@ -94,17 +140,24 @@ export function SecurityPanel() {
                 <Group key={session.id} justify="space-between" wrap="nowrap">
                     <div>
                         <Text size="sm" fw={600} lineClamp={1}>
-                            {session.userAgent || 'Unknown device'}
+                            {deviceName(session.userAgent)}
+                            {session.current && (
+                                <Badge size="xs" variant="light" ml="xs">
+                                    This device
+                                </Badge>
+                            )}
                         </Text>
                         <Text size="xs" c="dimmed">
                             {session.ipAddress || 'Unknown address'} ·{' '}
                             {new Date(session.createdAt).toLocaleString()}
+                            {' · expires '}
+                            {new Date(session.expiresAt).toLocaleString()}
                         </Text>
                     </div>
                     <Button
                         size="xs"
                         variant="default"
-                        disabled={busy}
+                        disabled={busy || session.current}
                         onClick={() => void revoke(session.id)}
                     >
                         Revoke
@@ -112,20 +165,58 @@ export function SecurityPanel() {
                 </Group>
             ))}
             <Divider />
-            <Text fw={650}>Recent security activity</Text>
+            <Group justify="space-between" align="end">
+                <Text fw={650}>Recent security activity</Text>
+                <Select
+                    size="xs"
+                    aria-label="Filter security activity"
+                    value={auditFilter}
+                    onChange={value => {
+                        setAuditFilter(value ?? 'all')
+                        setVisibleEvents(10)
+                    }}
+                    data={[
+                        { value: 'all', label: 'All activity' },
+                        { value: 'authentication', label: 'Sign-ins & sessions' },
+                        { value: 'data', label: 'Data changes' },
+                        { value: 'backup', label: 'Backups' },
+                        { value: 'retention', label: 'Retention' },
+                    ]}
+                />
+            </Group>
             {events.length === 0 && (
                 <Text size="sm" c="dimmed">
                     Security events such as sign-ins and revoked sessions will appear here.
                 </Text>
             )}
-            {events.slice(0, 8).map(event => (
+            {filteredEvents.slice(0, visibleEvents).map(event => (
                 <Group key={event.id} justify="space-between">
-                    <Text size="sm">{event.action.replaceAll('.', ' ')}</Text>
+                    <div>
+                        <Text size="sm" fw={600}>
+                            {actionLabel(event.action)}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                            {event.actor}
+                            {event.targetType ? ` · ${event.targetType.replaceAll('_', ' ')}` : ''}
+                            {event.targetId ? ` · ${event.targetId.slice(0, 8)}` : ''}
+                        </Text>
+                    </div>
                     <Text size="xs" c="dimmed">
                         {new Date(event.createdAt).toLocaleString()}
                     </Text>
                 </Group>
             ))}
+            {filteredEvents.length > visibleEvents && (
+                <Button variant="default" onClick={() => setVisibleEvents(count => count + 10)}>
+                    Show 10 more
+                </Button>
+            )}
+            {filteredEvents.length > 0 && (
+                <Text size="xs" c="dimmed">
+                    Showing {Math.min(visibleEvents, filteredEvents.length)} of {filteredEvents.length}
+                    {' '}matching events
+                </Text>
+            )}
         </Stack>
     )
 }

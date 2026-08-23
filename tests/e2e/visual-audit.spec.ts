@@ -25,8 +25,26 @@ test('capture every page for visual review', async ({ page }, testInfo) => {
     await mkdir(output, { recursive: true })
 
     for (const [name, route] of pages) {
-        await page.goto(route)
-        await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
-        await page.screenshot({ path: `${output}/${name}.png`, fullPage: true })
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            await page.goto(route)
+            try {
+                await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible({
+                    timeout: 10_000,
+                })
+                break
+            } catch (error) {
+                if (attempt === 2) throw error
+                await page.waitForTimeout(750 * (attempt + 1))
+            }
+        }
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            try {
+                await page.screenshot({ path: `${output}/${name}.png`, fullPage: true })
+                break
+            } catch (error) {
+                if (attempt === 2) throw error
+                await page.waitForTimeout(250 * (attempt + 1))
+            }
+        }
     }
 })

@@ -14,6 +14,7 @@ import { ExperiencePanel } from '../components/ExperiencePanel'
 import { PreferencesPanel } from '../components/PreferencesPanel'
 import { PrivacyPanel } from '../components/PrivacyPanel'
 import { SecurityPanel } from '../components/SecurityPanel'
+import { PageHeader } from '../components/PageHeader'
 
 const sections = [
     {
@@ -57,21 +58,22 @@ export function Settings() {
     const location = useLocation()
     const slug = location.pathname.split('/')[2] ?? ''
     const active = sections.find(section => section.slug === slug)
-    const Content = active?.content
-    const ActiveIcon = active?.icon
+    const displayed = active ?? (!slug ? sections[0] : undefined)
+    const Content = displayed?.content
+    const ActiveIcon = displayed?.icon
 
     return (
         <div className="page-content settings-page">
-            <h1>Settings</h1>
-            <Text className="subhead">
-                Manage your TrackIt preferences, data, and installation.
-            </Text>
+            <PageHeader
+                title="Settings"
+                description="Manage your TrackIt preferences, data, and installation."
+            />
             <div className={`settings-layout ${active ? 'has-active-settings' : ''}`}>
                 <nav className="panel settings-navigation" aria-label="Settings sections">
                     {sections.map(({ slug: sectionSlug, title, description, icon: Icon }) => (
                         <NavLink
-                            aria-current={active?.slug === sectionSlug ? 'page' : undefined}
-                            className={active?.slug === sectionSlug ? 'active' : ''}
+                            aria-current={displayed?.slug === sectionSlug ? 'page' : undefined}
+                            className={displayed?.slug === sectionSlug ? 'active' : ''}
                             to={`/settings/${sectionSlug}`}
                             key={sectionSlug}
                         >
@@ -88,7 +90,7 @@ export function Settings() {
                         </NavLink>
                     ))}
                 </nav>
-                {active && Content && ActiveIcon ? (
+                {displayed && Content && ActiveIcon ? (
                     <section
                         className="panel settings-detail"
                         aria-labelledby="settings-detail-title"
@@ -109,9 +111,9 @@ export function Settings() {
                                 <ActiveIcon size={20} />
                             </div>
                             <div>
-                                <h2 id="settings-detail-title">{active.title}</h2>
+                                <h2 id="settings-detail-title">{displayed.title}</h2>
                                 <Text size="sm" c="dimmed">
-                                    {active.description}
+                                    {displayed.description}
                                 </Text>
                             </div>
                         </div>

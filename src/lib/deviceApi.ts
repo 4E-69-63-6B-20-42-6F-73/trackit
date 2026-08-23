@@ -18,6 +18,39 @@ export type DeviceRecord = {
     }[]
 }
 
+export type HealthConnectStatus =
+    | 'Connected'
+    | 'Syncing'
+    | 'Up to date'
+    | 'Delayed'
+    | 'Permission required'
+    | 'Device unreachable'
+    | 'Authentication failed'
+    | 'Not connected'
+
+export function healthConnectStatus(devices: DeviceRecord[], now = Date.now()): HealthConnectStatus {
+    const active = devices.filter(device => device.status === 'active')
+    if (active.length) {
+        const diagnostics = active.flatMap(device => device.sync.map(cursor => cursor.diagnostic ?? ''))
+        if (diagnostics.some(value => /signature|nonce|revoked|auth/i.test(value))) {
+            return 'Authentication failed'
+        }
+        if (active.some(device => device.sync.some(cursor => cursor.status === 'syncing'))) {
+            return 'Syncing'
+        }
+        const latest = Math.max(
+            ...active.map(device => (device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0)),
+        )
+        if (latest === 0) return 'Connected'
+        if (now - latest > 7 * 24 * 60 * 60 * 1000) return 'Device unreachable'
+        return now - latest <= 24 * 60 * 60 * 1000 ? 'Up to date' : 'Delayed'
+    }
+    if (devices.some(device => device.status === 'pending' || device.status === 'confirmed')) {
+        return 'Permission required'
+    }
+    return 'Not connected'
+}
+
 export async function createPairingCode() {
     const response = await authRequest('/api/devices/pair', { method: 'POST' })
     if (!response.ok) throw new Error('Could not create pairing code')

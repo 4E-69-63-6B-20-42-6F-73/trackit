@@ -22,6 +22,7 @@ export type JournalEntry = CreateJournalEntry & {
     version: number
     createdAt: string
     updatedAt: string
+    deviceName?: string
 } & JournalEntityLink
 
 export const updateJournalEntrySchema = z.object({
@@ -36,6 +37,9 @@ export type UpdateJournalEntry = z.infer<typeof updateJournalEntrySchema>
 export type JournalListQuery = {
     from?: string
     to?: string
+    before?: string
+    category?: JournalEntry['category']
+    source?: string
     limit?: number
 }
 

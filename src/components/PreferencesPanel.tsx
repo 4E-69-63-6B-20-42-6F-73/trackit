@@ -1,4 +1,4 @@
-import { Alert, Button, Loader, Select, Stack, TextInput } from '@mantine/core'
+import { Alert, Button, Select, Skeleton, Stack, Text, TextInput } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import { updatePreferences, type Preferences } from '../lib/preferencesApi'
 import { useServerData } from '../hooks/useServerData'
@@ -8,13 +8,33 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
     const [value, setValue] = useState<Preferences | null>(preferences)
     const [message, setMessage] = useState('')
     const [saving, setSaving] = useState(false)
+    const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+    const detectedLocale = Intl.DateTimeFormat().resolvedOptions().locale
+    const timezones =
+        typeof Intl.supportedValuesOf === 'function'
+            ? Intl.supportedValuesOf('timeZone')
+            : [detectedTimezone]
+    const locales = [...new Set([detectedLocale, 'en-US', 'en-GB', 'nl-NL', 'de-DE', 'fr-FR'])]
 
     useEffect(() => {
         queueMicrotask(() => setValue(preferences))
     }, [preferences])
 
-    if (loading && !value) return <Loader role="status" aria-label="Loading preferences" />
-    if (!value) return <Alert color="orange">{message}</Alert>
+    if (loading && !value)
+        return (
+            <Stack role="status" aria-label="Loading preferences">
+                <Skeleton height={58} />
+                <Skeleton height={58} />
+                <Skeleton height={58} />
+                <Skeleton height={36} />
+            </Stack>
+        )
+    if (!value)
+        return (
+            <Alert color="orange">
+                {message || 'Preferences are unavailable. Connect to the server and retry.'}
+            </Alert>
+        )
 
     const save = async () => {
         setSaving(true)
@@ -49,20 +69,40 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                     { label: 'Imperial', value: 'imperial' },
                 ]}
             />
-            <TextInput
-                required
+            <Select
                 label="Timezone"
-                description="IANA name, for example Europe/Amsterdam"
+                description={`Browser recommendation: ${detectedTimezone}. Changing this can move records between days.`}
                 value={value.timezone}
-                onChange={event => setValue({ ...value, timezone: event.currentTarget.value })}
+                onChange={timezone => timezone && setValue({ ...value, timezone })}
+                data={timezones}
+                searchable
             />
-            <TextInput
-                required
+            <Select
                 label="Locale"
-                description="BCP 47 tag, for example en-GB"
+                description={`Browser recommendation: ${detectedLocale}`}
                 value={value.locale}
-                onChange={event => setValue({ ...value, locale: event.currentTarget.value })}
+                onChange={locale => locale && setValue({ ...value, locale })}
+                data={locales}
+                searchable
             />
+            <div className="preference-preview">
+                <Text size="xs" c="dimmed">
+                    Formatting preview
+                </Text>
+                <Text size="sm" fw={600}>
+                    {new Intl.DateTimeFormat(value.locale, {
+                        dateStyle: 'full',
+                        timeStyle: 'short',
+                        timeZone: value.timezone,
+                    }).format(new Date())}
+                </Text>
+                <Text size="sm">
+                    {new Intl.NumberFormat(value.locale, { maximumFractionDigits: 1 }).format(
+                        value.units === 'metric' ? 83.5 : 184.1,
+                    )}{' '}
+                    {value.units === 'metric' ? 'kg' : 'lb'}
+                </Text>
+            </div>
             {message && (
                 <Alert color={message.endsWith('saved.') ? 'teal' : 'orange'}>{message}</Alert>
             )}

@@ -39,6 +39,7 @@ import { WeeklyReflection } from '../components/WeeklyReflection'
 import type { QuickAddKind } from '../components/QuickAdd'
 import { eventVisual } from '../domain/data'
 import { displayValue, type Observation } from '../domain/health'
+import { formatMetricValue, friendlySourceName } from '../domain/formatting'
 import type { JournalEvent } from '../domain/types'
 import { useTodayHealth } from '../hooks/useTodayHealth'
 import { updatePreferences, type DashboardCard } from '../lib/preferencesApi'
@@ -52,7 +53,19 @@ const reading = (
     const displayUnit =
         units === 'imperial' && record.canonicalUnit === 'kg' ? 'lb' : record.canonicalUnit
     const value = displayValue(record.canonicalValue, record.canonicalUnit, displayUnit)
-    return `${value.toLocaleString(undefined, { maximumFractionDigits: 1 })} ${displayUnit}`
+    return formatMetricValue(value, displayUnit)
+}
+
+const provenance = (record: Observation | null, locale?: string, timezone?: string) => {
+    if (!record) return ''
+    const origin =
+        typeof record.metadata?.dataOrigin === 'string' ? record.metadata.dataOrigin : null
+    const time = new Date(record.observedAt).toLocaleTimeString(locale, {
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZone: timezone,
+    })
+    return `${origin ? `Synced from ${friendlySourceName(origin)}` : 'Recorded'} at ${time}`
 }
 
 const sleepReading = (record: Observation | null) => {
@@ -76,6 +89,7 @@ export function Today({
     openGoals,
     quickAdd,
     onSelectedDateChange,
+    initialSelectedDate,
 }: {
     events: JournalEvent[]
     insight: boolean
@@ -86,8 +100,11 @@ export function Today({
     openGoals?: () => void
     quickAdd?: (kind: QuickAddKind) => void
     onSelectedDateChange?: (date: string) => void
+    initialSelectedDate?: string | null
 }) {
-    const [selectedDate, setSelectedDate] = useState(() => new Date())
+    const [selectedDate, setSelectedDate] = useState(() =>
+        initialSelectedDate ? new Date(`${initialSelectedDate}T12:00:00`) : new Date(),
+    )
     const [customizing, setCustomizing] = useState(false)
     const [savingCards, setSavingCards] = useState(false)
     const health = useTodayHealth(selectedDate)
@@ -246,31 +263,35 @@ export function Today({
                     </ActionIcon>
                 </div>
             </section>
-            {!health.loading && (
-                <section className="next-action" aria-labelledby="next-action-title">
-                    <div className="next-action-icon">
-                        <NextActionIcon size={22} />
-                    </div>
-                    <div className="next-action-copy">
-                        <Text className="eyebrow teal-text">{nextAction.eyebrow}</Text>
-                        <h2 id="next-action-title">{nextAction.title}</h2>
-                        <Text size="sm">{nextAction.detail}</Text>
-                    </div>
-                    <Button color="trackit" onClick={nextAction.run} disabled={!nextAction.run}>
-                        {nextAction.label}
-                    </Button>
-                    {health.unavailable && quickAdd && (
-                        <Button
-                            className="manual-use-action"
-                            variant="subtle"
-                            color="gray"
-                            onClick={() => quickAdd('Check-in')}
-                        >
-                            Add a manual check-in instead
+            {!health.loading &&
+                (!health.sleepBaseline ||
+                    health.unavailable ||
+                    !health.energy ||
+                    !health.weight) && (
+                    <section className="next-action" aria-labelledby="next-action-title">
+                        <div className="next-action-icon">
+                            <NextActionIcon size={22} />
+                        </div>
+                        <div className="next-action-copy">
+                            <Text className="eyebrow teal-text">{nextAction.eyebrow}</Text>
+                            <h2 id="next-action-title">{nextAction.title}</h2>
+                            <Text size="sm">{nextAction.detail}</Text>
+                        </div>
+                        <Button color="trackit" onClick={nextAction.run} disabled={!nextAction.run}>
+                            {nextAction.label}
                         </Button>
-                    )}
-                </section>
-            )}
+                        {health.unavailable && quickAdd && (
+                            <Button
+                                className="manual-use-action"
+                                variant="subtle"
+                                color="gray"
+                                onClick={() => quickAdd('Check-in')}
+                            >
+                                Add a manual check-in instead
+                            </Button>
+                        )}
+                    </section>
+                )}
             {insight && health.sleepBaseline && (
                 <section className="insight">
                     <div className="insight-icon">
@@ -320,10 +341,15 @@ export function Today({
                             icon={IconMoon}
                             tone="indigo"
                             label="Sleep"
+                            record={health.sleepToday}
                             value={sleepReading(health.sleepToday)}
                             note={
                                 health.sleepToday
-                                    ? 'Latest recorded sleep'
+                                    ? provenance(
+                                          health.sleepToday,
+                                          health.preferences?.locale,
+                                          health.preferences?.timezone,
+                                      )
                                     : 'No sleep imported today'
                             }
                             action={
@@ -341,10 +367,15 @@ export function Today({
                             icon={IconHeartRateMonitor}
                             tone="rose"
                             label="Resting heart rate"
+                            record={health.restingHeartRate}
                             value={reading(health.restingHeartRate)}
                             note={
-                                health.restingBaseline
-                                    ? `${Math.abs(Math.round(health.restingBaseline.delta))} bpm ${health.restingBaseline.delta <= 0 ? 'below' : 'above'} baseline`
+                                health.restingHeartRate
+                                    ? provenance(
+                                          health.restingHeartRate,
+                                          health.preferences?.locale,
+                                          health.preferences?.timezone,
+                                      )
                                     : 'No baseline available'
                             }
                             action={
@@ -362,8 +393,17 @@ export function Today({
                             icon={IconSparkles}
                             tone="violet"
                             label="Energy"
+                            record={health.energy}
                             value={reading(health.energy)}
-                            note="Latest check-in today"
+                            note={
+                                health.energy
+                                    ? provenance(
+                                          health.energy,
+                                          health.preferences?.locale,
+                                          health.preferences?.timezone,
+                                      )
+                                    : 'No check-in today'
+                            }
                             action={
                                 health.energy
                                     ? undefined
@@ -379,8 +419,17 @@ export function Today({
                             icon={IconScale}
                             tone="blue"
                             label="Weight"
+                            record={health.weight}
                             value={reading(health.weight, health.preferences?.units)}
-                            note="Latest reading today"
+                            note={
+                                health.weight
+                                    ? provenance(
+                                          health.weight,
+                                          health.preferences?.locale,
+                                          health.preferences?.timezone,
+                                      )
+                                    : 'No weight reading today'
+                            }
                             action={
                                 health.weight
                                     ? undefined
@@ -542,7 +591,6 @@ export function Today({
                     </article>
                 )}
             </section>
-            {isToday && <WeeklyReflection events={events} openJournal={openJournal} />}
             {visible('journal') && (
                 <section className="panel timeline">
                     <div className="panel-head">
@@ -581,6 +629,7 @@ export function Today({
                     })}
                 </section>
             )}
+            {isToday && <WeeklyReflection events={events} openJournal={openJournal} />}
             <Modal
                 opened={customizing}
                 onClose={() => setCustomizing(false)}

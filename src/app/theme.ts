@@ -10,6 +10,16 @@ export const theme = createTheme({
             'Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif',
         fontWeight: '700',
     },
+    components: {
+        Modal: {
+            defaultProps: {
+                centered: true,
+                radius: 'lg',
+                size: 'md',
+                overlayProps: { backgroundOpacity: 0.45, blur: 2 },
+            },
+        },
+    },
     colors: {
         trackit: [
             '#f1f7f5',

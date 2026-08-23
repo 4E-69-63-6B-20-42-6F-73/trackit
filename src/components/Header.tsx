@@ -9,7 +9,9 @@ export function Header({ page, add }: { page: Page; add: () => void }) {
                 <Text className="mobile-brand">
                     track <strong>it</strong>
                 </Text>
-                <Text className="page-title">{page}</Text>
+                <Text className="page-context" aria-label="Current section">
+                    TrackIt <span aria-hidden="true">/</span> {page}
+                </Text>
             </div>
             <Group gap="xs">
                 <Button color="trackit" leftSection={<IconPlus size={18} />} onClick={add}>

@@ -39,6 +39,11 @@ const metricLabel = (metric: string) =>
         .replaceAll('_', ' ')
         .replace(/^./, value => value.toUpperCase())
 
+const humanizeExerciseType = (value: unknown) =>
+    typeof value === 'string' && value.trim()
+        ? value.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase())
+        : null
+
 const format = (observation: DerivedObservation) => {
     const precision = ['hours', 'kg', 'm', '%', 'L'].includes(observation.unit) ? 1 : 0
     return `${metricLabel(observation.metric)} ${observation.value.toFixed(precision)} ${observation.unit}`
@@ -60,8 +65,10 @@ export function projectHealthRecordToJournal(
         .map(format)
     if (!summaries.length) return null
     const title =
-        record.recordType === 'ExerciseSessionRecord' && typeof record.payload.title === 'string'
-            ? record.payload.title
+        record.recordType === 'ExerciseSessionRecord'
+            ? typeof record.payload.title === 'string' && record.payload.title.trim()
+                ? record.payload.title
+                : (humanizeExerciseType(record.payload.exerciseType) ?? definition.title)
             : definition.title
     return { category: definition.category, title, detail: summaries.join(' · ') }
 }

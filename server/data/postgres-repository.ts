@@ -334,15 +334,21 @@ export class PostgresDataRepository implements DataRepository {
                 const total = items.reduce(
                     (nutrients, { item, food }) => {
                         const factor = item.grams / 100 / recipe.servings
-                        nutrients.calories += food.caloriesPer100g * factor
-                        nutrients.protein += food.proteinPer100g * factor
-                        nutrients.carbs += food.carbsPer100g * factor
-                        nutrients.fat += food.fatPer100g * factor
-                        nutrients.fiber += food.fiberPer100g * factor
-                        nutrients.sugar += food.sugarPer100g * factor
-                        nutrients.saturatedFat += food.saturatedFatPer100g * factor
-                        nutrients.sodium += food.sodiumPer100g * factor
-                        nutrients.potassium += food.potassiumPer100g * factor
+                        const add = (key: keyof typeof nutrients, value: number | null) => {
+                            nutrients[key] =
+                                nutrients[key] === null || value === null
+                                    ? null
+                                    : nutrients[key] + value * factor
+                        }
+                        add('calories', food.caloriesPer100g)
+                        add('protein', food.proteinPer100g)
+                        add('carbs', food.carbsPer100g)
+                        add('fat', food.fatPer100g)
+                        add('fiber', food.fiberPer100g)
+                        add('sugar', food.sugarPer100g)
+                        add('saturatedFat', food.saturatedFatPer100g)
+                        add('sodium', food.sodiumPer100g)
+                        add('potassium', food.potassiumPer100g)
                         return nutrients
                     },
                     {
@@ -355,7 +361,18 @@ export class PostgresDataRepository implements DataRepository {
                         saturatedFat: 0,
                         sodium: 0,
                         potassium: 0,
-                    },
+                    } as Record<
+                        | 'calories'
+                        | 'protein'
+                        | 'carbs'
+                        | 'fat'
+                        | 'fiber'
+                        | 'sugar'
+                        | 'saturatedFat'
+                        | 'sodium'
+                        | 'potassium',
+                        number | null
+                    >,
                 )
                 return {
                     ...recipe,
@@ -432,6 +449,29 @@ export class PostgresDataRepository implements DataRepository {
         const [record] = await this.database
             .update(goals)
             .set({ effectiveTo: new Date(effectiveTo) })
+            .where(eq(goals.id, id))
+            .returning()
+        return record ?? null
+    }
+
+    async updateGoal(
+        id: string,
+        input: {
+            metric?: string
+            targetValue?: number
+            canonicalUnit?: string
+            effectiveFrom?: string
+            effectiveTo?: string
+            schedule?: Record<string, unknown>
+        },
+    ) {
+        const [record] = await this.database
+            .update(goals)
+            .set({
+                ...input,
+                effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : undefined,
+                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+            })
             .where(eq(goals.id, id))
             .returning()
         return record ?? null

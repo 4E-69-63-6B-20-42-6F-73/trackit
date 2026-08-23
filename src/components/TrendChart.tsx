@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Loader, Text } from '@mantine/core'
+import { Alert, Button, Group, Skeleton, Text } from '@mantine/core'
 import { IconCircleCheck } from '@tabler/icons-react'
 import {
     CartesianGrid,
@@ -30,7 +30,7 @@ export function TrendChart({
     comparisonLabel?: string
     periodLabel?: 'day' | 'week'
 }) {
-    if (loading) return <Loader role="status" aria-label="Loading trend" />
+    if (loading) return <Skeleton role="status" aria-label="Loading trend" height={280} radius="md" />
     if (error) return <Alert color="orange">Connect to TrackIt to load your observations.</Alert>
     const covered = points.filter(point => point.value !== null)
     if (!covered.length) return <Alert>No {metric} records exist in this date range.</Alert>

@@ -16,7 +16,7 @@ export function FoodEditModal({
     const [servingName, setServingName] = useState(food.servingName)
     const [servingGrams, setServingGrams] = useState<number | string>(food.servingGrams)
     const [quality, setQuality] = useState(food.nutritionQuality ?? 'complete')
-    const [nutrients, setNutrients] = useState<Nutrients>(food.per100g)
+    const [nutrients, setNutrients] = useState<Partial<Nutrients>>(food.per100g)
     const [error, setError] = useState('')
     const [saving, setSaving] = useState(false)
 

@@ -100,7 +100,8 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
     return (
         <>
             <Button
-                variant="default"
+                variant="filled"
+                color="trackit"
                 size="sm"
                 leftSection={<IconBarcode size={18} />}
                 onClick={() => setOpened(true)}
@@ -192,7 +193,9 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                                         <Text fw={650}>{food.name}</Text>
                                         <Text size="sm" c="dimmed">
                                             {food.brand || 'No brand'} Â·{' '}
-                                            {Math.round(food.per100g.calories)} kcal per 100 g
+                                            {food.per100g.calories === undefined
+                                                ? 'Calories unknown'
+                                                : `${Math.round(food.per100g.calories)} kcal per 100 g`}
                                         </Text>
                                     </div>
                                     <Badge

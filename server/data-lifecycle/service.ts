@@ -1,4 +1,4 @@
-import { and, eq, inArray, lt } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, lt, max, min } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -37,6 +37,43 @@ export class DataLifecycleService {
     private retentionTimer?: ReturnType<typeof setInterval>
 
     constructor(private readonly database: Database) {}
+
+    async categorySummary(category: 'observations' | 'meals' | 'journal') {
+        const aggregate = async (
+            table: typeof observations | typeof meals | typeof journalEntries,
+            column:
+                | typeof observations.observedAt
+                | typeof meals.eatenAt
+                | typeof journalEntries.observedAt,
+        ) => {
+            const [result] = await this.database
+                .select({ count: count(), oldest: min(column), newest: max(column) })
+                .from(table)
+            return {
+                count: result.count,
+                oldest: result.oldest?.toISOString() ?? null,
+                newest: result.newest?.toISOString() ?? null,
+            }
+        }
+        const summary =
+            category === 'observations'
+                ? await aggregate(observations, observations.observedAt)
+                : category === 'meals'
+                  ? await aggregate(meals, meals.eatenAt)
+                  : await aggregate(journalEntries, journalEntries.observedAt)
+        const [lastRun] = await this.database
+            .select({ createdAt: auditEvents.createdAt })
+            .from(auditEvents)
+            .where(
+                and(
+                    eq(auditEvents.action, 'retention.applied'),
+                    eq(auditEvents.targetId, category),
+                ),
+            )
+            .orderBy(desc(auditEvents.createdAt))
+            .limit(1)
+        return { ...summary, lastRetentionRun: lastRun?.createdAt.toISOString() ?? null }
+    }
 
     start(intervalHours = 24) {
         if (this.retentionTimer) return

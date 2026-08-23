@@ -14,7 +14,7 @@ test('settings sections use nested pages instead of dialogs', async ({ page }) =
     await page.goBack()
     await expect(page).toHaveURL(/\/settings$/)
     if ((page.viewportSize()?.width ?? 1000) > 760) {
-        await expect(page.getByRole('heading', { name: 'Choose what to manage' })).toBeVisible()
+        await expect(page.getByRole('heading', { name: 'Dashboard & reminders' })).toBeVisible()
     } else {
         await expect(page.getByRole('navigation', { name: 'Settings sections' })).toBeVisible()
     }

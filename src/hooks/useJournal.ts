@@ -8,6 +8,8 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
     const { from, to, limit } = query
     const [events, setEvents] = useState<JournalEvent[]>([])
     const [status, setStatus] = useState<ServerStatus>('connecting')
+    const [loadingOlder, setLoadingOlder] = useState(false)
+    const [hasOlder, setHasOlder] = useState(false)
     const [failure, setFailure] = useState<{
         message: string
         retry: () => Promise<void>
@@ -21,6 +23,7 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
                 if (!active) return
                 setStatus('online')
                 setEvents(records)
+                setHasOlder(records.length === 100)
             })
             .catch(() => {
                 if (!active) return
@@ -41,6 +44,27 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
             controller.abort()
         }
     }, [from, limit, to])
+
+    const loadOlder = async () => {
+        const oldest = events.at(-1)?.observedAt
+        if (!oldest || loadingOlder || !hasOlder) return
+        setLoadingOlder(true)
+        try {
+            const records = await listJournal({ before: oldest, limit: 100 })
+            setEvents(current => [
+                ...current,
+                ...records.filter(record => !current.some(item => item.id === record.id)),
+            ])
+            setHasOlder(records.length === 100)
+        } catch {
+            setFailure({
+                message: 'Older journal entries could not be loaded.',
+                retry: loadOlder,
+            })
+        } finally {
+            setLoadingOlder(false)
+        }
+    }
 
     const add = (event: JournalEvent, allowDuplicate = false) => {
         const timestamp = (item: JournalEvent) => {
@@ -137,5 +161,8 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
         update,
         syncFailure: failure?.message ?? '',
         retry: () => void failure?.retry(),
+        hasOlder,
+        loadingOlder,
+        loadOlder,
     }
 }

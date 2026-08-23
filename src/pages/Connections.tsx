@@ -10,8 +10,9 @@ import {
     IconTools,
 } from '@tabler/icons-react'
 import { McpPanel } from '../components/McpPanel'
+import { PageHeader } from '../components/PageHeader'
 import { downloadExport } from '../lib/lifecycleApi'
-import { listDevices } from '../lib/deviceApi'
+import { healthConnectStatus, listDevices, type HealthConnectStatus } from '../lib/deviceApi'
 
 export function Connections() {
     const navigate = useNavigate()
@@ -19,40 +20,14 @@ export function Connections() {
     const [mcp, setMcp] = useState(false)
     const [exportError, setExportError] = useState('')
     const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
-    const [healthStatus, setHealthStatus] = useState<
-        | 'Configured'
-        | 'Connected'
-        | 'Setup required'
-        | 'Not configured'
-        | 'Sync delayed'
-        | 'Unavailable'
-    >('Not configured')
+    const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
+        'Not connected',
+    )
     const [deviceCount, setDeviceCount] = useState(0)
     const refreshHealthStatus = useCallback(() => {
         void listDevices()
             .then(devices => {
-                const activeDevices = devices.filter(d => d.status === 'active')
-                const configuredDevices = devices.filter(
-                    d => d.status === 'confirmed' && d.configuredAt !== null,
-                )
-                if (activeDevices.length > 0) {
-                    const latest = Math.max(
-                        ...activeDevices.map(device =>
-                            device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0,
-                        ),
-                    )
-                    setHealthStatus(
-                        latest > 0 && Date.now() - latest > 24 * 60 * 60 * 1000
-                            ? 'Sync delayed'
-                            : 'Connected',
-                    )
-                } else if (configuredDevices.length > 0) {
-                    setHealthStatus('Configured')
-                } else if (devices.some(d => d.status === 'pending')) {
-                    setHealthStatus('Setup required')
-                } else {
-                    setHealthStatus('Not configured')
-                }
+                setHealthStatus(healthConnectStatus(devices))
                 setDeviceCount(devices.length)
             })
             .catch(() => setHealthStatus('Unavailable'))
@@ -89,23 +64,32 @@ export function Connections() {
         {
             key: 'export' as const,
             icon: IconDatabase,
-            title: 'Import & export',
+            title: 'Export your data',
             status: null,
-            desc: 'Bring in historical data or download a portable copy of everything you own.',
+            desc: 'Download a portable copy of your TrackIt data for backup or migration.',
             color: 'blue',
         },
     ]
     return (
         <div className="page-content connections-page">
-            <h1>Connections</h1>
-            <Text className="subhead">
-                You decide what comes in, what goes out, and who can see it.
-            </Text>
+            <PageHeader
+                title="Connections"
+                description="You decide what comes in, what goes out, and who can see it."
+            />
             <div className="connection-grid connection-grid-primary">
                 {cards
                     .filter(card => card.key !== 'mcp')
                     .map(({ key, icon: Icon, title, status, desc, color }) => (
-                        <article className="connection-card" key={title}>
+                        <button
+                            type="button"
+                            className="connection-card"
+                            key={title}
+                            onClick={
+                                key === 'health'
+                                    ? () => navigate('/connections/devices')
+                                    : () => setDialog(key)
+                            }
+                        >
                             <div className={`connection-icon ${color}`}>
                                 <Icon size={24} />
                             </div>
@@ -115,11 +99,11 @@ export function Connections() {
                                     <Badge
                                         variant="light"
                                         color={
-                                            status === 'Connected'
+                                            status === 'Up to date'
                                                 ? 'trackit'
-                                                : status === 'Sync delayed'
+                                                : status === 'Delayed' || status === 'Device unreachable'
                                                   ? 'orange'
-                                                  : status === 'Configured'
+                                                  : status === 'Permission required'
                                                     ? 'green'
                                                     : 'dark'
                                         }
@@ -132,30 +116,30 @@ export function Connections() {
                                 {desc}
                             </Text>
                             <div className="connection-action">
-                                <Button
-                                    variant={key === 'health' ? 'filled' : 'default'}
-                                    color="trackit"
-                                    onClick={
-                                        key === 'health'
-                                            ? () => navigate('/connections/devices')
-                                            : () => setDialog(key)
-                                    }
-                                >
+                                <Text fw={650} c="trackit">
                                     {key === 'health'
-                                        ? healthStatus === 'Connected' && deviceCount > 0
+                                        ? healthStatus === 'Up to date' && deviceCount > 0
                                             ? `${deviceCount} device${deviceCount > 1 ? 's' : ''} configured`
-                                            : healthStatus === 'Configured'
+                                            : healthStatus === 'Permission required'
                                               ? 'View devices'
                                               : healthStatus === 'Unavailable'
                                                 ? 'Review Health Connect'
-                                                : healthStatus === 'Sync delayed'
+                                                : healthStatus === 'Delayed'
                                                   ? 'Review delayed sync'
+                                                  : healthStatus === 'Authentication failed'
+                                                    ? 'Reconnect this device'
+                                                    : healthStatus === 'Device unreachable'
+                                                      ? 'Check this device'
+                                                      : healthStatus === 'Syncing'
+                                                        ? 'Sync in progress'
+                                                        : healthStatus === 'Connected'
+                                                          ? 'Waiting for first sync'
                                                   : 'Connect device'
-                                        : 'Manage data'}
-                                </Button>
+                                        : 'Export data'}
+                                </Text>
                                 <IconChevronRight size={18} />
                             </div>
-                        </article>
+                        </button>
                     ))}
             </div>
             <section className="connections-advanced">
@@ -211,13 +195,13 @@ export function Connections() {
             <Modal
                 opened={dialog === 'export'}
                 onClose={() => setDialog(null)}
-                title="Your data"
+                title="Export your data"
                 centered
             >
                 <Stack>
                     <Text size="sm" c="dimmed">
-                        Download a versioned portable copy of journal, health, nutrition, goals, and
-                        preferences from your server.
+                        Download a versioned copy of your journal, health, nutrition, goals, and
+                        preferences. Your server prepares the file when you request it.
                     </Text>
                     <Button
                         loading={exporting === 'json'}

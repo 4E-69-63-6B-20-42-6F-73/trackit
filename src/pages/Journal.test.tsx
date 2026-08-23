@@ -2,6 +2,7 @@ import { MantineProvider } from '@mantine/core'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { MemoryRouter } from 'react-router-dom'
 
 import { Journal } from './Journal'
 import type { JournalEvent } from '../domain/types'
@@ -33,9 +34,16 @@ describe('Journal', () => {
         const update = vi.fn().mockResolvedValue(true)
 
         render(
-            <MantineProvider>
-                <Journal events={records} remove={vi.fn()} duplicate={duplicate} update={update} />
-            </MantineProvider>,
+            <MemoryRouter>
+                <MantineProvider>
+                    <Journal
+                        events={records}
+                        remove={vi.fn()}
+                        duplicate={duplicate}
+                        update={update}
+                    />
+                </MantineProvider>
+            </MemoryRouter>,
         )
 
         const user = userEvent.setup()
@@ -84,14 +92,16 @@ describe('Journal', () => {
 
     it('can select a specific journal day and return to all dates', async () => {
         render(
-            <MantineProvider>
-                <Journal
-                    events={records}
-                    remove={vi.fn()}
-                    duplicate={vi.fn()}
-                    update={vi.fn().mockResolvedValue(true)}
-                />
-            </MantineProvider>,
+            <MemoryRouter>
+                <MantineProvider>
+                    <Journal
+                        events={records}
+                        remove={vi.fn()}
+                        duplicate={vi.fn()}
+                        update={vi.fn().mockResolvedValue(true)}
+                    />
+                </MantineProvider>
+            </MemoryRouter>,
         )
 
         const user = userEvent.setup()

@@ -1,13 +1,13 @@
-import { Text } from '@mantine/core'
 import { GoalsPanel } from '../components/GoalsPanel'
+import { PageHeader } from '../components/PageHeader'
 
 export function Goals() {
     return (
         <div className="page-content goals-page">
-            <h1>Goals</h1>
-            <Text className="subhead">
-                Set optional targets that add context without changing your health records.
-            </Text>
+            <PageHeader
+                title="Goals"
+                description="Set optional targets that add context without changing your health records."
+            />
             <GoalsPanel />
         </div>
     )

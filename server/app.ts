@@ -18,7 +18,7 @@ import {
     foodImportSchema,
     foodUpdateSchema,
     goalInputSchema,
-    goalRetireSchema,
+    goalUpdateSchema,
     mealInputSchema,
     mealUpdateSchema,
     observationInputSchema,
@@ -334,7 +334,13 @@ export async function createApp(
             reply.clearCookie(csrfCookie, { path: '/' })
             return reply.code(204).send()
         })
-        app.get('/api/auth/sessions', async () => ({ data: await auth.listSessions() }))
+        app.get('/api/auth/sessions', async request => {
+            const current = await auth.authenticate(request.cookies[sessionCookie])
+            const active = await auth.listSessions()
+            return {
+                data: active.map(session => ({ ...session, current: session.id === current?.id })),
+            }
+        })
         app.delete<{ Params: { id: string } }>('/api/auth/sessions/:id', async (request, reply) => {
             await auth.revokeSession(request.params.id)
             return reply.code(204).send()
@@ -391,6 +397,17 @@ export async function createApp(
     if (options?.lifecycle) {
         const lifecycle = options.lifecycle
         app.get('/api/retention', async () => ({ data: await lifecycle.listRetentionRules() }))
+        app.get<{ Querystring: { category?: string } }>(
+            '/api/data-summary',
+            async (request, reply) => {
+                const category = z
+                    .enum(['observations', 'meals', 'journal'])
+                    .safeParse(request.query.category)
+                if (!category.success)
+                    return badRequest(request, reply, { validation: category.error })
+                return { data: await lifecycle.categorySummary(category.data) }
+            },
+        )
         app.put<{ Params: { category: string } }>(
             '/api/retention/:category',
             async (request, reply) => {
@@ -734,14 +751,19 @@ export async function createApp(
         }
     })
 
-    app.get<{ Querystring: { from?: string; to?: string; limit?: string } }>(
+    app.get<{ Querystring: Record<string, string | undefined> }>(
         '/api/journal',
         async (request, reply) => {
             const query = z
                 .object({
                     from: z.string().datetime().optional(),
                     to: z.string().datetime().optional(),
-                    limit: z.coerce.number().int().min(1).max(500).default(100),
+                    before: z.string().datetime().optional(),
+                    category: z
+                        .enum(['Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'])
+                        .optional(),
+                    source: z.string().max(120).optional(),
+                    limit: z.coerce.number().int().min(1).max(100).default(100),
                 })
                 .refine(value => !value.from || !value.to || value.from <= value.to, {
                     message: 'from must be before to',
@@ -972,9 +994,9 @@ export async function createApp(
             return reply.code(201).send({ data: await data.createGoal(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/goals/:id', async (request, reply) => {
-            const input = goalRetireSchema.safeParse(request.body)
+            const input = goalUpdateSchema.safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })
-            const updated = await data.retireGoal(request.params.id, input.data.effectiveTo)
+            const updated = await data.updateGoal(request.params.id, input.data)
             return updated ? { data: updated } : reply.code(404).send({ error: 'not_found' })
         })
         app.get('/api/trend-views', async () => ({ data: await data.listSavedTrendViews() }))

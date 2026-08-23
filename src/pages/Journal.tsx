@@ -9,16 +9,20 @@ import {
     SegmentedControl,
     Text,
     TextInput,
+    Select,
 } from '@mantine/core'
 import {
-    IconChevronDown,
+    IconDots,
     IconChevronLeft,
     IconChevronRight,
     IconPlus,
     IconSearch,
 } from '@tabler/icons-react'
 import { eventVisual } from '../domain/data'
+import { PageHeader } from '../components/PageHeader'
 import type { Category, JournalEvent } from '../domain/types'
+import { useSearchParams } from 'react-router-dom'
+import { listJournal } from '../lib/journalApi'
 
 const localDateKey = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -29,6 +33,10 @@ export function Journal({
     duplicate,
     update,
     onSelectedDateChange,
+    hasOlder = false,
+    loadingOlder = false,
+    loadOlder,
+    initialSelectedDate,
 }: {
     events: JournalEvent[]
     remove: (id: string) => void
@@ -38,27 +46,93 @@ export function Journal({
         changes: Pick<JournalEvent, 'title' | 'detail' | 'time'>,
     ) => Promise<boolean>
     onSelectedDateChange?: (date: string | null) => void
+    hasOlder?: boolean
+    loadingOlder?: boolean
+    loadOlder?: () => Promise<void>
+    initialSelectedDate?: string | null
 }) {
-    const [filter, setFilter] = useState<'All' | Category>('All')
-    const [query, setQuery] = useState('')
-    const [selectedDate, setSelectedDate] = useState<string | null>(null)
+    const [params, setParams] = useSearchParams()
+    const initialCategory = params.get('category') as Category | null
+    const [filter, setFilter] = useState<'All' | Category>(initialCategory ?? 'All')
+    const [query, setQuery] = useState(params.get('q') ?? '')
+    const [source, setSource] = useState<string | null>(params.get('source'))
+    const [device, setDevice] = useState<string | null>(params.get('device'))
+    const [selectedDate, setSelectedDate] = useState<string | null>(
+        params.get('date') ?? initialSelectedDate ?? null,
+    )
+    const [rangeFrom, setRangeFrom] = useState(params.get('from') ?? '')
+    const [rangeTo, setRangeTo] = useState(params.get('to') ?? '')
+    const [boundedEvents, setBoundedEvents] = useState<JournalEvent[] | null>(null)
     const [editing, setEditing] = useState<JournalEvent | null>(null)
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
     useEffect(() => onSelectedDateChange?.(selectedDate), [onSelectedDateChange, selectedDate])
+    useEffect(() => {
+        if (!selectedDate && !rangeFrom && !rangeTo) {
+            return
+        }
+        let active = true
+        const fromKey = selectedDate || rangeFrom
+        const toKey = selectedDate || rangeTo
+        const from = fromKey ? new Date(`${fromKey}T00:00:00`).toISOString() : undefined
+        const toDate = toKey ? new Date(`${toKey}T00:00:00`) : null
+        if (toDate) toDate.setDate(toDate.getDate() + 1)
+        void listJournal({
+            from,
+            to: toDate?.toISOString(),
+            category: filter === 'All' ? undefined : filter,
+            limit: 100,
+        })
+            .then(records => active && setBoundedEvents(records))
+            .catch(() => active && setBoundedEvents(null))
+        return () => {
+            active = false
+        }
+    }, [filter, rangeFrom, rangeTo, selectedDate])
+    useEffect(() => {
+        const next = new URLSearchParams()
+        if (selectedDate) next.set('date', selectedDate)
+        if (!selectedDate && rangeFrom) next.set('from', rangeFrom)
+        if (!selectedDate && rangeTo) next.set('to', rangeTo)
+        if (filter !== 'All') next.set('category', filter)
+        if (query) next.set('q', query)
+        if (source) next.set('source', source)
+        if (device) next.set('device', device)
+        setParams(next, { replace: true })
+    }, [device, filter, query, rangeFrom, rangeTo, selectedDate, setParams, source])
+    const availableEvents = useMemo(
+        () => (!selectedDate && !rangeFrom && !rangeTo ? events : (boundedEvents ?? events)),
+        [boundedEvents, events, rangeFrom, rangeTo, selectedDate],
+    )
     const shown = useMemo(
         () =>
-            events.filter(
+            availableEvents.filter(
                 event =>
                     (!selectedDate ||
                         localDateKey(new Date(event.observedAt ?? 0)) === selectedDate) &&
+                    (selectedDate ||
+                        !rangeFrom ||
+                        localDateKey(new Date(event.observedAt ?? 0)) >= rangeFrom) &&
+                    (selectedDate ||
+                        !rangeTo ||
+                        localDateKey(new Date(event.observedAt ?? 0)) <= rangeTo) &&
                     (filter === 'All' || event.category === filter) &&
+                    (!source || event.source === source) &&
+                    (!device || event.deviceName === device) &&
                     `${event.title} ${event.detail} ${event.source}`
                         .toLowerCase()
                         .includes(query.toLowerCase()),
             ),
-        [events, filter, query, selectedDate],
+        [availableEvents, device, filter, query, rangeFrom, rangeTo, selectedDate, source],
+    )
+    const sources = useMemo(
+        () => [...new Set(availableEvents.map(event => event.source))].sort(),
+        [availableEvents],
+    )
+    const devices = useMemo(
+        () => [...new Set(availableEvents.flatMap(event => event.deviceName ?? []))].sort(),
+        [availableEvents],
     )
     const groups = useMemo(() => {
         const today = new Date()
@@ -86,7 +160,42 @@ export function Journal({
                 }
                 return result
             }, new Map<string, { label: string; events: JournalEvent[] }>()),
-        ).map(([, group]) => group)
+        ).map(([, group]) => ({
+            ...group,
+            events: group.events.reduce<JournalEvent[]>((result, event, index, all) => {
+                if (event.title !== 'Weight' && event.title !== 'Body fat')
+                    return [...result, event]
+                const partnerTitle = event.title === 'Weight' ? 'Body fat' : 'Weight'
+                const partner = all.find(
+                    candidate =>
+                        candidate.title === partnerTitle &&
+                        candidate.source === event.source &&
+                        Math.abs(
+                            new Date(candidate.observedAt ?? 0).getTime() -
+                                new Date(event.observedAt ?? 0).getTime(),
+                        ) <= 60_000,
+                )
+                if (!partner) return [...result, event]
+                if (
+                    result.some(
+                        candidate => candidate.id === partner.id || candidate.id === event.id,
+                    )
+                )
+                    return result
+                return [
+                    ...result,
+                    {
+                        ...event,
+                        id: `${event.id}:${partner.id}`,
+                        title: 'Body composition',
+                        detail: [event, partner]
+                            .sort(item => (item.title === 'Weight' ? -1 : 1))
+                            .map(item => item.detail)
+                            .join(' · '),
+                    },
+                ]
+            }, []),
+        }))
     }, [shown])
     const beginEdit = (event: JournalEvent) => {
         setEditing(event)
@@ -101,25 +210,30 @@ export function Journal({
 
     return (
         <div className="page-content journal-page">
-            <div className="section-title">
-                <div>
-                    <h1>Journal</h1>
-                    <Text className="subhead">
-                        Everything you’ve logged and synced, in one honest timeline.
-                    </Text>
-                </div>
-            </div>
+            <PageHeader
+                title="Journal"
+                description="Everything you’ve logged and synced, in one honest timeline."
+            />
             <div className="journal-toolbar">
                 <div className="journal-toolbar-primary">
                     <SegmentedControl
                         aria-label="Journal time range"
-                        value={selectedDate ? 'day' : 'all'}
-                        onChange={value =>
+                        value={selectedDate ? 'day' : rangeFrom || rangeTo ? 'range' : 'all'}
+                        onChange={value => {
                             setSelectedDate(value === 'day' ? localDateKey(new Date()) : null)
-                        }
+                            if (value === 'range') {
+                                const today = localDateKey(new Date())
+                                setRangeFrom(current => current || today)
+                                setRangeTo(current => current || today)
+                            } else {
+                                setRangeFrom('')
+                                setRangeTo('')
+                            }
+                        }}
                         data={[
                             { label: 'All entries', value: 'all' },
                             { label: 'Single day', value: 'day' },
+                            { label: 'Date range', value: 'range' },
                         ]}
                     />
                     {selectedDate && (
@@ -156,6 +270,27 @@ export function Journal({
                             </Button>
                         </div>
                     )}
+                    {!selectedDate && (rangeFrom || rangeTo) && (
+                        <div className="journal-date-navigation" aria-label="Journal date range">
+                            <TextInput
+                                type="date"
+                                aria-label="Journal start date"
+                                value={rangeFrom}
+                                max={rangeTo || undefined}
+                                onChange={event => setRangeFrom(event.currentTarget.value)}
+                            />
+                            <Text size="sm" c="dimmed">
+                                to
+                            </Text>
+                            <TextInput
+                                type="date"
+                                aria-label="Journal end date"
+                                value={rangeTo}
+                                min={rangeFrom || undefined}
+                                onChange={event => setRangeTo(event.currentTarget.value)}
+                            />
+                        </div>
+                    )}
                     <TextInput
                         className="journal-search"
                         value={query}
@@ -164,6 +299,28 @@ export function Journal({
                         aria-label="Search journal"
                         leftSection={<IconSearch size={16} />}
                     />
+                    <Select
+                        className="journal-source"
+                        clearable
+                        searchable
+                        value={source}
+                        onChange={setSource}
+                        placeholder="All sources"
+                        aria-label="Filter journal by source"
+                        data={sources}
+                    />
+                    {devices.length > 0 && (
+                        <Select
+                            className="journal-source"
+                            clearable
+                            searchable
+                            value={device}
+                            onChange={setDevice}
+                            placeholder="All devices"
+                            aria-label="Filter journal by device"
+                            data={devices}
+                        />
+                    )}
                 </div>
                 <div className="filter-row" aria-label="Journal categories">
                     {(
@@ -183,7 +340,11 @@ export function Journal({
                 </div>
             </div>
             <section className="panel timeline">
-                {events.length === 0 && (
+                <Text size="xs" c="dimmed" className="journal-result-count">
+                    Showing {shown.length} of {availableEvents.length} loaded entries
+                    {hasOlder ? ' · older entries are available' : ''}
+                </Text>
+                {availableEvents.length === 0 && (
                     <div className="day-divider">
                         <span>Today</span>
                         <small>0 entries</small>
@@ -216,6 +377,11 @@ export function Journal({
                                                 {event.source}
                                             </Badge>
                                         )}
+                                        {event.deviceName && (
+                                            <Text size="xs" c="dimmed">
+                                                Device: {event.deviceName}
+                                            </Text>
+                                        )}
                                     </div>
                                     <Menu>
                                         <Menu.Target>
@@ -224,7 +390,7 @@ export function Journal({
                                                 variant="subtle"
                                                 color="gray"
                                             >
-                                                <IconChevronDown size={17} />
+                                                <IconDots size={18} />
                                             </ActionIcon>
                                         </Menu.Target>
                                         <Menu.Dropdown>
@@ -251,7 +417,7 @@ export function Journal({
                         })}
                     </div>
                 ))}
-                {shown.length === 0 && events.length > 0 && (
+                {shown.length === 0 && availableEvents.length > 0 && (
                     <div className="empty-state">
                         <IconSearch size={24} />
                         <Text fw={600}>Nothing matches</Text>
@@ -261,7 +427,7 @@ export function Journal({
                         </Text>
                     </div>
                 )}
-                {events.length === 0 && (
+                {availableEvents.length === 0 && (
                     <div className="empty-state">
                         <IconPlus size={24} />
                         <Text fw={600}>Your journal is ready</Text>
@@ -269,6 +435,13 @@ export function Journal({
                             Meals, measurements, check-ins, and synced activity will appear here.
                             Use Quick add to record your first entry.
                         </Text>
+                    </div>
+                )}
+                {hasOlder && !selectedDate && (
+                    <div className="journal-load-more">
+                        <Button variant="default" loading={loadingOlder} onClick={loadOlder}>
+                            Load older entries
+                        </Button>
                     </div>
                 )}
             </section>
