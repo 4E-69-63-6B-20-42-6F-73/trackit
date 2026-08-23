@@ -294,7 +294,7 @@ export default function App() {
                 add={addQuick}
                 selectedDate={['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null}
             />
-            <GlobalLogFab />
+            {page !== 'Connections' && <GlobalLogFab />}
             {lastAdded && (
                 <Notification
                     className="record-feedback"
