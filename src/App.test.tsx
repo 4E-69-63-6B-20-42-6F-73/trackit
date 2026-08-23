@@ -19,7 +19,8 @@ describe('App routing', () => {
         expect(
             await screen.findByRole('heading', { name: 'Journal' }, { timeout: 5_000 }),
         ).toBeInTheDocument()
-        expect(screen.getByText('4 entries')).toBeInTheDocument()
+        expect(screen.getByText('0 entries')).toBeInTheDocument()
+        expect(screen.getByText('Your journal is ready')).toBeInTheDocument()
     })
 
     it('renders a bookmarkable goals route', async () => {

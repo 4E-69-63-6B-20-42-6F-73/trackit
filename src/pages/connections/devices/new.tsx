@@ -263,11 +263,7 @@ export function DeviceNew() {
                                             3. Scan the code shown below
                                         </Text>
                                     </Stack>
-                                    <Button
-                                        variant="default"
-                                        size="sm"
-                                        onClick={handleShowNewCode}
-                                    >
+                                    <Button variant="default" size="sm" onClick={handleShowNewCode}>
                                         New code
                                     </Button>
                                 </Group>

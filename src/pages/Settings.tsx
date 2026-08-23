@@ -3,17 +3,26 @@ import {
     IconArrowLeft,
     IconChevronRight,
     IconDatabase,
+    IconDashboard,
     IconSettings,
     IconShieldLock,
     IconUser,
 } from '@tabler/icons-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { BackupPanel } from '../components/BackupPanel'
+import { ExperiencePanel } from '../components/ExperiencePanel'
 import { PreferencesPanel } from '../components/PreferencesPanel'
 import { PrivacyPanel } from '../components/PrivacyPanel'
 import { SecurityPanel } from '../components/SecurityPanel'
 
 const sections = [
+    {
+        slug: 'experience',
+        title: 'Dashboard & reminders',
+        description: 'Focus areas, routines and calm reminders',
+        icon: IconDashboard,
+        content: ExperiencePanel,
+    },
     {
         slug: 'profile',
         title: 'Profile & units',

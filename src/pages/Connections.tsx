@@ -20,8 +20,13 @@ export function Connections() {
     const [exportError, setExportError] = useState('')
     const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
     const [healthStatus, setHealthStatus] = useState<
-        'Configured' | 'Connected' | 'Setup required' | 'Unavailable'
-    >('Setup required')
+        | 'Configured'
+        | 'Connected'
+        | 'Setup required'
+        | 'Not configured'
+        | 'Sync delayed'
+        | 'Unavailable'
+    >('Not configured')
     const [deviceCount, setDeviceCount] = useState(0)
     const refreshHealthStatus = useCallback(() => {
         void listDevices()
@@ -31,13 +36,22 @@ export function Connections() {
                     d => d.status === 'confirmed' && d.configuredAt !== null,
                 )
                 if (activeDevices.length > 0) {
-                    setHealthStatus('Connected')
+                    const latest = Math.max(
+                        ...activeDevices.map(device =>
+                            device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0,
+                        ),
+                    )
+                    setHealthStatus(
+                        latest > 0 && Date.now() - latest > 24 * 60 * 60 * 1000
+                            ? 'Sync delayed'
+                            : 'Connected',
+                    )
                 } else if (configuredDevices.length > 0) {
                     setHealthStatus('Configured')
                 } else if (devices.some(d => d.status === 'pending')) {
                     setHealthStatus('Setup required')
                 } else {
-                    setHealthStatus('Unavailable')
+                    setHealthStatus('Not configured')
                 }
                 setDeviceCount(devices.length)
             })
@@ -103,9 +117,11 @@ export function Connections() {
                                         color={
                                             status === 'Connected'
                                                 ? 'trackit'
-                                                : status === 'Configured'
-                                                  ? 'green'
-                                                  : 'dark'
+                                                : status === 'Sync delayed'
+                                                  ? 'orange'
+                                                  : status === 'Configured'
+                                                    ? 'green'
+                                                    : 'dark'
                                         }
                                     >
                                         {status}
@@ -132,7 +148,9 @@ export function Connections() {
                                               ? 'View devices'
                                               : healthStatus === 'Unavailable'
                                                 ? 'Review Health Connect'
-                                                : 'Connect device'
+                                                : healthStatus === 'Sync delayed'
+                                                  ? 'Review delayed sync'
+                                                  : 'Connect device'
                                         : 'Manage data'}
                                 </Button>
                                 <IconChevronRight size={18} />

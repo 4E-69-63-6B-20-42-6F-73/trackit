@@ -1,10 +1,9 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Box, Button, Center, Loader, Notification } from '@mantine/core'
-import { IconCircleCheck, IconSettings } from '@tabler/icons-react'
+import { IconCircleCheck, IconPlus } from '@tabler/icons-react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from './components/Header'
-import { MigrationPrompt } from './components/MigrationPrompt'
-import { QuickAdd, type QuickAddKind } from './components/QuickAdd'
+import type { QuickAddKind } from './components/QuickAdd'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
 import { nav } from './domain/data'
@@ -31,6 +30,18 @@ const DeviceNew = lazy(() =>
 const Settings = lazy(() =>
     import('./pages/Settings').then(module => ({ default: module.Settings })),
 )
+const MobileMore = lazy(() =>
+    import('./components/MobileMore').then(module => ({ default: module.MobileMore })),
+)
+const QuickAdd = lazy(() =>
+    import('./components/QuickAdd').then(module => ({ default: module.QuickAdd })),
+)
+const Onboarding = lazy(() =>
+    import('./components/Onboarding').then(module => ({ default: module.Onboarding })),
+)
+const ReminderPrompt = lazy(() =>
+    import('./components/ReminderPrompt').then(module => ({ default: module.ReminderPrompt })),
+)
 
 const pagePaths: Record<Page, string> = {
     Today: '/today',
@@ -56,19 +67,10 @@ export default function App() {
           : (pathPages[location.pathname] ?? 'Today')
     const [quick, setQuick] = useState<QuickAddKind | null>(null)
     const [collapsed, setCollapsed] = useState(false)
+    const [moreOpen, setMoreOpen] = useState(false)
     const [insight, setInsight] = useState(true)
     const [observationRetry, setObservationRetry] = useState<JournalEvent | null>(null)
-    const {
-        events,
-        migrationPending,
-        dismissMigration,
-        migrate,
-        add,
-        remove,
-        update,
-        syncFailure,
-        retry,
-    } = useJournal()
+    const { events, add, remove, update, syncFailure, retry } = useJournal()
     const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
@@ -184,8 +186,9 @@ export default function App() {
                 </main>
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
-                {[...nav, { label: 'Settings' as const, icon: IconSettings }].map(
-                    ({ label, icon: Icon }) => (
+                {nav
+                    .filter(({ label }) => ['Today', 'Journal'].includes(label))
+                    .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
                             aria-current={page === label ? 'page' : undefined}
@@ -195,22 +198,68 @@ export default function App() {
                             <Icon size={21} />
                             <span>{label}</span>
                         </NavLink>
-                    ),
-                )}
+                    ))}
+                <button
+                    className="mobile-add"
+                    type="button"
+                    onClick={() => setQuick('Meal')}
+                    aria-label="Add a health record"
+                >
+                    <span>
+                        <IconPlus size={22} />
+                    </span>
+                    Add
+                </button>
+                {nav
+                    .filter(({ label }) => label === 'Trends')
+                    .map(({ label, icon: Icon }) => (
+                        <NavLink
+                            className={page === label ? 'active' : ''}
+                            aria-current={page === label ? 'page' : undefined}
+                            to={pagePaths[label]}
+                            key={label}
+                        >
+                            <Icon size={21} />
+                            <span>{label}</span>
+                        </NavLink>
+                    ))}
+                <button
+                    className={
+                        ['Nutrition', 'Goals', 'Connections', 'Settings'].includes(page)
+                            ? 'active'
+                            : ''
+                    }
+                    type="button"
+                    onClick={() => setMoreOpen(true)}
+                    aria-label="Open more pages"
+                >
+                    <span className="more-symbol" aria-hidden="true">
+                        •••
+                    </span>
+                    <span>More</span>
+                </button>
             </nav>
-            <QuickAdd
-                key={quick ?? 'closed'}
-                opened={quick !== null}
-                close={() => setQuick(null)}
-                add={addQuick}
-                initialKind={quick ?? undefined}
-            />
-            <MigrationPrompt
-                opened={migrationPending}
-                count={events.length}
-                migrate={migrate}
-                close={dismissMigration}
-            />
+            <Suspense fallback={null}>
+                <Onboarding />
+                <ReminderPrompt open={setQuick} />
+            </Suspense>
+            {moreOpen && (
+                <Suspense fallback={null}>
+                    <MobileMore page={page} close={() => setMoreOpen(false)} />
+                </Suspense>
+            )}
+            {quick !== null && (
+                <Suspense fallback={null}>
+                    <QuickAdd
+                        key={quick}
+                        opened
+                        close={() => setQuick(null)}
+                        add={addQuick}
+                        initialKind={quick}
+                        recentEvents={events.filter(event => event.source === 'You')}
+                    />
+                </Suspense>
+            )}
             {lastAdded && (
                 <Notification
                     className="record-feedback"

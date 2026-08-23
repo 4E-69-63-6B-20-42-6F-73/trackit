@@ -24,6 +24,7 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     title: entry.title,
     detail: entry.detail,
     source: entry.source,
+    observedAt: entry.observedAt,
     time: new Date(entry.observedAt).toLocaleTimeString([], {
         hour: '2-digit',
         minute: '2-digit',
@@ -31,8 +32,8 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     version: entry.version,
 })
 
-const observedAt = (time: string) => {
-    const date = new Date()
+const observedAt = (time: string, existing?: string) => {
+    const date = existing ? new Date(existing) : new Date()
     const [hours, minutes] = time.split(':').map(Number)
     date.setHours(hours, minutes, 0, 0)
     return date.toISOString()
@@ -52,7 +53,7 @@ export async function updateJournal(
         body: JSON.stringify({
             title: changes.title,
             detail: changes.detail,
-            observedAt: observedAt(changes.time),
+            observedAt: observedAt(changes.time, event.observedAt),
             version: event.version ?? 1,
         }),
     })
@@ -76,7 +77,7 @@ export async function createJournal(event: JournalEvent): Promise<JournalEvent> 
             'content-type': 'application/json',
             'x-csrf-token': csrfToken() ?? '',
         },
-        body: JSON.stringify({ ...event, observedAt: observedAt(event.time) }),
+        body: JSON.stringify({ ...event, observedAt: observedAt(event.time, event.observedAt) }),
     })
     if (!response.ok) throw new Error(`Journal create failed (${response.status})`)
     const body = (await response.json()) as { data: ApiJournalEntry }

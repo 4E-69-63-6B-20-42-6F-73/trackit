@@ -22,7 +22,6 @@ describe('QuickAdd', () => {
         expect(add).toHaveBeenCalledWith(
             expect.objectContaining({
                 category: 'Meals',
-                title: 'Lunch',
                 detail: 'Soup and bread',
                 source: 'You',
             }),

@@ -4,7 +4,7 @@ import { listGoals, type GoalRecord } from '../lib/goalApi'
 import { listObservations } from '../lib/observationApi'
 import { getPreferences, type Preferences } from '../lib/preferencesApi'
 
-export function useTodayHealth() {
+export function useTodayHealth(selectedDate: Date = new Date()) {
     const [observations, setObservations] = useState<Observation[]>([])
     const [goals, setGoals] = useState<GoalRecord[]>([])
     const [loading, setLoading] = useState(true)
@@ -14,7 +14,7 @@ export function useTodayHealth() {
     useEffect(() => {
         let active = true
         const load = () => {
-            const from = new Date()
+            const from = new Date(selectedDate)
             from.setDate(from.getDate() - 30)
             void Promise.all([
                 listObservations({ from: from.toISOString() }),
@@ -33,14 +33,16 @@ export function useTodayHealth() {
         }
         load()
         window.addEventListener('trackit:observations-changed', load)
+        window.addEventListener('trackit:preferences-changed', load)
         return () => {
             active = false
             window.removeEventListener('trackit:observations-changed', load)
+            window.removeEventListener('trackit:preferences-changed', load)
         }
-    }, [])
+    }, [selectedDate])
 
     return useMemo(() => {
-        const now = new Date()
+        const now = selectedDate
         const timezone = preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
         const dayFormatter = new Intl.DateTimeFormat('en-CA', {
             timeZone: timezone,
@@ -114,5 +116,5 @@ export function useTodayHealth() {
             waterGoal: activeGoal('water'),
             preferences,
         }
-    }, [goals, loading, observations, preferences, unavailable])
+    }, [goals, loading, observations, preferences, selectedDate, unavailable])
 }

@@ -1,4 +1,15 @@
-import { Alert, Button, Menu, SegmentedControl, Select, Text } from '@mantine/core'
+import {
+    Alert,
+    Badge,
+    Button,
+    Group,
+    Menu,
+    Modal,
+    SegmentedControl,
+    Select,
+    Text,
+    TextInput,
+} from '@mantine/core'
 import {
     IconAdjustments,
     IconChartLine,
@@ -21,7 +32,7 @@ import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
 import type { Nutrients } from '../domain/nutrition'
 import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
-import { getPreferences, type Preferences } from '../lib/preferencesApi'
+import { getPreferences, updatePreferences, type Preferences } from '../lib/preferencesApi'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
 
 const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
@@ -59,6 +70,8 @@ export function Trends() {
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
     const [preferences, setPreferences] = useState<Preferences | null>(null)
     const [actionError, setActionError] = useState('')
+    const [experimentOpen, setExperimentOpen] = useState(false)
+    const [experimentQuestion, setExperimentQuestion] = useState('')
 
     useEffect(() => {
         const from = new Date()
@@ -191,6 +204,13 @@ export function Trends() {
         ? Math.max(...coveredValues) - Math.min(...coveredValues)
         : null
     const pageLoading = loading || mealsLoading
+    const coverageRatio = points.length ? coveredValues.length / points.length : 0
+    const confidence =
+        coverageRatio >= 0.75
+            ? 'High coverage'
+            : coverageRatio >= 0.4
+              ? 'Partial coverage'
+              : 'Low coverage'
 
     const toggleExcluded = async (observation: Observation) => {
         try {
@@ -260,6 +280,64 @@ export function Trends() {
                             meals remain available.
                         </Alert>
                     )}
+                    <div className="trend-questions" aria-label="Questions to explore">
+                        <div>
+                            <Text fw={700}>What would you like to understand?</Text>
+                            <Text size="sm" c="dimmed">
+                                Start with a question, then refine the chart if you need more
+                                detail.
+                            </Text>
+                        </div>
+                        <div className="trend-question-actions">
+                            {[
+                                { label: 'How has my sleep changed?', primary: 'sleep' },
+                                { label: 'How active have I been?', primary: 'steps' },
+                                {
+                                    label: 'Compare sleep and energy',
+                                    primary: 'sleep',
+                                    secondary: 'energy',
+                                },
+                                { label: 'How is my nutrition changing?', primary: 'protein' },
+                            ].map(question => (
+                                <Button
+                                    key={question.label}
+                                    size="compact-sm"
+                                    variant="default"
+                                    onClick={() => {
+                                        setMetric(question.primary)
+                                        setComparisonMetric(question.secondary ?? null)
+                                        setShowCompare(Boolean(question.secondary))
+                                        setInspectedIds(null)
+                                    }}
+                                >
+                                    {question.label}
+                                </Button>
+                            ))}
+                            <Button
+                                size="compact-sm"
+                                variant="light"
+                                onClick={() => setExperimentOpen(true)}
+                            >
+                                Start a personal experiment
+                            </Button>
+                        </div>
+                        {(preferences?.experience?.experiments ?? [])
+                            .filter(item => item.status === 'active')
+                            .map(experiment => (
+                                <button
+                                    className="experiment-link"
+                                    key={experiment.id}
+                                    onClick={() => {
+                                        setMetric(experiment.primaryMetric)
+                                        setComparisonMetric(experiment.comparisonMetric ?? null)
+                                        setShowCompare(Boolean(experiment.comparisonMetric))
+                                    }}
+                                >
+                                    <span>Active experiment</span>
+                                    <strong>{experiment.question}</strong>
+                                </button>
+                            ))}
+                    </div>
                     <div className="trend-primary-controls">
                         <Select
                             label="Metric"
@@ -390,8 +468,28 @@ export function Trends() {
                                     {coveredValues.length}{' '}
                                     {granularity === 'weekly' ? 'weeks' : 'days'}
                                 </Text>
+                                <Badge
+                                    mt={4}
+                                    size="xs"
+                                    color={
+                                        coverageRatio >= 0.75
+                                            ? 'teal'
+                                            : coverageRatio >= 0.4
+                                              ? 'yellow'
+                                              : 'gray'
+                                    }
+                                >
+                                    {confidence}
+                                </Badge>
                             </div>
                         </div>
+                    )}
+                    {average !== null && (
+                        <Text size="sm" c="dimmed" className="trend-confidence-note">
+                            Based on {coveredValues.length} of {points.length} expected{' '}
+                            {granularity === 'weekly' ? 'weeks' : 'days'}. Missing periods are shown
+                            rather than estimated. Inspect the chart to review underlying records.
+                        </Text>
                     )}
                     {!pageLoading && coveredValues.length === 0 ? (
                         <div className="trend-metric-empty">
@@ -483,6 +581,63 @@ export function Trends() {
                         onToggleExcluded={observation => void toggleExcluded(observation)}
                         showAll={Boolean(inspectedIds)}
                     />
+                    <Modal
+                        opened={experimentOpen}
+                        onClose={() => setExperimentOpen(false)}
+                        title="Start a personal experiment"
+                        centered
+                    >
+                        <Text size="sm" c="dimmed" mb="md">
+                            Track a question over time without treating an association as medical
+                            advice or proof of cause.
+                        </Text>
+                        <TextInput
+                            label="Question"
+                            value={experimentQuestion}
+                            onChange={event => setExperimentQuestion(event.currentTarget.value)}
+                            placeholder="For example, do I report more energy after longer sleep?"
+                        />
+                        <Group justify="flex-end" mt="lg">
+                            <Button variant="default" onClick={() => setExperimentOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                disabled={!experimentQuestion.trim() || !metric}
+                                onClick={async () => {
+                                    if (!preferences || !metric) return
+                                    const experience = preferences.experience ?? {}
+                                    try {
+                                        const saved = await updatePreferences({
+                                            experience: {
+                                                ...experience,
+                                                experiments: [
+                                                    ...(experience.experiments ?? []),
+                                                    {
+                                                        id: crypto.randomUUID(),
+                                                        question: experimentQuestion.trim(),
+                                                        primaryMetric: metric,
+                                                        comparisonMetric:
+                                                            comparisonMetric ?? undefined,
+                                                        startedAt: new Date().toISOString(),
+                                                        status: 'active',
+                                                    },
+                                                ],
+                                            },
+                                        })
+                                        setPreferences(saved)
+                                        setExperimentQuestion('')
+                                        setExperimentOpen(false)
+                                    } catch {
+                                        setActionError(
+                                            'The experiment could not be saved to your server.',
+                                        )
+                                    }
+                                }}
+                            >
+                                Start experiment
+                            </Button>
+                        </Group>
+                    </Modal>
                 </section>
             )}
         </div>

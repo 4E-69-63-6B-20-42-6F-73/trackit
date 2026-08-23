@@ -5,6 +5,40 @@ export type Preferences = {
     timezone: string
     locale: string
     units: 'metric' | 'imperial'
+    experience?: ExperiencePreferences
+}
+
+export type FocusArea = 'energy' | 'nutrition' | 'sleep' | 'movement' | 'body' | 'collect'
+export type DashboardCard =
+    'sleep' | 'heart' | 'energy' | 'weight' | 'progress' | 'trend' | 'journal'
+export type ExperiencePreferences = {
+    onboardingStep?: number
+    onboardingComplete?: boolean
+    dataMode?: 'manual' | 'health-connect' | 'hybrid'
+    focusAreas?: FocusArea[]
+    visibleCards?: DashboardCard[]
+    reminders?: Array<{
+        id: string
+        label: string
+        kind: 'Meal' | 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
+        time: string
+        enabled: boolean
+    }>
+    routines?: Array<{
+        id: string
+        name: string
+        kinds: Array<'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'>
+    }>
+    experiments?: Array<{
+        id: string
+        question: string
+        primaryMetric: string
+        comparisonMetric?: string
+        startedAt: string
+        endedAt?: string
+        status: 'active' | 'completed'
+    }>
+    dismissedWeeklyReflection?: string
 }
 
 export async function getPreferences(): Promise<Preferences> {
@@ -13,7 +47,7 @@ export async function getPreferences(): Promise<Preferences> {
     return ((await response.json()) as { data: Preferences }).data
 }
 
-export async function updatePreferences(input: Preferences): Promise<Preferences> {
+export async function updatePreferences(input: Partial<Preferences>): Promise<Preferences> {
     const response = await authRequest('/api/preferences', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },

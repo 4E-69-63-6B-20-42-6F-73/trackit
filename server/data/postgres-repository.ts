@@ -194,6 +194,7 @@ export class PostgresDataRepository implements DataRepository {
         units?: 'metric' | 'imperial'
         goals?: Record<string, number>
         mcpEnabled?: boolean
+        experience?: Record<string, unknown>
     }) {
         const current = await this.getPreferences()
         const [record] = await this.database

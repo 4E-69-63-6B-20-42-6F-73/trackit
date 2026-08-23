@@ -10,6 +10,7 @@ export type JournalEvent = {
     title: string
     detail: string
     source: string
+    observedAt?: string
     version?: number
     observation?: {
         metric: string

@@ -163,6 +163,7 @@ export const preferences = pgTable('preferences', {
     units: text('units').notNull().default('metric'),
     goals: jsonb('goals').notNull().default({}),
     mcpEnabled: boolean('mcp_enabled').notNull().default(false),
+    experience: jsonb('experience').notNull().default({}),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 

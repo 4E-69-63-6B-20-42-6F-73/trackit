@@ -12,13 +12,17 @@ vi.mock('../lib/preferencesApi', () => ({
 
 describe('PreferencesPanel', () => {
     it('loads and persists owner preferences', async () => {
-        vi.mocked(getPreferences).mockResolvedValue({
+        const preferences = {
             displayName: 'Owner',
             timezone: 'UTC',
             locale: 'en',
-            units: 'metric',
-        })
-        vi.mocked(updatePreferences).mockImplementation(async value => value)
+            units: 'metric' as const,
+        }
+        vi.mocked(getPreferences).mockResolvedValue(preferences)
+        vi.mocked(updatePreferences).mockImplementation(async value => ({
+            ...preferences,
+            ...value,
+        }))
         render(
             <MantineProvider>
                 <PreferencesPanel />

@@ -47,6 +47,13 @@ const weekdays = [
     { value: '0', label: 'Sunday' },
 ]
 
+const goalTemplates = [
+    { label: 'Walk 8,000 steps', metric: 'steps', target: 8_000 },
+    { label: 'Drink 2 L water', metric: 'water', target: 2_000 },
+    { label: 'Sleep 8 hours', metric: 'sleep', target: 8 },
+    { label: 'Check in with energy', metric: 'energy', target: 7 },
+]
+
 function GoalCard({ goal, onRetire }: { goal: GoalRecord; onRetire: () => Promise<void> }) {
     const definition = metricDefinition(goal.metric)
     const active = !goal.effectiveTo || new Date(goal.effectiveTo) > new Date()
@@ -164,6 +171,32 @@ export function GoalsPanel() {
                 </div>
                 <form onSubmit={event => void save(event)}>
                     <Stack>
+                        <div>
+                            <Text size="sm" fw={650} mb={6}>
+                                Start with a common goal
+                            </Text>
+                            <Group gap="xs" className="goal-templates">
+                                {goalTemplates.map(template => (
+                                    <Button
+                                        key={template.metric}
+                                        type="button"
+                                        size="compact-sm"
+                                        variant={
+                                            metric === template.metric &&
+                                            Number(target) === template.target
+                                                ? 'light'
+                                                : 'default'
+                                        }
+                                        onClick={() => {
+                                            setMetric(template.metric)
+                                            setTarget(template.target)
+                                        }}
+                                    >
+                                        {template.label}
+                                    </Button>
+                                ))}
+                            </Group>
+                        </div>
                         <Select
                             label="Metric"
                             value={metric}

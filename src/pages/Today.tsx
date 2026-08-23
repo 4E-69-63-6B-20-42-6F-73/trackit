@@ -1,6 +1,19 @@
-import { ActionIcon, Alert, Badge, Button, Progress, Skeleton, Text } from '@mantine/core'
+import { useState } from 'react'
+import {
+    ActionIcon,
+    Badge,
+    Button,
+    Checkbox,
+    Group,
+    Modal,
+    Progress,
+    Skeleton,
+    Text,
+} from '@mantine/core'
 import {
     IconActivity,
+    IconAdjustments,
+    IconChevronLeft,
     IconChevronRight,
     IconDroplet,
     IconHeartRateMonitor,
@@ -22,11 +35,13 @@ import {
 } from 'recharts'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { MetricCard } from '../components/MetricCard'
+import { WeeklyReflection } from '../components/WeeklyReflection'
 import type { QuickAddKind } from '../components/QuickAdd'
 import { eventVisual } from '../domain/data'
 import { displayValue, type Observation } from '../domain/health'
 import type { JournalEvent } from '../domain/types'
 import { useTodayHealth } from '../hooks/useTodayHealth'
+import { updatePreferences, type DashboardCard } from '../lib/preferencesApi'
 
 const reading = (
     record: Observation | null,
@@ -70,8 +85,20 @@ export function Today({
     openGoals?: () => void
     quickAdd?: (kind: QuickAddKind) => void
 }) {
-    const health = useTodayHealth()
-    const now = new Date()
+    const [selectedDate, setSelectedDate] = useState(() => new Date())
+    const [customizing, setCustomizing] = useState(false)
+    const [savingCards, setSavingCards] = useState(false)
+    const health = useTodayHealth(selectedDate)
+    const now = selectedDate
+    const calendarToday = new Date()
+    const isToday = now.toDateString() === calendarToday.toDateString()
+    const changeDay = (offset: number) => {
+        setSelectedDate(current => {
+            const next = new Date(current)
+            next.setDate(next.getDate() + offset)
+            return next
+        })
+    }
     const locale = health.preferences?.locale
     const timezone = health.preferences?.timezone
     const localHour = Number(
@@ -84,6 +111,18 @@ export function Today({
     const stepsTarget = health.stepsGoal?.targetValue
     const waterTarget = health.waterGoal?.targetValue
     const sleepPointCount = health.sleepSeries.filter(point => point.sleep !== null).length
+    const defaultCards: DashboardCard[] = [
+        'sleep',
+        'heart',
+        'energy',
+        'weight',
+        'progress',
+        'trend',
+        'journal',
+    ]
+    const visibleCards = health.preferences?.experience?.visibleCards ?? defaultCards
+    const [draftCards, setDraftCards] = useState<DashboardCard[]>(visibleCards)
+    const visible = (card: DashboardCard) => visibleCards.includes(card)
     const missingCount = [
         health.sleepToday,
         health.restingHeartRate,
@@ -154,7 +193,9 @@ export function Today({
                         })}
                     </Text>
                     <h1>
-                        Good {localHour < 12 ? 'morning' : localHour < 18 ? 'afternoon' : 'evening'}
+                        {isToday
+                            ? `Good ${localHour < 12 ? 'morning' : localHour < 18 ? 'afternoon' : 'evening'}`
+                            : 'Daily review'}
                         {health.preferences?.displayName &&
                         health.preferences.displayName.toLowerCase() !== 'owner'
                             ? `, ${health.preferences.displayName}.`
@@ -162,16 +203,42 @@ export function Today({
                     </h1>
                     <Text className="subhead">{dailySummary}</Text>
                 </div>
+                <div className="day-navigation" aria-label="Choose day">
+                    <Button
+                        variant="subtle"
+                        color="gray"
+                        leftSection={<IconAdjustments size={16} />}
+                        onClick={() => {
+                            setDraftCards(visibleCards)
+                            setCustomizing(true)
+                        }}
+                    >
+                        Customize
+                    </Button>
+                    <ActionIcon
+                        variant="default"
+                        size="lg"
+                        aria-label="Previous day"
+                        onClick={() => changeDay(-1)}
+                    >
+                        <IconChevronLeft size={18} />
+                    </ActionIcon>
+                    {!isToday && (
+                        <Button variant="default" onClick={() => setSelectedDate(new Date())}>
+                            Today
+                        </Button>
+                    )}
+                    <ActionIcon
+                        variant="default"
+                        size="lg"
+                        aria-label="Next day"
+                        disabled={isToday}
+                        onClick={() => changeDay(1)}
+                    >
+                        <IconChevronRight size={18} />
+                    </ActionIcon>
+                </div>
             </section>
-            {health.unavailable && (
-                <Alert
-                    color="orange"
-                    title="Health data is unavailable"
-                    styles={{ title: { color: '#7a2e0b' } }}
-                >
-                    TrackIt could not load your observations. No representative values are shown.
-                </Alert>
-            )}
             {!health.loading && (
                 <section className="next-action" aria-labelledby="next-action-title">
                     <div className="next-action-icon">
@@ -185,6 +252,16 @@ export function Today({
                     <Button color="trackit" onClick={nextAction.run} disabled={!nextAction.run}>
                         {nextAction.label}
                     </Button>
+                    {health.unavailable && quickAdd && (
+                        <Button
+                            className="manual-use-action"
+                            variant="subtle"
+                            color="gray"
+                            onClick={() => quickAdd('Check-in')}
+                        >
+                            Add a manual check-in instead
+                        </Button>
+                    )}
                 </section>
             )}
             {insight && health.sleepBaseline && (
@@ -231,255 +308,336 @@ export function Today({
                 />
             ) : (
                 <section className="metric-grid">
-                    <MetricCard
-                        icon={IconMoon}
-                        tone="indigo"
-                        label="Sleep"
-                        value={sleepReading(health.sleepToday)}
-                        note={
-                            health.sleepToday ? 'Latest recorded sleep' : 'No sleep imported today'
-                        }
-                        action={
-                            health.sleepToday
-                                ? undefined
-                                : {
-                                      label: 'Connect sleep data',
-                                      onClick: openConnections ?? (() => {}),
-                                  }
-                        }
-                    />
-                    <MetricCard
-                        icon={IconHeartRateMonitor}
-                        tone="rose"
-                        label="Resting heart rate"
-                        value={reading(health.restingHeartRate)}
-                        note={
-                            health.restingBaseline
-                                ? `${Math.abs(Math.round(health.restingBaseline.delta))} bpm ${health.restingBaseline.delta <= 0 ? 'below' : 'above'} baseline`
-                                : 'No baseline available'
-                        }
-                        action={
-                            health.restingHeartRate
-                                ? undefined
-                                : {
-                                      label: 'Connect heart data',
-                                      onClick: openConnections ?? (() => {}),
-                                  }
-                        }
-                    />
-                    <MetricCard
-                        icon={IconSparkles}
-                        tone="violet"
-                        label="Energy"
-                        value={reading(health.energy)}
-                        note="Latest check-in today"
-                        action={
-                            health.energy
-                                ? undefined
-                                : {
-                                      label: 'How’s your energy?',
-                                      onClick: () => quickAdd?.('Check-in'),
-                                  }
-                        }
-                    />
-                    <MetricCard
-                        icon={IconScale}
-                        tone="blue"
-                        label="Weight"
-                        value={reading(health.weight, health.preferences?.units)}
-                        note="Latest reading today"
-                        action={
-                            health.weight
-                                ? undefined
-                                : { label: 'Add weight', onClick: () => quickAdd?.('Weight') }
-                        }
-                    />
+                    {visible('sleep') && (
+                        <MetricCard
+                            icon={IconMoon}
+                            tone="indigo"
+                            label="Sleep"
+                            value={sleepReading(health.sleepToday)}
+                            note={
+                                health.sleepToday
+                                    ? 'Latest recorded sleep'
+                                    : 'No sleep imported today'
+                            }
+                            action={
+                                health.sleepToday
+                                    ? undefined
+                                    : {
+                                          label: 'Connect sleep data',
+                                          onClick: openConnections ?? (() => {}),
+                                      }
+                            }
+                        />
+                    )}
+                    {visible('heart') && (
+                        <MetricCard
+                            icon={IconHeartRateMonitor}
+                            tone="rose"
+                            label="Resting heart rate"
+                            value={reading(health.restingHeartRate)}
+                            note={
+                                health.restingBaseline
+                                    ? `${Math.abs(Math.round(health.restingBaseline.delta))} bpm ${health.restingBaseline.delta <= 0 ? 'below' : 'above'} baseline`
+                                    : 'No baseline available'
+                            }
+                            action={
+                                health.restingHeartRate
+                                    ? undefined
+                                    : {
+                                          label: 'Connect heart data',
+                                          onClick: openConnections ?? (() => {}),
+                                      }
+                            }
+                        />
+                    )}
+                    {visible('energy') && (
+                        <MetricCard
+                            icon={IconSparkles}
+                            tone="violet"
+                            label="Energy"
+                            value={reading(health.energy)}
+                            note="Latest check-in today"
+                            action={
+                                health.energy
+                                    ? undefined
+                                    : {
+                                          label: 'How’s your energy?',
+                                          onClick: () => quickAdd?.('Check-in'),
+                                      }
+                            }
+                        />
+                    )}
+                    {visible('weight') && (
+                        <MetricCard
+                            icon={IconScale}
+                            tone="blue"
+                            label="Weight"
+                            value={reading(health.weight, health.preferences?.units)}
+                            note="Latest reading today"
+                            action={
+                                health.weight
+                                    ? undefined
+                                    : { label: 'Add weight', onClick: () => quickAdd?.('Weight') }
+                            }
+                        />
+                    )}
                 </section>
             )}
             <section className="dashboard-grid">
-                <article className="panel movement">
-                    <div className="panel-head">
-                        <div>
-                            <h2>Today’s progress</h2>
-                            <Text size="xs" c="dimmed">
-                                Daily totals against your optional goals
-                            </Text>
-                        </div>
-                        <Button
-                            onClick={openTrends}
-                            variant="subtle"
-                            color="gray"
-                            size="xs"
-                            rightSection={<IconChevronRight size={14} />}
-                        >
-                            View trends
-                        </Button>
-                    </div>
-                    <div className="progress-row">
-                        <div className="progress-label">
-                            <span>
-                                <IconActivity size={18} />
-                                Steps
-                            </span>
-                            <strong>
-                                {health.steps.toLocaleString()}
-                                <small>
-                                    {stepsTarget
-                                        ? `of ${stepsTarget.toLocaleString()}`
-                                        : 'no goal set'}
-                                </small>
-                            </strong>
-                        </div>
-                        {stepsTarget ? (
-                            <Progress
-                                value={percentage(health.steps, stepsTarget)}
-                                color="trackit"
-                                radius="xl"
-                                size="sm"
-                                aria-label="Daily steps progress"
-                            />
-                        ) : (
+                {visible('progress') && (
+                    <article className="panel movement">
+                        <div className="panel-head">
+                            <div>
+                                <h2>Today’s progress</h2>
+                                <Text size="xs" c="dimmed">
+                                    Daily totals against your optional goals
+                                </Text>
+                            </div>
                             <Button
+                                onClick={openTrends}
                                 variant="subtle"
-                                color="trackit"
-                                size="compact-sm"
-                                onClick={openGoals}
-                            >
-                                Set a steps goal
-                            </Button>
-                        )}
-                    </div>
-                    <div className="progress-row">
-                        <div className="progress-label">
-                            <span>
-                                <IconDroplet size={18} />
-                                Water
-                            </span>
-                            <strong>
-                                {health.water.toLocaleString()} ml
-                                <small>
-                                    {waterTarget
-                                        ? `of ${waterTarget.toLocaleString()} ${health.waterGoal?.canonicalUnit ?? ''}`
-                                        : 'no goal set'}
-                                </small>
-                            </strong>
-                        </div>
-                        {waterTarget ? (
-                            <Progress
-                                value={percentage(health.water, waterTarget)}
-                                color="cyan"
-                                radius="xl"
-                                size="sm"
-                                aria-label="Daily water progress"
-                            />
-                        ) : (
-                            <Button
-                                variant="subtle"
-                                color="trackit"
-                                size="compact-sm"
-                                onClick={openGoals}
-                            >
-                                Set a water goal
-                            </Button>
-                        )}
-                    </div>
-                    <DailyNutritionPanel openGoals={openGoals} />
-                </article>
-                <article className="panel mini-chart">
-                    <div className="panel-head">
-                        <div>
-                            <Text className="eyebrow">PAST 7 DAYS</Text>
-                            <h2>Sleep duration</h2>
-                        </div>
-                        {health.sleepBaseline && (
-                            <Badge variant="light" color="trackit">
-                                {health.sleepBaseline.delta >= 0 ? '+' : ''}
-                                {health.sleepToday?.canonicalUnit === 'hours'
-                                    ? `${Math.round(health.sleepBaseline.delta * 60)}m`
-                                    : `${Math.round(health.sleepBaseline.delta)}m`}
-                            </Badge>
-                        )}
-                    </div>
-                    {sleepPointCount >= 2 ? (
-                        <ResponsiveContainer width="100%" height={155}>
-                            <AreaChart
-                                data={health.sleepSeries}
-                                margin={{ top: 12, right: 5, left: -30, bottom: 0 }}
-                            >
-                                <CartesianGrid vertical={false} stroke="#ebe9e1" />
-                                <XAxis dataKey="day" axisLine={false} tickLine={false} />
-                                <YAxis axisLine={false} tickLine={false} />
-                                <Tooltip />
-                                <Area
-                                    type="monotone"
-                                    dataKey="sleep"
-                                    connectNulls={false}
-                                    stroke="#38645e"
-                                    fill="#486f6947"
-                                />
-                            </AreaChart>
-                        </ResponsiveContainer>
-                    ) : (
-                        <div className="chart-empty">
-                            <IconMoon size={24} />
-                            <Text fw={650}>
-                                {sleepPointCount === 1
-                                    ? 'One night recorded'
-                                    : 'No sleep trend yet'}
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                                {sleepPointCount === 1
-                                    ? 'Add one more night to begin comparing sleep.'
-                                    : 'Import sleep on at least two days to see a trend.'}
-                            </Text>
-                            <Button
-                                variant="light"
-                                color="trackit"
+                                color="gray"
                                 size="xs"
-                                onClick={openConnections}
+                                rightSection={<IconChevronRight size={14} />}
                             >
-                                Connect sleep data
+                                View trends
                             </Button>
                         </div>
-                    )}
-                </article>
-            </section>
-            <section className="panel timeline">
-                <div className="panel-head">
-                    <div>
-                        <Text className="eyebrow">JOURNAL</Text>
-                        <h2>Your timeline</h2>
-                    </div>
-                    <Button onClick={openJournal} variant="subtle" color="teal" size="xs">
-                        View all
-                    </Button>
-                </div>
-                {events.slice(0, 3).map(event => {
-                    const { icon: Icon, tone } = eventVisual(event.category)
-                    return (
-                        <div className="event" key={event.id}>
-                            <time>{event.time}</time>
-                            <div className={`event-icon ${tone}`}>
-                                <Icon size={17} />
+                        <div className="progress-row">
+                            <div className="progress-label">
+                                <span>
+                                    <IconActivity size={18} />
+                                    Steps
+                                </span>
+                                <strong>
+                                    {health.steps.toLocaleString()}
+                                    <small>
+                                        {stepsTarget
+                                            ? `of ${stepsTarget.toLocaleString()}`
+                                            : 'no goal set'}
+                                    </small>
+                                </strong>
                             </div>
-                            <div className="event-copy">
-                                <Text fw={600} size="sm">
-                                    {event.title}
-                                </Text>
-                                <Text size="sm" c="dimmed">
-                                    {event.detail}
-                                </Text>
+                            {stepsTarget ? (
+                                <Progress
+                                    value={percentage(health.steps, stepsTarget)}
+                                    color="trackit"
+                                    radius="xl"
+                                    size="sm"
+                                    aria-label="Daily steps progress"
+                                />
+                            ) : (
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    size="compact-sm"
+                                    onClick={openGoals}
+                                >
+                                    Set a steps goal
+                                </Button>
+                            )}
+                        </div>
+                        <div className="progress-row">
+                            <div className="progress-label">
+                                <span>
+                                    <IconDroplet size={18} />
+                                    Water
+                                </span>
+                                <strong>
+                                    {health.water.toLocaleString()} ml
+                                    <small>
+                                        {waterTarget
+                                            ? `of ${waterTarget.toLocaleString()} ${health.waterGoal?.canonicalUnit ?? ''}`
+                                            : 'no goal set'}
+                                    </small>
+                                </strong>
                             </div>
-                            {event.source !== 'You' && (
-                                <Badge variant="light" color="gray" fw={500}>
-                                    {event.source}
+                            {waterTarget ? (
+                                <Progress
+                                    value={percentage(health.water, waterTarget)}
+                                    color="cyan"
+                                    radius="xl"
+                                    size="sm"
+                                    aria-label="Daily water progress"
+                                />
+                            ) : (
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    size="compact-sm"
+                                    onClick={openGoals}
+                                >
+                                    Set a water goal
+                                </Button>
+                            )}
+                        </div>
+                        <DailyNutritionPanel openGoals={openGoals} />
+                    </article>
+                )}
+                {visible('trend') && (
+                    <article className="panel mini-chart">
+                        <div className="panel-head">
+                            <div>
+                                <Text className="eyebrow">PAST 7 DAYS</Text>
+                                <h2>Sleep duration</h2>
+                            </div>
+                            {health.sleepBaseline && (
+                                <Badge variant="light" color="trackit">
+                                    {health.sleepBaseline.delta >= 0 ? '+' : ''}
+                                    {health.sleepToday?.canonicalUnit === 'hours'
+                                        ? `${Math.round(health.sleepBaseline.delta * 60)}m`
+                                        : `${Math.round(health.sleepBaseline.delta)}m`}
                                 </Badge>
                             )}
-                            <IconChevronRight size={17} color="#a3a49e" />
                         </div>
-                    )
-                })}
+                        {sleepPointCount >= 2 ? (
+                            <ResponsiveContainer width="100%" height={155}>
+                                <AreaChart
+                                    data={health.sleepSeries}
+                                    margin={{ top: 12, right: 5, left: -30, bottom: 0 }}
+                                >
+                                    <CartesianGrid vertical={false} stroke="#ebe9e1" />
+                                    <XAxis dataKey="day" axisLine={false} tickLine={false} />
+                                    <YAxis axisLine={false} tickLine={false} />
+                                    <Tooltip />
+                                    <Area
+                                        type="monotone"
+                                        dataKey="sleep"
+                                        connectNulls={false}
+                                        stroke="#38645e"
+                                        fill="#486f6947"
+                                    />
+                                </AreaChart>
+                            </ResponsiveContainer>
+                        ) : (
+                            <div className="chart-empty">
+                                <IconMoon size={24} />
+                                <Text fw={650}>
+                                    {sleepPointCount === 1
+                                        ? 'One night recorded'
+                                        : 'No sleep trend yet'}
+                                </Text>
+                                <Text size="sm" c="dimmed">
+                                    {sleepPointCount === 1
+                                        ? 'Add one more night to begin comparing sleep.'
+                                        : 'Import sleep on at least two days to see a trend.'}
+                                </Text>
+                                <Button
+                                    variant="light"
+                                    color="trackit"
+                                    size="xs"
+                                    onClick={openConnections}
+                                >
+                                    Connect sleep data
+                                </Button>
+                            </div>
+                        )}
+                    </article>
+                )}
             </section>
+            {isToday && <WeeklyReflection events={events} openJournal={openJournal} />}
+            {visible('journal') && (
+                <section className="panel timeline">
+                    <div className="panel-head">
+                        <div>
+                            <Text className="eyebrow">JOURNAL</Text>
+                            <h2>Your timeline</h2>
+                        </div>
+                        <Button onClick={openJournal} variant="subtle" color="teal" size="xs">
+                            View all
+                        </Button>
+                    </div>
+                    {events.slice(0, 3).map(event => {
+                        const { icon: Icon, tone } = eventVisual(event.category)
+                        return (
+                            <div className="event" key={event.id}>
+                                <time>{event.time}</time>
+                                <div className={`event-icon ${tone}`}>
+                                    <Icon size={17} />
+                                </div>
+                                <div className="event-copy">
+                                    <Text fw={600} size="sm">
+                                        {event.title}
+                                    </Text>
+                                    <Text size="sm" c="dimmed">
+                                        {event.detail}
+                                    </Text>
+                                </div>
+                                {event.source !== 'You' && (
+                                    <Badge variant="light" color="gray" fw={500}>
+                                        {event.source}
+                                    </Badge>
+                                )}
+                                <IconChevronRight size={17} color="#a3a49e" />
+                            </div>
+                        )
+                    })}
+                </section>
+            )}
+            <Modal
+                opened={customizing}
+                onClose={() => setCustomizing(false)}
+                title="Customize Today"
+                centered
+            >
+                <Text size="sm" c="dimmed" mb="md">
+                    Choose what deserves space on your dashboard. Your selection is saved on your
+                    TrackIt server.
+                </Text>
+                <div className="dashboard-card-options">
+                    {(
+                        [
+                            ['sleep', 'Sleep'],
+                            ['heart', 'Resting heart rate'],
+                            ['energy', 'Energy'],
+                            ['weight', 'Weight'],
+                            ['progress', 'Daily progress'],
+                            ['trend', 'Sleep trend'],
+                            ['journal', 'Recent journal'],
+                        ] as Array<[DashboardCard, string]>
+                    ).map(([value, label]) => (
+                        <Checkbox
+                            key={value}
+                            label={label}
+                            checked={draftCards.includes(value)}
+                            onChange={event =>
+                                setDraftCards(current =>
+                                    event.currentTarget.checked
+                                        ? [...current, value]
+                                        : current.filter(card => card !== value),
+                                )
+                            }
+                        />
+                    ))}
+                </div>
+                <Group justify="flex-end" mt="lg">
+                    <Button variant="default" onClick={() => setCustomizing(false)}>
+                        Cancel
+                    </Button>
+                    <Button
+                        loading={savingCards}
+                        disabled={draftCards.length === 0}
+                        onClick={async () => {
+                            if (!health.preferences) return
+                            setSavingCards(true)
+                            try {
+                                await updatePreferences({
+                                    experience: {
+                                        ...health.preferences.experience,
+                                        visibleCards: draftCards,
+                                    },
+                                })
+                                window.dispatchEvent(new Event('trackit:preferences-changed'))
+                                setCustomizing(false)
+                            } finally {
+                                setSavingCards(false)
+                            }
+                        }}
+                    >
+                        Save dashboard
+                    </Button>
+                </Group>
+            </Modal>
         </div>
     )
 }

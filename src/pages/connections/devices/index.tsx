@@ -8,8 +8,13 @@ export function Devices() {
     const navigate = useNavigate()
     const [devices, setDevices] = useState<DeviceRecord[]>([])
     const [healthStatus, setHealthStatus] = useState<
-        'Configured' | 'Connected' | 'Setup required' | 'Unavailable'
-    >('Setup required')
+        | 'Configured'
+        | 'Connected'
+        | 'Setup required'
+        | 'Not configured'
+        | 'Sync delayed'
+        | 'Unavailable'
+    >('Not configured')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(true)
     const hasLoaded = useRef(false)
@@ -26,13 +31,22 @@ export function Devices() {
                 d => d.status === 'confirmed' && d.configuredAt !== null,
             )
             if (activeDevices.length > 0) {
-                setHealthStatus('Connected')
+                const latest = Math.max(
+                    ...activeDevices.map(device =>
+                        device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0,
+                    ),
+                )
+                setHealthStatus(
+                    latest > 0 && Date.now() - latest > 24 * 60 * 60 * 1000
+                        ? 'Sync delayed'
+                        : 'Connected',
+                )
             } else if (configuredDevices.length > 0) {
                 setHealthStatus('Configured')
             } else if (nextDevices.some(d => d.status === 'pending')) {
                 setHealthStatus('Setup required')
             } else {
-                setHealthStatus('Unavailable')
+                setHealthStatus('Not configured')
             }
         } catch {
             setError('Devices unavailable')
@@ -177,7 +191,11 @@ export function Devices() {
                                         ? pendingDevices.length > 0
                                             ? `${pendingDevices.length} device${pendingDevices.length > 1 ? 's' : ''} awaiting approval`
                                             : 'No devices configured'
-                                        : 'No devices available'}
+                                        : healthStatus === 'Sync delayed'
+                                          ? 'The last upload is more than 24 hours old'
+                                          : healthStatus === 'Not configured'
+                                            ? 'No phone has been paired yet'
+                                            : 'The server could not load device status'}
                             </Text>
                         </Stack>
                     </Group>
@@ -293,15 +311,36 @@ export function Devices() {
                                                 : 'Never synced'}
                                         </Text>
                                         {device.sync.length > 0 && (
-                                            <Text size="xs" c="dimmed">
-                                                {device.sync.filter(s => s.status === 'ok').length}{' '}
-                                                data type
-                                                {device.sync.filter(s => s.status === 'ok')
-                                                    .length !== 1
-                                                    ? 's'
-                                                    : ''}{' '}
-                                                enabled
-                                            </Text>
+                                            <div className="sync-diagnostics">
+                                                {device.sync.map(cursor => (
+                                                    <div key={cursor.recordType}>
+                                                        <Badge
+                                                            size="xs"
+                                                            color={
+                                                                cursor.status === 'ok'
+                                                                    ? 'teal'
+                                                                    : cursor.status === 'idle'
+                                                                      ? 'gray'
+                                                                      : 'orange'
+                                                            }
+                                                        >
+                                                            {cursor.status}
+                                                        </Badge>
+                                                        <Text size="xs">
+                                                            {cursor.recordType.replaceAll('_', ' ')}{' '}
+                                                            Â·{' '}
+                                                            {cursor.lastSyncedAt
+                                                                ? `last received ${new Date(cursor.lastSyncedAt).toLocaleString()}`
+                                                                : 'not received yet'}
+                                                        </Text>
+                                                        {cursor.diagnostic && (
+                                                            <Text size="xs" c="orange">
+                                                                {cursor.diagnostic}
+                                                            </Text>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
                                         )}
                                     </Stack>
                                     <Button
