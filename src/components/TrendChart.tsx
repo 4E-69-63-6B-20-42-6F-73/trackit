@@ -30,7 +30,8 @@ export function TrendChart({
     comparisonLabel?: string
     periodLabel?: 'day' | 'week'
 }) {
-    if (loading) return <Skeleton role="status" aria-label="Loading trend" height={280} radius="md" />
+    if (loading)
+        return <Skeleton role="status" aria-label="Loading trend" height={280} radius="md" />
     if (error) return <Alert color="orange">Connect to TrackIt to load your observations.</Alert>
     const covered = points.filter(point => point.value !== null)
     if (!covered.length) return <Alert>No {metric} records exist in this date range.</Alert>

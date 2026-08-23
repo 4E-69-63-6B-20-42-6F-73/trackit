@@ -10,9 +10,7 @@ export function friendlySourceName(source?: string | null) {
     if (source.toLowerCase() === 'you') return 'You'
     const raw = source.replace(/^Health Connect\s*[·â€¢-]\s*/i, '')
     if (/^health connect$/i.test(raw)) return 'Health Connect'
-    const match = Object.entries(sourceNames).find(
-        ([id]) => id.toLowerCase() === raw.toLowerCase(),
-    )
+    const match = Object.entries(sourceNames).find(([id]) => id.toLowerCase() === raw.toLowerCase())
     if (match) return match[1]
     if (raw.includes('.') && !raw.includes(' ')) {
         const candidate = raw.split('.').at(-1)?.replaceAll(/[_-]/g, ' ')

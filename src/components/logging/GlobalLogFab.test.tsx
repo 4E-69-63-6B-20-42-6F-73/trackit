@@ -10,7 +10,9 @@ function ActiveLoggerProbe() {
     const { activeLogger, closeLogger } = useLogger()
     return activeLogger ? (
         <div role="dialog" aria-label={`${activeLogger} logger`}>
-            <button type="button" onClick={closeLogger}>Close logger</button>
+            <button type="button" onClick={closeLogger}>
+                Close logger
+            </button>
         </div>
     ) : null
 }

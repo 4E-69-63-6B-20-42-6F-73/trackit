@@ -101,7 +101,8 @@ export function Connections() {
                                         color={
                                             status === 'Up to date'
                                                 ? 'trackit'
-                                                : status === 'Delayed' || status === 'Device unreachable'
+                                                : status === 'Delayed' ||
+                                                    status === 'Device unreachable'
                                                   ? 'orange'
                                                   : status === 'Permission required'
                                                     ? 'green'
@@ -134,7 +135,7 @@ export function Connections() {
                                                         ? 'Sync in progress'
                                                         : healthStatus === 'Connected'
                                                           ? 'Waiting for first sync'
-                                                  : 'Connect device'
+                                                          : 'Connect device'
                                         : 'Export data'}
                                 </Text>
                                 <IconChevronRight size={18} />
