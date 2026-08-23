@@ -28,6 +28,7 @@ jobs:
 
         env:
             DATABASE_URL: postgres://trackit:trackit-ci@127.0.0.1:5432/trackit
+            TRACKIT_DB_PASSWORD: trackit-ci
             BACKUP_DIR: ${{ github.workspace }}/backup-fixtures
             BACKUP_ENCRYPTION_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
             TRACKIT_POSTGRES_INTEGRATION: 'true'
