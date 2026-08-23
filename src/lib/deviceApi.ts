@@ -35,6 +35,11 @@ export async function confirmDevice(id: string) {
     if (!response.ok) throw new Error('Could not confirm device')
 }
 
+export async function rejectDevice(id: string) {
+    const response = await authRequest(`/api/devices/${id}/reject`, { method: 'POST' })
+    if (!response.ok) throw new Error('Could not reject device')
+}
+
 export async function revokeDevice(id: string) {
     const response = await authRequest(`/api/devices/${id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Could not revoke device')

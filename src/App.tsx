@@ -23,7 +23,10 @@ const Connections = lazy(() =>
     import('./pages/Connections').then(module => ({ default: module.Connections })),
 )
 const DeviceManagement = lazy(() =>
-    import('./pages/DeviceManagement').then(module => ({ default: module.DeviceManagement })),
+    import('./pages/connections/devices/index').then(module => ({ default: module.Devices })),
+)
+const DeviceNew = lazy(() =>
+    import('./pages/connections/devices/new').then(module => ({ default: module.DeviceNew })),
 )
 const Settings = lazy(() =>
     import('./pages/Settings').then(module => ({ default: module.Settings })),
@@ -169,6 +172,7 @@ export default function App() {
                             <Route path="/trends" element={<Trends />} />
                             <Route path="/connections" element={<Connections />} />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
+                            <Route path="/connections/devices/new" element={<DeviceNew />} />
                             <Route
                                 path="/settings/goals"
                                 element={<Navigate to="/goals" replace />}
