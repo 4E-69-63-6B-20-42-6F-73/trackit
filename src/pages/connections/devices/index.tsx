@@ -19,10 +19,12 @@ import {
     IconDots,
     IconPlus,
     IconRefresh,
+    IconTrash,
 } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import {
     confirmDevice,
+    deleteDevice,
     healthConnectStatus,
     listDevices,
     rejectDevice,
@@ -62,6 +64,17 @@ const statusColor = (status: string) => {
 const statusOrder: Record<string, number> = { pending: 0, confirmed: 1, active: 2, revoked: 3 }
 const formatDate = (value: string | null) =>
     value ? new Date(value).toLocaleString() : 'Not available'
+const relativeDate = (value: string) => {
+    const elapsed = new Date(value).getTime() - Date.now()
+    const minutes = Math.round(elapsed / 60_000)
+    if (Math.abs(minutes) < 60)
+        return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(minutes, 'minute')
+    const hours = Math.round(elapsed / 3_600_000)
+    if (Math.abs(hours) < 24)
+        return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(hours, 'hour')
+    const days = Math.round(elapsed / 86_400_000)
+    return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(days, 'day')
+}
 
 export function Devices() {
     const navigate = useNavigate()
@@ -75,7 +88,7 @@ export function Devices() {
     const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null)
     const [confirmation, setConfirmation] = useState<{
         device: DeviceRecord
-        action: 'reject' | 'disconnect'
+        action: 'reject' | 'disconnect' | 'delete'
     } | null>(null)
     const hasLoaded = useRef(false)
 
@@ -110,6 +123,8 @@ export function Devices() {
             ),
         [devices],
     )
+    const currentDevices = orderedDevices.filter(device => device.status !== 'revoked')
+    const pastDevices = orderedDevices.filter(device => device.status === 'revoked')
     const activeCount = devices.filter(device => device.status === 'active').length
     const attentionCount = devices.filter(device =>
         ['pending', 'confirmed'].includes(device.status),
@@ -154,7 +169,8 @@ export function Devices() {
         setBusyDeviceId(device.id)
         try {
             if (action === 'reject') await rejectDevice(device.id)
-            else await revokeDevice(device.id)
+            else if (action === 'disconnect') await revokeDevice(device.id)
+            else await deleteDevice(device.id)
             setConfirmation(null)
             setSelectedDevice(null)
             await refresh()
@@ -162,7 +178,9 @@ export function Devices() {
             setError(
                 action === 'reject'
                     ? `Could not reject ${device.name}. Try again.`
-                    : `Could not disconnect ${device.name}. Try again.`,
+                    : action === 'disconnect'
+                      ? `Could not disconnect ${device.name}. Try again.`
+                      : `Could not delete ${device.name}. Try again.`,
             )
         } finally {
             setBusyDeviceId(null)
@@ -192,10 +210,20 @@ export function Devices() {
                     leftSection={<IconPlus size={16} />}
                     onClick={() => navigate('/connections/devices/new')}
                     disabled={hasPendingDevice}
+                    title={
+                        hasPendingDevice
+                            ? 'Approve or delete the pending request before pairing another device.'
+                            : undefined
+                    }
                 >
                     Pair device
                 </Button>
             </Group>
+            {hasPendingDevice && (
+                <Text className="device-pairing-note" size="xs" c="dimmed">
+                    Approve or delete the pending request before pairing another device.
+                </Text>
+            )}
 
             {error && (
                 <Alert color="orange" variant="light" mt="lg">
@@ -221,113 +249,153 @@ export function Devices() {
             </div>
 
             {devices.length > 0 ? (
-                <Card className="device-list" withBorder padding={0} radius="md">
-                    <Group className="device-list-heading" justify="space-between">
-                        <Text size="sm" fw={700}>
-                            Your devices
-                        </Text>
-                        <Text size="xs" c="dimmed">
-                            {devices.length} {devices.length === 1 ? 'device' : 'devices'}
-                        </Text>
-                    </Group>
-                    {orderedDevices.map(device => (
-                        <div
-                            className="device-row"
-                            key={device.id}
-                            role="button"
-                            tabIndex={0}
-                            aria-label={`View ${device.name} details`}
-                            onClick={() => setSelectedDevice(device)}
-                            onKeyDown={event => {
-                                if (event.key === 'Enter' || event.key === ' ') {
-                                    event.preventDefault()
-                                    setSelectedDevice(device)
+                <>
+                    <Card className="device-list" withBorder padding={0} radius="md">
+                        <Group className="device-list-heading" justify="space-between">
+                            <Text size="sm" fw={700}>
+                                Your devices
+                            </Text>
+                        </Group>
+                        {currentDevices.map(device => (
+                            <div
+                                className={`device-row ${device.status === 'pending' ? 'device-row-pending' : ''}`}
+                                key={device.id}
+                                role={device.status === 'pending' ? undefined : 'button'}
+                                tabIndex={device.status === 'pending' ? undefined : 0}
+                                aria-label={
+                                    device.status === 'pending'
+                                        ? undefined
+                                        : `View ${device.name} details`
                                 }
-                            }}
-                        >
-                            <div className={`device-row-icon ${statusColor(device.status)}`}>
-                                <IconDeviceMobile size={19} />
-                            </div>
-                            <div className="device-row-copy">
-                                <Group gap="xs">
-                                    <Text fw={650}>{device.name}</Text>
-                                    <Badge
-                                        size="sm"
-                                        variant="light"
-                                        color={statusColor(device.status)}
+                                onClick={() =>
+                                    device.status !== 'pending' && setSelectedDevice(device)
+                                }
+                                onKeyDown={event => {
+                                    if (
+                                        device.status !== 'pending' &&
+                                        (event.key === 'Enter' || event.key === ' ')
+                                    ) {
+                                        event.preventDefault()
+                                        setSelectedDevice(device)
+                                    }
+                                }}
+                            >
+                                <div className={`device-row-icon ${statusColor(device.status)}`}>
+                                    <IconDeviceMobile size={19} />
+                                </div>
+                                <div className="device-row-copy">
+                                    <Group gap="xs">
+                                        <Text fw={650}>{device.name}</Text>
+                                        <Badge
+                                            size="sm"
+                                            variant="light"
+                                            color={statusColor(device.status)}
+                                        >
+                                            {statusLabel(device.status)}
+                                        </Badge>
+                                    </Group>
+                                    <Text size="xs" c="dimmed">
+                                        {device.lastSeenAt
+                                            ? `Synced ${relativeDate(device.lastSeenAt)}`
+                                            : device.status === 'pending'
+                                              ? 'Waiting for your approval'
+                                              : 'Never synced'}
+                                    </Text>
+                                </div>
+                                {device.status === 'pending' && (
+                                    <Button
+                                        size="compact-sm"
+                                        color="trackit"
+                                        loading={busyDeviceId === device.id}
+                                        onClick={event => {
+                                            event.stopPropagation()
+                                            void approve(device)
+                                        }}
                                     >
-                                        {statusLabel(device.status)}
-                                    </Badge>
-                                </Group>
-                                <Text size="xs" c="dimmed">
-                                    {device.lastSeenAt
-                                        ? `Last synced ${new Date(device.lastSeenAt).toLocaleString()}`
-                                        : device.status === 'pending'
-                                          ? 'Waiting for your approval'
-                                          : 'Never synced'}
-                                </Text>
-                            </div>
-                            {device.status === 'pending' && (
-                                <Button
-                                    size="compact-sm"
-                                    color="trackit"
-                                    loading={busyDeviceId === device.id}
-                                    onClick={event => {
-                                        event.stopPropagation()
-                                        void approve(device)
-                                    }}
-                                >
-                                    Approve
-                                </Button>
-                            )}
-                            <Menu position="bottom-end">
-                                <Menu.Target>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        color="gray"
-                                        aria-label={`Actions for ${device.name}`}
-                                        onClick={event => event.stopPropagation()}
-                                    >
-                                        <IconDots size={18} />
-                                    </ActionIcon>
-                                </Menu.Target>
-                                <Menu.Dropdown onClick={event => event.stopPropagation()}>
-                                    <Menu.Item onClick={() => setSelectedDevice(device)}>
-                                        View details
-                                    </Menu.Item>
-                                    {device.status === 'pending' && (
+                                        Approve
+                                    </Button>
+                                )}
+                                <Menu position="bottom-end">
+                                    <Menu.Target>
+                                        <ActionIcon
+                                            variant="subtle"
+                                            color="gray"
+                                            aria-label={`Actions for ${device.name}`}
+                                            onClick={event => event.stopPropagation()}
+                                        >
+                                            <IconDots size={18} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown onClick={event => event.stopPropagation()}>
+                                        <Menu.Item onClick={() => setSelectedDevice(device)}>
+                                            View details
+                                        </Menu.Item>
+                                        {device.status === 'active' && (
+                                            <Menu.Item
+                                                color="red"
+                                                onClick={() =>
+                                                    setConfirmation({
+                                                        device,
+                                                        action: 'disconnect',
+                                                    })
+                                                }
+                                            >
+                                                Disconnect
+                                            </Menu.Item>
+                                        )}
                                         <Menu.Item
                                             color="red"
+                                            leftSection={<IconTrash size={15} />}
                                             onClick={() =>
-                                                setConfirmation({ device, action: 'reject' })
+                                                setConfirmation({ device, action: 'delete' })
                                             }
                                         >
-                                            Reject pairing
+                                            Delete device
                                         </Menu.Item>
-                                    )}
-                                    {device.status === 'active' && (
-                                        <Menu.Item
+                                    </Menu.Dropdown>
+                                </Menu>
+                                {device.status !== 'pending' && (
+                                    <IconChevronRight className="device-row-chevron" size={17} />
+                                )}
+                            </div>
+                        ))}
+                    </Card>
+                    {pastDevices.length > 0 && (
+                        <details className="past-device-list">
+                            <summary>Past devices ({pastDevices.length})</summary>
+                            <Card className="device-list" withBorder padding={0} radius="md">
+                                {pastDevices.map(device => (
+                                    <div className="device-row device-row-past" key={device.id}>
+                                        <div className="device-row-icon">
+                                            <IconDeviceMobile size={19} />
+                                        </div>
+                                        <div className="device-row-copy">
+                                            <Group gap="xs">
+                                                <Text fw={650}>{device.name}</Text>
+                                                <Badge size="sm" variant="light" color="gray">
+                                                    Disconnected
+                                                </Badge>
+                                            </Group>
+                                            <Text size="xs" c="dimmed">
+                                                Disconnected device
+                                            </Text>
+                                        </div>
+                                        <Button
+                                            variant="subtle"
                                             color="red"
+                                            size="compact-sm"
                                             onClick={() =>
-                                                setConfirmation({ device, action: 'disconnect' })
+                                                setConfirmation({ device, action: 'delete' })
                                             }
                                         >
-                                            Disconnect
-                                        </Menu.Item>
-                                    )}
-                                    {device.status === 'revoked' && (
-                                        <Menu.Item
-                                            onClick={() => navigate('/connections/devices/new')}
-                                        >
-                                            Pair another device
-                                        </Menu.Item>
-                                    )}
-                                </Menu.Dropdown>
-                            </Menu>
-                            <IconChevronRight className="device-row-chevron" size={17} />
-                        </div>
-                    ))}
-                </Card>
+                                            Delete
+                                        </Button>
+                                    </div>
+                                ))}
+                            </Card>
+                        </details>
+                    )}
+                </>
             ) : (
                 !loading && (
                     <Card className="device-empty" withBorder padding="xl" radius="md" ta="center">
@@ -443,14 +511,22 @@ export function Devices() {
             <Modal
                 opened={Boolean(confirmation)}
                 onClose={() => setConfirmation(null)}
-                title={confirmation?.action === 'reject' ? 'Reject pairing?' : 'Disconnect device?'}
+                title={
+                    confirmation?.action === 'reject'
+                        ? 'Reject pairing?'
+                        : confirmation?.action === 'disconnect'
+                          ? 'Disconnect device?'
+                          : 'Delete device?'
+                }
                 centered
                 size="sm"
             >
                 <Text size="sm">
                     {confirmation?.action === 'reject'
                         ? `Reject the pairing request from ${confirmation.device.name}?`
-                        : `Disconnect ${confirmation?.device.name}? It will no longer be able to sync health data.`}
+                        : confirmation?.action === 'disconnect'
+                          ? `Disconnect ${confirmation.device.name}? It will no longer be able to sync health data.`
+                          : `Permanently delete ${confirmation?.device.name}? Its saved connection and sync diagnostics will be removed.`}
                 </Text>
                 <Group justify="flex-end" mt="lg">
                     <Button variant="default" onClick={() => setConfirmation(null)}>
@@ -461,7 +537,11 @@ export function Devices() {
                         loading={Boolean(confirmation && busyDeviceId === confirmation.device.id)}
                         onClick={() => void runConfirmedAction()}
                     >
-                        {confirmation?.action === 'reject' ? 'Reject pairing' : 'Disconnect'}
+                        {confirmation?.action === 'reject'
+                            ? 'Reject pairing'
+                            : confirmation?.action === 'disconnect'
+                              ? 'Disconnect'
+                              : 'Delete device'}
                     </Button>
                 </Group>
             </Modal>

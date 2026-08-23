@@ -29,6 +29,12 @@ const DeviceManagement = lazy(() =>
 const DeviceNew = lazy(() =>
     import('./pages/connections/devices/new').then(module => ({ default: module.DeviceNew })),
 )
+const McpAccess = lazy(() =>
+    import('./pages/connections/mcp/index').then(module => ({ default: module.McpAccess })),
+)
+const McpNew = lazy(() =>
+    import('./pages/connections/mcp/new').then(module => ({ default: module.McpNew })),
+)
 const Settings = lazy(() =>
     import('./pages/Settings').then(module => ({ default: module.Settings })),
 )
@@ -220,6 +226,8 @@ export default function App() {
                             <Route path="/connections" element={<Connections />} />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route path="/connections/devices/new" element={<DeviceNew />} />
+                            <Route path="/connections/mcp" element={<McpAccess />} />
+                            <Route path="/connections/mcp/new" element={<McpNew />} />
                             <Route
                                 path="/settings/goals"
                                 element={<Navigate to="/goals" replace />}

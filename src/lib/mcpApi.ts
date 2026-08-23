@@ -6,9 +6,10 @@ export type McpClientRecord = {
     scopes: string[]
     dateFrom: string | null
     dateTo: string | null
-    expiresAt: string
+    expiresAt: string | null
     revokedAt: string | null
     lastUsedAt: string | null
+    createdAt: string
 }
 
 export type McpAccessEvent = {
@@ -44,7 +45,7 @@ export async function setMcpEnabled(enabled: boolean) {
 export async function issueMcpClient(input: {
     name: string
     scopes: string[]
-    expiresAt: string
+    expiresAt?: string
     dateFrom?: string
     dateTo?: string
 }) {
@@ -60,4 +61,9 @@ export async function issueMcpClient(input: {
 export async function revokeMcpClient(id: string) {
     const response = await authRequest(`/api/mcp/clients/${id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Could not revoke MCP credential')
+}
+
+export async function deleteMcpClient(id: string) {
+    const response = await authRequest(`/api/mcp/clients/${id}/permanent`, { method: 'DELETE' })
+    if (!response.ok) throw new Error('Could not delete MCP credential')
 }

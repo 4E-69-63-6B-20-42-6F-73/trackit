@@ -323,6 +323,16 @@ export class DeviceService {
         })
     }
 
+    async delete(id: string) {
+        await this.database.delete(devices).where(eq(devices.id, id))
+        await this.database.insert(auditEvents).values({
+            actor: 'owner',
+            action: 'device.deleted',
+            targetType: 'device',
+            targetId: id,
+        })
+    }
+
     async upload(deviceId: string, idempotencyKey: string, records: DeviceUploadRecord[]) {
         return this.database.transaction(async transaction => {
             const [existing] = await transaction
