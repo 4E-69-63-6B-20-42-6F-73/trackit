@@ -1,11 +1,13 @@
 package net.trackit.companion
 
 import android.content.Context
+import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.permission.HealthPermission
+import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_HISTORY
 import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.request.ChangesTokenRequest
@@ -15,6 +17,8 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.reflect.KClass
@@ -104,10 +108,16 @@ object HistoricalProgressCodec {
     }
 }
 
+private class HealthConnectReadTimeoutException(
+    recordType: String,
+) : Exception("Health Connect did not respond within 60 seconds for $recordType")
+
 class HealthConnectSync(private val context: Context) {
     companion object {
         private const val UPLOAD_BATCH_SIZE = 1000
         private const val READ_PAGE_SIZE = 1000
+        private const val READ_TIMEOUT_MS = 60_000L
+        private const val LOG_TAG = "TrackItHistorical"
     }
 
     private val health by lazy { HealthConnectClient.getOrCreate(context) }
@@ -123,10 +133,14 @@ class HealthConnectSync(private val context: Context) {
     fun permissionsFor(
         recordTypes: Set<KClass<out Record>>,
         includeBackground: Boolean,
+        includeHistory: Boolean = false,
     ): Set<String> {
         val permissions = permissionsFor(recordTypes).toMutableSet()
         if (includeBackground && supportsBackgroundRead()) {
             permissions += PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
+        }
+        if (includeHistory && supportsHistoryRead()) {
+            permissions += PERMISSION_READ_HEALTH_DATA_HISTORY
         }
         return permissions
     }
@@ -138,6 +152,11 @@ class HealthConnectSync(private val context: Context) {
             HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND,
         ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
 
+    fun supportsHistoryRead(): Boolean =
+        health.features.getFeatureStatus(
+            HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY,
+        ) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+
     suspend fun grantedPermissions(): Set<String> =
         health.permissionController.getGrantedPermissions()
 
@@ -146,6 +165,9 @@ class HealthConnectSync(private val context: Context) {
 
     suspend fun hasBackgroundReadPermission(): Boolean =
         PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND in grantedPermissions()
+
+    suspend fun hasHistoryReadPermission(): Boolean =
+        PERMISSION_READ_HEALTH_DATA_HISTORY in grantedPermissions()
 
     suspend fun syncSelected(
         recordTypes: Set<KClass<out Record>>,
@@ -207,11 +229,32 @@ class HealthConnectSync(private val context: Context) {
                 do {
                     if (cancelled()) throw CancellationException("Import cancelled")
 
+                    val requestedPageToken = pageToken
+
+                    Log.i(
+                        LOG_TAG,
+                        "Reading $category page=${requestedPageToken ?: "first"}",
+                    )
+
                     val response = readPage(
                         recordType = recordType,
                         filter = TimeRangeFilter.after(since),
-                        pageToken = pageToken,
+                        pageToken = requestedPageToken,
                     )
+
+                    Log.i(
+                        LOG_TAG,
+                        "$category returned ${response.records.size} records, next=${response.pageToken}",
+                    )
+
+                    if (
+                        response.pageToken != null &&
+                        response.pageToken == requestedPageToken
+                    ) {
+                        throw IllegalStateException(
+                            "Health Connect repeated the page token for $category",
+                        )
+                    }
 
                     discovered += response.records.size
 
@@ -402,7 +445,34 @@ class HealthConnectSync(private val context: Context) {
         do {
             if (cancelled()) throw CancellationException("Import cancelled")
 
-            val response = readPage(recordType, filter, pageToken)
+            val requestedPageToken = pageToken
+            val category = recordType.simpleName.orEmpty()
+
+            Log.i(
+                LOG_TAG,
+                "Reading $category reread page=${requestedPageToken ?: "first"}",
+            )
+
+            val response = readPage(
+                recordType = recordType,
+                filter = filter,
+                pageToken = requestedPageToken,
+            )
+
+            Log.i(
+                LOG_TAG,
+                "$category reread returned ${response.records.size} records, next=${response.pageToken}",
+            )
+
+            if (
+                response.pageToken != null &&
+                response.pageToken == requestedPageToken
+            ) {
+                throw IllegalStateException(
+                    "Health Connect repeated the page token for $category",
+                )
+            }
+
             val uploads = response.records.map { record ->
                 requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
                     "Unable to serialize ${record::class.simpleName}"
@@ -425,12 +495,20 @@ class HealthConnectSync(private val context: Context) {
         recordType: KClass<out Record>,
         filter: TimeRangeFilter,
         pageToken: String?,
-    ) = health.readRecords(
-        ReadRecordsRequest(
-            recordType = recordType as KClass<Record>,
-            timeRangeFilter = filter,
-            pageSize = READ_PAGE_SIZE,
-            pageToken = pageToken,
-        ),
-    )
+    ) = try {
+        withTimeout(READ_TIMEOUT_MS) {
+            health.readRecords(
+                ReadRecordsRequest(
+                    recordType = recordType as KClass<Record>,
+                    timeRangeFilter = filter,
+                    pageSize = READ_PAGE_SIZE,
+                    pageToken = pageToken,
+                ),
+            )
+        }
+    } catch (_: TimeoutCancellationException) {
+        throw HealthConnectReadTimeoutException(
+            recordType.simpleName.orEmpty(),
+        )
+    }
 }
