@@ -71,6 +71,7 @@ class MainActivity : ComponentActivity() {
                     var syncProgress by remember { mutableFloatStateOf(0f) }
                     var syncRunning by remember { mutableStateOf(false) }
                     var showPairingDialog by remember { mutableStateOf(false) }
+                    var showHistoricalUpload by remember { mutableStateOf(false) }
                     var selectedTypes by remember {
                         mutableStateOf(credentialStore.selectedRecordTypes())
                     }
@@ -177,7 +178,14 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    Box(Modifier.fillMaxSize()) {
+                    if (showHistoricalUpload) {
+                        HistoricalUploadScreen(
+                            healthSync = healthSync,
+                            recordTypes = selectedClasses,
+                            onBack = { showHistoricalUpload = false },
+                        )
+                    } else {
+                        Box(Modifier.fillMaxSize()) {
                         Column(
                             Modifier
                                 .fillMaxSize()
@@ -241,6 +249,12 @@ class MainActivity : ComponentActivity() {
                             ) {
                                 Text(if (syncRunning) "Syncing…" else "Sync now")
                             }
+                            Button(
+                                enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
+                                onClick = { showHistoricalUpload = true },
+                            ) {
+                                Text("Historical upload")
+                            }
                             if (!paired) {
                                 Text("Pair this device before starting a Health Connect sync.")
                             }
@@ -262,15 +276,16 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    if (showPairingDialog) {
-                        PairingDialog(
-                            activity = this@MainActivity,
-                            onDismiss = { showPairingDialog = false },
-                            onPaired = {
-                                paired = true
-                                status = "Paired successfully. Ready to sync."
-                            },
-                        )
+                        if (showPairingDialog) {
+                            PairingDialog(
+                                activity = this@MainActivity,
+                                onDismiss = { showPairingDialog = false },
+                                onPaired = {
+                                    paired = true
+                                    status = "Paired successfully. Ready to sync."
+                                },
+                            )
+                        }
                     }
                 }
             }
