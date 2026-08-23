@@ -55,6 +55,34 @@ class MemoryJournalRepository implements JournalRepository {
     }
 }
 
+describe('device authentication diagnostics', () => {
+    it.each(['signature_mismatch', 'clock_skew', 'device_revoked', 'nonce_replay'] as const)(
+        'keeps the %s diagnostic server-side and returns only unauthorized',
+        async reason => {
+            const authenticateDetailed = vi.fn().mockResolvedValue({
+                error: reason,
+                serverTime: '2026-08-23T12:00:00.000Z',
+            })
+            const app = await createApp(new MemoryJournalRepository(), {
+                devices: { authenticateDetailed } as never,
+            })
+
+            const response = await app.inject({
+                method: 'POST',
+                url: '/api/device/health-records',
+                payload: { idempotencyKey: randomUUID(), records: [] },
+                headers: { 'x-device-id': 'diagnostic-device' },
+            })
+
+            expect(response.statusCode).toBe(401)
+            expect(response.json()).toEqual({ error: 'unauthorized' })
+            expect(response.body).not.toContain(reason)
+            expect(authenticateDetailed).toHaveBeenCalledOnce()
+            await app.close()
+        },
+    )
+})
+
 describe('journal API', () => {
     it('creates, lists, idempotently updates, and deletes a record', async () => {
         const repository = new MemoryJournalRepository()

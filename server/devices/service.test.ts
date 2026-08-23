@@ -26,7 +26,10 @@ describe('Android device pairing and upload', () => {
         })
         const publicKey = keyPair.publicKey.toString('base64')
         const fingerprint = createHash('sha256').update(keyPair.publicKey).digest('base64url')
-        const authenticate = (credential?: string, overrides: Record<string, string> = {}) => {
+        const authenticationRequest = (
+            credential?: string,
+            overrides: Record<string, string> = {},
+        ) => {
             const timestamp = overrides.timestamp ?? Date.now().toString()
             const request = {
                 credential,
@@ -48,13 +51,19 @@ describe('Android device pairing and upload', () => {
             const signature = sign('sha256', Buffer.from(canonical), keyPair.privateKey).toString(
                 'base64url',
             )
-            return service.authenticate({
+            return {
                 ...request,
                 path: overrides.submittedPath ?? request.path,
                 bodyHash: overrides.submittedBodyHash ?? request.bodyHash,
                 signature,
-            })
+            }
         }
+        const authenticate = (credential?: string, overrides: Record<string, string> = {}) =>
+            service.authenticate(authenticationRequest(credential, overrides))
+        const authenticateDetailed = (
+            credential?: string,
+            overrides: Record<string, string> = {},
+        ) => service.authenticateDetailed(authenticationRequest(credential, overrides))
         const pairing = await service.createPairingCode()
         const result = await service.requestPairing(
             pairing.code,
@@ -108,6 +117,12 @@ describe('Android device pairing and upload', () => {
                 timestamp: String(Date.now() - 120_000),
             }),
         ).toBeNull()
+        await expect(
+            authenticateDetailed(requested?.credential, {
+                deviceId: requested?.deviceId,
+                timestamp: String(Date.now() - 120_000),
+            }),
+        ).resolves.toMatchObject({ error: 'clock_skew' })
         const replayNonce = randomUUID()
         expect(
             await authenticate(requested?.credential, {
@@ -121,6 +136,12 @@ describe('Android device pairing and upload', () => {
                 nonce: replayNonce,
             }),
         ).toBeNull()
+        await expect(
+            authenticateDetailed(requested?.credential, {
+                deviceId: requested?.deviceId,
+                nonce: replayNonce,
+            }),
+        ).resolves.toMatchObject({ error: 'nonce_replay' })
         const validBodyHash = createHash('sha256').update('{}').digest('hex')
         expect(
             await authenticate(requested?.credential, {
@@ -136,6 +157,13 @@ describe('Android device pairing and upload', () => {
                 submittedPath: '/api/device/cursor',
             }),
         ).toBeNull()
+        await expect(
+            authenticateDetailed(requested?.credential, {
+                deviceId: requested?.deviceId,
+                path: '/api/device/upload',
+                submittedPath: '/api/device/cursor',
+            }),
+        ).resolves.toMatchObject({ error: 'signature_mismatch' })
         expect(
             await authenticate(requested?.credential, {
                 submittedBodyHash: createHash('sha256').update('{"tampered":true}').digest('hex'),
@@ -303,6 +331,9 @@ describe('Android device pairing and upload', () => {
 
         await service.revoke(requested!.deviceId)
         expect(await authenticate(requested?.credential)).toBeNull()
+        await expect(
+            authenticateDetailed(requested?.credential, { deviceId: requested?.deviceId }),
+        ).resolves.toMatchObject({ error: 'device_revoked' })
         await client.close()
     })
 })

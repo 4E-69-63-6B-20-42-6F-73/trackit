@@ -37,6 +37,16 @@ export type DeviceUploadRecord = {
     deleted?: boolean
 }
 
+export type DeviceAuthenticationFailure =
+    | 'missing_credentials'
+    | 'invalid_nonce'
+    | 'clock_skew'
+    | 'device_not_found'
+    | 'device_not_confirmed'
+    | 'device_revoked'
+    | 'signature_mismatch'
+    | 'nonce_replay'
+
 export class DeviceService {
     constructor(
         private readonly database: Database,
@@ -173,7 +183,7 @@ export class DeviceService {
         return device ?? null
     }
 
-    async authenticate(input: {
+    async authenticateDetailed(input: {
         credential?: string
         deviceId?: string
         method: string
@@ -182,30 +192,29 @@ export class DeviceService {
         nonce?: string
         bodyHash: string
         signature?: string
-    }) {
+    }): Promise<
+        | { device: typeof devices.$inferSelect }
+        | { error: DeviceAuthenticationFailure; serverTime: string }
+    > {
+        const failure = (error: DeviceAuthenticationFailure) => ({
+            error,
+            serverTime: new Date().toISOString(),
+        })
         const { credential, deviceId, timestamp, nonce, signature } = input
-        if (!credential || !deviceId || !timestamp || !nonce || !signature) return null
-        if (!/^[A-Za-z0-9_-]{16,200}$/.test(nonce)) return null
+        if (!credential || !deviceId || !timestamp || !nonce || !signature)
+            return failure('missing_credentials')
+        if (!/^[A-Za-z0-9_-]{16,200}$/.test(nonce)) return failure('invalid_nonce')
         const signedAt = Number(timestamp)
-        if (!Number.isFinite(signedAt) || Math.abs(Date.now() - signedAt) > 60_000) return null
+        if (!Number.isFinite(signedAt) || Math.abs(Date.now() - signedAt) > 60_000)
+            return failure('clock_skew')
         const [device] = await this.database
             .select()
             .from(devices)
-            .where(
-                and(
-                    eq(devices.credentialHash, hash(credential)),
-                    eq(devices.id, deviceId),
-                    eq(devices.status, 'confirmed'),
-                    isNull(devices.revokedAt),
-                ),
-            )
+            .where(and(eq(devices.credentialHash, hash(credential)), eq(devices.id, deviceId)))
             .limit(1)
-        if (!device) return null
-        const publicKey = createPublicKey({
-            key: Buffer.from(device.publicKey, 'base64'),
-            format: 'der',
-            type: 'spki',
-        })
+        if (!device) return failure('device_not_found')
+        if (device.revokedAt || device.status === 'revoked') return failure('device_revoked')
+        if (device.status !== 'confirmed') return failure('device_not_confirmed')
         const canonical = [
             input.method.toUpperCase(),
             input.path,
@@ -214,16 +223,24 @@ export class DeviceService {
             input.bodyHash,
             device.id,
         ].join('\n')
-        if (
-            !verify(
-                'sha256',
-                Buffer.from(canonical),
-                publicKey,
-                Buffer.from(signature, 'base64url'),
-            )
-        ) {
-            return null
-        }
+        const validSignature = (() => {
+            try {
+                const publicKey = createPublicKey({
+                    key: Buffer.from(device.publicKey, 'base64'),
+                    format: 'der',
+                    type: 'spki',
+                })
+                return verify(
+                    'sha256',
+                    Buffer.from(canonical),
+                    publicKey,
+                    Buffer.from(signature, 'base64url'),
+                )
+            } catch {
+                return false
+            }
+        })()
+        if (!validSignature) return failure('signature_mismatch')
         const [claimed] = await this.database
             .insert(deviceRequestNonces)
             .values({
@@ -233,12 +250,17 @@ export class DeviceService {
             })
             .onConflictDoNothing()
             .returning({ nonceHash: deviceRequestNonces.nonceHash })
-        if (!claimed) return null
+        if (!claimed) return failure('nonce_replay')
         await this.database
             .update(devices)
             .set({ lastSeenAt: new Date() })
             .where(eq(devices.id, device.id))
-        return device
+        return { device }
+    }
+
+    async authenticate(input: Parameters<DeviceService['authenticateDetailed']>[0]) {
+        const result = await this.authenticateDetailed(input)
+        return 'device' in result ? result.device : null
     }
 
     async pairingStatus(credential?: string, keyFingerprint?: string) {
