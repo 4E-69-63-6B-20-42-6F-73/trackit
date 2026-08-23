@@ -554,7 +554,7 @@ textarea:focus-visible,
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    color: #8a8f89;
+    color: var(--muted);
     gap: 5px;
     text-align: center;
 }
@@ -1396,5 +1396,18 @@ textarea:focus-visible,
         left: 16px;
         right: 16px;
         width: auto;
+    }
+}
+@media (max-width: 360px) {
+    .welcome {
+        flex-direction: column;
+    }
+    .day-navigation {
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        width: 100%;
+    }
+    .metric-grid {
+        grid-template-columns: 1fr;
     }
 }

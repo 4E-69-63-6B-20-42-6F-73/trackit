@@ -1,5 +1,8 @@
 import { mkdir } from 'node:fs/promises'
 import { expect, test } from '@playwright/test'
+import { useAuthenticatedServer } from './server-fixture'
+
+test.beforeEach(async ({ page }) => useAuthenticatedServer(page))
 
 const pages = [
     ['today', '/today'],
@@ -23,10 +26,6 @@ test('capture every page for visual review', async ({ page }, testInfo) => {
 
     for (const [name, route] of pages) {
         await page.goto(route)
-        const demo = page.getByRole('button', { name: 'Open local demo mode' })
-        await demo.waitFor()
-        await demo.click()
-        await expect(demo).toBeHidden()
         await expect(page.getByRole('heading', { level: 1 }).first()).toBeVisible()
         await page.screenshot({ path: `${output}/${name}.png`, fullPage: true })
     }

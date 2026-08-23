@@ -1,5 +1,6 @@
 import AxeBuilder from '@axe-core/playwright'
 import { expect, test } from '@playwright/test'
+import { useAuthenticatedServer } from './server-fixture'
 
 const routes = [
     '/today',
@@ -11,9 +12,11 @@ const routes = [
     '/settings',
 ]
 
+test.beforeEach(async ({ page }) => useAuthenticatedServer(page))
+
 test('locked server state has no automatic WCAG A/AA violations', async ({ page }) => {
     await page.goto('/today')
-    await page.getByRole('button', { name: 'Open local demo mode' }).waitFor()
+    await page.getByRole('heading', { level: 1 }).waitFor()
     const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze()
@@ -22,10 +25,7 @@ test('locked server state has no automatic WCAG A/AA violations', async ({ page 
 
 test('keyboard users can bypass repeated navigation', async ({ page }) => {
     await page.goto('/today')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
-    await expect(demo).toBeHidden()
+    await page.getByRole('heading', { level: 1 }).waitFor()
     await page.keyboard.press('Tab')
     const skip = page.getByRole('link', { name: 'Skip to main content' })
     await expect(skip).toBeFocused()
@@ -35,9 +35,7 @@ test('keyboard users can bypass repeated navigation', async ({ page }) => {
 
 test('quick-add dialog has no automatic WCAG A/AA violations', async ({ page }) => {
     await page.goto('/today')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
+    await page.getByRole('heading', { level: 1 }).waitFor()
     await page.getByRole('button', { name: /quick add/i }).click()
     await page.getByRole('dialog').waitFor()
     const results = await new AxeBuilder({ page })
@@ -46,11 +44,10 @@ test('quick-add dialog has no automatic WCAG A/AA violations', async ({ page }) 
     expect(results.violations).toEqual([])
 })
 
-test('every primary destination is reachable from navigation', async ({ page }) => {
+test('every primary destination is reachable from navigation', async ({ page, isMobile }) => {
     await page.goto('/today')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
+    await page.getByRole('heading', { level: 1 }).waitFor()
+    if (isMobile) await page.getByRole('button', { name: 'More' }).click()
     for (const destination of [
         'Today',
         'Nutrition',
@@ -66,12 +63,14 @@ test('every primary destination is reachable from navigation', async ({ page }) 
     }
 })
 
-test('primary navigation works by keyboard and moves focus to page content', async ({ page }) => {
+test('primary navigation works by keyboard and moves focus to page content', async ({
+    page,
+    isMobile,
+}) => {
     await page.goto('/today')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
+    await page.getByRole('heading', { level: 1 }).waitFor()
 
+    if (isMobile) await page.getByRole('button', { name: 'More' }).click()
     const goalsLink = page.getByRole('link', { name: 'Goals', exact: true }).first()
     await goalsLink.focus()
     await page.keyboard.press('Enter')
@@ -85,9 +84,7 @@ test('Today reflows without page-level horizontal scrolling at 320 CSS pixels', 
 }) => {
     await page.setViewportSize({ width: 320, height: 800 })
     await page.goto('/today')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
+    await page.getByRole('heading', { level: 1 }).waitFor()
     await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
         .toBeLessThanOrEqual(320)
@@ -97,9 +94,7 @@ for (const width of [1280, 1440, 1680, 1920]) {
     test(`desktop pages use ${width}px without horizontal overflow`, async ({ page }) => {
         await page.setViewportSize({ width, height: 900 })
         await page.goto('/today')
-        const demo = page.getByRole('button', { name: 'Open local demo mode' })
-        await demo.waitFor()
-        await demo.click()
+        await page.getByRole('heading', { level: 1 }).waitFor()
         await expect(page.getByRole('heading', { level: 1 })).toBeVisible()
         await expect
             .poll(() => page.evaluate(() => document.documentElement.scrollWidth))
@@ -115,10 +110,6 @@ for (const width of [1280, 1440, 1680, 1920]) {
 for (const route of routes) {
     test(`${route} has no automatic WCAG A/AA violations`, async ({ page }) => {
         await page.goto(route)
-        const demo = page.getByRole('button', { name: 'Open local demo mode' })
-        await demo.waitFor()
-        await demo.click()
-        await expect(demo).toBeHidden()
         await page.getByRole('heading', { level: 1 }).waitFor()
         const results = await new AxeBuilder({ page })
             .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])

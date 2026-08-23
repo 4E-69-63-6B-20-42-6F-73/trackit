@@ -1,10 +1,10 @@
 import { expect, test } from '@playwright/test'
+import { useAuthenticatedServer } from './server-fixture'
+
+test.beforeEach(async ({ page }) => useAuthenticatedServer(page))
 
 test('settings sections use nested pages instead of dialogs', async ({ page }) => {
     await page.goto('/settings')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
 
     await page.getByRole('link', { name: /Profile & units/ }).click()
     await expect(page).toHaveURL(/\/settings\/profile$/)
@@ -22,9 +22,6 @@ test('settings sections use nested pages instead of dialogs', async ({ page }) =
 
 test('an unknown settings section has an explicit recovery path', async ({ page }) => {
     await page.goto('/settings/not-a-section')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
 
     if ((page.viewportSize()?.width ?? 1000) > 760) {
         await expect(page.getByRole('heading', { name: 'Settings page not found' })).toBeVisible()

@@ -1,32 +1,36 @@
-import { expect, test, type Page } from '@playwright/test'
+import { expect, test } from '@playwright/test'
+import { useAuthenticatedServer } from './server-fixture'
 
-const enterDemo = async (page: Page) => {
-    const button = page.getByRole('button', { name: 'Open local demo mode' })
-    await button.waitFor()
-    await button.click()
-    await expect(button).toBeHidden()
-}
+test('a server-owned journal entry survives reload and can be deleted', async ({ page }) => {
+    const records: Record<string, unknown>[] = []
+    await useAuthenticatedServer(page, { journal: records })
 
-test('quick add persists and can be deleted from the journal', async ({ page }) => {
-    await page.goto('/today')
-    await page.evaluate(() => localStorage.clear())
+    await page.goto('/journal')
+    await page.evaluate(async () => {
+        const response = await fetch('/api/journal', {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({
+                id: '30000000-0000-4000-8000-000000000001',
+                category: 'Meals',
+                title: 'Dinner',
+                detail: 'Lentil soup',
+                source: 'You',
+                observedAt: new Date().toISOString(),
+                time: '18:00',
+            }),
+        })
+        if (!response.ok) throw new Error(`Create failed: ${response.status}`)
+    })
+    await expect.poll(() => records.length).toBe(1)
     await page.reload()
-    await enterDemo(page)
-
-    await page.getByRole('button', { name: /quick add/i }).click()
-    const mealDescription = page.getByLabel('What did you have?')
-    await mealDescription.pressSequentially('Lentil soup')
-    await expect(mealDescription).toHaveValue('Lentil soup')
-    await page.getByRole('button', { name: 'Save meal' }).click()
-
-    await page.getByRole('link', { name: 'Journal', exact: true }).first().click()
     await expect(page.getByText('Lentil soup')).toBeVisible()
     await page.reload()
-    await enterDemo(page)
     await expect(page.getByText('Lentil soup')).toBeVisible()
 
-    await page.getByLabel('Actions for Lunch').click()
+    await page.getByLabel(/Actions for (Lunch|Dinner)/).click()
     await page.getByRole('menuitem', { name: 'Delete' }).click()
     await page.getByRole('button', { name: 'Delete entry' }).click()
     await expect(page.getByText('Lentil soup')).not.toBeVisible()
+    expect(records).toHaveLength(0)
 })

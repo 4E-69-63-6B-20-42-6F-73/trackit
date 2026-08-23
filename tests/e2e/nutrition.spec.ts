@@ -1,4 +1,7 @@
 import { expect, test } from '@playwright/test'
+import { useAuthenticatedServer } from './server-fixture'
+
+test.beforeEach(async ({ page }) => useAuthenticatedServer(page))
 
 test('a recent meal can be repeated in one interaction and under 20 seconds', async ({ page }) => {
     let postCount = 0
@@ -44,9 +47,6 @@ test('a recent meal can be repeated in one interaction and under 20 seconds', as
     )
 
     await page.goto('/nutrition')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
     const repeat = page.getByRole('button', { name: 'Log again' })
     await expect(repeat).toBeVisible()
 
@@ -63,24 +63,17 @@ test('a recent meal can be repeated in one interaction and under 20 seconds', as
     })
 })
 
-test('food composition includes every primary tracked nutrient', async ({ page }) => {
+test('empty food library has no fabricated nutrition records', async ({ page }) => {
+    await page.route('**/api/foods*', route =>
+        route.fulfill({ status: 200, contentType: 'application/json', body: '{"data":[]}' }),
+    )
     await page.goto('/nutrition')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
-
-    await page.getByRole('button', { name: /Rolled oats/ }).click()
-    for (const nutrient of ['kcal', 'protein', 'carbs', 'fat', 'fiber']) {
-        await expect(page.getByText(nutrient, { exact: true }).first()).toBeVisible()
-    }
+    await expect(page.getByText('Your food library is empty')).toBeVisible()
+    await expect(page.getByText(/Rolled oats/i)).toHaveCount(0)
 })
 
 test('new food supports extended nutrient details', async ({ page }) => {
     await page.goto('/nutrition')
-    const demo = page.getByRole('button', { name: 'Open local demo mode' })
-    await demo.waitFor()
-    await demo.click()
-
     await page.getByRole('button', { name: 'New food' }).click()
     for (const label of ['Sugar', 'Saturated fat', 'Sodium', 'Potassium']) {
         await expect(page.getByLabel(new RegExp(label, 'i'))).toBeVisible()
