@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Alert, Badge, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
-import { IconArrowRight, IconDeviceMobile, IconRefresh, IconX } from '@tabler/icons-react'
+import { IconArrowLeft, IconDeviceMobile, IconRefresh, IconX } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import { confirmDevice, listDevices, rejectDevice, type DeviceRecord } from '../../../lib/deviceApi'
 
@@ -111,7 +111,7 @@ export function Devices() {
         <div className="page-content devices-page">
             <Button
                 variant="subtle"
-                leftSection={<IconArrowRight size={16} />}
+                leftSection={<IconArrowLeft size={16} />}
                 onClick={() => navigate('/connections')}
                 mb="md"
             >
