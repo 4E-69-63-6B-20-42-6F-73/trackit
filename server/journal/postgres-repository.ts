@@ -23,7 +23,9 @@ const toEntry = (row: typeof journalEntries.$inferSelect): JournalEntry => ({
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
-    entityType: row.entityType ? (row.entityType as 'meal' | 'observation') : undefined,
+    entityType: row.entityType
+        ? (row.entityType as 'meal' | 'observation' | 'health_record')
+        : undefined,
     entityId: row.entityId ?? undefined,
 })
 

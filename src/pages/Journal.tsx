@@ -29,10 +29,40 @@ export function Journal({
             events.filter(
                 event =>
                     (filter === 'All' || event.category === filter) &&
-                    `${event.title} ${event.detail}`.toLowerCase().includes(query.toLowerCase()),
+                    `${event.title} ${event.detail} ${event.source}`
+                        .toLowerCase()
+                        .includes(query.toLowerCase()),
             ),
         [events, filter, query],
     )
+    const groups = useMemo(() => {
+        const today = new Date()
+        const yesterday = new Date(today)
+        yesterday.setDate(today.getDate() - 1)
+        const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`
+        return Array.from(
+            shown.reduce((result, event) => {
+                const date = event.observedAt ? new Date(event.observedAt) : today
+                const key = dayKey(date)
+                const existing = result.get(key)
+                if (existing) existing.events.push(event)
+                else {
+                    const label =
+                        key === dayKey(today)
+                            ? 'Today'
+                            : key === dayKey(yesterday)
+                              ? 'Yesterday'
+                              : new Intl.DateTimeFormat(undefined, {
+                                    weekday: 'long',
+                                    month: 'short',
+                                    day: 'numeric',
+                                }).format(date)
+                    result.set(key, { label, events: [event] })
+                }
+                return result
+            }, new Map<string, { label: string; events: JournalEvent[] }>()),
+        ).map(([, group]) => group)
+    }, [shown])
     const beginEdit = (event: JournalEvent) => {
         setEditing(event)
         setDraftTitle(event.title)
@@ -72,63 +102,74 @@ export function Journal({
                 )}
             </div>
             <section className="panel timeline">
-                <div className="day-divider">
-                    <span>Today</span>
-                    <small>
-                        {shown.length} {shown.length === 1 ? 'entry' : 'entries'}
-                    </small>
-                </div>
-                {shown.map(event => {
-                    const { icon: Icon, tone } = eventVisual(event.category)
-                    return (
-                        <div className="event roomy" key={event.id}>
-                            <time>{event.time}</time>
-                            <div className={`event-icon ${tone}`}>
-                                <Icon size={17} />
-                            </div>
-                            <div className="event-copy">
-                                <Text fw={600}>{event.title}</Text>
-                                <Text size="sm" c="dimmed">
-                                    {event.detail}
-                                </Text>
-                                {event.source !== 'You' && (
-                                    <Badge variant="light" color="gray">
-                                        {event.source}
-                                    </Badge>
-                                )}
-                            </div>
-                            <Menu>
-                                <Menu.Target>
-                                    <ActionIcon
-                                        aria-label={`Actions for ${event.title}`}
-                                        variant="subtle"
-                                        color="gray"
-                                    >
-                                        <IconChevronDown size={17} />
-                                    </ActionIcon>
-                                </Menu.Target>
-                                <Menu.Dropdown>
-                                    <Menu.Item onClick={() => duplicate(event)}>
-                                        Log a copy
-                                    </Menu.Item>
-                                    {event.source === 'You' && (
-                                        <>
-                                            <Menu.Item onClick={() => beginEdit(event)}>
-                                                Edit
-                                            </Menu.Item>
-                                            <Menu.Item
-                                                onClick={() => setDeleting(event)}
-                                                color="red"
-                                            >
-                                                Delete
-                                            </Menu.Item>
-                                        </>
-                                    )}
-                                </Menu.Dropdown>
-                            </Menu>
+                {events.length === 0 && (
+                    <div className="day-divider">
+                        <span>Today</span>
+                        <small>0 entries</small>
+                    </div>
+                )}
+                {groups.map(group => (
+                    <div key={group.label}>
+                        <div className="day-divider">
+                            <span>{group.label}</span>
+                            <small>
+                                {group.events.length}{' '}
+                                {group.events.length === 1 ? 'entry' : 'entries'}
+                            </small>
                         </div>
-                    )
-                })}
+                        {group.events.map(event => {
+                            const { icon: Icon, tone } = eventVisual(event.category)
+                            return (
+                                <div className="event roomy" key={event.id}>
+                                    <time>{event.time}</time>
+                                    <div className={`event-icon ${tone}`}>
+                                        <Icon size={17} />
+                                    </div>
+                                    <div className="event-copy">
+                                        <Text fw={600}>{event.title}</Text>
+                                        <Text size="sm" c="dimmed">
+                                            {event.detail}
+                                        </Text>
+                                        {event.source !== 'You' && (
+                                            <Badge variant="light" color="gray">
+                                                {event.source}
+                                            </Badge>
+                                        )}
+                                    </div>
+                                    <Menu>
+                                        <Menu.Target>
+                                            <ActionIcon
+                                                aria-label={`Actions for ${event.title}`}
+                                                variant="subtle"
+                                                color="gray"
+                                            >
+                                                <IconChevronDown size={17} />
+                                            </ActionIcon>
+                                        </Menu.Target>
+                                        <Menu.Dropdown>
+                                            <Menu.Item onClick={() => duplicate(event)}>
+                                                Log a copy
+                                            </Menu.Item>
+                                            {event.source === 'You' && (
+                                                <>
+                                                    <Menu.Item onClick={() => beginEdit(event)}>
+                                                        Edit
+                                                    </Menu.Item>
+                                                    <Menu.Item
+                                                        onClick={() => setDeleting(event)}
+                                                        color="red"
+                                                    >
+                                                        Delete
+                                                    </Menu.Item>
+                                                </>
+                                            )}
+                                        </Menu.Dropdown>
+                                    </Menu>
+                                </div>
+                            )
+                        })}
+                    </div>
+                ))}
                 {shown.length === 0 && events.length > 0 && (
                     <div className="empty-state">
                         <IconSearch size={24} />

@@ -13,7 +13,10 @@ export const createJournalEntrySchema = z.object({
 })
 
 export type CreateJournalEntry = z.infer<typeof createJournalEntrySchema>
-export type JournalEntityLink = { entityType?: 'meal' | 'observation'; entityId?: string }
+export type JournalEntityLink = {
+    entityType?: 'meal' | 'observation' | 'health_record'
+    entityId?: string
+}
 export type JournalEntry = CreateJournalEntry & {
     id: string
     version: number

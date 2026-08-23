@@ -84,6 +84,20 @@ export class DataLifecycleService {
             const cutoff = new Date(Date.now() - rule.days * 24 * 60 * 60 * 1000)
             await this.database.transaction(async transaction => {
                 if (rule.category === 'observations') {
+                    const sourceRecords = await transaction
+                        .select({ id: healthRecords.id })
+                        .from(healthRecords)
+                        .where(lt(healthRecords.startTime, cutoff))
+                    if (sourceRecords.length)
+                        await transaction.delete(journalEntries).where(
+                            and(
+                                eq(journalEntries.entityType, 'health_record'),
+                                inArray(
+                                    journalEntries.entityId,
+                                    sourceRecords.map(record => record.id),
+                                ),
+                            ),
+                        )
                     await transaction
                         .delete(healthRecords)
                         .where(lt(healthRecords.startTime, cutoff))
@@ -142,6 +156,9 @@ export class DataLifecycleService {
     async deleteCategory(category: 'observations' | 'meals' | 'journal') {
         await this.database.transaction(async transaction => {
             if (category === 'observations') {
+                await transaction
+                    .delete(journalEntries)
+                    .where(eq(journalEntries.entityType, 'health_record'))
                 const linked = await transaction.select({ id: observations.id }).from(observations)
                 if (linked.length) {
                     await transaction.delete(journalEntries).where(
