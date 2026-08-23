@@ -1,15 +1,17 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Box, Button, Center, Loader, Notification } from '@mantine/core'
-import { IconCircleCheck, IconPlus } from '@tabler/icons-react'
+import { IconCircleCheck } from '@tabler/icons-react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from './components/Header'
-import type { QuickAddKind } from './components/QuickAdd'
+import { GlobalLogFab } from './components/logging/GlobalLogFab'
+import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
 import { nav } from './domain/data'
 import type { JournalEvent, Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
 import { createObservation } from './lib/observationApi'
+import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
 const Journal = lazy(() => import('./pages/Journal').then(module => ({ default: module.Journal })))
@@ -32,9 +34,6 @@ const Settings = lazy(() =>
 )
 const MobileMore = lazy(() =>
     import('./components/MobileMore').then(module => ({ default: module.MobileMore })),
-)
-const QuickAdd = lazy(() =>
-    import('./components/QuickAdd').then(module => ({ default: module.QuickAdd })),
 )
 const Onboarding = lazy(() =>
     import('./components/Onboarding').then(module => ({ default: module.Onboarding })),
@@ -79,13 +78,13 @@ const currentWeekRange = () => {
 
 export default function App() {
     const navigate = useNavigate()
+    const { openLogger } = useLogger()
     const location = useLocation()
     const page = location.pathname.startsWith('/settings')
         ? 'Settings'
         : location.pathname.startsWith('/connections')
           ? 'Connections'
           : (pathPages[location.pathname] ?? 'Today')
-    const [quick, setQuick] = useState<QuickAddKind | null>(null)
     const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
@@ -160,7 +159,7 @@ export default function App() {
                     toggle={() => setCollapsed(!collapsed)}
                 />
                 <main ref={mainRef} className="main" id="main-content" tabIndex={-1}>
-                    <Header page={page} add={() => setQuick('Meal')} />
+                    <Header page={page} />
                     {syncFailure && (
                         <Box px="xl" pt="md">
                             <SyncStatus message={syncFailure} retry={retry} />
@@ -187,7 +186,7 @@ export default function App() {
                                         openTrends={() => openPage('Trends')}
                                         openConnections={() => openPage('Connections')}
                                         openGoals={() => openPage('Goals')}
-                                        quickAdd={setQuick}
+                                        openLogger={openLogger}
                                         onSelectedDateChange={setSelectedDay}
                                         initialSelectedDate={selectedDay}
                                     />
@@ -247,17 +246,6 @@ export default function App() {
                             <span>{label}</span>
                         </NavLink>
                     ))}
-                <button
-                    className="mobile-add"
-                    type="button"
-                    onClick={() => setQuick('Meal')}
-                    aria-label="Add a health record"
-                >
-                    <span>
-                        <IconPlus size={22} />
-                    </span>
-                    Add
-                </button>
                 {nav
                     .filter(({ label }) => label === 'Trends')
                     .map(({ label, icon: Icon }) => (
@@ -289,28 +277,18 @@ export default function App() {
             </nav>
             <Suspense fallback={null}>
                 <Onboarding />
-                <ReminderPrompt open={setQuick} />
+                <ReminderPrompt open={openLogger} />
             </Suspense>
             {moreOpen && (
                 <Suspense fallback={null}>
                     <MobileMore page={page} close={() => setMoreOpen(false)} />
                 </Suspense>
             )}
-            {quick !== null && (
-                <Suspense fallback={null}>
-                    <QuickAdd
-                        key={quick}
-                        opened
-                        close={() => setQuick(null)}
-                        add={addQuick}
-                        initialKind={quick}
-                        recentEvents={events.filter(event => event.source === 'You')}
-                        selectedDate={
-                            ['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null
-                        }
-                    />
-                </Suspense>
-            )}
+            <LoggerHost
+                add={addQuick}
+                selectedDate={['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null}
+            />
+            <GlobalLogFab />
             {lastAdded && (
                 <Notification
                     className="record-feedback"

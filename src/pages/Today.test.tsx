@@ -27,6 +27,7 @@ vi.mock('../hooks/useTodayHealth', () => ({
 describe('Today', () => {
     it('renders actual progress and opens its contributing trends view', async () => {
         const openTrends = vi.fn()
+        const openLogger = vi.fn()
         render(
             <MantineProvider>
                 <ServerDataProvider
@@ -45,6 +46,7 @@ describe('Today', () => {
                         dismissInsight={vi.fn()}
                         openJournal={vi.fn()}
                         openTrends={openTrends}
+                        openLogger={openLogger}
                     />
                 </ServerDataProvider>
             </MantineProvider>,
@@ -61,6 +63,8 @@ describe('Today', () => {
         expect(screen.getByRole('button', { name: 'Set a water goal' })).toBeInTheDocument()
         expect(screen.queryByLabelText('Daily water progress')).not.toBeInTheDocument()
         expect(screen.getByRole('button', { name: 'Check in now' })).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Check in now' }))
+        expect(openLogger).toHaveBeenCalledWith('energy')
         expect(screen.getByText('No sleep trend yet')).toBeInTheDocument()
         await userEvent.click(screen.getByRole('button', { name: 'View trends' }))
         expect(openTrends).toHaveBeenCalledOnce()

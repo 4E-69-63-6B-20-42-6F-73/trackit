@@ -1527,3 +1527,112 @@ textarea:focus-visible,
         grid-template-columns: 1fr;
     }
 }
+.global-log {
+    position: fixed;
+    right: max(24px, env(safe-area-inset-right));
+    bottom: max(24px, env(safe-area-inset-bottom));
+    z-index: 190;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.global-log-fab,
+.log-speed-dial button {
+    border: 0;
+    box-shadow: 0 8px 24px rgb(26 57 48 / 18%);
+    cursor: pointer;
+    font: inherit;
+}
+
+.global-log-fab {
+    min-width: 104px;
+    min-height: 52px;
+    padding: 0 20px;
+    border-radius: 999px;
+    background: #176b55;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-weight: 700;
+}
+
+.log-speed-dial {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+}
+
+.log-speed-dial button {
+    min-width: 148px;
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 999px;
+    background: white;
+    color: var(--mantine-color-dark-8);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 650;
+}
+
+.global-log-fab:focus-visible,
+.log-speed-dial button:focus-visible,
+.food-logger-results button:focus-visible {
+    outline: 3px solid var(--mantine-color-blue-4);
+    outline-offset: 3px;
+}
+
+.food-logger-results {
+    max-height: 260px;
+    overflow-y: auto;
+    display: grid;
+    gap: 6px;
+}
+
+.food-logger-results button {
+    border: 1px solid var(--mantine-color-gray-3);
+    border-radius: var(--mantine-radius-md);
+    background: white;
+    padding: 10px 12px;
+    text-align: left;
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    cursor: pointer;
+}
+
+.food-logger-results small,
+.food-nutrient-preview small {
+    color: var(--mantine-color-dimmed);
+}
+
+@media (max-width: 48em) {
+    .global-log {
+        right: 16px;
+        bottom: calc(82px + env(safe-area-inset-bottom));
+    }
+
+    .global-log-fab {
+        min-width: 56px;
+        width: 56px;
+        height: 56px;
+        padding: 0;
+    }
+
+    .global-log-fab span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0, 0, 0, 0);
+    }
+
+    .log-speed-dial button {
+        min-width: 136px;
+    }
+}

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Button, Notification } from '@mantine/core'
 import { IconBell } from '@tabler/icons-react'
 import { useServerData } from '../hooks/useServerData'
-import type { QuickAddKind } from './QuickAdd'
+import type { LogActionId } from '../logging/logActions'
 
 const dayKey = (date: Date) => `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
 
-export function ReminderPrompt({ open }: { open: (kind: QuickAddKind) => void }) {
+export function ReminderPrompt({ open }: { open: (kind: LogActionId) => void }) {
     const { preferences } = useServerData()
     const [now, setNow] = useState(() => new Date())
     const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
@@ -67,7 +67,17 @@ export function ReminderPrompt({ open }: { open: (kind: QuickAddKind) => void })
                 size="compact-xs"
                 variant="subtle"
                 onClick={() => {
-                    open(reminder.kind)
+                    open(
+                        reminder.kind === 'Meal'
+                            ? 'food'
+                            : reminder.kind === 'Water'
+                              ? 'water'
+                              : reminder.kind === 'Weight'
+                                ? 'weight'
+                                : reminder.kind === 'Check-in'
+                                  ? 'energy'
+                                  : 'journal',
+                    )
                     dismiss()
                 }}
             >

@@ -36,7 +36,7 @@ import {
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { MetricCard } from '../components/MetricCard'
 import { WeeklyReflection } from '../components/WeeklyReflection'
-import type { QuickAddKind } from '../components/QuickAdd'
+import type { LogActionId } from '../logging/logActions'
 import { eventVisual } from '../domain/data'
 import { displayValue, type Observation } from '../domain/health'
 import { formatMetricValue, friendlySourceName } from '../domain/formatting'
@@ -87,7 +87,7 @@ export function Today({
     openTrends,
     openConnections,
     openGoals,
-    quickAdd,
+    openLogger,
     onSelectedDateChange,
     initialSelectedDate,
 }: {
@@ -98,7 +98,7 @@ export function Today({
     openTrends: () => void
     openConnections?: () => void
     openGoals?: () => void
-    quickAdd?: (kind: QuickAddKind) => void
+    openLogger?: (kind: LogActionId) => void
     onSelectedDateChange?: (date: string) => void
     initialSelectedDate?: string | null
 }) {
@@ -174,7 +174,7 @@ export function Today({
                 detail: 'A quick check-in adds context to sleep, activity, and nutrition.',
                 label: 'Check in now',
                 icon: IconSparkles,
-                run: () => quickAdd?.('Check-in'),
+                run: () => openLogger?.('energy'),
             }
           : !health.weight
             ? {
@@ -183,7 +183,7 @@ export function Today({
                   detail: 'Log it now if weighing in is part of your routine.',
                   label: 'Add weight',
                   icon: IconScale,
-                  run: () => quickAdd?.('Weight'),
+                  run: () => openLogger?.('weight'),
               }
             : !stepsTarget || !waterTarget
               ? {
@@ -280,12 +280,12 @@ export function Today({
                         <Button color="trackit" onClick={nextAction.run} disabled={!nextAction.run}>
                             {nextAction.label}
                         </Button>
-                        {health.unavailable && quickAdd && (
+                        {health.unavailable && openLogger && (
                             <Button
                                 className="manual-use-action"
                                 variant="subtle"
                                 color="gray"
-                                onClick={() => quickAdd('Check-in')}
+                                onClick={() => openLogger('energy')}
                             >
                                 Add a manual check-in instead
                             </Button>
@@ -409,7 +409,7 @@ export function Today({
                                     ? undefined
                                     : {
                                           label: 'How’s your energy?',
-                                          onClick: () => quickAdd?.('Check-in'),
+                                          onClick: () => openLogger?.('energy'),
                                       }
                             }
                         />
@@ -433,7 +433,7 @@ export function Today({
                             action={
                                 health.weight
                                     ? undefined
-                                    : { label: 'Add weight', onClick: () => quickAdd?.('Weight') }
+                                    : { label: 'Add weight', onClick: () => openLogger?.('weight') }
                             }
                         />
                     )}

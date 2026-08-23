@@ -433,7 +433,7 @@ export function Journal({
                         <Text fw={600}>Your journal is ready</Text>
                         <Text size="sm" c="dimmed">
                             Meals, measurements, check-ins, and synced activity will appear here.
-                            Use Quick add to record your first entry.
+                            Use Log to record your first entry.
                         </Text>
                     </div>
                 )}
@@ -501,7 +501,12 @@ export function Journal({
                     <Button
                         color="red"
                         onClick={() => {
-                            if (deleting) remove(deleting.id)
+                            if (deleting) {
+                                remove(deleting.id)
+                                setBoundedEvents(current =>
+                                    current?.filter(event => event.id !== deleting.id) ?? null,
+                                )
+                            }
                             setDeleting(null)
                         }}
                     >

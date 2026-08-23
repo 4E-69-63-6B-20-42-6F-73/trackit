@@ -1,8 +1,7 @@
-import { Button, Group, Text } from '@mantine/core'
-import { IconPlus } from '@tabler/icons-react'
+import { Text } from '@mantine/core'
 import type { Page } from '../domain/types'
 
-export function Header({ page, add }: { page: Page; add: () => void }) {
+export function Header({ page }: { page: Page }) {
     return (
         <header className="topbar">
             <div>
@@ -13,11 +12,6 @@ export function Header({ page, add }: { page: Page; add: () => void }) {
                     TrackIt <span aria-hidden="true">/</span> {page}
                 </Text>
             </div>
-            <Group gap="xs">
-                <Button color="trackit" leftSection={<IconPlus size={18} />} onClick={add}>
-                    Quick add
-                </Button>
-            </Group>
         </header>
     )
 }

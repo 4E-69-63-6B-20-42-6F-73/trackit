@@ -8,6 +8,7 @@ import { AuthGate } from './components/AuthGate'
 import './styles.css'
 import App from './App'
 import { ServerDataProvider } from './hooks/useServerData'
+import { LoggingProvider } from './logging/LoggingContext'
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
@@ -15,7 +16,9 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
             <BrowserRouter>
                 <AuthGate>
                     <ServerDataProvider>
-                        <App />
+                        <LoggingProvider>
+                            <App />
+                        </LoggingProvider>
                     </ServerDataProvider>
                 </AuthGate>
             </BrowserRouter>
