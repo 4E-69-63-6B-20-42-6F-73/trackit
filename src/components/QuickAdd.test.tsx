@@ -44,4 +44,28 @@ describe('QuickAdd', () => {
         await user.click(screen.getByRole('button', { name: 'Log anyway' }))
         expect(add).toHaveBeenLastCalledWith(expect.any(Object), true)
     })
+
+    it('records against the day selected in the current page', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                <QuickAdd
+                    opened
+                    close={vi.fn()}
+                    add={add}
+                    initialKind="Weight"
+                    selectedDate="2026-08-20"
+                />
+            </MantineProvider>,
+        )
+
+        expect(screen.getByText(/Add something to .+20/)).toBeInTheDocument()
+        await user.click(screen.getByRole('button', { name: 'Save weight' }))
+
+        const saved = add.mock.calls[0][0]
+        expect(saved.observedAt).toMatch(/^2026-08-20T/)
+        expect(saved.observation.observedAt).toBe(saved.observedAt)
+    })
 })

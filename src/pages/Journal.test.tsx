@@ -39,7 +39,7 @@ describe('Journal', () => {
         )
 
         const user = userEvent.setup()
-        const search = screen.getByPlaceholderText('Search your journal')
+        const search = screen.getByRole('textbox', { name: 'Search journal' })
 
         await user.type(search, 'walk')
 
@@ -95,6 +95,7 @@ describe('Journal', () => {
         )
 
         const user = userEvent.setup()
+        await user.click(screen.getByText('Single day'))
         fireEvent.change(screen.getByLabelText('Journal date'), {
             target: { value: '2026-08-23' },
         })
@@ -102,7 +103,7 @@ describe('Journal', () => {
         expect(screen.getByText('Breakfast')).toBeInTheDocument()
         expect(screen.queryByText('Walk')).not.toBeInTheDocument()
 
-        await user.click(screen.getByRole('button', { name: 'All dates' }))
+        await user.click(screen.getByText('All entries'))
         expect(screen.getByText('Walk')).toBeInTheDocument()
     })
 })

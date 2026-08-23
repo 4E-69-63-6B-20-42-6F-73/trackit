@@ -66,6 +66,8 @@ export default function App() {
           ? 'Connections'
           : (pathPages[location.pathname] ?? 'Today')
     const [quick, setQuick] = useState<QuickAddKind | null>(null)
+    const [todayDate, setTodayDate] = useState<string | null>(null)
+    const [journalDate, setJournalDate] = useState<string | null>(null)
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
     const [insight, setInsight] = useState(true)
@@ -155,6 +157,7 @@ export default function App() {
                                         openConnections={() => openPage('Connections')}
                                         openGoals={() => openPage('Goals')}
                                         quickAdd={setQuick}
+                                        onSelectedDateChange={setTodayDate}
                                     />
                                 }
                             />
@@ -166,6 +169,7 @@ export default function App() {
                                         remove={remove}
                                         duplicate={duplicate}
                                         update={update}
+                                        onSelectedDateChange={setJournalDate}
                                     />
                                 }
                             />
@@ -257,6 +261,9 @@ export default function App() {
                         add={addQuick}
                         initialKind={quick}
                         recentEvents={events.filter(event => event.source === 'You')}
+                        selectedDate={
+                            page === 'Today' ? todayDate : page === 'Journal' ? journalDate : null
+                        }
                     />
                 </Suspense>
             )}

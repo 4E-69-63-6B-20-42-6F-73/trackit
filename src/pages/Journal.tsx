@@ -1,5 +1,15 @@
-import { useMemo, useState } from 'react'
-import { ActionIcon, Badge, Button, Group, Menu, Modal, Text, TextInput } from '@mantine/core'
+import { useEffect, useMemo, useState } from 'react'
+import {
+    ActionIcon,
+    Badge,
+    Button,
+    Group,
+    Menu,
+    Modal,
+    SegmentedControl,
+    Text,
+    TextInput,
+} from '@mantine/core'
 import {
     IconChevronDown,
     IconChevronLeft,
@@ -18,6 +28,7 @@ export function Journal({
     remove,
     duplicate,
     update,
+    onSelectedDateChange,
 }: {
     events: JournalEvent[]
     remove: (id: string) => void
@@ -26,6 +37,7 @@ export function Journal({
         event: JournalEvent,
         changes: Pick<JournalEvent, 'title' | 'detail' | 'time'>,
     ) => Promise<boolean>
+    onSelectedDateChange?: (date: string | null) => void
 }) {
     const [filter, setFilter] = useState<'All' | Category>('All')
     const [query, setQuery] = useState('')
@@ -34,6 +46,7 @@ export function Journal({
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
+    useEffect(() => onSelectedDateChange?.(selectedDate), [onSelectedDateChange, selectedDate])
     const shown = useMemo(
         () =>
             events.filter(
@@ -95,57 +108,79 @@ export function Journal({
                         Everything you’ve logged and synced, in one honest timeline.
                     </Text>
                 </div>
-                <TextInput
-                    value={query}
-                    onChange={event => setQuery(event.currentTarget.value)}
-                    placeholder="Search your journal"
-                    leftSection={<IconSearch size={16} />}
-                />
             </div>
-            <div className="day-navigation" aria-label="Journal day">
-                <ActionIcon variant="default" aria-label="Previous day" onClick={() => moveDay(-1)}>
-                    <IconChevronLeft size={18} />
-                </ActionIcon>
-                <TextInput
-                    type="date"
-                    aria-label="Journal date"
-                    value={selectedDate ?? ''}
-                    onChange={event => setSelectedDate(event.currentTarget.value || null)}
-                />
-                <ActionIcon variant="default" aria-label="Next day" onClick={() => moveDay(1)}>
-                    <IconChevronRight size={18} />
-                </ActionIcon>
-                <Button
-                    variant="default"
-                    size="xs"
-                    onClick={() => setSelectedDate(localDateKey(new Date()))}
-                >
-                    Today
-                </Button>
-                <Button
-                    variant={selectedDate ? 'subtle' : 'filled'}
-                    color={selectedDate ? 'gray' : 'dark'}
-                    size="xs"
-                    onClick={() => setSelectedDate(null)}
-                >
-                    All dates
-                </Button>
-            </div>
-            <div className="filter-row" aria-label="Journal categories">
-                {(['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const).map(
-                    category => (
+            <div className="journal-toolbar">
+                <div className="journal-toolbar-primary">
+                    <SegmentedControl
+                        aria-label="Journal time range"
+                        value={selectedDate ? 'day' : 'all'}
+                        onChange={value =>
+                            setSelectedDate(value === 'day' ? localDateKey(new Date()) : null)
+                        }
+                        data={[
+                            { label: 'All entries', value: 'all' },
+                            { label: 'Single day', value: 'day' },
+                        ]}
+                    />
+                    {selectedDate && (
+                        <div className="journal-date-navigation" aria-label="Journal day">
+                            <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                aria-label="Previous day"
+                                onClick={() => moveDay(-1)}
+                            >
+                                <IconChevronLeft size={18} />
+                            </ActionIcon>
+                            <TextInput
+                                type="date"
+                                aria-label="Journal date"
+                                value={selectedDate}
+                                onChange={event => setSelectedDate(event.currentTarget.value)}
+                            />
+                            <ActionIcon
+                                variant="subtle"
+                                color="gray"
+                                aria-label="Next day"
+                                onClick={() => moveDay(1)}
+                            >
+                                <IconChevronRight size={18} />
+                            </ActionIcon>
+                            <Button
+                                variant="subtle"
+                                color="gray"
+                                size="xs"
+                                onClick={() => setSelectedDate(localDateKey(new Date()))}
+                            >
+                                Today
+                            </Button>
+                        </div>
+                    )}
+                    <TextInput
+                        className="journal-search"
+                        value={query}
+                        onChange={event => setQuery(event.currentTarget.value)}
+                        placeholder="Search entries"
+                        aria-label="Search journal"
+                        leftSection={<IconSearch size={16} />}
+                    />
+                </div>
+                <div className="filter-row" aria-label="Journal categories">
+                    {(
+                        ['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const
+                    ).map(category => (
                         <Button
                             onClick={() => setFilter(category)}
                             key={category}
-                            variant={filter === category ? 'filled' : 'default'}
-                            color={filter === category ? 'dark' : undefined}
+                            variant={filter === category ? 'filled' : 'subtle'}
+                            color={filter === category ? 'dark' : 'gray'}
                             radius="xl"
                             size="xs"
                         >
                             {category}
                         </Button>
-                    ),
-                )}
+                    ))}
+                </div>
             </div>
             <section className="panel timeline">
                 {events.length === 0 && (

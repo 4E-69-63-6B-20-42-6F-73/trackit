@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
     ActionIcon,
     Badge,
@@ -75,6 +75,7 @@ export function Today({
     openConnections,
     openGoals,
     quickAdd,
+    onSelectedDateChange,
 }: {
     events: JournalEvent[]
     insight: boolean
@@ -84,6 +85,7 @@ export function Today({
     openConnections?: () => void
     openGoals?: () => void
     quickAdd?: (kind: QuickAddKind) => void
+    onSelectedDateChange?: (date: string) => void
 }) {
     const [selectedDate, setSelectedDate] = useState(() => new Date())
     const [customizing, setCustomizing] = useState(false)
@@ -99,6 +101,11 @@ export function Today({
             return next
         })
     }
+    useEffect(() => {
+        onSelectedDateChange?.(
+            `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`,
+        )
+    }, [onSelectedDateChange, selectedDate])
     const locale = health.preferences?.locale
     const timezone = health.preferences?.timezone
     const localHour = Number(

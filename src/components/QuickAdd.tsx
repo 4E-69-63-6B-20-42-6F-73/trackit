@@ -22,12 +22,14 @@ export function QuickAdd({
     add,
     initialKind,
     recentEvents = [],
+    selectedDate,
 }: {
     opened: boolean
     close: () => void
     add: (event: JournalEvent, allowDuplicate?: boolean) => boolean | void
     initialKind?: QuickAddKind
     recentEvents?: JournalEvent[]
+    selectedDate?: string | null
 }) {
     const [kind, setKind] = useState<QuickAddKind>(initialKind ?? 'Meal')
     const hour = new Date().getHours()
@@ -52,6 +54,26 @@ export function QuickAdd({
             .then(preferences => setRoutines(preferences.experience?.routines ?? []))
             .catch(() => undefined)
     }, [])
+    const selectedTimestamp = () => {
+        const now = new Date()
+        if (!selectedDate) return now.toISOString()
+        const [year, month, day] = selectedDate.split('-').map(Number)
+        return new Date(
+            year,
+            month - 1,
+            day,
+            now.getHours(),
+            now.getMinutes(),
+            now.getSeconds(),
+        ).toISOString()
+    }
+    const selectedDateLabel = selectedDate
+        ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, {
+              weekday: 'short',
+              month: 'short',
+              day: 'numeric',
+          })
+        : 'today'
     const finish = (event: JournalEvent, allowDuplicate = false) => {
         const result = allowDuplicate ? add(event, true) : add(event)
         if (result === false) {
@@ -72,7 +94,7 @@ export function QuickAdd({
     }
     const submit = () => {
         const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        const recordedAt = new Date().toISOString()
+        const recordedAt = selectedTimestamp()
         let event: JournalEvent
         if (kind === 'Meal')
             event = {
@@ -97,7 +119,7 @@ export function QuickAdd({
                     metric: 'water',
                     value: Number(amount) || 0,
                     unit: 'ml',
-                    observedAt: new Date().toISOString(),
+                    observedAt: recordedAt,
                 },
             }
         else if (kind === 'Weight')
@@ -113,7 +135,7 @@ export function QuickAdd({
                     metric: 'weight',
                     value: Number(amount) || 0,
                     unit: 'kg',
-                    observedAt: new Date().toISOString(),
+                    observedAt: recordedAt,
                 },
             }
         else if (kind === 'Check-in')
@@ -129,7 +151,7 @@ export function QuickAdd({
                     metric: 'energy',
                     value: Number(energy?.split(' ')[0]) || 5,
                     unit: 'score',
-                    observedAt: new Date().toISOString(),
+                    observedAt: recordedAt,
                 },
             }
         else if (kind === 'Symptom')
@@ -161,7 +183,7 @@ export function QuickAdd({
                     }`,
                     value: Number(severity) || 5,
                     unit: 'score',
-                    observedAt: new Date().toISOString(),
+                    observedAt: recordedAt,
                 },
             }
         else
@@ -196,7 +218,7 @@ export function QuickAdd({
                         Quick add
                     </Text>
                     <Text size="sm" c="dimmed">
-                        Add something to today
+                        Add something to {selectedDateLabel}
                     </Text>
                 </div>
             }
@@ -240,10 +262,11 @@ export function QuickAdd({
                                             }),
                                             source: 'You',
                                             version: undefined,
+                                            observedAt: selectedTimestamp(),
                                             observation: event.observation
                                                 ? {
                                                       ...event.observation,
-                                                      observedAt: new Date().toISOString(),
+                                                      observedAt: selectedTimestamp(),
                                                   }
                                                 : undefined,
                                         })
