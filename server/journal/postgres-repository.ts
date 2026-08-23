@@ -1,4 +1,4 @@
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lte } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { journalEntries } from '../db/schema.js'
@@ -6,6 +6,7 @@ import type {
     CreateJournalEntry,
     JournalEntityLink,
     JournalEntry,
+    JournalListQuery,
     JournalRepository,
     UpdateJournalEntry,
 } from './types.js'
@@ -32,12 +33,16 @@ const toEntry = (row: typeof journalEntries.$inferSelect): JournalEntry => ({
 export class PostgresJournalRepository implements JournalRepository {
     constructor(private readonly database: Database) {}
 
-    async list() {
-        const rows = await this.database
+    async list(query: JournalListQuery = {}) {
+        const conditions = [isNull(journalEntries.deletedAt)]
+        if (query.from) conditions.push(gte(journalEntries.observedAt, new Date(query.from)))
+        if (query.to) conditions.push(lte(journalEntries.observedAt, new Date(query.to)))
+        const statement = this.database
             .select()
             .from(journalEntries)
-            .where(isNull(journalEntries.deletedAt))
+            .where(and(...conditions))
             .orderBy(desc(journalEntries.observedAt))
+        const rows = query.limit ? await statement.limit(query.limit) : await statement
         return rows.map(toEntry)
     }
 

@@ -1,5 +1,6 @@
 import { environment } from '../app/env'
 import type { JournalEvent } from '../domain/types'
+import { sharedJsonRequest } from './sharedRequest'
 
 type ApiJournalEntry = {
     id: string
@@ -62,10 +63,19 @@ export async function updateJournal(
     return toEvent(body.data)
 }
 
-export async function listJournal(): Promise<JournalEvent[]> {
-    const response = await fetch(apiUrl('/api/journal'), { credentials: 'same-origin' })
-    if (!response.ok) throw new Error(`Journal request failed (${response.status})`)
-    const body = (await response.json()) as { data: ApiJournalEntry[] }
+export async function listJournal(
+    query: { from?: string; to?: string; limit?: number } = {},
+    signal?: AbortSignal,
+): Promise<JournalEvent[]> {
+    const search = new URLSearchParams(
+        Object.entries(query)
+            .filter((entry): entry is [string, string | number] => entry[1] !== undefined)
+            .map(([key, value]) => [key, String(value)]),
+    )
+    const body = await sharedJsonRequest<{ data: ApiJournalEntry[] }>(
+        apiUrl(`/api/journal?${search}`),
+        signal,
+    )
     return body.data.map(toEvent)
 }
 

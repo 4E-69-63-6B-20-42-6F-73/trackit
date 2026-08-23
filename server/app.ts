@@ -734,7 +734,24 @@ export async function createApp(
         }
     })
 
-    app.get('/api/journal', async () => ({ data: await repository.list() }))
+    app.get<{ Querystring: { from?: string; to?: string; limit?: string } }>(
+        '/api/journal',
+        async (request, reply) => {
+            const query = z
+                .object({
+                    from: z.string().datetime().optional(),
+                    to: z.string().datetime().optional(),
+                    limit: z.coerce.number().int().min(1).max(500).default(100),
+                })
+                .refine(value => !value.from || !value.to || value.from <= value.to, {
+                    message: 'from must be before to',
+                    path: ['from'],
+                })
+                .safeParse(request.query)
+            if (!query.success) return badRequest(request, reply, { validation: query.error })
+            return { data: await repository.list(query.data) }
+        },
+    )
     app.post('/api/journal', async (request, reply) => {
         const result = createJournalEntrySchema.safeParse(request.body)
         if (!result.success) {

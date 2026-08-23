@@ -21,6 +21,7 @@ import { RecipeYieldModal } from '../components/RecipeYieldModal'
 import { NewRecipeModal } from '../components/NewRecipeModal'
 import { RecentMeals } from '../components/RecentMeals'
 import { emptyNutrients, nutrientsFor, roundedNutrients, type Food } from '../domain/nutrition'
+import { useServerData } from '../hooks/useServerData'
 import {
     listMeals,
     listRecipes,
@@ -32,7 +33,6 @@ import {
     type MealRecord,
     type RecipeRecord,
 } from '../lib/nutritionApi'
-import { getPreferences } from '../lib/preferencesApi'
 
 export function Nutrition() {
     const [foods, setFoods] = useState<Food[]>([])
@@ -50,7 +50,8 @@ export function Nutrition() {
     const [editingMeal, setEditingMeal] = useState<MealRecord | null>(null)
     const [editingRecipe, setEditingRecipe] = useState<RecipeRecord | null>(null)
     const [editingFood, setEditingFood] = useState<Food | null>(null)
-    const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    const { preferences } = useServerData()
+    const timezone = preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -78,9 +79,6 @@ export function Nutrition() {
 
     useEffect(() => {
         refreshNutrition()
-        void getPreferences()
-            .then(preferences => setTimezone(preferences.timezone))
-            .catch(() => undefined)
     }, [refreshNutrition])
 
     const nutrients = useMemo(

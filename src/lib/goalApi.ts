@@ -10,8 +10,8 @@ export type GoalRecord = {
     schedule: { weekdays?: number[] }
 }
 
-export async function listGoals(): Promise<GoalRecord[]> {
-    const response = await authRequest('/api/goals')
+export async function listGoals(signal?: AbortSignal): Promise<GoalRecord[]> {
+    const response = await authRequest('/api/goals', { signal })
     if (!response.ok) throw new Error('Goals unavailable')
     return ((await response.json()) as { data: GoalRecord[] }).data
 }
@@ -24,7 +24,9 @@ export async function createGoal(input: Omit<GoalRecord, 'id'>) {
         body: JSON.stringify({ ...required, ...(effectiveTo ? { effectiveTo } : {}) }),
     })
     if (!response.ok) throw new Error('Could not create goal')
-    return ((await response.json()) as { data: GoalRecord }).data
+    const saved = ((await response.json()) as { data: GoalRecord }).data
+    window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
+    return saved
 }
 
 export async function retireGoal(goal: GoalRecord) {
@@ -34,5 +36,7 @@ export async function retireGoal(goal: GoalRecord) {
         body: JSON.stringify({ effectiveTo: new Date().toISOString() }),
     })
     if (!response.ok) throw new Error('Could not retire goal')
-    return ((await response.json()) as { data: GoalRecord }).data
+    const saved = ((await response.json()) as { data: GoalRecord }).data
+    window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
+    return saved
 }

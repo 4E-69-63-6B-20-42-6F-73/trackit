@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
     Button,
     Alert,
@@ -12,7 +12,7 @@ import {
 } from '@mantine/core'
 import { IconSearch } from '@tabler/icons-react'
 import type { JournalEvent } from '../domain/types'
-import { getPreferences, type ExperiencePreferences } from '../lib/preferencesApi'
+import { useServerData } from '../hooks/useServerData'
 
 export type QuickAddKind = 'Meal' | 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
 
@@ -45,15 +45,11 @@ export function QuickAdd({
     const [duration, setDuration] = useState('')
     const [tags, setTags] = useState('')
     const [duplicate, setDuplicate] = useState<JournalEvent | null>(null)
-    const [routines, setRoutines] = useState<NonNullable<ExperiencePreferences['routines']>>([])
+    const { preferences } = useServerData()
+    const routines = preferences?.experience?.routines ?? []
     const [routineQueue, setRoutineQueue] = useState<QuickAddKind[]>([])
     const [activeRoutine, setActiveRoutine] = useState('')
 
-    useEffect(() => {
-        void getPreferences()
-            .then(preferences => setRoutines(preferences.experience?.routines ?? []))
-            .catch(() => undefined)
-    }, [])
     const selectedTimestamp = () => {
         const now = new Date()
         if (!selectedDate) return now.toISOString()

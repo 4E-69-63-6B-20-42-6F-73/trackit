@@ -13,9 +13,10 @@ import {
     TextInput,
 } from '@mantine/core'
 import { IconTargetArrow } from '@tabler/icons-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
-import { createGoal, listGoals, retireGoal, type GoalRecord } from '../lib/goalApi'
+import { createGoal, retireGoal, type GoalRecord } from '../lib/goalApi'
+import { useServerData } from '../hooks/useServerData'
 
 const metricDefaults: Record<string, number> = {
     steps: 10_000,
@@ -92,23 +93,15 @@ function GoalCard({ goal, onRetire }: { goal: GoalRecord; onRetire: () => Promis
 }
 
 export function GoalsPanel() {
-    const [goals, setGoals] = useState<GoalRecord[]>([])
+    const { goals, loading } = useServerData()
     const [metric, setMetric] = useState<string | null>('steps')
     const [target, setTarget] = useState<number | string>(10_000)
     const [effectiveDate, setEffectiveDate] = useState(new Date().toISOString().slice(0, 10))
     const [effectiveTo, setEffectiveTo] = useState('')
     const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>([])
-    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
-
-    useEffect(() => {
-        void listGoals()
-            .then(setGoals)
-            .catch(() => setError('Goals are unavailable. Check the server connection and retry.'))
-            .finally(() => setLoading(false))
-    }, [])
 
     const selectedDefinition = metricDefinition(metric)
     const activeGoals = useMemo(
@@ -128,7 +121,7 @@ export function GoalsPanel() {
         setMessage('')
         setError('')
         try {
-            const goal = await createGoal({
+            await createGoal({
                 metric,
                 targetValue: Number(target),
                 canonicalUnit: selectedDefinition.unit,
@@ -136,7 +129,6 @@ export function GoalsPanel() {
                 effectiveTo: effectiveTo ? new Date(`${effectiveTo}T23:59:59`).toISOString() : null,
                 schedule: { weekdays: selectedWeekdays.map(Number) },
             })
-            setGoals(current => [goal, ...current])
             setMessage(`${selectedDefinition.label} goal added.`)
         } catch {
             setError('The goal could not be saved. Check the values and try again.')
@@ -149,8 +141,7 @@ export function GoalsPanel() {
         setError('')
         setMessage('')
         try {
-            const retired = await retireGoal(goal)
-            setGoals(current => current.map(item => (item.id === retired.id ? retired : item)))
+            await retireGoal(goal)
             setMessage(`${metricDefinition(goal.metric)?.label ?? goal.metric} goal retired.`)
         } catch {
             setError('The goal could not be retired. Try again.')

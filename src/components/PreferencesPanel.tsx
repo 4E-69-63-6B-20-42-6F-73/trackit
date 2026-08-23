@@ -1,21 +1,19 @@
 import { Alert, Button, Loader, Select, Stack, TextInput } from '@mantine/core'
 import { useEffect, useState } from 'react'
-import { getPreferences, updatePreferences, type Preferences } from '../lib/preferencesApi'
+import { updatePreferences, type Preferences } from '../lib/preferencesApi'
+import { useServerData } from '../hooks/useServerData'
 
 export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
-    const [value, setValue] = useState<Preferences | null>(null)
+    const { preferences, loading } = useServerData()
+    const [value, setValue] = useState<Preferences | null>(preferences)
     const [message, setMessage] = useState('')
     const [saving, setSaving] = useState(false)
 
     useEffect(() => {
-        void getPreferences()
-            .then(setValue)
-            .catch(() =>
-                setMessage('Preferences are unavailable. Connect to the TrackIt server and retry.'),
-            )
-    }, [])
+        queueMicrotask(() => setValue(preferences))
+    }, [preferences])
 
-    if (!value && !message) return <Loader role="status" aria-label="Loading preferences" />
+    if (loading && !value) return <Loader role="status" aria-label="Loading preferences" />
     if (!value) return <Alert color="orange">{message}</Alert>
 
     const save = async () => {
