@@ -227,27 +227,26 @@ textarea:focus-visible,
     gap: 8px;
 }
 .journal-toolbar {
-    background: color-mix(in srgb, var(--surface) 78%, transparent);
-    border: 1px solid var(--border);
-    border-radius: 16px;
-    margin: 24px 0 16px;
-    padding: 10px 12px 8px;
-    position: sticky;
-    top: 80px;
-    z-index: 4;
+    align-items: center;
+    display: flex;
+    gap: 12px;
+    justify-content: flex-end;
+    margin: 0 0 24px;
 }
 .journal-toolbar-primary,
 .journal-date-navigation {
-    align-items: center;
     display: flex;
     gap: 6px;
 }
 .journal-toolbar-primary {
+    align-items: stretch;
+    flex-direction: column;
     gap: 12px;
 }
 .journal-date-navigation {
-    border-left: 1px solid var(--border);
-    padding-left: 12px;
+    align-items: center;
+    border: 0;
+    padding: 0;
 }
 .journal-date-navigation .mantine-TextInput-root {
     width: 150px;
@@ -257,7 +256,7 @@ textarea:focus-visible,
     width: 260px;
 }
 .journal-source {
-    width: 180px;
+    width: 100%;
 }
 .journal-result-count {
     border-bottom: 1px solid var(--line);
@@ -388,6 +387,16 @@ textarea:focus-visible,
     padding: 17px;
     min-height: 145px;
     position: relative;
+}
+.metric-card-clickable {
+    cursor: pointer;
+}
+.metric-card-clickable:hover {
+    border-color: var(--mantine-color-trackit-5);
+}
+.metric-card-clickable:focus-visible {
+    outline: 2px solid var(--mantine-color-trackit-6);
+    outline-offset: 2px;
 }
 .metric-action {
     margin-left: -8px;
@@ -592,9 +601,8 @@ textarea:focus-visible,
     margin: 25px 0 15px;
 }
 .journal-toolbar .filter-row {
-    border-top: 1px solid var(--border);
-    margin: 10px 0 0;
-    padding-top: 8px;
+    flex-wrap: wrap;
+    margin: 0;
 }
 .filter-row .mantine-Button-root {
     flex: 0 0 auto;
@@ -611,6 +619,19 @@ textarea:focus-visible,
     font-weight: 500;
 }
 .event.roomy {
+    min-height: 78px;
+}
+.journal-page > .page-header {
+    display: none;
+}
+.journal-timeline {
+    padding: 16px 22px 6px;
+}
+.journal-timeline .day-divider {
+    border-bottom: 1px solid var(--line);
+    padding: 8px 0 15px;
+}
+.journal-timeline .event {
     min-height: 78px;
 }
 .empty-state {

@@ -200,11 +200,9 @@ export default function App() {
                                         remove={remove}
                                         duplicate={duplicate}
                                         update={update}
-                                        onSelectedDateChange={setSelectedDay}
                                         hasOlder={hasOlder}
                                         loadingOlder={loadingOlder}
                                         loadOlder={loadOlder}
-                                        initialSelectedDate={selectedDay}
                                     />
                                 }
                             />

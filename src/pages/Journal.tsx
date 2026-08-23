@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
     ActionIcon,
-    Badge,
     Button,
     Group,
     Menu,
     Modal,
+    Popover,
     SegmentedControl,
+    Stack,
     Text,
     TextInput,
     Select,
@@ -15,10 +16,11 @@ import {
     IconDots,
     IconChevronLeft,
     IconChevronRight,
+    IconFilter,
     IconPlus,
     IconSearch,
 } from '@tabler/icons-react'
-import { eventVisual } from '../domain/data'
+import { JournalEventList } from '../components/JournalEventList'
 import { PageHeader } from '../components/PageHeader'
 import type { Category, JournalEvent } from '../domain/types'
 import { useSearchParams } from 'react-router-dom'
@@ -57,11 +59,21 @@ export function Journal({
     const [query, setQuery] = useState(params.get('q') ?? '')
     const [source, setSource] = useState<string | null>(params.get('source'))
     const [device, setDevice] = useState<string | null>(params.get('device'))
+    const hasExplicitDateFilter =
+        params.has('date') || params.has('from') || params.has('to') || Boolean(initialSelectedDate)
+    const defaultRangeEnd = localDateKey(new Date())
+    const defaultRangeStartDate = new Date()
+    defaultRangeStartDate.setDate(defaultRangeStartDate.getDate() - 6)
+    const defaultRangeStart = localDateKey(defaultRangeStartDate)
     const [selectedDate, setSelectedDate] = useState<string | null>(
         params.get('date') ?? initialSelectedDate ?? null,
     )
-    const [rangeFrom, setRangeFrom] = useState(params.get('from') ?? '')
-    const [rangeTo, setRangeTo] = useState(params.get('to') ?? '')
+    const [rangeFrom, setRangeFrom] = useState(
+        params.get('from') ?? (hasExplicitDateFilter ? '' : defaultRangeStart),
+    )
+    const [rangeTo, setRangeTo] = useState(
+        params.get('to') ?? (hasExplicitDateFilter ? '' : defaultRangeEnd),
+    )
     const [boundedEvents, setBoundedEvents] = useState<JournalEvent[] | null>(null)
     const [editing, setEditing] = useState<JournalEvent | null>(null)
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
@@ -207,6 +219,25 @@ export function Journal({
         date.setDate(date.getDate() + days)
         setSelectedDate(localDateKey(date))
     }
+    const showEarlier = () => {
+        const startKey = selectedDate || rangeFrom || rangeTo
+        const endKey = selectedDate || rangeTo || rangeFrom
+        if (!startKey || !endKey) return
+        const start = new Date(`${startKey}T12:00:00`)
+        const end = new Date(`${endKey}T12:00:00`)
+        const selectedDayCount = Math.max(
+            1,
+            Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000)) + 1,
+        )
+        start.setDate(start.getDate() - Math.min(selectedDayCount, 7))
+        setSelectedDate(null)
+        setRangeFrom(localDateKey(start))
+        setRangeTo(endKey)
+    }
+    const activeFilterCount =
+        Number(Boolean(selectedDate || rangeFrom || rangeTo)) +
+        Number(Boolean(source)) +
+        Number(Boolean(device))
 
     return (
         <div className="page-content journal-page">
@@ -215,113 +246,6 @@ export function Journal({
                 description="Everything you’ve logged and synced, in one honest timeline."
             />
             <div className="journal-toolbar">
-                <div className="journal-toolbar-primary">
-                    <SegmentedControl
-                        aria-label="Journal time range"
-                        value={selectedDate ? 'day' : rangeFrom || rangeTo ? 'range' : 'all'}
-                        onChange={value => {
-                            setSelectedDate(value === 'day' ? localDateKey(new Date()) : null)
-                            if (value === 'range') {
-                                const today = localDateKey(new Date())
-                                setRangeFrom(current => current || today)
-                                setRangeTo(current => current || today)
-                            } else {
-                                setRangeFrom('')
-                                setRangeTo('')
-                            }
-                        }}
-                        data={[
-                            { label: 'All entries', value: 'all' },
-                            { label: 'Single day', value: 'day' },
-                            { label: 'Date range', value: 'range' },
-                        ]}
-                    />
-                    {selectedDate && (
-                        <div className="journal-date-navigation" aria-label="Journal day">
-                            <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                aria-label="Previous day"
-                                onClick={() => moveDay(-1)}
-                            >
-                                <IconChevronLeft size={18} />
-                            </ActionIcon>
-                            <TextInput
-                                type="date"
-                                aria-label="Journal date"
-                                value={selectedDate}
-                                onChange={event => setSelectedDate(event.currentTarget.value)}
-                            />
-                            <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                aria-label="Next day"
-                                onClick={() => moveDay(1)}
-                            >
-                                <IconChevronRight size={18} />
-                            </ActionIcon>
-                            <Button
-                                variant="subtle"
-                                color="gray"
-                                size="xs"
-                                onClick={() => setSelectedDate(localDateKey(new Date()))}
-                            >
-                                Today
-                            </Button>
-                        </div>
-                    )}
-                    {!selectedDate && (rangeFrom || rangeTo) && (
-                        <div className="journal-date-navigation" aria-label="Journal date range">
-                            <TextInput
-                                type="date"
-                                aria-label="Journal start date"
-                                value={rangeFrom}
-                                max={rangeTo || undefined}
-                                onChange={event => setRangeFrom(event.currentTarget.value)}
-                            />
-                            <Text size="sm" c="dimmed">
-                                to
-                            </Text>
-                            <TextInput
-                                type="date"
-                                aria-label="Journal end date"
-                                value={rangeTo}
-                                min={rangeFrom || undefined}
-                                onChange={event => setRangeTo(event.currentTarget.value)}
-                            />
-                        </div>
-                    )}
-                    <TextInput
-                        className="journal-search"
-                        value={query}
-                        onChange={event => setQuery(event.currentTarget.value)}
-                        placeholder="Search entries"
-                        aria-label="Search journal"
-                        leftSection={<IconSearch size={16} />}
-                    />
-                    <Select
-                        className="journal-source"
-                        clearable
-                        searchable
-                        value={source}
-                        onChange={setSource}
-                        placeholder="All sources"
-                        aria-label="Filter journal by source"
-                        data={sources}
-                    />
-                    {devices.length > 0 && (
-                        <Select
-                            className="journal-source"
-                            clearable
-                            searchable
-                            value={device}
-                            onChange={setDevice}
-                            placeholder="All devices"
-                            aria-label="Filter journal by device"
-                            data={devices}
-                        />
-                    )}
-                </div>
                 <div className="filter-row" aria-label="Journal categories">
                     {(
                         ['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const
@@ -338,12 +262,163 @@ export function Journal({
                         </Button>
                     ))}
                 </div>
+                <TextInput
+                    className="journal-search"
+                    value={query}
+                    onChange={event => setQuery(event.currentTarget.value)}
+                    placeholder="Search entries"
+                    aria-label="Search journal"
+                    leftSection={<IconSearch size={16} />}
+                />
+                <Popover width={460} position="bottom-end" shadow="md">
+                    <Popover.Target>
+                        <Button variant="default" leftSection={<IconFilter size={16} />}>
+                            Filters{activeFilterCount ? ` (${activeFilterCount})` : ''}
+                        </Button>
+                    </Popover.Target>
+                    <Popover.Dropdown>
+                        <Stack gap="md">
+                            <div className="journal-toolbar-primary">
+                                <SegmentedControl
+                                    aria-label="Journal time range"
+                                    value={
+                                        selectedDate
+                                            ? 'day'
+                                            : rangeFrom || rangeTo
+                                              ? 'range'
+                                              : 'all'
+                                    }
+                                    onChange={value => {
+                                        setSelectedDate(
+                                            value === 'day' ? localDateKey(new Date()) : null,
+                                        )
+                                        if (value === 'range') {
+                                            const today = localDateKey(new Date())
+                                            setRangeFrom(current => current || today)
+                                            setRangeTo(current => current || today)
+                                        } else {
+                                            setRangeFrom('')
+                                            setRangeTo('')
+                                        }
+                                    }}
+                                    data={[
+                                        { label: 'All entries', value: 'all' },
+                                        { label: 'Single day', value: 'day' },
+                                        { label: 'Date range', value: 'range' },
+                                    ]}
+                                />
+                                {selectedDate && (
+                                    <div
+                                        className="journal-date-navigation"
+                                        aria-label="Journal day"
+                                    >
+                                        <ActionIcon
+                                            variant="subtle"
+                                            color="gray"
+                                            aria-label="Previous day"
+                                            onClick={() => moveDay(-1)}
+                                        >
+                                            <IconChevronLeft size={18} />
+                                        </ActionIcon>
+                                        <TextInput
+                                            type="date"
+                                            aria-label="Journal date"
+                                            value={selectedDate}
+                                            onChange={event =>
+                                                setSelectedDate(event.currentTarget.value)
+                                            }
+                                        />
+                                        <ActionIcon
+                                            variant="subtle"
+                                            color="gray"
+                                            aria-label="Next day"
+                                            onClick={() => moveDay(1)}
+                                        >
+                                            <IconChevronRight size={18} />
+                                        </ActionIcon>
+                                        <Button
+                                            variant="subtle"
+                                            color="gray"
+                                            size="xs"
+                                            onClick={() =>
+                                                setSelectedDate(localDateKey(new Date()))
+                                            }
+                                        >
+                                            Today
+                                        </Button>
+                                    </div>
+                                )}
+                                {!selectedDate && (rangeFrom || rangeTo) && (
+                                    <div
+                                        className="journal-date-navigation"
+                                        aria-label="Journal date range"
+                                    >
+                                        <TextInput
+                                            type="date"
+                                            aria-label="Journal start date"
+                                            value={rangeFrom}
+                                            max={rangeTo || undefined}
+                                            onChange={event =>
+                                                setRangeFrom(event.currentTarget.value)
+                                            }
+                                        />
+                                        <Text size="sm" c="dimmed">
+                                            to
+                                        </Text>
+                                        <TextInput
+                                            type="date"
+                                            aria-label="Journal end date"
+                                            value={rangeTo}
+                                            min={rangeFrom || undefined}
+                                            onChange={event =>
+                                                setRangeTo(event.currentTarget.value)
+                                            }
+                                        />
+                                    </div>
+                                )}
+                                <Select
+                                    className="journal-source"
+                                    clearable
+                                    searchable
+                                    value={source}
+                                    onChange={setSource}
+                                    placeholder="All sources"
+                                    aria-label="Filter journal by source"
+                                    data={sources}
+                                />
+                                {devices.length > 0 && (
+                                    <Select
+                                        className="journal-source"
+                                        clearable
+                                        searchable
+                                        value={device}
+                                        onChange={setDevice}
+                                        placeholder="All devices"
+                                        aria-label="Filter journal by device"
+                                        data={devices}
+                                    />
+                                )}
+                            </div>
+                            <Button
+                                variant="subtle"
+                                color="gray"
+                                disabled={activeFilterCount === 0 && filter === 'All'}
+                                onClick={() => {
+                                    setFilter('All')
+                                    setSelectedDate(null)
+                                    setRangeFrom('')
+                                    setRangeTo('')
+                                    setSource(null)
+                                    setDevice(null)
+                                }}
+                            >
+                                Clear filters
+                            </Button>
+                        </Stack>
+                    </Popover.Dropdown>
+                </Popover>
             </div>
-            <section className="panel timeline">
-                <Text size="xs" c="dimmed" className="journal-result-count">
-                    Showing {shown.length} of {availableEvents.length} loaded entries
-                    {hasOlder ? ' · older entries are available' : ''}
-                </Text>
+            <section className="panel timeline journal-timeline">
                 {availableEvents.length === 0 && (
                     <div className="day-divider">
                         <span>Today</span>
@@ -354,67 +429,42 @@ export function Journal({
                     <div key={group.label}>
                         <div className="day-divider">
                             <span>{group.label}</span>
-                            <small>
-                                {group.events.length}{' '}
-                                {group.events.length === 1 ? 'entry' : 'entries'}
-                            </small>
                         </div>
-                        {group.events.map(event => {
-                            const { icon: Icon, tone } = eventVisual(event.category)
-                            return (
-                                <div className="event roomy" key={event.id}>
-                                    <time>{event.time}</time>
-                                    <div className={`event-icon ${tone}`}>
-                                        <Icon size={17} />
-                                    </div>
-                                    <div className="event-copy">
-                                        <Text fw={600}>{event.title}</Text>
-                                        <Text size="sm" c="dimmed">
-                                            {event.detail}
-                                        </Text>
-                                        {event.source !== 'You' && (
-                                            <Badge variant="light" color="gray">
-                                                {event.source}
-                                            </Badge>
+                        <JournalEventList
+                            events={group.events}
+                            roomy
+                            renderActions={event => (
+                                <Menu>
+                                    <Menu.Target>
+                                        <ActionIcon
+                                            aria-label={`Actions for ${event.title}`}
+                                            variant="subtle"
+                                            color="gray"
+                                        >
+                                            <IconDots size={18} />
+                                        </ActionIcon>
+                                    </Menu.Target>
+                                    <Menu.Dropdown>
+                                        <Menu.Item onClick={() => duplicate(event)}>
+                                            Log a copy
+                                        </Menu.Item>
+                                        {event.source === 'You' && (
+                                            <>
+                                                <Menu.Item onClick={() => beginEdit(event)}>
+                                                    Edit
+                                                </Menu.Item>
+                                                <Menu.Item
+                                                    onClick={() => setDeleting(event)}
+                                                    color="red"
+                                                >
+                                                    Delete
+                                                </Menu.Item>
+                                            </>
                                         )}
-                                        {event.deviceName && (
-                                            <Text size="xs" c="dimmed">
-                                                Device: {event.deviceName}
-                                            </Text>
-                                        )}
-                                    </div>
-                                    <Menu>
-                                        <Menu.Target>
-                                            <ActionIcon
-                                                aria-label={`Actions for ${event.title}`}
-                                                variant="subtle"
-                                                color="gray"
-                                            >
-                                                <IconDots size={18} />
-                                            </ActionIcon>
-                                        </Menu.Target>
-                                        <Menu.Dropdown>
-                                            <Menu.Item onClick={() => duplicate(event)}>
-                                                Log a copy
-                                            </Menu.Item>
-                                            {event.source === 'You' && (
-                                                <>
-                                                    <Menu.Item onClick={() => beginEdit(event)}>
-                                                        Edit
-                                                    </Menu.Item>
-                                                    <Menu.Item
-                                                        onClick={() => setDeleting(event)}
-                                                        color="red"
-                                                    >
-                                                        Delete
-                                                    </Menu.Item>
-                                                </>
-                                            )}
-                                        </Menu.Dropdown>
-                                    </Menu>
-                                </div>
-                            )
-                        })}
+                                    </Menu.Dropdown>
+                                </Menu>
+                            )}
+                        />
                     </div>
                 ))}
                 {shown.length === 0 && availableEvents.length > 0 && (
@@ -437,7 +487,14 @@ export function Journal({
                         </Text>
                     </div>
                 )}
-                {hasOlder && !selectedDate && (
+                {(selectedDate || rangeFrom || rangeTo) && (
+                    <div className="journal-load-more">
+                        <Button variant="subtle" color="gray" onClick={showEarlier}>
+                            Show earlier
+                        </Button>
+                    </div>
+                )}
+                {hasOlder && !selectedDate && !rangeFrom && !rangeTo && (
                     <div className="journal-load-more">
                         <Button variant="default" loading={loadingOlder} onClick={loadOlder}>
                             Load older entries

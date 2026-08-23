@@ -26,6 +26,15 @@ const records: JournalEvent[] = [
         source: 'Health Connect',
         observedAt: '2026-08-22T09:00:00.000Z',
     },
+    {
+        id: '3',
+        time: '10:00',
+        category: 'Activity',
+        title: 'Earlier walk',
+        detail: '15 minutes',
+        source: 'Health Connect',
+        observedAt: '2026-08-16T10:00:00.000Z',
+    },
 ]
 
 describe('Journal', () => {
@@ -105,7 +114,8 @@ describe('Journal', () => {
         )
 
         const user = userEvent.setup()
-        await user.click(screen.getByText('Single day'))
+        await user.click(screen.getByRole('button', { name: /^Filters/ }))
+        await user.click(await screen.findByText('Single day'))
         fireEvent.change(screen.getByLabelText('Journal date'), {
             target: { value: '2026-08-23' },
         })
@@ -115,5 +125,24 @@ describe('Journal', () => {
 
         await user.click(screen.getByText('All entries'))
         expect(screen.getByText('Walk')).toBeInTheDocument()
+    })
+
+    it('extends the default seven-day window with earlier entries', async () => {
+        render(
+            <MemoryRouter>
+                <MantineProvider>
+                    <Journal
+                        events={records}
+                        remove={vi.fn()}
+                        duplicate={vi.fn()}
+                        update={vi.fn().mockResolvedValue(true)}
+                    />
+                </MantineProvider>
+            </MemoryRouter>,
+        )
+
+        expect(screen.queryByText('Earlier walk')).not.toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Show earlier' }))
+        expect(screen.getByText('Earlier walk')).toBeInTheDocument()
     })
 })

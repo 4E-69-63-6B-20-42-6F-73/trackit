@@ -34,12 +34,12 @@ import {
     YAxis,
 } from 'recharts'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
+import { JournalEventList } from '../components/JournalEventList'
 import { MetricCard } from '../components/MetricCard'
 import { WeeklyReflection } from '../components/WeeklyReflection'
 import type { LogActionId } from '../logging/logActions'
-import { eventVisual } from '../domain/data'
 import { displayValue, type Observation } from '../domain/health'
-import { formatMetricValue, friendlySourceName } from '../domain/formatting'
+import { formatMetricValue } from '../domain/formatting'
 import type { JournalEvent } from '../domain/types'
 import { useTodayHealth } from '../hooks/useTodayHealth'
 import { updatePreferences, type DashboardCard } from '../lib/preferencesApi'
@@ -56,16 +56,29 @@ const reading = (
     return formatMetricValue(value, displayUnit)
 }
 
-const provenance = (record: Observation | null, locale?: string, timezone?: string) => {
-    if (!record) return ''
-    const origin =
-        typeof record.metadata?.dataOrigin === 'string' ? record.metadata.dataOrigin : null
-    const time = new Date(record.observedAt).toLocaleTimeString(locale, {
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZone: timezone,
-    })
-    return `${origin ? `Synced from ${friendlySourceName(origin)}` : 'Recorded'} at ${time}`
+const rollingAverageChange = (
+    current: Observation,
+    baseline: { baseline: number; sampleSize: number; unit: string } | null,
+    units: 'metric' | 'imperial' = 'metric',
+) => {
+    if (!baseline) return null
+    const displayUnit =
+        units === 'imperial' && current.canonicalUnit === 'kg' ? 'lb' : current.canonicalUnit
+    const currentValue = displayValue(current.canonicalValue, current.canonicalUnit, displayUnit)
+    const baselineInCanonicalUnit =
+        baseline.unit === current.canonicalUnit
+            ? baseline.baseline
+            : baseline.unit === 'hours' && current.canonicalUnit === 'minutes'
+              ? baseline.baseline * 60
+              : baseline.unit === 'minutes' && current.canonicalUnit === 'hours'
+                ? baseline.baseline / 60
+                : displayValue(baseline.baseline, baseline.unit, current.canonicalUnit)
+    const average = displayValue(baselineInCanonicalUnit, current.canonicalUnit, displayUnit)
+    const delta = currentValue - average
+    const averageLabel = `${baseline.sampleSize}-day rolling average`
+    if (Math.abs(delta) < 0.01) return `In line with your ${averageLabel}`
+    const amount = formatMetricValue(Math.abs(delta), displayUnit)
+    return `${amount} ${delta > 0 ? 'higher' : 'lower'} than your ${averageLabel}`
 }
 
 const sleepReading = (record: Observation | null) => {
@@ -345,11 +358,7 @@ export function Today({
                             value={sleepReading(health.sleepToday)}
                             note={
                                 health.sleepToday
-                                    ? provenance(
-                                          health.sleepToday,
-                                          health.preferences?.locale,
-                                          health.preferences?.timezone,
-                                      )
+                                    ? rollingAverageChange(health.sleepToday, health.sleepBaseline)
                                     : 'No sleep imported today'
                             }
                             action={
@@ -371,10 +380,9 @@ export function Today({
                             value={reading(health.restingHeartRate)}
                             note={
                                 health.restingHeartRate
-                                    ? provenance(
+                                    ? rollingAverageChange(
                                           health.restingHeartRate,
-                                          health.preferences?.locale,
-                                          health.preferences?.timezone,
+                                          health.restingBaseline,
                                       )
                                     : 'No baseline available'
                             }
@@ -397,11 +405,7 @@ export function Today({
                             value={reading(health.energy)}
                             note={
                                 health.energy
-                                    ? provenance(
-                                          health.energy,
-                                          health.preferences?.locale,
-                                          health.preferences?.timezone,
-                                      )
+                                    ? rollingAverageChange(health.energy, health.energyBaseline)
                                     : 'No check-in today'
                             }
                             action={
@@ -423,10 +427,10 @@ export function Today({
                             value={reading(health.weight, health.preferences?.units)}
                             note={
                                 health.weight
-                                    ? provenance(
+                                    ? rollingAverageChange(
                                           health.weight,
-                                          health.preferences?.locale,
-                                          health.preferences?.timezone,
+                                          health.weightBaseline,
+                                          health.preferences?.units,
                                       )
                                     : 'No weight reading today'
                             }
@@ -602,31 +606,7 @@ export function Today({
                             View all
                         </Button>
                     </div>
-                    {events.slice(0, 3).map(event => {
-                        const { icon: Icon, tone } = eventVisual(event.category)
-                        return (
-                            <div className="event" key={event.id}>
-                                <time>{event.time}</time>
-                                <div className={`event-icon ${tone}`}>
-                                    <Icon size={17} />
-                                </div>
-                                <div className="event-copy">
-                                    <Text fw={600} size="sm">
-                                        {event.title}
-                                    </Text>
-                                    <Text size="sm" c="dimmed">
-                                        {event.detail}
-                                    </Text>
-                                </div>
-                                {event.source !== 'You' && (
-                                    <Badge variant="light" color="gray" fw={500}>
-                                        {event.source}
-                                    </Badge>
-                                )}
-                                <IconChevronRight size={17} color="#a3a49e" />
-                            </div>
-                        )
-                    })}
+                    <JournalEventList events={events.slice(0, 3)} showChevron />
                 </section>
             )}
             {isToday && <WeeklyReflection events={events} openJournal={openJournal} />}

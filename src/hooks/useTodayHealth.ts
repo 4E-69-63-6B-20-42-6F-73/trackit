@@ -111,6 +111,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 baseline: average,
                 delta: current.value - average,
                 sampleSize: prior.length,
+                unit: current.unit,
             }
         }
         const activeGoal = (metric: string) =>
@@ -153,6 +154,8 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             })),
             sleepBaseline: baseline('sleep'),
             restingBaseline: baseline('resting_heart_rate'),
+            energyBaseline: baseline('energy'),
+            weightBaseline: baseline('weight'),
             stepsGoal: activeGoal('steps'),
             waterGoal: activeGoal('water'),
             preferences,

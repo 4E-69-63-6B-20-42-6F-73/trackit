@@ -18,7 +18,7 @@ export function MetricCard({
     icon: typeof IconMoon
     label: string
     value: string
-    note: string
+    note?: string | null
     delta?: string
     tone: string
     action?: {
@@ -29,48 +29,55 @@ export function MetricCard({
 }) {
     const [detailsOpen, setDetailsOpen] = useState(false)
     return (
-        <article className="metric-card">
-            <div className={`metric-icon ${tone}`}>
-                <Icon size={19} stroke={1.8} />
-            </div>
-            <div className="metric-top">
-                <Text className="eyebrow">{label}</Text>
-                {delta && (
-                    <Badge
-                        variant="light"
+        <>
+            <article
+                className={`metric-card${record ? ' metric-card-clickable' : ''}`}
+                onClick={record ? () => setDetailsOpen(true) : undefined}
+                onKeyDown={
+                    record
+                        ? event => {
+                              if (event.key === 'Enter' || event.key === ' ') {
+                                  event.preventDefault()
+                                  setDetailsOpen(true)
+                              }
+                          }
+                        : undefined
+                }
+                role={record ? 'button' : undefined}
+                tabIndex={record ? 0 : undefined}
+                aria-label={record ? `View ${label} details` : undefined}
+            >
+                <div className={`metric-icon ${tone}`}>
+                    <Icon size={19} stroke={1.8} />
+                </div>
+                <div className="metric-top">
+                    <Text className="eyebrow">{label}</Text>
+                    {delta && (
+                        <Badge
+                            variant="light"
+                            color="trackit"
+                            size="sm"
+                            leftSection={<IconArrowUpRight size={11} />}
+                        >
+                            {delta}
+                        </Badge>
+                    )}
+                </div>
+                {action ? (
+                    <Button
+                        className="metric-action"
+                        onClick={action.onClick}
+                        variant="subtle"
                         color="trackit"
-                        size="sm"
-                        leftSection={<IconArrowUpRight size={11} />}
+                        size="compact-sm"
                     >
-                        {delta}
-                    </Badge>
+                        {action.label}
+                    </Button>
+                ) : (
+                    <Text className="metric-value">{value}</Text>
                 )}
-            </div>
-            {action ? (
-                <Button
-                    className="metric-action"
-                    onClick={action.onClick}
-                    variant="subtle"
-                    color="trackit"
-                    size="compact-sm"
-                >
-                    {action.label}
-                </Button>
-            ) : (
-                <Text className="metric-value">{value}</Text>
-            )}
-            <Text className="metric-note">{note}</Text>
-            {record && (
-                <Button
-                    className="metric-detail-action"
-                    variant="subtle"
-                    color="gray"
-                    size="compact-xs"
-                    onClick={() => setDetailsOpen(true)}
-                >
-                    View details
-                </Button>
-            )}
+                {note && <Text className="metric-note">{note}</Text>}
+            </article>
             <Modal
                 opened={detailsOpen}
                 onClose={() => setDetailsOpen(false)}
@@ -125,6 +132,6 @@ export function MetricCard({
                     </Stack>
                 )}
             </Modal>
-        </article>
+        </>
     )
 }
