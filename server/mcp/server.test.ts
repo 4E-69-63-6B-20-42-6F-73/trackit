@@ -14,6 +14,93 @@ const grant: McpClient = {
 }
 
 describe('TrackIt MCP tools', () => {
+    it('searches foods and previews catalog creation or adding a saved food', async () => {
+        const food = {
+            id: '10000000-0000-4000-8000-000000000001',
+            name: 'Greek yogurt',
+            brand: 'Example',
+            version: 1,
+            servingName: 'pot',
+            servingGrams: 150,
+            nutritionQuality: 'complete',
+            caloriesPer100g: 80,
+            proteinPer100g: 10,
+            carbsPer100g: 4,
+            fatPer100g: 2,
+        }
+        const data = {
+            listFoods: vi.fn(async (query?: string) =>
+                !query || food.name.toLowerCase().includes(query.toLowerCase()) ? [food] : [],
+            ),
+            getPreferences: async () => ({ timezone: 'UTC' }),
+        }
+        const access = {
+            issueConfirmation: vi.fn(async () => ({
+                token: 'confirmation',
+                expiresAt: new Date('2026-01-10T10:05:00Z'),
+            })),
+        }
+        const server = createTrackItMcpServer(
+            { ...grant, scopes: ['meals', 'meals:write'] },
+            data as never,
+            {} as never,
+            access as never,
+        )
+        const client = new Client({ name: 'food-catalog-test', version: '1.0.0' })
+        const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+        await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+        const search = await client.callTool({
+            name: 'search_foods',
+            arguments: { query: 'yogurt' },
+        })
+        expect(
+            JSON.parse((search as { content: { text: string }[] }).content[0].text),
+        ).toMatchObject({
+            foods: [{ id: food.id, name: food.name }],
+            matchCount: 1,
+            selectionRequired: true,
+            clarificationQuestion: expect.stringContaining('Greek yogurt'),
+        })
+        const toolNames = (await client.listTools()).tools.map(tool => tool.name)
+        expect(toolNames).not.toContain('preview_meal')
+        expect(toolNames).not.toContain('log_meal')
+        expect(toolNames).toContain('add_food_to_meal')
+
+        const createPreview = await client.callTool({
+            name: 'preview_create_food',
+            arguments: {
+                name: 'Skyr',
+                caloriesPer100g: 63,
+                proteinPer100g: 11,
+                nutritionQuality: 'complete',
+            },
+        })
+        expect(createPreview.isError).not.toBe(true)
+
+        const addPreview = await client.callTool({
+            name: 'preview_add_food_to_meal',
+            arguments: {
+                foodId: food.id,
+                grams: 150,
+                mealType: 'Breakfast',
+                eatenAt: '2026-01-10T08:00:00Z',
+            },
+        })
+        const addResult = JSON.parse(
+            (addPreview as { content: { text: string }[] }).content[0].text,
+        )
+        expect(addResult.preview).toMatchObject({
+            food: { id: food.id, name: 'Greek yogurt' },
+            foodVersion: 1,
+            nutrients: { calories: 120, protein: 15, carbs: 6, fat: 3 },
+        })
+        expect(access.issueConfirmation).toHaveBeenCalledTimes(2)
+
+        await client.close()
+        await server.close()
+    })
+
     it('enforces the grant window on every mutation and hides delete contents without read scope', async () => {
         const outsideId = '20000000-0000-4000-8000-000000000001'
         const insideId = '20000000-0000-4000-8000-000000000002'

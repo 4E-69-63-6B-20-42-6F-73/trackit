@@ -21,7 +21,7 @@ const scopes = [
     { value: 'journal', label: 'Journal', group: 'View data' },
     { value: 'preferences', label: 'Preferences', group: 'View data' },
     { value: 'observations:write', label: 'Add health data', group: 'Change data' },
-    { value: 'meals:write', label: 'Add meals', group: 'Change data' },
+    { value: 'meals:write', label: 'Add meals and manage foods', group: 'Change data' },
     { value: 'checkins:write', label: 'Add check-ins', group: 'Change data' },
     { value: 'journal:delete', label: 'Delete journal entries', group: 'Change data' },
 ]

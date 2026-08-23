@@ -38,7 +38,7 @@ const scopeLabels: Record<string, string> = {
     journal: 'Journal',
     preferences: 'Preferences',
     'observations:write': 'Add health data',
-    'meals:write': 'Add meals',
+    'meals:write': 'Add meals and manage foods',
     'checkins:write': 'Add check-ins',
     'journal:delete': 'Delete journal entries',
 }
@@ -48,6 +48,11 @@ const toolLabels: Record<string, string> = {
     list_journal: 'Viewed journal',
     create_observation: 'Added health data',
     create_meal: 'Added a meal',
+    search_foods: 'Searched foods',
+    create_food: 'Created a food',
+    add_food_to_meal: 'Added food to a meal',
+    preview_create_food: 'Previewed a new food',
+    preview_add_food_to_meal: 'Previewed food for a meal',
     create_checkin: 'Added a check-in',
     delete_journal_entry: 'Deleted a journal entry',
 }
@@ -250,52 +255,60 @@ export function McpAccess() {
                     {activeClients.length > 0 && (
                         <Card withBorder padding={0} radius="md" className="mcp-client-list">
                             {activeClients.map(client => {
-                            const state = clientState(client)
-                            return (
-                                <div className="mcp-client-row" key={client.id}>
-                                    <div className="mcp-client-icon">
-                                        <IconRobot size={19} />
-                                    </div>
-                                    <div>
-                                        <Group gap="xs">
-                                            <Text fw={650}>{client.name}</Text>
-                                            <Badge size="sm" variant="light" color={state.color}>
-                                                {state.label}
-                                            </Badge>
+                                const state = clientState(client)
+                                return (
+                                    <div className="mcp-client-row" key={client.id}>
+                                        <div className="mcp-client-icon">
+                                            <IconRobot size={19} />
+                                        </div>
+                                        <div>
+                                            <Group gap="xs">
+                                                <Text fw={650}>{client.name}</Text>
+                                                <Badge
+                                                    size="sm"
+                                                    variant="light"
+                                                    color={state.color}
+                                                >
+                                                    {state.label}
+                                                </Badge>
+                                            </Group>
+                                            <Text
+                                                size="xs"
+                                                c="dimmed"
+                                                className="mcp-client-scopes"
+                                            >
+                                                {client.scopes
+                                                    .map(scope => scopeLabels[scope] ?? scope)
+                                                    .join(' · ')}
+                                            </Text>
+                                            <Text size="xs" c="dimmed">
+                                                Last used{' '}
+                                                {client.lastUsedAt
+                                                    ? new Date(client.lastUsedAt).toLocaleString()
+                                                    : 'never'}{' '}
+                                                · {expiryLabel(client.expiresAt)}
+                                            </Text>
+                                        </div>
+                                        <Group className="mcp-client-actions" gap="xs">
+                                            <Button
+                                                variant="subtle"
+                                                color="red"
+                                                size="compact-sm"
+                                                onClick={() => setRevoking(client)}
+                                            >
+                                                Revoke access
+                                            </Button>
+                                            <Button
+                                                variant="subtle"
+                                                color="gray"
+                                                size="compact-sm"
+                                                onClick={() => setDeleting(client)}
+                                            >
+                                                Delete
+                                            </Button>
                                         </Group>
-                                        <Text size="xs" c="dimmed" className="mcp-client-scopes">
-                                            {client.scopes
-                                                .map(scope => scopeLabels[scope] ?? scope)
-                                                .join(' · ')}
-                                        </Text>
-                                        <Text size="xs" c="dimmed">
-                                            Last used{' '}
-                                            {client.lastUsedAt
-                                                ? new Date(client.lastUsedAt).toLocaleString()
-                                                : 'never'}{' '}
-                                            · {expiryLabel(client.expiresAt)}
-                                        </Text>
                                     </div>
-                                    <Group className="mcp-client-actions" gap="xs">
-                                        <Button
-                                            variant="subtle"
-                                            color="red"
-                                            size="compact-sm"
-                                            onClick={() => setRevoking(client)}
-                                        >
-                                            Revoke access
-                                        </Button>
-                                        <Button
-                                            variant="subtle"
-                                            color="gray"
-                                            size="compact-sm"
-                                            onClick={() => setDeleting(client)}
-                                        >
-                                            Delete
-                                        </Button>
-                                    </Group>
-                                </div>
-                            )
+                                )
                             })}
                         </Card>
                     )}
