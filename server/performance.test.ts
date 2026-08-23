@@ -122,6 +122,10 @@ class FiveYearData implements DataRepository {
         return null
     }
 
+    async importFoods(input: unknown): Promise<unknown> {
+        return input
+    }
+
     async listRecipes(): Promise<unknown[]> {
         return []
     }

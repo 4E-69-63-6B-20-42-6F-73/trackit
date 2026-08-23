@@ -3,6 +3,7 @@ import type { Food } from './nutrition'
 export const foodCsvHeaders = [
     'name',
     'brand',
+    'barcode',
     'calories_per_100g',
     'protein_per_100g',
     'carbs_per_100g',
@@ -67,9 +68,12 @@ export function parseFoodCsv(csv: string): Omit<Food, 'id'>[] {
         if (!record.name) throw new Error(`Row ${rowIndex + 2} is missing a food name.`)
         const servingGrams = numberAt(record, 'serving_grams', 100)
         if (servingGrams <= 0) throw new Error(`Row ${rowIndex + 2} has an invalid serving size.`)
+        if (record.barcode && !/^\d{8,14}$/.test(record.barcode))
+            throw new Error(`Row ${rowIndex + 2} has an invalid barcode.`)
         return {
             name: record.name,
             brand: record.brand || undefined,
+            barcode: record.barcode || undefined,
             per100g: {
                 calories: numberAt(record, 'calories_per_100g'),
                 protein: numberAt(record, 'protein_per_100g', 0),
@@ -98,4 +102,45 @@ export function parseFoodCsv(csv: string): Omit<Food, 'id'>[] {
     })
 }
 
-export const foodCsvTemplate = `${foodCsvHeaders.join(',')}\nRolled oats,,389,16.9,66.3,6.9,10.6,0.9,1.2,2,429,bowl,50,true,complete\n`
+export type FoodCsvInspection = {
+    headers: string[]
+    foods: Omit<Food, 'id'>[]
+    rows: Array<{
+        row: number
+        name: string
+        status: 'ready' | 'invalid'
+        message?: string
+    }>
+}
+
+export function inspectFoodCsv(csv: string): FoodCsvInspection {
+    const lines = csv
+        .replace(/^\uFEFF/, '')
+        .split(/\r?\n/)
+        .filter(row => row.trim())
+    if (lines.length < 2) throw new Error('CSV must contain a header and at least one food.')
+    const headers = splitRow(lines[0]).map(value => value.toLowerCase())
+    for (const required of ['name', 'calories_per_100g']) {
+        if (!headers.includes(required)) throw new Error(`CSV is missing the ${required} column.`)
+    }
+    const foods: Omit<Food, 'id'>[] = []
+    const rows = lines.slice(1).map((line, index) => {
+        try {
+            const [food] = parseFoodCsv(`${lines[0]}\n${line}`)
+            foods.push(food)
+            return { row: index + 2, name: food.name, status: 'ready' as const }
+        } catch (error) {
+            const values = splitRow(line)
+            const nameIndex = headers.indexOf('name')
+            return {
+                row: index + 2,
+                name: values[nameIndex] || 'Unnamed row',
+                status: 'invalid' as const,
+                message: error instanceof Error ? error.message : 'Invalid row',
+            }
+        }
+    })
+    return { headers, foods, rows }
+}
+
+export const foodCsvTemplate = `${foodCsvHeaders.join(',')}\n`

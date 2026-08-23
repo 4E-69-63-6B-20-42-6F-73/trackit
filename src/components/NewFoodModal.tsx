@@ -1,4 +1,4 @@
-import { Button, Modal, NumberInput, Stack, TextInput } from '@mantine/core'
+import { Alert, Button, Modal, NumberInput, Stack, TextInput } from '@mantine/core'
 import { useState } from 'react'
 import { emptyNutrients, type Food, type Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
@@ -24,6 +24,7 @@ const nutrientLabels: Record<keyof Nutrients, string> = {
 export function NewFoodModal({ opened, onClose, onCreate }: NewFoodModalProps) {
     const [name, setName] = useState('')
     const [nutrients, setNutrients] = useState<Nutrients>(emptyNutrients())
+    const [error, setError] = useState('')
 
     const save = async () => {
         const input: Omit<Food, 'id'> = {
@@ -39,7 +40,8 @@ export function NewFoodModal({ opened, onClose, onCreate }: NewFoodModalProps) {
         try {
             onCreate(await createFood(input))
         } catch {
-            onCreate({ ...input, id: crypto.randomUUID() })
+            setError('The food could not be saved to your server. No local copy was created.')
+            return
         }
 
         setName('')
@@ -49,6 +51,7 @@ export function NewFoodModal({ opened, onClose, onCreate }: NewFoodModalProps) {
     return (
         <Modal opened={opened} onClose={onClose} title="Create food" centered>
             <Stack>
+                {error && <Alert color="orange">{error}</Alert>}
                 <TextInput
                     label="Name"
                     value={name}

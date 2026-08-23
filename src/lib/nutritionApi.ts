@@ -6,6 +6,9 @@ type FoodRecord = {
     id: string
     name: string
     brand: string | null
+    barcode: string | null
+    catalogSource: string | null
+    catalogId: string | null
     caloriesPer100g: number
     proteinPer100g: number
     carbsPer100g: number
@@ -48,6 +51,9 @@ const toFood = (record: FoodRecord): Food => ({
     id: record.id,
     name: record.name,
     brand: record.brand ?? undefined,
+    barcode: record.barcode ?? undefined,
+    catalogSource: record.catalogSource ?? undefined,
+    catalogId: record.catalogId ?? undefined,
     per100g: {
         calories: record.caloriesPer100g,
         protein: record.proteinPer100g,
@@ -83,6 +89,9 @@ export async function createFood(food: Omit<Food, 'id'>) {
         body: JSON.stringify({
             name: food.name,
             brand: food.brand,
+            barcode: food.barcode,
+            catalogSource: food.catalogSource,
+            catalogId: food.catalogId,
             servingName: food.servingName,
             servingGrams: food.servingGrams,
             favorite: food.favorite,
@@ -102,9 +111,98 @@ export async function createFood(food: Omit<Food, 'id'>) {
     return toFood(((await response.json()) as { data: FoodRecord }).data)
 }
 
+export type FoodImportResult = {
+    results: Array<{
+        index: number
+        status: 'created' | 'updated' | 'skipped' | 'failed'
+        id?: string
+        reason?: string
+    }>
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+}
+
+export async function importFoods(
+    foods: Array<Omit<Food, 'id' | 'version'>>,
+    duplicateStrategy: 'skip' | 'update' | 'create',
+): Promise<FoodImportResult> {
+    const response = await authRequest('/api/foods/import', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+            duplicateStrategy,
+            foods: foods.map(food => ({
+                name: food.name,
+                brand: food.brand,
+                barcode: food.barcode,
+                catalogSource: food.catalogSource,
+                catalogId: food.catalogId,
+                servingName: food.servingName,
+                servingGrams: food.servingGrams,
+                favorite: food.favorite,
+                nutritionQuality: food.nutritionQuality ?? 'complete',
+                caloriesPer100g: food.per100g.calories,
+                proteinPer100g: food.per100g.protein,
+                carbsPer100g: food.per100g.carbs,
+                fatPer100g: food.per100g.fat,
+                fiberPer100g: food.per100g.fiber,
+                sugarPer100g: food.per100g.sugar ?? 0,
+                saturatedFatPer100g: food.per100g.saturatedFat ?? 0,
+                sodiumPer100g: food.per100g.sodium ?? 0,
+                potassiumPer100g: food.per100g.potassium ?? 0,
+            })),
+        }),
+    })
+    if (!response.ok) throw new Error('The server could not import this catalog.')
+    return ((await response.json()) as { data: FoodImportResult }).data
+}
+
+type CatalogFoodRecord = Omit<FoodRecord, 'id' | 'favorite' | 'version'>
+
+const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> => ({
+    name: record.name,
+    brand: record.brand ?? undefined,
+    barcode: record.barcode ?? undefined,
+    catalogSource: record.catalogSource ?? undefined,
+    catalogId: record.catalogId ?? undefined,
+    per100g: {
+        calories: record.caloriesPer100g,
+        protein: record.proteinPer100g,
+        carbs: record.carbsPer100g,
+        fat: record.fatPer100g,
+        fiber: record.fiberPer100g,
+        sugar: record.sugarPer100g,
+        saturatedFat: record.saturatedFatPer100g,
+        sodium: record.sodiumPer100g,
+        potassium: record.potassiumPer100g,
+    },
+    servingName: record.servingName,
+    servingGrams: record.servingGrams,
+    favorite: false,
+    nutritionQuality: record.nutritionQuality,
+})
+
+export async function lookupCatalogBarcode(barcode: string) {
+    const response = await authRequest(`/api/food-catalog/barcode/${encodeURIComponent(barcode)}`)
+    if (response.status === 404) return null
+    if (response.status === 503)
+        throw new Error('No external food catalog is configured on this server.')
+    if (!response.ok) throw new Error('The food catalog is unavailable. Try again later.')
+    return catalogToFood(((await response.json()) as { data: CatalogFoodRecord }).data)
+}
+
+export async function searchFoodCatalog(query: string) {
+    const response = await authRequest(`/api/food-catalog/search?q=${encodeURIComponent(query)}`)
+    if (response.status === 503)
+        throw new Error('No external food catalog is configured on this server.')
+    if (!response.ok) throw new Error('The food catalog is unavailable. Try again later.')
+    return ((await response.json()) as { data: CatalogFoodRecord[] }).data.map(catalogToFood)
+}
+
 export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version'>) {
-    if (!food.version)
-        throw new Error('This example food must be imported before it can be edited.')
+    if (!food.version) throw new Error('This food is not stored on the server.')
     const response = await authRequest(`/api/foods/${food.id}`, {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
@@ -112,6 +210,9 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
             version: food.version,
             name: changes.name,
             brand: changes.brand,
+            barcode: changes.barcode,
+            catalogSource: changes.catalogSource,
+            catalogId: changes.catalogId,
             servingName: changes.servingName,
             servingGrams: changes.servingGrams,
             favorite: changes.favorite,

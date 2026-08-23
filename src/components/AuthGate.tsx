@@ -197,11 +197,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
                             <code>npm run dev:server</code> beside Vite.
                         </Text>
                         <Button onClick={() => window.location.reload()}>Try again</Button>
-                        {import.meta.env.DEV && (
-                            <Button variant="outline" onClick={() => setState('authenticated')}>
-                                Open local demo mode
-                            </Button>
-                        )}
                     </Stack>
                 </Paper>
             </Center>

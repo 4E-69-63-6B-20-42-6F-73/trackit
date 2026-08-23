@@ -241,6 +241,67 @@ export class PostgresDataRepository implements DataRepository {
         return record ?? null
     }
 
+    async importFoods(input: {
+        duplicateStrategy: 'skip' | 'update' | 'create'
+        foods: Array<typeof foods.$inferInsert>
+    }) {
+        const results: Array<{
+            index: number
+            status: 'created' | 'updated' | 'skipped' | 'failed'
+            id?: string
+            reason?: string
+        }> = []
+        for (const [index, candidate] of input.foods.entries()) {
+            try {
+                const [existing] = await this.database
+                    .select()
+                    .from(foods)
+                    .where(
+                        candidate.barcode
+                            ? eq(foods.barcode, candidate.barcode)
+                            : and(
+                                  sql`lower(${foods.name}) = lower(${candidate.name})`,
+                                  candidate.brand
+                                      ? sql`lower(coalesce(${foods.brand}, '')) = lower(${candidate.brand})`
+                                      : sql`${foods.brand} is null`,
+                              ),
+                    )
+                    .limit(1)
+                if (existing && input.duplicateStrategy === 'skip') {
+                    results.push({ index, status: 'skipped', id: existing.id, reason: 'duplicate' })
+                    continue
+                }
+                if (existing && input.duplicateStrategy === 'update') {
+                    const [updated] = await this.database
+                        .update(foods)
+                        .set({ ...candidate, version: existing.version + 1, updatedAt: new Date() })
+                        .where(eq(foods.id, existing.id))
+                        .returning({ id: foods.id })
+                    results.push({ index, status: 'updated', id: updated.id })
+                    continue
+                }
+                const [created] = await this.database
+                    .insert(foods)
+                    .values(candidate)
+                    .returning({ id: foods.id })
+                results.push({ index, status: 'created', id: created.id })
+            } catch (error) {
+                results.push({
+                    index,
+                    status: 'failed',
+                    reason: error instanceof Error ? error.message : 'database_error',
+                })
+            }
+        }
+        return {
+            results,
+            created: results.filter(result => result.status === 'created').length,
+            updated: results.filter(result => result.status === 'updated').length,
+            skipped: results.filter(result => result.status === 'skipped').length,
+            failed: results.filter(result => result.status === 'failed').length,
+        }
+    }
+
     async listRecipes() {
         const records = await this.database
             .select()

@@ -148,6 +148,13 @@ export const observationUpdateSchema = z.object({
 export const foodInputSchema = z.object({
     name: z.string().trim().min(1).max(160),
     brand: z.string().trim().max(120).optional(),
+    barcode: z
+        .string()
+        .trim()
+        .regex(/^\d{8,14}$/)
+        .optional(),
+    catalogSource: z.string().trim().max(80).optional(),
+    catalogId: z.string().trim().max(160).optional(),
     caloriesPer100g: z.number().finite().nonnegative(),
     proteinPer100g: z.number().finite().nonnegative().default(0),
     carbsPer100g: z.number().finite().nonnegative().default(0),
@@ -165,6 +172,11 @@ export const foodInputSchema = z.object({
 
 export const foodUpdateSchema = foodInputSchema.partial().extend({
     version: z.number().int().positive(),
+})
+
+export const foodImportSchema = z.object({
+    duplicateStrategy: z.enum(['skip', 'update', 'create']).default('skip'),
+    foods: z.array(foodInputSchema).min(1).max(1000),
 })
 
 export const recipeInputSchema = z.object({
@@ -204,6 +216,7 @@ export interface DataRepository {
     listFoods(query?: string): Promise<unknown[]>
     createFood(input: z.infer<typeof foodInputSchema>): Promise<unknown>
     updateFood(id: string, input: z.infer<typeof foodUpdateSchema>): Promise<unknown | null>
+    importFoods(input: z.infer<typeof foodImportSchema>): Promise<unknown>
     listRecipes(): Promise<unknown[]>
     createRecipe(input: z.infer<typeof recipeInputSchema>): Promise<unknown>
     updateRecipe(id: string, input: z.infer<typeof recipeUpdateSchema>): Promise<unknown | null>

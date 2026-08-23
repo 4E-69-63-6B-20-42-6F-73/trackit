@@ -14,6 +14,9 @@ export type Food = {
     id: string
     name: string
     brand?: string
+    barcode?: string
+    catalogSource?: string
+    catalogId?: string
     per100g: Nutrients
     servingName: string
     servingGrams: number

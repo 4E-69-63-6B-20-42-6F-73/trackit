@@ -12,6 +12,7 @@ import { McpAccessService } from './mcp/service.js'
 import { DeviceService } from './devices/service.js'
 import { BackupService } from './backup/service.js'
 import { DataLifecycleService } from './data-lifecycle/service.js'
+import { FoodCatalogService } from './nutrition/catalog.js'
 
 await migrate(db, { migrationsFolder: './server/db/migrations' })
 
@@ -36,6 +37,9 @@ const app = await createApp(new PostgresJournalRepository(db), {
     trustProxy: config.TRUST_PROXY,
     bootstrapSecret: config.BOOTSTRAP_SECRET,
     database: db,
+    foodCatalog: config.FOOD_CATALOG_URL
+        ? new FoodCatalogService(config.FOOD_CATALOG_URL)
+        : undefined,
 })
 const webRoot = resolve('dist')
 
