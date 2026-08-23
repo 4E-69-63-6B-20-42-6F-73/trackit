@@ -1,20 +1,13 @@
 package net.trackit.companion
 
 import android.content.Context
-import android.util.Log
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.permission.HealthPermission.Companion.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND
-import androidx.health.connect.client.records.ExerciseSessionRecord
-import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.Record
-import androidx.health.connect.client.records.RestingHeartRateRecord
-import androidx.health.connect.client.records.SleepSessionRecord
-import androidx.health.connect.client.records.StepsRecord
-import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ChangesTokenRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -22,8 +15,9 @@ import java.time.Duration
 import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
+import org.json.JSONArray
+import org.json.JSONObject
 import kotlin.reflect.KClass
-
 
 data class HistoricalImportProgress(
     val category: String,
@@ -33,11 +27,15 @@ data class HistoricalImportProgress(
     val discoveredRecords: Int = 0,
     val uploadedRecords: Int = 0,
     val issue: String? = null,
+    val retryAfterSeconds: Int? = null,
+    val retryAttempt: Int? = null,
 )
 
 enum class HistoricalImportPhase {
+    PENDING,
     READING,
     UPLOADING,
+    WAITING_TO_RETRY,
     COMPLETE,
     ERROR,
 }
@@ -52,9 +50,58 @@ data class HistoricalImportResult(
     val categories: Map<String, HistoricalImportCategoryResult>,
 ) {
     val uploadedRecords: Int get() = categories.values.sumOf { it.uploadedRecords }
-    val issues: Map<String, String> get() = categories.mapNotNull { (category, result) ->
-        result.issue?.let { category to it }
-    }.toMap()
+
+    val issues: Map<String, String>
+        get() = categories.mapNotNull { (category, result) ->
+            result.issue?.let { category to it }
+        }.toMap()
+}
+
+object HistoricalProgressCodec {
+    fun encode(states: Collection<HistoricalImportProgress>): String {
+        val array = JSONArray()
+        states.forEach { progress ->
+            array.put(
+                JSONObject()
+                    .put("category", progress.category)
+                    .put("index", progress.categoryIndex)
+                    .put("total", progress.totalCategories)
+                    .put("phase", progress.phase.name)
+                    .put("discovered", progress.discoveredRecords)
+                    .put("uploaded", progress.uploadedRecords)
+                    .put("issue", progress.issue?.take(300))
+                    .put("retryAfter", progress.retryAfterSeconds)
+                    .put("retryAttempt", progress.retryAttempt),
+            )
+        }
+        return array.toString()
+    }
+
+    fun decode(value: String?): List<HistoricalImportProgress> {
+        if (value.isNullOrBlank()) return emptyList()
+
+        return runCatching {
+            val array = JSONArray(value)
+            buildList {
+                repeat(array.length()) { index ->
+                    val item = array.getJSONObject(index)
+                    add(
+                        HistoricalImportProgress(
+                            category = item.getString("category"),
+                            categoryIndex = item.getInt("index"),
+                            totalCategories = item.getInt("total"),
+                            phase = HistoricalImportPhase.valueOf(item.getString("phase")),
+                            discoveredRecords = item.optInt("discovered", 0),
+                            uploadedRecords = item.optInt("uploaded", 0),
+                            issue = item.optString("issue").takeIf { it.isNotBlank() && it != "null" },
+                            retryAfterSeconds = item.optInt("retryAfter", -1).takeIf { it >= 0 },
+                            retryAttempt = item.optInt("retryAttempt", -1).takeIf { it >= 0 },
+                        ),
+                    )
+                }
+            }
+        }.getOrDefault(emptyList())
+    }
 }
 
 class HealthConnectSync(private val context: Context) {
@@ -126,61 +173,119 @@ class HealthConnectSync(private val context: Context) {
         recordTypes: Set<KClass<out Record>>,
         days: Int,
         cancelled: () -> Boolean = { false },
-        onProgress: (HistoricalImportProgress) -> Unit = {},
+        onProgress: suspend (HistoricalImportProgress) -> Unit = {},
     ): HistoricalImportResult {
-        val since = if (days == Int.MAX_VALUE) Instant.EPOCH else Instant.now().minus(Duration.ofDays(days.toLong()))
+        val since =
+            if (days == Int.MAX_VALUE) {
+                Instant.EPOCH
+            } else {
+                Instant.now().minus(Duration.ofDays(days.toLong()))
+            }
+
         val orderedTypes = supportedRecordTypes.filter { it in recordTypes }
         val outcomes = linkedMapOf<String, HistoricalImportCategoryResult>()
 
         orderedTypes.forEachIndexed { index, recordType ->
             if (cancelled()) throw CancellationException("Import cancelled")
-            val category = recordType.simpleName.orEmpty()
-            onProgress(HistoricalImportProgress(category, index, orderedTypes.size, HistoricalImportPhase.READING))
 
+            val category = recordType.simpleName.orEmpty()
             var discovered = 0
             var uploaded = 0
-            try {
-                val records = readWindow(recordType, TimeRangeFilter.after(since), cancelled)
-                discovered = records.size
-                val uploads = records.mapNotNull(HealthRecordAdapterRegistry::serialize)
-                onProgress(
-                    HistoricalImportProgress(
-                        category = category,
-                        categoryIndex = index,
-                        totalCategories = orderedTypes.size,
-                        phase = HistoricalImportPhase.UPLOADING,
-                        discoveredRecords = records.size,
-                        uploadedRecords = 0,
-                    ),
-                )
 
-                uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+            onProgress(
+                HistoricalImportProgress(
+                    category = category,
+                    categoryIndex = index,
+                    totalCategories = orderedTypes.size,
+                    phase = HistoricalImportPhase.READING,
+                ),
+            )
+
+            try {
+                var pageToken: String? = null
+
+                do {
                     if (cancelled()) throw CancellationException("Import cancelled")
-                    if (batch.isNotEmpty()) api.upload(UUID.randomUUID().toString(), batch)
-                    uploaded += batch.size
+
+                    val response = readPage(
+                        recordType = recordType,
+                        filter = TimeRangeFilter.after(since),
+                        pageToken = pageToken,
+                    )
+
+                    discovered += response.records.size
+
                     onProgress(
                         HistoricalImportProgress(
                             category = category,
                             categoryIndex = index,
                             totalCategories = orderedTypes.size,
-                            phase = HistoricalImportPhase.UPLOADING,
+                            phase = HistoricalImportPhase.READING,
                             discoveredRecords = discovered,
                             uploadedRecords = uploaded,
                         ),
                     )
-                }
+
+                    val uploads = response.records.map { record ->
+                        requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
+                            "Unable to serialize ${record::class.simpleName}"
+                        }
+                    }
+
+                    uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+                        if (cancelled()) throw CancellationException("Import cancelled")
+
+                        if (batch.isNotEmpty()) {
+                            api.upload(
+                                idempotencyKey = UUID.randomUUID().toString(),
+                                records = batch,
+                                onRetry = { retry ->
+                                    onProgress(
+                                        HistoricalImportProgress(
+                                            category = category,
+                                            categoryIndex = index,
+                                            totalCategories = orderedTypes.size,
+                                            phase = HistoricalImportPhase.WAITING_TO_RETRY,
+                                            discoveredRecords = discovered,
+                                            uploadedRecords = uploaded,
+                                            issue = retry.reason,
+                                            retryAfterSeconds = ((retry.retryAfterMillis + 999) / 1000).toInt(),
+                                            retryAttempt = retry.attempt,
+                                        ),
+                                    )
+                                },
+                            )
+                        }
+
+                        uploaded += batch.size
+
+                        onProgress(
+                            HistoricalImportProgress(
+                                category = category,
+                                categoryIndex = index,
+                                totalCategories = orderedTypes.size,
+                                phase = HistoricalImportPhase.UPLOADING,
+                                discoveredRecords = discovered,
+                                uploadedRecords = uploaded,
+                            ),
+                        )
+                    }
+
+                    pageToken = response.pageToken
+                } while (pageToken != null)
 
                 outcomes[category] = HistoricalImportCategoryResult(
                     discoveredRecords = discovered,
                     uploadedRecords = uploaded,
                 )
+
                 onProgress(
                     HistoricalImportProgress(
                         category = category,
                         categoryIndex = index,
                         totalCategories = orderedTypes.size,
                         phase = HistoricalImportPhase.COMPLETE,
-                        discoveredRecords = records.size,
+                        discoveredRecords = discovered,
                         uploadedRecords = uploaded,
                     ),
                 )
@@ -189,18 +294,41 @@ class HealthConnectSync(private val context: Context) {
             } catch (e: SecurityException) {
                 val issue = "Health Connect access was revoked"
                 outcomes[category] = HistoricalImportCategoryResult(discovered, uploaded, issue)
-                onProgress(HistoricalImportProgress(category, index, orderedTypes.size, HistoricalImportPhase.ERROR, discovered, uploaded, issue))
+                onProgress(
+                    HistoricalImportProgress(
+                        category = category,
+                        categoryIndex = index,
+                        totalCategories = orderedTypes.size,
+                        phase = HistoricalImportPhase.ERROR,
+                        discoveredRecords = discovered,
+                        uploadedRecords = uploaded,
+                        issue = issue,
+                    ),
+                )
             } catch (e: Exception) {
                 val issue = e.message ?: "Unknown error"
                 outcomes[category] = HistoricalImportCategoryResult(discovered, uploaded, issue)
-                onProgress(HistoricalImportProgress(category, index, orderedTypes.size, HistoricalImportPhase.ERROR, discovered, uploaded, issue))
+                onProgress(
+                    HistoricalImportProgress(
+                        category = category,
+                        categoryIndex = index,
+                        totalCategories = orderedTypes.size,
+                        phase = HistoricalImportPhase.ERROR,
+                        discoveredRecords = discovered,
+                        uploadedRecords = uploaded,
+                        issue = issue,
+                    ),
+                )
             }
         }
 
         return HistoricalImportResult(outcomes)
     }
 
-    private suspend fun syncType(recordType: KClass<out Record>, cancelled: () -> Boolean) {
+    private suspend fun syncType(
+        recordType: KClass<out Record>,
+        cancelled: () -> Boolean,
+    ) {
         val key = recordType.simpleName.orEmpty()
         val savedToken = state.cursor(key)
         var token: String
@@ -218,6 +346,7 @@ class HealthConnectSync(private val context: Context) {
             if (cancelled()) throw CancellationException("Import cancelled")
 
             val response = health.getChanges(token)
+
             if (response.changesTokenExpired) {
                 token = newChangesToken(recordType)
                 rereadWindow(recordType, cancelled)
@@ -236,8 +365,8 @@ class HealthConnectSync(private val context: Context) {
                         endTime = null,
                         dataOrigin = null,
                         recordingMethod = null,
-                        device = org.json.JSONObject(),
-                        payload = org.json.JSONObject(),
+                        device = JSONObject(),
+                        payload = JSONObject(),
                         lastModifiedTime = null,
                         deleted = true,
                     )
@@ -247,7 +376,9 @@ class HealthConnectSync(private val context: Context) {
 
             uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
                 if (cancelled()) throw CancellationException("Import cancelled")
-                api.upload(UUID.randomUUID().toString(), batch)
+                if (batch.isNotEmpty()) {
+                    api.upload(UUID.randomUUID().toString(), batch)
+                }
             }
 
             token = response.nextChangesToken
@@ -265,48 +396,41 @@ class HealthConnectSync(private val context: Context) {
         recordType: KClass<out Record>,
         cancelled: () -> Boolean,
     ) {
-        val since = Instant.now().minus(Duration.ofDays(30))
-        val filter = TimeRangeFilter.after(since)
-        val records = readWindowDynamic(recordType, filter, cancelled)
-
-        records.mapNotNull(HealthRecordAdapterRegistry::serialize).chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
-            if (cancelled()) throw CancellationException("Import cancelled")
-            if (batch.isNotEmpty()) {
-                api.upload(UUID.randomUUID().toString(), batch)
-            }
-        }
-    }
-
-    private suspend fun <T : Record> readWindow(
-        recordType: KClass<T>,
-        filter: TimeRangeFilter,
-        cancelled: () -> Boolean,
-    ): List<Record> {
-        val records = mutableListOf<Record>()
+        val filter = TimeRangeFilter.after(Instant.now().minus(Duration.ofDays(30)))
         var pageToken: String? = null
 
         do {
             if (cancelled()) throw CancellationException("Import cancelled")
-            val response = health.readRecords(
-                ReadRecordsRequest(
-                    recordType = recordType,
-                    timeRangeFilter = filter,
-                    pageSize = READ_PAGE_SIZE,
-                    pageToken = pageToken,
-                ),
-            )
-            records.addAll(response.records)
+
+            val response = readPage(recordType, filter, pageToken)
+            val uploads = response.records.map { record ->
+                requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
+                    "Unable to serialize ${record::class.simpleName}"
+                }
+            }
+
+            uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+                if (cancelled()) throw CancellationException("Import cancelled")
+                if (batch.isNotEmpty()) {
+                    api.upload(UUID.randomUUID().toString(), batch)
+                }
+            }
+
             pageToken = response.pageToken
         } while (pageToken != null)
-
-        return records
     }
 
     @Suppress("UNCHECKED_CAST")
-    private suspend fun readWindowDynamic(
+    private suspend fun readPage(
         recordType: KClass<out Record>,
         filter: TimeRangeFilter,
-        cancelled: () -> Boolean,
-    ): List<Record> = readWindow(recordType as KClass<Record>, filter, cancelled)
-
+        pageToken: String?,
+    ) = health.readRecords(
+        ReadRecordsRequest(
+            recordType = recordType as KClass<Record>,
+            timeRangeFilter = filter,
+            pageSize = READ_PAGE_SIZE,
+            pageToken = pageToken,
+        ),
+    )
 }
