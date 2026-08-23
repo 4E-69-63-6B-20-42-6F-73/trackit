@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from './App'
 import { ServerDataProvider } from './hooks/useServerData'
+import { LoggingProvider } from './logging/LoggingContext'
 
 const initialData = {
     preferences: {
@@ -22,7 +23,9 @@ describe('App routing', () => {
             <MantineProvider>
                 <MemoryRouter initialEntries={['/journal']}>
                     <ServerDataProvider initialData={initialData}>
-                        <App />
+                        <LoggingProvider>
+                            <App />
+                        </LoggingProvider>
                     </ServerDataProvider>
                 </MemoryRouter>
             </MantineProvider>,
@@ -40,7 +43,9 @@ describe('App routing', () => {
             <MantineProvider>
                 <MemoryRouter initialEntries={['/goals']}>
                     <ServerDataProvider initialData={initialData}>
-                        <App />
+                        <LoggingProvider>
+                            <App />
+                        </LoggingProvider>
                     </ServerDataProvider>
                 </MemoryRouter>
             </MantineProvider>,

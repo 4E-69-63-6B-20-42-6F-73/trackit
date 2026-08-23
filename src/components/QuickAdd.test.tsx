@@ -2,7 +2,7 @@ import { MantineProvider } from '@mantine/core'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { QuickAdd } from './QuickAdd'
+import { ManualEntryLogger } from './QuickAdd'
 import { ServerDataProvider } from '../hooks/useServerData'
 
 const provider = (children: React.ReactNode) => (
@@ -15,7 +15,7 @@ const provider = (children: React.ReactNode) => (
     </ServerDataProvider>
 )
 
-describe('QuickAdd', () => {
+describe('ManualEntryLogger', () => {
     it('creates a meal and closes the dialog', async () => {
         const user = userEvent.setup()
         const add = vi.fn()
@@ -23,7 +23,7 @@ describe('QuickAdd', () => {
 
         render(
             <MantineProvider>
-                {provider(<QuickAdd opened close={close} add={add} />)}
+                {provider(<ManualEntryLogger opened close={close} add={add} initialKind="Meal" />)}
             </MantineProvider>,
         )
 
@@ -46,7 +46,7 @@ describe('QuickAdd', () => {
 
         render(
             <MantineProvider>
-                {provider(<QuickAdd opened close={vi.fn()} add={add} />)}
+                {provider(<ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Meal" />)}
             </MantineProvider>,
         )
 
@@ -63,7 +63,7 @@ describe('QuickAdd', () => {
         render(
             <MantineProvider>
                 {provider(
-                    <QuickAdd
+                    <ManualEntryLogger
                         opened
                         close={vi.fn()}
                         add={add}
@@ -74,7 +74,7 @@ describe('QuickAdd', () => {
             </MantineProvider>,
         )
 
-        expect(screen.getByText(/Add something to .+20/)).toBeInTheDocument()
+        expect(screen.getByText(/Record this for .+20/)).toBeInTheDocument()
         await user.click(screen.getByRole('button', { name: 'Save weight' }))
 
         const saved = add.mock.calls[0][0]

@@ -14,9 +14,9 @@ import { IconSearch } from '@tabler/icons-react'
 import type { JournalEvent } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 
-export type QuickAddKind = 'Meal' | 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
+export type ManualEntryKind = 'Meal' | 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
 
-export function QuickAdd({
+export function ManualEntryLogger({
     opened,
     close,
     add,
@@ -27,17 +27,21 @@ export function QuickAdd({
     opened: boolean
     close: () => void
     add: (event: JournalEvent, allowDuplicate?: boolean) => boolean | void
-    initialKind?: QuickAddKind
+    initialKind: ManualEntryKind
     recentEvents?: JournalEvent[]
     selectedDate?: string | null
 }) {
-    const [kind, setKind] = useState<QuickAddKind>(initialKind ?? 'Meal')
+    const [kind, setKind] = useState<ManualEntryKind>(initialKind)
     const hour = new Date().getHours()
     const [meal, setMeal] = useState(
         hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack',
     )
     const [description, setDescription] = useState('')
-    const [amount, setAmount] = useState<number | string>(250)
+    const { preferences } = useServerData()
+    const weightUnit = preferences?.units === 'imperial' ? 'lb' : 'kg'
+    const [amount, setAmount] = useState<number | string>(
+        initialKind === 'Weight' ? (weightUnit === 'lb' ? 165 : 75) : 250,
+    )
     const [energy, setEnergy] = useState<string | null>('5 · Neutral')
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
@@ -45,24 +49,17 @@ export function QuickAdd({
     const [duration, setDuration] = useState('')
     const [tags, setTags] = useState('')
     const [duplicate, setDuplicate] = useState<JournalEvent | null>(null)
-    const { preferences } = useServerData()
     const routines = preferences?.experience?.routines ?? []
-    const [routineQueue, setRoutineQueue] = useState<QuickAddKind[]>([])
+    const [routineQueue, setRoutineQueue] = useState<ManualEntryKind[]>([])
     const [activeRoutine, setActiveRoutine] = useState('')
 
-    const selectedTimestamp = () => {
+    const initialDateTime = () => {
         const now = new Date()
-        if (!selectedDate) return now.toISOString()
-        const [year, month, day] = selectedDate.split('-').map(Number)
-        return new Date(
-            year,
-            month - 1,
-            day,
-            now.getHours(),
-            now.getMinutes(),
-            now.getSeconds(),
-        ).toISOString()
+        const day = selectedDate ?? now.toISOString().slice(0, 10)
+        return `${day}T${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
     }
+    const [recordedAt, setRecordedAt] = useState(initialDateTime)
+    const selectedTimestamp = () => new Date(recordedAt).toISOString()
     const selectedDateLabel = selectedDate
         ? new Date(`${selectedDate}T12:00:00`).toLocaleDateString(undefined, {
               weekday: 'short',
@@ -124,12 +121,15 @@ export function QuickAdd({
                 time,
                 category: 'Measurements',
                 title: 'Weight',
-                detail: `${amount || 0} kg`,
+                detail: `${amount || 0} ${weightUnit}`,
                 source: 'You',
                 observedAt: recordedAt,
                 observation: {
                     metric: 'weight',
-                    value: Number(amount) || 0,
+                    value:
+                        weightUnit === 'lb'
+                            ? (Number(amount) || 0) / 2.2046226218
+                            : Number(amount) || 0,
                     unit: 'kg',
                     observedAt: recordedAt,
                 },
@@ -207,14 +207,14 @@ export function QuickAdd({
             onClose={close}
             centered
             radius="lg"
-            closeButtonProps={{ 'aria-label': 'Close quick add' }}
+            closeButtonProps={{ 'aria-label': 'Close logger' }}
             title={
                 <div>
                     <Text fw={700} size="lg">
-                        Quick add
+                        {kind === 'Check-in' ? "How's your energy?" : `Log ${kind.toLowerCase()}`}
                     </Text>
                     <Text size="sm" c="dimmed">
-                        Add something to {selectedDateLabel}
+                        Record this for {selectedDateLabel}
                     </Text>
                 </div>
             }
@@ -304,18 +304,6 @@ export function QuickAdd({
                         )}
                     </div>
                 )}
-                <Select
-                    label="What do you want to record?"
-                    value={kind}
-                    onChange={value => value && setKind(value as QuickAddKind)}
-                    data={[
-                        { group: 'Eat or drink', items: ['Meal', 'Water'] },
-                        { group: 'Measure', items: ['Weight'] },
-                        { group: 'How I feel', items: ['Check-in', 'Symptom'] },
-                        { group: 'Remember', items: ['Note'] },
-                    ]}
-                    allowDeselect={false}
-                />
                 {kind === 'Meal' && (
                     <>
                         <Select
@@ -334,29 +322,50 @@ export function QuickAdd({
                     </>
                 )}
                 {kind === 'Water' && (
-                    <NumberInput
-                        label="Amount"
-                        value={amount}
-                        onChange={setAmount}
-                        suffix=" ml"
-                        step={50}
-                        min={0}
-                    />
+                    <Stack gap="xs">
+                        <Group grow>
+                            <Button variant="default" onClick={() => setAmount(250)}>
+                                +250 ml
+                            </Button>
+                            <Button variant="default" onClick={() => setAmount(500)}>
+                                +500 ml
+                            </Button>
+                        </Group>
+                        <NumberInput
+                            autoFocus
+                            label="Custom amount"
+                            value={amount}
+                            onChange={setAmount}
+                            suffix=" ml"
+                            step={50}
+                            min={1}
+                        />
+                    </Stack>
                 )}
                 {kind === 'Weight' && (
-                    <NumberInput
-                        label="Weight"
-                        value={amount}
-                        onChange={setAmount}
-                        decimalScale={1}
-                        suffix=" kg"
-                        placeholder="72.4"
-                        min={0}
-                    />
+                    <>
+                        <NumberInput
+                            autoFocus
+                            label="Weight"
+                            value={amount}
+                            onChange={setAmount}
+                            decimalScale={1}
+                            suffix={` ${weightUnit}`}
+                            placeholder={weightUnit === 'lb' ? '165.0' : '72.4'}
+                            min={1}
+                        />
+                        <TextInput
+                            type="datetime-local"
+                            label="Date and time"
+                            value={recordedAt}
+                            onChange={event => setRecordedAt(event.currentTarget.value)}
+                        />
+                    </>
                 )}
                 {kind === 'Check-in' && (
                     <>
                         <Select
+                            autoFocus
                             label="How is your energy?"
                             value={energy}
                             onChange={setEnergy}
@@ -414,6 +423,7 @@ export function QuickAdd({
                 )}
                 {kind === 'Note' && (
                     <TextInput
+                        autoFocus
                         label="What do you want to remember?"
                         value={note}
                         onChange={event => setNote(event.currentTarget.value)}

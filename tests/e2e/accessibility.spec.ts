@@ -33,10 +33,11 @@ test('keyboard users can bypass repeated navigation', async ({ page }) => {
     await expect(page.locator('#main-content')).toBeFocused()
 })
 
-test('quick-add dialog has no automatic WCAG A/AA violations', async ({ page }) => {
+test('global logger has no automatic WCAG A/AA violations', async ({ page }) => {
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
-    await page.getByRole('button', { name: /quick add/i }).click()
+    await page.getByRole('button', { name: 'Log health information' }).click()
+    await page.getByRole('menuitem', { name: 'Weight' }).click()
     await page.getByRole('dialog').waitFor()
     const results = await new AxeBuilder({ page })
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
