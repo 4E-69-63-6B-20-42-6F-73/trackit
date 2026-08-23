@@ -28,10 +28,15 @@ export type HealthConnectStatus =
     | 'Authentication failed'
     | 'Not connected'
 
-export function healthConnectStatus(devices: DeviceRecord[], now = Date.now()): HealthConnectStatus {
+export function healthConnectStatus(
+    devices: DeviceRecord[],
+    now = Date.now(),
+): HealthConnectStatus {
     const active = devices.filter(device => device.status === 'active')
     if (active.length) {
-        const diagnostics = active.flatMap(device => device.sync.map(cursor => cursor.diagnostic ?? ''))
+        const diagnostics = active.flatMap(device =>
+            device.sync.map(cursor => cursor.diagnostic ?? ''),
+        )
         if (diagnostics.some(value => /signature|nonce|revoked|auth/i.test(value))) {
             return 'Authentication failed'
         }
@@ -39,7 +44,9 @@ export function healthConnectStatus(devices: DeviceRecord[], now = Date.now()): 
             return 'Syncing'
         }
         const latest = Math.max(
-            ...active.map(device => (device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0)),
+            ...active.map(device =>
+                device.lastSeenAt ? new Date(device.lastSeenAt).getTime() : 0,
+            ),
         )
         if (latest === 0) return 'Connected'
         if (now - latest > 7 * 24 * 60 * 60 * 1000) return 'Device unreachable'

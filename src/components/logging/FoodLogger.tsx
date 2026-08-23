@@ -16,10 +16,7 @@ import { listRecipes, logMeal, searchFoods, type RecipeRecord } from '../../lib/
 import { FoodCatalogLookup } from '../FoodCatalogLookup'
 import { NewFoodModal } from '../NewFoodModal'
 
-type Selection =
-    | { kind: 'food'; food: Food }
-    | { kind: 'recipe'; recipe: RecipeRecord }
-    | null
+type Selection = { kind: 'food'; food: Food } | { kind: 'recipe'; recipe: RecipeRecord } | null
 
 const selectedTimestamp = (selectedDate?: string | null) => {
     const now = new Date()
@@ -112,7 +109,13 @@ export function FoodLogger({
 
     return (
         <>
-            <Modal opened={opened} onClose={close} title="Log food" size="lg" className="food-logger">
+            <Modal
+                opened={opened}
+                onClose={close}
+                title="Log food"
+                size="lg"
+                className="food-logger"
+            >
                 <Stack>
                     <SegmentedControl
                         fullWidth
@@ -151,7 +154,9 @@ export function FoodLogger({
                                             }}
                                         >
                                             <span>{food.name}</span>
-                                            <small>{food.brand || `${food.servingGrams} g serving`}</small>
+                                            <small>
+                                                {food.brand || `${food.servingGrams} g serving`}
+                                            </small>
                                         </button>
                                     ))}
                                 {(view === 'recipes' || query) &&
@@ -173,12 +178,18 @@ export function FoodLogger({
                                             </button>
                                         ))}
                                 {visibleFoods.length === 0 && visibleRecipes.length === 0 && (
-                                    <Text size="sm" c="dimmed">No matching saved foods or recipes.</Text>
+                                    <Text size="sm" c="dimmed">
+                                        No matching saved foods or recipes.
+                                    </Text>
                                 )}
                             </div>
-                            <Text size="sm" fw={650}>More</Text>
+                            <Text size="sm" fw={650}>
+                                More
+                            </Text>
                             <Group>
-                                <FoodCatalogLookup onCreated={food => setFoods(current => [food, ...current])} />
+                                <FoodCatalogLookup
+                                    onCreated={food => setFoods(current => [food, ...current])}
+                                />
                                 <Button variant="default" onClick={() => setCreating(true)}>
                                     Create food
                                 </Button>
@@ -228,7 +239,9 @@ export function FoodLogger({
                                 </Text>
                             </Group>
                             <Group justify="space-between">
-                                <Button variant="subtle" onClick={() => setSelection(null)}>Back</Button>
+                                <Button variant="subtle" onClick={() => setSelection(null)}>
+                                    Back
+                                </Button>
                                 <Button loading={busy} onClick={() => void save()}>
                                     Add to {mealType.toLowerCase()}
                                 </Button>

@@ -7,6 +7,7 @@ import {
     healthConnectStatus,
     listDevices,
     rejectDevice,
+    revokeDevice,
     type DeviceRecord,
     type HealthConnectStatus,
 } from '../../../lib/deviceApi'
@@ -66,13 +67,7 @@ export function Devices() {
 
     const handleRevoke = async (id: string) => {
         try {
-            const response = await fetch(`/api/devices/${id}`, {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-            })
-            if (!response.ok) throw new Error('Could not revoke device')
+            await revokeDevice(id)
             await refresh()
         } catch {
             setError('The device could not be disconnected. Try again.')
@@ -101,6 +96,19 @@ export function Devices() {
 
     const activeDevices = devices.filter(d => d.status === 'active')
     const pendingDevices = devices.filter(d => d.status === 'pending')
+
+    const getStatusColor = (status: string): string => {
+        switch (status) {
+            case 'active':
+                return 'green'
+            case 'pending':
+                return 'blue'
+            case 'confirmed':
+                return 'orange'
+            default:
+                return 'gray'
+        }
+    }
 
     return (
         <div className="page-content devices-page">
@@ -174,15 +182,15 @@ export function Devices() {
                                           ? 'Authentication failed; reconnect the phone to renew access'
                                           : healthStatus === 'Device unreachable'
                                             ? 'No upload has arrived for more than seven days; check the phone'
-                                    : healthStatus === 'Permission required'
-                                        ? pendingDevices.length > 0
-                                            ? `${pendingDevices.length} device${pendingDevices.length > 1 ? 's' : ''} awaiting approval`
-                                            : 'No devices configured'
-                                        : healthStatus === 'Delayed'
-                                          ? 'The last upload is more than 24 hours old'
-                                          : healthStatus === 'Not connected'
-                                            ? 'No phone has been paired yet'
-                                            : 'The server could not load device status'}
+                                            : healthStatus === 'Permission required'
+                                              ? pendingDevices.length > 0
+                                                  ? `${pendingDevices.length} device${pendingDevices.length > 1 ? 's' : ''} awaiting approval`
+                                                  : 'No devices configured'
+                                              : healthStatus === 'Delayed'
+                                                ? 'The last upload is more than 24 hours old'
+                                                : healthStatus === 'Not connected'
+                                                  ? 'No phone has been paired yet'
+                                                  : 'The server could not load device status'}
                             </Text>
                         </Stack>
                     </Group>
@@ -208,31 +216,6 @@ export function Devices() {
                                 awaiting approval
                             </Text>
                         </Text>
-                        <Group gap="sm">
-                            <Button
-                                variant="default"
-                                size="sm"
-                                leftSection={<IconX size={14} />}
-                                onClick={() => {
-                                    if (pendingDevices[0]) {
-                                        setPendingDeviceToReject(pendingDevices[0].id)
-                                    }
-                                }}
-                            >
-                                Reject
-                            </Button>
-                            <Button
-                                size="sm"
-                                color="trackit"
-                                onClick={() => {
-                                    if (pendingDevices[0]) {
-                                        handleApprove(pendingDevices[0].id)
-                                    }
-                                }}
-                            >
-                                Approve
-                            </Button>
-                        </Group>
                     </Group>
                 </Alert>
             )}
@@ -265,19 +248,19 @@ export function Devices() {
             )}
 
             {/* Your Devices */}
-            {activeDevices.length > 0 && (
+            {devices.length > 0 && (
                 <Card withBorder padding="lg" radius="md" mb="md">
                     <Group justify="space-between" mb="md">
                         <Text size="sm" fw={600}>
-                            Your devices ({activeDevices.length})
+                            Your devices ({devices.length})
                         </Text>
                     </Group>
                     <Stack gap="sm">
-                        {activeDevices.map(device => (
+                        {devices.map(device => (
                             <div
                                 key={device.id}
                                 style={{
-                                    background: 'var(--mantine-color-green-0)',
+                                    background: `var(--mantine-color-${getStatusColor(device.status)}-0)`,
                                     borderRadius: 'var(--mantine-radius-md)',
                                     padding: 'var(--mantine-spacing-sm)',
                                 }}
@@ -288,7 +271,11 @@ export function Devices() {
                                             <Text fw={600} size="sm">
                                                 {device.name}
                                             </Text>
-                                            <Badge size="sm" variant="light" color="green">
+                                            <Badge
+                                                size="sm"
+                                                variant="light"
+                                                color={getStatusColor(device.status)}
+                                            >
                                                 {getStatusLabel(device.status)}
                                             </Badge>
                                         </Group>
@@ -330,14 +317,35 @@ export function Devices() {
                                             </div>
                                         )}
                                     </Stack>
-                                    <Button
-                                        size="compact-sm"
-                                        variant="default"
-                                        color="gray"
-                                        onClick={() => handleRevoke(device.id)}
-                                    >
-                                        Disconnect
-                                    </Button>
+                                    {device.status === 'pending' && (
+                                        <Group gap="xs" wrap="nowrap">
+                                            <Button
+                                                size="compact-sm"
+                                                variant="default"
+                                                leftSection={<IconX size={14} />}
+                                                onClick={() => setPendingDeviceToReject(device.id)}
+                                            >
+                                                Reject
+                                            </Button>
+                                            <Button
+                                                size="compact-sm"
+                                                color="trackit"
+                                                onClick={() => handleApprove(device.id)}
+                                            >
+                                                Approve
+                                            </Button>
+                                        </Group>
+                                    )}
+                                    {device.status === 'active' && (
+                                        <Button
+                                            size="compact-sm"
+                                            variant="default"
+                                            color="gray"
+                                            onClick={() => handleRevoke(device.id)}
+                                        >
+                                            Disconnect
+                                        </Button>
+                                    )}
                                 </Group>
                             </div>
                         ))}
