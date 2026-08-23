@@ -92,7 +92,8 @@ export function ExperiencePanel() {
                                 kind,
                                 time,
                                 enabled: editingId
-                                    ? (reminders.find(item => item.id === editingId)?.enabled ?? true)
+                                    ? (reminders.find(item => item.id === editingId)?.enabled ??
+                                      true)
                                     : true,
                             }
                             void save(

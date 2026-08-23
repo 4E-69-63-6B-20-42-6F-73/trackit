@@ -213,8 +213,8 @@ export function SecurityPanel() {
             )}
             {filteredEvents.length > 0 && (
                 <Text size="xs" c="dimmed">
-                    Showing {Math.min(visibleEvents, filteredEvents.length)} of {filteredEvents.length}
-                    {' '}matching events
+                    Showing {Math.min(visibleEvents, filteredEvents.length)} of{' '}
+                    {filteredEvents.length} matching events
                 </Text>
             )}
         </Stack>

@@ -503,8 +503,9 @@ export function Journal({
                         onClick={() => {
                             if (deleting) {
                                 remove(deleting.id)
-                                setBoundedEvents(current =>
-                                    current?.filter(event => event.id !== deleting.id) ?? null,
+                                setBoundedEvents(
+                                    current =>
+                                        current?.filter(event => event.id !== deleting.id) ?? null,
                                 )
                             }
                             setDeleting(null)
