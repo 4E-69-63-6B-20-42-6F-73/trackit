@@ -7,8 +7,10 @@ import {
     backupRuns,
     devices,
     deviceUploadBatches,
+    dailyMetrics,
     foods,
     goals,
+    healthRecords,
     journalEntries,
     mcpClients,
     mcpActionReceipts,
@@ -82,6 +84,9 @@ export class DataLifecycleService {
             const cutoff = new Date(Date.now() - rule.days * 24 * 60 * 60 * 1000)
             await this.database.transaction(async transaction => {
                 if (rule.category === 'observations') {
+                    await transaction
+                        .delete(healthRecords)
+                        .where(lt(healthRecords.startTime, cutoff))
                     const linked = await transaction
                         .select({ id: observations.id })
                         .from(observations)
@@ -99,6 +104,9 @@ export class DataLifecycleService {
                     await transaction
                         .delete(observations)
                         .where(lt(observations.observedAt, cutoff))
+                    await transaction
+                        .delete(dailyMetrics)
+                        .where(lt(dailyMetrics.date, cutoff.toISOString().slice(0, 10)))
                 } else if (rule.category === 'meals') {
                     const linked = await transaction
                         .select({ id: meals.id })
@@ -147,6 +155,8 @@ export class DataLifecycleService {
                     )
                 }
                 await transaction.delete(observations)
+                await transaction.delete(healthRecords)
+                await transaction.delete(dailyMetrics)
             }
             if (category === 'meals') {
                 const linked = await transaction.select({ id: meals.id }).from(meals)
@@ -185,6 +195,8 @@ export class DataLifecycleService {
             await transaction.delete(recipes)
             await transaction.delete(foods)
             await transaction.delete(observations)
+            await transaction.delete(healthRecords)
+            await transaction.delete(dailyMetrics)
             await transaction.delete(journalEntries)
             await transaction.delete(goals)
             await transaction.delete(savedTrendViews)

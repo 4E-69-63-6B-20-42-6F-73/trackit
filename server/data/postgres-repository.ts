@@ -3,6 +3,8 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
     foods,
+    healthRecords,
+    dailyMetrics,
     goals,
     meals,
     observations,
@@ -17,6 +19,21 @@ import type { DataRepository, RecordRange } from './types.js'
 type Database = PostgresJsDatabase<typeof schemaType>
 
 export class PostgresDataRepository implements DataRepository {
+    listHealthRecords() {
+        return this.database.select().from(healthRecords).orderBy(desc(healthRecords.startTime))
+    }
+
+    listDailyMetrics(range: { from?: string; to?: string } = {}) {
+        const conditions = []
+        if (range.from) conditions.push(gte(dailyMetrics.date, range.from))
+        if (range.to) conditions.push(lte(dailyMetrics.date, range.to))
+        return this.database
+            .select()
+            .from(dailyMetrics)
+            .where(conditions.length ? and(...conditions) : undefined)
+            .orderBy(desc(dailyMetrics.date))
+    }
+
     listSources() {
         return this.database.select().from(sources).orderBy(sources.name)
     }

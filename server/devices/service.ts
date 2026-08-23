@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, randomBytes, randomInt, verify } from 'node:crypto'
-import { and, desc, eq, gt, isNull, lt } from 'drizzle-orm'
+import { and, desc, eq, gte, gt, isNull, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -7,13 +7,19 @@ import {
     devices,
     deviceRequestNonces,
     deviceUploadBatches,
+    dailyMetrics,
+    healthRecords,
     observations,
     pairingCodes,
     sources,
     syncCursors,
 } from '../db/schema.js'
+import { deriveRecord } from '../health-records/derive.js'
+import { aggregateMetric, metricDefinition } from '../health-records/metric-registry.js'
+import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const deletionTombstoneVersion = Number.MAX_SAFE_INTEGER
 
@@ -414,6 +420,261 @@ export class DeviceService {
             })
             return { duplicate: false, accepted: records.length }
         })
+    }
+
+    async uploadHealthRecords(
+        deviceId: string,
+        idempotencyKey: string,
+        records: CanonicalHealthRecordInput[],
+    ) {
+        return this.database.transaction(async transaction => {
+            const [existing] = await transaction
+                .select({ id: deviceUploadBatches.id })
+                .from(deviceUploadBatches)
+                .where(
+                    and(
+                        eq(deviceUploadBatches.deviceId, deviceId),
+                        eq(deviceUploadBatches.idempotencyKey, idempotencyKey),
+                    ),
+                )
+                .limit(1)
+            if (existing) return { duplicate: true, accepted: records.length }
+
+            await transaction
+                .insert(sources)
+                .values({
+                    id: deviceId,
+                    kind: 'health_connect',
+                    name: 'Health Connect',
+                    externalOrigin: 'android',
+                })
+                .onConflictDoNothing({ target: sources.id })
+
+            const affectedDates = new Set<string>()
+            for (const input of records) {
+                const now = new Date()
+                const startTime = new Date(input.startTime)
+                const endTime = input.endTime ? new Date(input.endTime) : null
+                const [previous] = await transaction
+                    .select()
+                    .from(healthRecords)
+                    .where(
+                        and(
+                            eq(healthRecords.userId, 'owner'),
+                            eq(healthRecords.provider, input.provider),
+                            eq(healthRecords.externalId, input.externalId),
+                        ),
+                    )
+                    .limit(1)
+
+                if (previous)
+                    affectedDates.add(
+                        this.metricDate(previous.recordType, previous.startTime, previous.endTime),
+                    )
+                const deletedAt = input.deleted ? now : null
+                await transaction
+                    .insert(healthRecords)
+                    .values({
+                        userId: 'owner',
+                        provider: input.provider,
+                        recordType: input.recordType,
+                        externalId: input.externalId,
+                        externalVersion: input.externalVersion,
+                        startTime,
+                        endTime,
+                        dataOrigin: input.dataOrigin,
+                        recordingMethod: input.recordingMethod,
+                        device: input.device ?? {},
+                        payload: input.payload,
+                        lastModifiedTime: input.lastModifiedTime
+                            ? new Date(input.lastModifiedTime)
+                            : undefined,
+                        deletedAt,
+                    })
+                    .onConflictDoUpdate({
+                        target: [
+                            healthRecords.userId,
+                            healthRecords.provider,
+                            healthRecords.externalId,
+                        ],
+                        setWhere: lt(healthRecords.externalVersion, input.externalVersion),
+                        set: {
+                            recordType: input.recordType,
+                            externalVersion: input.externalVersion,
+                            startTime,
+                            endTime,
+                            dataOrigin: input.dataOrigin,
+                            recordingMethod: input.recordingMethod,
+                            device: input.device ?? {},
+                            payload: input.payload,
+                            lastModifiedTime: input.lastModifiedTime
+                                ? new Date(input.lastModifiedTime)
+                                : undefined,
+                            deletedAt,
+                            updatedAt: now,
+                        },
+                    })
+
+                const [stored] = await transaction
+                    .select()
+                    .from(healthRecords)
+                    .where(
+                        and(
+                            eq(healthRecords.userId, 'owner'),
+                            eq(healthRecords.provider, input.provider),
+                            eq(healthRecords.externalId, input.externalId),
+                        ),
+                    )
+                    .limit(1)
+                if (!stored || stored.externalVersion !== input.externalVersion) continue
+
+                affectedDates.add(
+                    this.metricDate(stored.recordType, stored.startTime, stored.endTime),
+                )
+                await transaction
+                    .delete(observations)
+                    .where(eq(observations.sourceRecordId, stored.id))
+                if (!stored.deletedAt) {
+                    const projections = deriveRecord({
+                        ...input,
+                        id: stored.id,
+                        userId: stored.userId,
+                        startTime: stored.startTime,
+                        endTime: stored.endTime,
+                    })
+                    if (projections.length)
+                        await transaction.insert(observations).values(
+                            projections.map(projection => ({
+                                userId: stored.userId,
+                                metric: projection.metric,
+                                canonicalValue: projection.value,
+                                canonicalUnit: projection.unit,
+                                originalValue: projection.value,
+                                originalUnit: projection.unit,
+                                observedAt: projection.observedAt!,
+                                endedAt: projection.endedAt,
+                                sourceId: deviceId,
+                                externalId: `${stored.externalId}:${projection.metric}:v${projection.derivationVersion}`,
+                                kind: projection.kind,
+                                sourceRecordId: stored.id,
+                                derivation: projection.derivation,
+                                derivationVersion: projection.derivationVersion,
+                                version: stored.externalVersion,
+                                metadata: {
+                                    source: 'Health Connect',
+                                    dataOrigin: stored.dataOrigin,
+                                },
+                            })),
+                        )
+                }
+            }
+
+            for (const date of affectedDates) await this.rebuildDailyDate(transaction, date)
+            await transaction.insert(deviceUploadBatches).values({
+                deviceId,
+                idempotencyKey,
+                recordCount: records.length,
+            })
+            return { duplicate: false, accepted: records.length }
+        })
+    }
+
+    async rebuildHealthRecordObservations() {
+        return this.database.transaction(async transaction => {
+            const records = await transaction
+                .select()
+                .from(healthRecords)
+                .where(isNull(healthRecords.deletedAt))
+            const dates = new Set<string>()
+            for (const stored of records) {
+                dates.add(this.metricDate(stored.recordType, stored.startTime, stored.endTime))
+                await transaction
+                    .delete(observations)
+                    .where(eq(observations.sourceRecordId, stored.id))
+                const projections = deriveRecord({
+                    id: stored.id,
+                    userId: stored.userId,
+                    provider: stored.provider,
+                    recordType: stored.recordType,
+                    externalId: stored.externalId,
+                    externalVersion: stored.externalVersion,
+                    startTime: stored.startTime,
+                    endTime: stored.endTime,
+                    dataOrigin: stored.dataOrigin ?? undefined,
+                    recordingMethod: stored.recordingMethod ?? undefined,
+                    device: stored.device as Record<string, unknown>,
+                    payload: stored.payload as Record<string, unknown>,
+                    lastModifiedTime: stored.lastModifiedTime?.toISOString(),
+                })
+                if (projections.length)
+                    await transaction.insert(observations).values(
+                        projections.map(projection => ({
+                            userId: stored.userId,
+                            metric: projection.metric,
+                            canonicalValue: projection.value,
+                            canonicalUnit: projection.unit,
+                            originalValue: projection.value,
+                            originalUnit: projection.unit,
+                            observedAt: projection.observedAt!,
+                            endedAt: projection.endedAt,
+                            externalId: `${stored.externalId}:${projection.metric}:v${projection.derivationVersion}`,
+                            kind: projection.kind,
+                            sourceRecordId: stored.id,
+                            derivation: projection.derivation,
+                            derivationVersion: projection.derivationVersion,
+                            version: stored.externalVersion,
+                            metadata: { source: 'Health Connect', dataOrigin: stored.dataOrigin },
+                        })),
+                    )
+            }
+            for (const date of dates) await this.rebuildDailyDate(transaction, date)
+            return { records: records.length }
+        })
+    }
+
+    private metricDate(recordType: string, startTime: Date, endTime: Date | null) {
+        const instant = recordType === 'SleepSessionRecord' && endTime ? endTime : startTime
+        return instant.toISOString().slice(0, 10)
+    }
+
+    private async rebuildDailyDate(transaction: Transaction, date: string) {
+        const from = new Date(`${date}T00:00:00.000Z`)
+        const to = new Date(from.getTime() + 86_400_000)
+        const rows = await transaction
+            .select({
+                metric: observations.metric,
+                value: observations.canonicalValue,
+                unit: observations.canonicalUnit,
+                observedAt: observations.observedAt,
+                derivationVersion: observations.derivationVersion,
+            })
+            .from(observations)
+            .where(
+                and(
+                    eq(observations.userId, 'owner'),
+                    isNull(observations.deletedAt),
+                    gte(observations.observedAt, from),
+                    lt(observations.observedAt, to),
+                ),
+            )
+        await transaction
+            .delete(dailyMetrics)
+            .where(and(eq(dailyMetrics.userId, 'owner'), eq(dailyMetrics.date, date)))
+        const byMetric = new Map<string, typeof rows>()
+        for (const row of rows) byMetric.set(row.metric, [...(byMetric.get(row.metric) ?? []), row])
+        for (const [metric, values] of byMetric) {
+            const definition = metricDefinition(metric)
+            if (!definition || !values.length) continue
+            const aggregate = aggregateMetric(definition.aggregation, values)!
+            await transaction.insert(dailyMetrics).values({
+                userId: 'owner',
+                date,
+                metric,
+                value: aggregate,
+                unit: definition.canonicalUnit,
+                derivationVersion: Math.max(...values.map(row => row.derivationVersion ?? 1)),
+            })
+        }
     }
 
     async updateCursor(

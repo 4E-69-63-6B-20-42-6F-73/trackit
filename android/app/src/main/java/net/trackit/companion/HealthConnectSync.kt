@@ -67,14 +67,8 @@ class HealthConnectSync(private val context: Context) {
     private val api = TrackItApi(context)
     private val state = CredentialStore(context)
 
-    val supportedRecordTypes: List<KClass<out Record>> = listOf(
-        StepsRecord::class,
-        SleepSessionRecord::class,
-        WeightRecord::class,
-        HeartRateRecord::class,
-        RestingHeartRateRecord::class,
-        ExerciseSessionRecord::class,
-    )
+    val supportedRecordTypes: List<KClass<out Record>> =
+        HealthRecordAdapterRegistry.supportedRecordTypes
 
     fun permissionsFor(recordTypes: Set<KClass<out Record>>): Set<String> =
         recordTypes.map(HealthPermission::getReadPermission).toSet()
@@ -148,7 +142,7 @@ class HealthConnectSync(private val context: Context) {
             try {
                 val records = readWindow(recordType, TimeRangeFilter.after(since), cancelled)
                 discovered = records.size
-                val uploads = records.mapNotNull(::mapRecord)
+                val uploads = records.mapNotNull(HealthRecordAdapterRegistry::serialize)
                 onProgress(
                     HistoricalImportProgress(
                         category = category,
@@ -233,16 +227,18 @@ class HealthConnectSync(private val context: Context) {
 
             val uploads = response.changes.mapNotNull { change ->
                 when (change) {
-                    is UpsertionChange -> mapRecord(change.record)
-                    is DeletionChange -> HealthUpload(
+                    is UpsertionChange -> HealthRecordAdapterRegistry.serialize(change.record)
+                    is DeletionChange -> TrackItHealthRecord(
+                        recordType = key,
                         externalId = change.recordId,
-                        metric = key,
-                        value = 0.0,
-                        unit = "deleted",
-                        observedAt = Instant.EPOCH.toString(),
-                        endedAt = null,
-                        version = 9_007_199_254_740_991L,
-                        dataOrigin = "Health Connect",
+                        externalVersion = 9_007_199_254_740_991L,
+                        startTime = Instant.EPOCH.toString(),
+                        endTime = null,
+                        dataOrigin = null,
+                        recordingMethod = null,
+                        device = org.json.JSONObject(),
+                        payload = org.json.JSONObject(),
+                        lastModifiedTime = null,
                         deleted = true,
                     )
                     else -> null
@@ -271,17 +267,9 @@ class HealthConnectSync(private val context: Context) {
     ) {
         val since = Instant.now().minus(Duration.ofDays(30))
         val filter = TimeRangeFilter.after(since)
-        val records: List<Record> = when (recordType) {
-            StepsRecord::class -> readWindow(StepsRecord::class, filter, cancelled)
-            SleepSessionRecord::class -> readWindow(SleepSessionRecord::class, filter, cancelled)
-            WeightRecord::class -> readWindow(WeightRecord::class, filter, cancelled)
-            HeartRateRecord::class -> readWindow(HeartRateRecord::class, filter, cancelled)
-            RestingHeartRateRecord::class -> readWindow(RestingHeartRateRecord::class, filter, cancelled)
-            ExerciseSessionRecord::class -> readWindow(ExerciseSessionRecord::class, filter, cancelled)
-            else -> emptyList()
-        }
+        val records = readWindowDynamic(recordType, filter, cancelled)
 
-        records.mapNotNull(::mapRecord).chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+        records.mapNotNull(HealthRecordAdapterRegistry::serialize).chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
             if (cancelled()) throw CancellationException("Import cancelled")
             if (batch.isNotEmpty()) {
                 api.upload(UUID.randomUUID().toString(), batch)
@@ -314,22 +302,11 @@ class HealthConnectSync(private val context: Context) {
         return records
     }
 
-    private fun mapRecord(record: Record): HealthUpload? {
-        val metadata = record.metadata
-        val common = Triple(
-            metadata.id,
-            metadata.lastModifiedTime.toEpochMilli(),
-            metadata.dataOrigin.packageName,
-        )
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun readWindowDynamic(
+        recordType: KClass<out Record>,
+        filter: TimeRangeFilter,
+        cancelled: () -> Boolean,
+    ): List<Record> = readWindow(recordType as KClass<Record>, filter, cancelled)
 
-        return when (record) {
-            is StepsRecord -> HealthUpload(common.first, "steps", record.count.toDouble(), "count", HealthTime.serialize(record.startTime), HealthTime.serialize(record.endTime), common.second, common.third)
-            is SleepSessionRecord -> HealthUpload(common.first, "sleep", HealthTime.hoursBetween(record.startTime, record.endTime), "hours", HealthTime.serialize(record.startTime), HealthTime.serialize(record.endTime), common.second, common.third)
-            is WeightRecord -> HealthUpload(common.first, "weight", record.weight.inKilograms, "kg", HealthTime.serialize(record.time), null, common.second, common.third)
-            is HeartRateRecord -> HealthUpload(common.first, "heart_rate", record.samples.map { it.beatsPerMinute }.average(), "bpm", HealthTime.serialize(record.startTime), HealthTime.serialize(record.endTime), common.second, common.third)
-            is RestingHeartRateRecord -> HealthUpload(common.first, "resting_heart_rate", record.beatsPerMinute.toDouble(), "bpm", HealthTime.serialize(record.time), null, common.second, common.third)
-            is ExerciseSessionRecord -> HealthUpload(common.first, "exercise", Duration.between(record.startTime, record.endTime).toMinutes().toDouble(), "minutes", HealthTime.serialize(record.startTime), HealthTime.serialize(record.endTime), common.second, common.third)
-            else -> null
-        }
-    }
 }

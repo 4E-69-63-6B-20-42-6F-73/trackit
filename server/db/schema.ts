@@ -55,10 +55,42 @@ export const journalEntries = pgTable(
     ],
 )
 
+export const healthRecords = pgTable(
+    'health_records',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        userId: text('user_id').notNull().default('owner'),
+        provider: text('provider').notNull(),
+        recordType: text('record_type').notNull(),
+        externalId: text('external_id').notNull(),
+        externalVersion: bigint('external_version', { mode: 'number' }).notNull().default(1),
+        startTime: timestamp('start_time', { withTimezone: true }).notNull(),
+        endTime: timestamp('end_time', { withTimezone: true }),
+        dataOrigin: text('data_origin'),
+        recordingMethod: text('recording_method'),
+        device: jsonb('device').notNull().default({}),
+        payload: jsonb('payload').notNull().default({}),
+        lastModifiedTime: timestamp('last_modified_time', { withTimezone: true }),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+        deletedAt: timestamp('deleted_at', { withTimezone: true }),
+    },
+    table => [
+        uniqueIndex('health_record_source_identity_idx').on(
+            table.userId,
+            table.provider,
+            table.externalId,
+        ),
+        index('health_record_type_start_idx').on(table.recordType, table.startTime),
+        index('health_record_origin_idx').on(table.dataOrigin),
+    ],
+)
+
 export const observations = pgTable(
     'observations',
     {
         id: uuid('id').primaryKey().defaultRandom(),
+        userId: text('user_id').notNull().default('owner'),
         metric: text('metric').notNull(),
         canonicalValue: doublePrecision('canonical_value').notNull(),
         canonicalUnit: text('canonical_unit').notNull(),
@@ -68,6 +100,12 @@ export const observations = pgTable(
         endedAt: timestamp('ended_at', { withTimezone: true }),
         sourceId: uuid('source_id').references(() => sources.id),
         externalId: text('external_id'),
+        kind: text('kind').notNull().default('raw_metric'),
+        sourceRecordId: uuid('source_record_id').references(() => healthRecords.id, {
+            onDelete: 'cascade',
+        }),
+        derivation: text('derivation'),
+        derivationVersion: integer('derivation_version'),
         metadata: jsonb('metadata').notNull().default({}),
         excluded: boolean('excluded').notNull().default(false),
         version: bigint('version', { mode: 'number' }).notNull().default(1),
@@ -77,8 +115,28 @@ export const observations = pgTable(
     },
     table => [
         uniqueIndex('observation_external_source_idx').on(table.sourceId, table.externalId),
+        uniqueIndex('observation_record_metric_idx').on(
+            table.sourceRecordId,
+            table.metric,
+            table.derivationVersion,
+        ),
         index('observation_metric_observed_idx').on(table.metric, table.observedAt),
     ],
+)
+
+export const dailyMetrics = pgTable(
+    'daily_metrics',
+    {
+        userId: text('user_id').notNull().default('owner'),
+        date: text('date').notNull(),
+        metric: text('metric').notNull(),
+        value: doublePrecision('value').notNull(),
+        unit: text('unit').notNull(),
+        derivationVersion: integer('derivation_version').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [uniqueIndex('daily_metric_identity_idx').on(table.userId, table.date, table.metric)],
 )
 
 export const meals = pgTable(

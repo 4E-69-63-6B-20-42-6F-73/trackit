@@ -3,7 +3,8 @@
 The companion targets Android 9+ and uses Jetpack Compose plus the Health Connect client. Pairing
 requires the HTTPS server URL, the exact server identity shown by TrackIt, a five-minute one-time
 code, confirmation in the web UI, and a device-keystore signing key. Uploads are signed, batched,
-idempotent, and use one change cursor per Health Connect record type.
+idempotent, and use one change cursor per Health Connect record type. Source records are serialized
+through the shared adapter registry without Android-side analytics or aggregation.
 
 Open this directory in Android Studio and use its bundled Gradle/JDK toolchain. This repository does
 not commit generated signing keys. Cleartext HTTP is disabled; for a private CA, install the CA on
@@ -14,8 +15,7 @@ again before every sync. A revoked permission pauses that category without affec
 categories. The first import and expired-token recovery both page through the most recent 30 days,
 upload in batches, and deduplicate by Health Connect source ID/version before a new cursor is stored.
 
-Health Connect deletion changes hide the matching TrackIt observation immediately. Because the
-Health Connect deletion event contains an ID but no modification version, TrackIt assigns a
-permanent tombstone version so replayed upserts cannot resurrect it. The soft-deleted row remains
-only for deduplication until observation retention applies or the owner deletes the observations
-category or all owner data.
+Health Connect deletion changes tombstone the canonical server record by Health Connect record ID.
+The server removes linked projections and rebuilds affected daily aggregates. Because a deletion
+contains no modification version, the companion assigns a terminal version so stale upserts cannot
+resurrect it.
