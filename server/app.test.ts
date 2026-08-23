@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
 import type {
@@ -56,6 +56,35 @@ class MemoryJournalRepository implements JournalRepository {
 }
 
 describe('device authentication diagnostics', () => {
+    it('authenticates the exact raw JSON bytes instead of reserialized numeric values', async () => {
+        const authenticateDetailed = vi.fn().mockResolvedValue({ device: { id: 'device-1' } })
+        const uploadHealthRecords = vi.fn().mockResolvedValue({ accepted: 1, duplicate: false })
+        const app = await createApp(new MemoryJournalRepository(), {
+            devices: { authenticateDetailed, uploadHealthRecords } as never,
+        })
+        const idempotencyKey = randomUUID()
+        const rawBody = `{"idempotencyKey":"${idempotencyKey}","records":[{"provider":"health_connect","recordType":"DistanceRecord","externalId":"distance-1","externalVersion":1,"startTime":"2026-08-23T08:00:00.000Z","endTime":"2026-08-23T08:30:00.000Z","payload":{"meters":1E-7}}]}`
+        const rawHash = createHash('sha256').update(rawBody).digest('hex')
+        const reserializedHash = createHash('sha256')
+            .update(JSON.stringify(JSON.parse(rawBody)))
+            .digest('hex')
+
+        expect(rawHash).not.toBe(reserializedHash)
+        const response = await app.inject({
+            method: 'POST',
+            url: '/api/device/health-records',
+            payload: rawBody,
+            headers: { 'content-type': 'application/json' },
+        })
+
+        expect(response.statusCode).toBe(200)
+        expect(authenticateDetailed).toHaveBeenCalledWith(
+            expect.objectContaining({ bodyHash: rawHash }),
+        )
+        expect(uploadHealthRecords).toHaveBeenCalledOnce()
+        await app.close()
+    })
+
     it.each(['signature_mismatch', 'clock_skew', 'device_revoked', 'nonce_replay'] as const)(
         'keeps the %s diagnostic server-side and returns only unauthorized',
         async reason => {

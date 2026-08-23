@@ -78,6 +78,23 @@ export async function createApp(
         trustProxy: options?.trustProxy ?? false,
     })
 
+    const rawJsonBodies = new WeakMap<FastifyRequest, Buffer>()
+    const secureJsonParser = app.getDefaultJsonParser('error', 'error')
+    app.removeContentTypeParser('application/json')
+    app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (request, body, done) => {
+        const rawBody = Buffer.isBuffer(body) ? body : Buffer.from(body)
+        rawJsonBodies.set(request, rawBody)
+        secureJsonParser(request, rawBody.toString('utf8'), done)
+    })
+
+    const requestBodyHash = (request: FastifyRequest) =>
+        createHash('sha256')
+            .update(
+                rawJsonBodies.get(request) ??
+                    Buffer.from(JSON.stringify(request.body ?? null), 'utf8'),
+            )
+            .digest('hex')
+
     await app.register(cookie)
     await app.register(helmet, {
         contentSecurityPolicy: {
@@ -654,12 +671,7 @@ export async function createApp(
             return null
         }
         app.post('/api/device/upload', async (request, reply) => {
-            const device = await authenticateDevice(
-                request,
-                createHash('sha256')
-                    .update(JSON.stringify(request.body ?? null))
-                    .digest('hex'),
-            )
+            const device = await authenticateDevice(request, requestBodyHash(request))
             if (!device) return reply.code(401).send({ error: 'unauthorized' })
             const input = z
                 .object({
@@ -675,12 +687,7 @@ export async function createApp(
             )
         })
         app.post('/api/device/health-records', async (request, reply) => {
-            const device = await authenticateDevice(
-                request,
-                createHash('sha256')
-                    .update(JSON.stringify(request.body ?? null))
-                    .digest('hex'),
-            )
+            const device = await authenticateDevice(request, requestBodyHash(request))
             if (!device) return reply.code(401).send({ error: 'unauthorized' })
             const input = z
                 .object({
@@ -699,12 +706,7 @@ export async function createApp(
             data: await devices.rebuildHealthRecordObservations(),
         }))
         app.put('/api/device/cursor', async (request, reply) => {
-            const device = await authenticateDevice(
-                request,
-                createHash('sha256')
-                    .update(JSON.stringify(request.body ?? null))
-                    .digest('hex'),
-            )
+            const device = await authenticateDevice(request, requestBodyHash(request))
             if (!device) return reply.code(401).send({ error: 'unauthorized' })
             const input = z
                 .object({
