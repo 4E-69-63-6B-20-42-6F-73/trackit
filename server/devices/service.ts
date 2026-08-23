@@ -320,6 +320,17 @@ export class DeviceService {
             for (const record of records) {
                 if (record.deleted) {
                     const deletedAt = new Date()
+                    const observedAt = new Date(record.observedAt)
+                    const endedAt = record.endedAt ? new Date(record.endedAt) : undefined
+
+                    // For sleep records, use the end time to determine the "sleep date"
+                    const effectiveObservedAt =
+                        record.metric === 'sleep' &&
+                        endedAt &&
+                        endedAt.getTime() > observedAt.getTime()
+                            ? endedAt
+                            : observedAt
+
                     await transaction
                         .insert(observations)
                         .values({
@@ -328,7 +339,7 @@ export class DeviceService {
                             canonicalUnit: record.unit,
                             originalValue: record.value,
                             originalUnit: record.unit,
-                            observedAt: new Date(record.observedAt),
+                            observedAt: effectiveObservedAt,
                             sourceId: deviceId,
                             externalId: record.externalId,
                             version: deletionTombstoneVersion,
@@ -348,6 +359,16 @@ export class DeviceService {
                         })
                     continue
                 }
+                const observedAt = new Date(record.observedAt)
+                const endedAt = record.endedAt ? new Date(record.endedAt) : undefined
+
+                // For sleep records, use the end time to determine the "sleep date"
+                // Sleep that spans midnight is attributed to the day you wake up in
+                const effectiveObservedAt =
+                    record.metric === 'sleep' && endedAt && endedAt.getTime() > observedAt.getTime()
+                        ? endedAt
+                        : observedAt
+
                 await transaction
                     .insert(observations)
                     .values({
@@ -356,8 +377,8 @@ export class DeviceService {
                         canonicalUnit: record.unit,
                         originalValue: record.value,
                         originalUnit: record.unit,
-                        observedAt: new Date(record.observedAt),
-                        endedAt: record.endedAt ? new Date(record.endedAt) : undefined,
+                        observedAt: effectiveObservedAt,
+                        endedAt,
                         sourceId: deviceId,
                         externalId: record.externalId,
                         version: record.version,
@@ -374,8 +395,8 @@ export class DeviceService {
                             canonicalUnit: record.unit,
                             originalValue: record.value,
                             originalUnit: record.unit,
-                            observedAt: new Date(record.observedAt),
-                            endedAt: record.endedAt ? new Date(record.endedAt) : null,
+                            observedAt: effectiveObservedAt,
+                            endedAt,
                             version: record.version,
                             deletedAt: null,
                             updatedAt: new Date(),
