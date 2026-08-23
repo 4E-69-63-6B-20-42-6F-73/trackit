@@ -43,6 +43,15 @@ export const openApiContract = {
             get: { responses: { '200': { description: 'Preferences' } } },
             patch: { responses: { '200': { description: 'Updated' } } },
         },
+        '/api/foods/import': {
+            post: { responses: { '200': { description: 'Per-row food import result' } } },
+        },
+        '/api/food-catalog/barcode/{barcode}': {
+            get: { responses: { '200': { description: 'Normalized catalog food preview' } } },
+        },
+        '/api/food-catalog/search': {
+            get: { responses: { '200': { description: 'Normalized catalog food previews' } } },
+        },
     },
     components: {
         securitySchemes: {

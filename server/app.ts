@@ -15,6 +15,7 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from './db/schema.js'
 import {
     foodInputSchema,
+    foodImportSchema,
     foodUpdateSchema,
     goalInputSchema,
     goalRetireSchema,
@@ -37,6 +38,7 @@ import type { DeviceService, DeviceUploadRecord } from './devices/service.js'
 import type { BackupService } from './backup/service.js'
 import type { DataLifecycleService } from './data-lifecycle/service.js'
 import { ExportService } from './data-lifecycle/export.js'
+import type { FoodCatalogService } from './nutrition/catalog.js'
 
 export async function createApp(
     repository: JournalRepository,
@@ -51,6 +53,7 @@ export async function createApp(
         trustProxy?: boolean
         bootstrapSecret?: string
         database?: PostgresJsDatabase<typeof schemaType>
+        foodCatalog?: FoodCatalogService
     },
 ) {
     const app = Fastify({
@@ -818,6 +821,38 @@ export async function createApp(
             if (!input.success) return badRequest(request, reply, { validation: input.error })
             return reply.code(201).send({ data: await data.createFood(input.data) })
         })
+        app.post('/api/foods/import', async (request, reply) => {
+            const input = foodImportSchema.safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            return { data: await data.importFoods(input.data) }
+        })
+        app.get<{ Params: { barcode: string } }>(
+            '/api/food-catalog/barcode/:barcode',
+            async (request, reply) => {
+                if (!options.foodCatalog)
+                    return reply.code(503).send({ error: 'catalog_not_configured' })
+                try {
+                    const result = await options.foodCatalog.barcode(request.params.barcode)
+                    return result ? { data: result } : reply.code(404).send({ error: 'not_found' })
+                } catch {
+                    return reply.code(502).send({ error: 'catalog_unavailable' })
+                }
+            },
+        )
+        app.get<{ Querystring: { q?: string } }>(
+            '/api/food-catalog/search',
+            async (request, reply) => {
+                if (!options.foodCatalog)
+                    return reply.code(503).send({ error: 'catalog_not_configured' })
+                const query = request.query.q?.trim() ?? ''
+                if (query.length < 2) return reply.code(400).send({ error: 'query_too_short' })
+                try {
+                    return { data: await options.foodCatalog.search(query) }
+                } catch {
+                    return reply.code(502).send({ error: 'catalog_unavailable' })
+                }
+            },
+        )
         app.patch<{ Params: { id: string } }>('/api/foods/:id', async (request, reply) => {
             const input = foodUpdateSchema.safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })

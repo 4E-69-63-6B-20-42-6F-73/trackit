@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseFoodCsv } from './foodCsv'
+import { inspectFoodCsv, parseFoodCsv } from './foodCsv'
 
 describe('food CSV adapter', () => {
     it('imports quoted names, nutrients, serving data, and favorites', () => {
@@ -14,6 +14,17 @@ describe('food CSV adapter', () => {
             favorite: true,
             per100g: { calories: 389, protein: 16.9 },
         })
+    })
+
+    it('previews valid rows while preserving row-level validation errors', () => {
+        const inspection = inspectFoodCsv(
+            'name,barcode,calories_per_100g\nValid,12345678,100\nBroken,abc,200',
+        )
+        expect(inspection.foods).toHaveLength(1)
+        expect(inspection.rows).toEqual([
+            expect.objectContaining({ row: 2, status: 'ready', name: 'Valid' }),
+            expect.objectContaining({ row: 3, status: 'invalid', name: 'Broken' }),
+        ])
     })
 
     it('rejects missing required columns and invalid values', () => {

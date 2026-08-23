@@ -22,6 +22,10 @@ const configSchema = z.object({
     TRACKIT_DB_HOST: z.string().default(process.env.NODE_ENV === 'production' ? 'db' : 'localhost'),
     TRACKIT_DB_PORT: z.coerce.number().int().positive().default(5432),
     TRACKIT_DB_PASSWORD: z.string().default(''),
+    FOOD_CATALOG_URL: z.preprocess(
+        value => (value === '' ? undefined : value),
+        z.string().url().optional(),
+    ),
 })
 
 const parsed = configSchema.parse(process.env)

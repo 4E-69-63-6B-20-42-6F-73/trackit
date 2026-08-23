@@ -14,6 +14,7 @@ import {
 import { IconApple, IconPlus, IconSearch, IconStar, IconStarFilled } from '@tabler/icons-react'
 import { NewFoodModal } from '../components/NewFoodModal'
 import { FoodCsvImport } from '../components/FoodCsvImport'
+import { FoodCatalogLookup } from '../components/FoodCatalogLookup'
 import { FoodEditModal } from '../components/FoodEditModal'
 import { MealEditModal } from '../components/MealEditModal'
 import { RecipeYieldModal } from '../components/RecipeYieldModal'
@@ -33,27 +34,9 @@ import {
 } from '../lib/nutritionApi'
 import { getPreferences } from '../lib/preferencesApi'
 
-const exampleFoods: Food[] = [
-    {
-        id: 'example-oats',
-        name: 'Rolled oats',
-        per100g: { calories: 389, protein: 16.9, carbs: 66.3, fat: 6.9, fiber: 10.6 },
-        servingName: 'bowl',
-        servingGrams: 50,
-        favorite: true,
-    },
-    {
-        id: 'example-yoghurt',
-        name: 'Greek yoghurt',
-        per100g: { calories: 97, protein: 9, carbs: 3.9, fat: 5, fiber: 0 },
-        servingName: 'cup',
-        servingGrams: 170,
-        favorite: true,
-    },
-]
-
 export function Nutrition() {
-    const [foods, setFoods] = useState<Food[]>(exampleFoods)
+    const [foods, setFoods] = useState<Food[]>([])
+    const [foodSearchError, setFoodSearchError] = useState('')
     const [query, setQuery] = useState('')
     const [selected, setSelected] = useState<Food | null>(null)
     const [grams, setGrams] = useState<number | string>(100)
@@ -72,8 +55,14 @@ export function Nutrition() {
     useEffect(() => {
         const timeout = window.setTimeout(() => {
             searchFoods(query)
-                .then(records => records.length && setFoods(records))
-                .catch(() => undefined)
+                .then(records => {
+                    setFoods(records)
+                    setFoodSearchError('')
+                })
+                .catch(() => {
+                    setFoods([])
+                    setFoodSearchError('Your food library could not be loaded from the server.')
+                })
         }, 200)
         return () => window.clearTimeout(timeout)
     }, [query])
@@ -201,9 +190,10 @@ export function Nutrition() {
                     </Text>
                 </div>
                 <Group className="nutrition-admin" gap="xs">
-                    <FoodCsvImport
-                        onImported={imported => setFoods(current => [...imported, ...current])}
+                    <FoodCatalogLookup
+                        onCreated={food => setFoods(current => [food, ...current])}
                     />
+                    <FoodCsvImport onImported={imported => setFoods(imported)} />
                     <Button
                         variant="default"
                         size="sm"
@@ -238,6 +228,11 @@ export function Nutrition() {
                         placeholder="Search recent and favorite foods"
                         leftSection={<IconSearch size={17} />}
                     />
+                    {foodSearchError && (
+                        <Alert color="orange" mt="md">
+                            {foodSearchError}
+                        </Alert>
+                    )}
                     <Stack mt="md" gap="xs">
                         {foods.map(food => (
                             <button
@@ -281,6 +276,18 @@ export function Nutrition() {
                                 )}
                             </button>
                         ))}
+                        {!foodSearchError && foods.length === 0 && (
+                            <div className="compact-empty">
+                                <Text fw={650}>
+                                    {query ? 'No matching foods' : 'Your food library is empty'}
+                                </Text>
+                                <Text size="sm" c="dimmed">
+                                    {query
+                                        ? 'Try another search, look in the external catalog, or create this food.'
+                                        : 'Scan a barcode, search a configured catalog, import a file, or create your first food.'}
+                                </Text>
+                            </div>
+                        )}
                     </Stack>
                 </article>
                 <article className="panel meal-composer">

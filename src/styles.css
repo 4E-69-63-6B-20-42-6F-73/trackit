@@ -1261,6 +1261,51 @@ textarea:focus-visible,
     text-align: left;
     width: 100%;
 }
+.catalog-results {
+    display: grid;
+    gap: 8px;
+    max-height: 280px;
+    overflow: auto;
+}
+.catalog-results > button {
+    align-items: center;
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    color: var(--ink);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    padding: 12px;
+    text-align: left;
+}
+.catalog-results > button.selected {
+    background: var(--teal-soft);
+    border-color: #8eb8ae;
+}
+.import-summary {
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 2fr 1fr 1fr;
+}
+.import-summary > div,
+.import-preview > div {
+    background: #f3f5f2;
+    border-radius: 9px;
+    padding: 9px 11px;
+}
+.import-preview {
+    display: grid;
+    gap: 6px;
+    max-height: 250px;
+    overflow: auto;
+}
+.import-preview > div {
+    align-items: center;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: 1fr auto;
+}
 
 .food-row:hover,
 .food-row:focus-visible,
