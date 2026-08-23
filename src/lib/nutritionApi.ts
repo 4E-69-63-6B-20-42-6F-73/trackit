@@ -9,15 +9,15 @@ type FoodRecord = {
     barcode: string | null
     catalogSource: string | null
     catalogId: string | null
-    caloriesPer100g: number
-    proteinPer100g: number
-    carbsPer100g: number
-    fatPer100g: number
-    fiberPer100g: number
-    sugarPer100g: number
-    saturatedFatPer100g: number
-    sodiumPer100g: number
-    potassiumPer100g: number
+    caloriesPer100g: number | null
+    proteinPer100g: number | null
+    carbsPer100g: number | null
+    fatPer100g: number | null
+    fiberPer100g: number | null
+    sugarPer100g: number | null
+    saturatedFatPer100g: number | null
+    sodiumPer100g: number | null
+    potassiumPer100g: number | null
     servingName: string
     servingGrams: number
     favorite: boolean
@@ -55,15 +55,15 @@ const toFood = (record: FoodRecord): Food => ({
     catalogSource: record.catalogSource ?? undefined,
     catalogId: record.catalogId ?? undefined,
     per100g: {
-        calories: record.caloriesPer100g,
-        protein: record.proteinPer100g,
-        carbs: record.carbsPer100g,
-        fat: record.fatPer100g,
-        fiber: record.fiberPer100g,
-        sugar: record.sugarPer100g,
-        saturatedFat: record.saturatedFatPer100g,
-        sodium: record.sodiumPer100g,
-        potassium: record.potassiumPer100g,
+        calories: record.caloriesPer100g ?? undefined,
+        protein: record.proteinPer100g ?? undefined,
+        carbs: record.carbsPer100g ?? undefined,
+        fat: record.fatPer100g ?? undefined,
+        fiber: record.fiberPer100g ?? undefined,
+        sugar: record.sugarPer100g ?? undefined,
+        saturatedFat: record.saturatedFatPer100g ?? undefined,
+        sodium: record.sodiumPer100g ?? undefined,
+        potassium: record.potassiumPer100g ?? undefined,
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
@@ -101,10 +101,10 @@ export async function createFood(food: Omit<Food, 'id'>) {
             carbsPer100g: food.per100g.carbs,
             fatPer100g: food.per100g.fat,
             fiberPer100g: food.per100g.fiber,
-            sugarPer100g: food.per100g.sugar ?? 0,
-            saturatedFatPer100g: food.per100g.saturatedFat ?? 0,
-            sodiumPer100g: food.per100g.sodium ?? 0,
-            potassiumPer100g: food.per100g.potassium ?? 0,
+            sugarPer100g: food.per100g.sugar,
+            saturatedFatPer100g: food.per100g.saturatedFat,
+            sodiumPer100g: food.per100g.sodium,
+            potassiumPer100g: food.per100g.potassium,
         }),
     })
     if (!response.ok) throw new Error('Could not create food')
@@ -148,10 +148,10 @@ export async function importFoods(
                 carbsPer100g: food.per100g.carbs,
                 fatPer100g: food.per100g.fat,
                 fiberPer100g: food.per100g.fiber,
-                sugarPer100g: food.per100g.sugar ?? 0,
-                saturatedFatPer100g: food.per100g.saturatedFat ?? 0,
-                sodiumPer100g: food.per100g.sodium ?? 0,
-                potassiumPer100g: food.per100g.potassium ?? 0,
+                sugarPer100g: food.per100g.sugar,
+                saturatedFatPer100g: food.per100g.saturatedFat,
+                sodiumPer100g: food.per100g.sodium,
+                potassiumPer100g: food.per100g.potassium,
             })),
         }),
     })
@@ -168,15 +168,15 @@ const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> 
     catalogSource: record.catalogSource ?? undefined,
     catalogId: record.catalogId ?? undefined,
     per100g: {
-        calories: record.caloriesPer100g,
-        protein: record.proteinPer100g,
-        carbs: record.carbsPer100g,
-        fat: record.fatPer100g,
-        fiber: record.fiberPer100g,
-        sugar: record.sugarPer100g,
-        saturatedFat: record.saturatedFatPer100g,
-        sodium: record.sodiumPer100g,
-        potassium: record.potassiumPer100g,
+        calories: record.caloriesPer100g ?? undefined,
+        protein: record.proteinPer100g ?? undefined,
+        carbs: record.carbsPer100g ?? undefined,
+        fat: record.fatPer100g ?? undefined,
+        fiber: record.fiberPer100g ?? undefined,
+        sugar: record.sugarPer100g ?? undefined,
+        saturatedFat: record.saturatedFatPer100g ?? undefined,
+        sodium: record.sodiumPer100g ?? undefined,
+        potassium: record.potassiumPer100g ?? undefined,
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
@@ -222,10 +222,10 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
             carbsPer100g: changes.per100g.carbs,
             fatPer100g: changes.per100g.fat,
             fiberPer100g: changes.per100g.fiber,
-            sugarPer100g: changes.per100g.sugar ?? 0,
-            saturatedFatPer100g: changes.per100g.saturatedFat ?? 0,
-            sodiumPer100g: changes.per100g.sodium ?? 0,
-            potassiumPer100g: changes.per100g.potassium ?? 0,
+            sugarPer100g: changes.per100g.sugar,
+            saturatedFatPer100g: changes.per100g.saturatedFat,
+            sodiumPer100g: changes.per100g.sodium,
+            potassiumPer100g: changes.per100g.potassium,
         }),
     })
     if (response.status === 409) throw new Error('Food changed elsewhere. Reload and try again.')
@@ -236,9 +236,10 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
 export async function logMeal(
     name: string,
     mealType: string,
-    nutrients: Nutrients,
+    nutrients: Partial<Nutrients>,
     nutritionQuality: 'complete' | 'estimated' | 'incomplete' = 'complete',
     foodId?: string,
+    eatenAt = new Date().toISOString(),
 ) {
     const response = await authRequest('/api/meals', {
         method: 'POST',
@@ -247,7 +248,7 @@ export async function logMeal(
             id: crypto.randomUUID(),
             name,
             mealType,
-            eatenAt: new Date().toISOString(),
+            eatenAt,
             nutrients,
             nutritionQuality,
             favorite: false,

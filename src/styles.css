@@ -179,26 +179,41 @@ textarea:focus-visible,
     justify-content: space-between;
     padding: 0 38px;
 }
-.page-title {
+.page-context {
     font-size: 14px;
-    font-weight: 650;
+    color: var(--muted);
+    font-weight: 550;
 }
 .mobile-brand {
     display: none;
 }
 .page-content {
-    max-width: 1180px;
+    max-width: 1200px;
     margin: 0 auto;
     padding: 42px 40px 70px;
 }
-.journal-page {
-    max-width: 1240px;
+.page-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 24px;
+    justify-content: space-between;
+    margin-bottom: 26px;
+    min-height: 64px;
 }
-.trends-page {
-    max-width: 1200px;
+.page-header-copy {
+    min-width: 0;
 }
-.connections-page {
-    max-width: 1100px;
+.page-header-actions {
+    align-items: center;
+    display: flex;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+.page-header h1 {
+    font-size: 30px;
+    letter-spacing: -1px;
+    line-height: 1.2;
+    margin: 0 0 4px;
 }
 .welcome {
     display: flex;
@@ -217,6 +232,9 @@ textarea:focus-visible,
     border-radius: 16px;
     margin: 24px 0 16px;
     padding: 10px 12px 8px;
+    position: sticky;
+    top: 80px;
+    z-index: 4;
 }
 .journal-toolbar-primary,
 .journal-date-navigation {
@@ -237,6 +255,18 @@ textarea:focus-visible,
 .journal-search {
     margin-left: auto;
     width: 260px;
+}
+.journal-source {
+    width: 180px;
+}
+.journal-result-count {
+    border-bottom: 1px solid var(--line);
+    display: block;
+    padding: 0 0 12px;
+}
+.journal-load-more {
+    padding: 20px 0 4px;
+    text-align: center;
 }
 .date,
 .eyebrow {
@@ -479,6 +509,10 @@ textarea:focus-visible,
     color: var(--teal);
     display: flex;
     flex-direction: column;
+    color: var(--ink);
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
     justify-content: center;
     min-height: 155px;
     padding: 18px;
@@ -661,9 +695,20 @@ textarea:focus-visible,
 }
 .connection-card {
     padding: 22px;
-    min-height: 265px;
+    min-height: 220px;
     display: flex;
     flex-direction: column;
+    transition:
+        border-color 140ms ease,
+        box-shadow 140ms ease,
+        transform 140ms ease;
+}
+.connection-card:hover {
+    border-color: color-mix(in srgb, var(--teal) 35%, var(--line));
+    box-shadow:
+        0 2px 4px #232b2612,
+        0 10px 30px #29342d12;
+    transform: translateY(-1px);
 }
 .connection-icon {
     width: 44px;
@@ -721,12 +766,14 @@ textarea:focus-visible,
 .settings-layout {
     display: grid;
     gap: 16px;
-    grid-template-columns: minmax(300px, 0.8fr) minmax(420px, 1.2fr);
+    grid-template-columns: minmax(240px, 280px) minmax(420px, 1fr);
     margin-top: 28px;
 }
 .settings-navigation {
     align-self: start;
     padding: 8px 16px;
+    position: sticky;
+    top: 88px;
 }
 .settings-navigation a {
     align-items: center;
@@ -984,7 +1031,7 @@ textarea:focus-visible,
         height: 62px;
         padding: 0 17px;
     }
-    .page-title {
+    .page-context {
         display: none;
     }
     .mobile-brand {
@@ -996,6 +1043,18 @@ textarea:focus-visible,
     }
     .page-content {
         padding: 27px 16px 45px;
+    }
+    .page-header {
+        display: block;
+        margin-bottom: 22px;
+        min-height: 0;
+    }
+    .page-header-actions {
+        flex-wrap: wrap;
+        margin-top: 18px;
+    }
+    .page-header h1 {
+        font-size: 26px;
     }
     .welcome {
         align-items: flex-start;
@@ -1359,6 +1418,9 @@ textarea:focus-visible,
 }
 
 @media (max-width: 760px) {
+    .journal-toolbar {
+        top: 68px;
+    }
     .journal-toolbar-primary {
         align-items: stretch;
         flex-wrap: wrap;
@@ -1372,6 +1434,10 @@ textarea:focus-visible,
     .journal-search {
         margin-left: 0;
         min-width: 180px;
+        width: auto;
+    }
+    .journal-source {
+        flex: 1 1 180px;
         width: auto;
     }
     .nutrition-layout {
@@ -1405,6 +1471,9 @@ textarea:focus-visible,
         display: inline-flex;
     }
     .settings-layout:not(.has-active-settings) .settings-overview {
+        display: none;
+    }
+    .settings-layout:not(.has-active-settings) .settings-detail {
         display: none;
     }
     .nutrition-admin {

@@ -13,21 +13,49 @@ export function ReminderPrompt({ open }: { open: (kind: QuickAddKind) => void })
     const [dismissed, setDismissed] = useState<Set<string>>(() => new Set())
 
     useEffect(() => {
-        const check = () => {
+        let timer: number | undefined
+        let active = true
+        const schedule = () => {
+            if (timer !== undefined) window.clearTimeout(timer)
             void getPreferences()
                 .then(preferences => {
-                    const now = new Date()
-                    const current = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`
-                    const due = (preferences.experience?.reminders ?? []).find(
-                        item => item.enabled && item.time <= current && !dismissed.has(item.id),
+                    if (!active) return
+                    const enabled = (preferences.experience?.reminders ?? []).filter(
+                        item => item.enabled && !dismissed.has(item.id),
                     )
-                    setReminder(due ?? null)
+                    if (!enabled.length) return
+                    const formatter = new Intl.DateTimeFormat('en-GB', {
+                        timeZone: preferences.timezone,
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hourCycle: 'h23',
+                    })
+                    const now = Date.now()
+                    let next: { delay: number; item: (typeof enabled)[number] } | null = null
+                    for (let minute = 0; minute <= 24 * 60; minute += 1) {
+                        const candidate = new Date(now + minute * 60_000)
+                        const time = formatter.format(candidate)
+                        const item = enabled.find(value => value.time === time)
+                        if (item) {
+                            next = { delay: Math.max(0, candidate.getTime() - now), item }
+                            break
+                        }
+                    }
+                    if (next)
+                        timer = window.setTimeout(
+                            () => active && setReminder(next!.item),
+                            next.delay,
+                        )
                 })
                 .catch(() => undefined)
         }
-        check()
-        const timer = window.setInterval(check, 60_000)
-        return () => window.clearInterval(timer)
+        schedule()
+        window.addEventListener('trackit:preferences-changed', schedule)
+        return () => {
+            active = false
+            if (timer !== undefined) window.clearTimeout(timer)
+            window.removeEventListener('trackit:preferences-changed', schedule)
+        }
     }, [dismissed])
 
     if (!reminder) return null

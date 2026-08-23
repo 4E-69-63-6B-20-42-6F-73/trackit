@@ -75,6 +75,7 @@ test('empty food library has no fabricated nutrition records', async ({ page }) 
 test('new food supports extended nutrient details', async ({ page }) => {
     await page.goto('/nutrition')
     await page.getByRole('button', { name: 'New food' }).click()
+    await page.getByRole('button', { name: 'More nutrients' }).click()
     for (const label of ['Sugar', 'Saturated fat', 'Sodium', 'Potassium']) {
         await expect(page.getByLabel(new RegExp(label, 'i'))).toBeVisible()
     }

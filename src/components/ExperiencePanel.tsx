@@ -18,12 +18,23 @@ import {
 } from '../lib/preferencesApi'
 
 const reminderKinds = ['Meal', 'Water', 'Weight', 'Check-in', 'Symptom', 'Note'] as const
+const nextOccurrence = (time: string, timezone: string) => {
+    const parts = new Intl.DateTimeFormat('en-CA', {
+        timeZone: timezone,
+        hour: '2-digit',
+        minute: '2-digit',
+        hourCycle: 'h23',
+    }).formatToParts(new Date())
+    const current = `${parts.find(part => part.type === 'hour')?.value}:${parts.find(part => part.type === 'minute')?.value}`
+    return `${time >= current ? 'Today' : 'Tomorrow'} at ${time}`
+}
 
 export function ExperiencePanel() {
     const [preferences, setPreferences] = useState<Preferences | null>(null)
     const [label, setLabel] = useState('Evening check-in')
     const [kind, setKind] = useState<(typeof reminderKinds)[number]>('Check-in')
     const [time, setTime] = useState('20:00')
+    const [editingId, setEditingId] = useState<string | null>(null)
     const [message, setMessage] = useState('')
     const [saving, setSaving] = useState(false)
 
@@ -86,26 +97,31 @@ export function ExperiencePanel() {
                     <Button
                         loading={saving}
                         disabled={!label.trim()}
-                        onClick={() =>
+                        onClick={() => {
+                            const nextReminder = {
+                                id: editingId ?? crypto.randomUUID(),
+                                label: label.trim(),
+                                kind,
+                                time,
+                                enabled: editingId
+                                    ? (reminders.find(item => item.id === editingId)?.enabled ?? true)
+                                    : true,
+                            }
                             void save(
                                 {
                                     ...experience,
-                                    reminders: [
-                                        ...reminders,
-                                        {
-                                            id: crypto.randomUUID(),
-                                            label: label.trim(),
-                                            kind,
-                                            time,
-                                            enabled: true,
-                                        },
-                                    ],
+                                    reminders: editingId
+                                        ? reminders.map(item =>
+                                              item.id === editingId ? nextReminder : item,
+                                          )
+                                        : [...reminders, nextReminder],
                                 },
-                                'Reminder saved.',
+                                editingId ? 'Reminder updated.' : 'Reminder saved.',
                             )
-                        }
+                            setEditingId(null)
+                        }}
                     >
-                        Add reminder
+                        {editingId ? 'Save reminder' : 'Add reminder'}
                     </Button>
                 </Group>
                 <Stack gap="xs" mt="md">
@@ -114,10 +130,25 @@ export function ExperiencePanel() {
                             <div>
                                 <Text fw={600}>{reminder.label}</Text>
                                 <Text size="sm" c="dimmed">
-                                    {reminder.time} Â· {reminder.kind}
+                                    Daily · {reminder.kind} · {preferences.timezone}
+                                </Text>
+                                <Text size="xs" c="dimmed">
+                                    Next: {nextOccurrence(reminder.time, preferences.timezone)}
                                 </Text>
                             </div>
                             <Group>
+                                <Button
+                                    size="compact-sm"
+                                    variant="subtle"
+                                    onClick={() => {
+                                        setEditingId(reminder.id)
+                                        setLabel(reminder.label)
+                                        setKind(reminder.kind as typeof kind)
+                                        setTime(reminder.time)
+                                    }}
+                                >
+                                    Edit
+                                </Button>
                                 <Switch
                                     checked={reminder.enabled}
                                     aria-label={`Enable ${reminder.label}`}

@@ -20,6 +20,7 @@ import { MealEditModal } from '../components/MealEditModal'
 import { RecipeYieldModal } from '../components/RecipeYieldModal'
 import { NewRecipeModal } from '../components/NewRecipeModal'
 import { RecentMeals } from '../components/RecentMeals'
+import { PageHeader } from '../components/PageHeader'
 import { emptyNutrients, nutrientsFor, roundedNutrients, type Food } from '../domain/nutrition'
 import {
     listMeals,
@@ -34,7 +35,16 @@ import {
 } from '../lib/nutritionApi'
 import { getPreferences } from '../lib/preferencesApi'
 
-export function Nutrition() {
+const dateKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+
+export function Nutrition({
+    selectedDate: selectedDateProp,
+    onSelectedDateChange,
+}: {
+    selectedDate?: string | null
+    onSelectedDateChange?: (date: string) => void
+}) {
     const [foods, setFoods] = useState<Food[]>([])
     const [foodSearchError, setFoodSearchError] = useState('')
     const [query, setQuery] = useState('')
@@ -51,6 +61,13 @@ export function Nutrition() {
     const [editingRecipe, setEditingRecipe] = useState<RecipeRecord | null>(null)
     const [editingFood, setEditingFood] = useState<Food | null>(null)
     const [timezone, setTimezone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
+    const [selectedDate, setSelectedDate] = useState(selectedDateProp ?? dateKey(new Date()))
+    const selectedTimestamp = () => {
+        const now = new Date()
+        const date = new Date(`${selectedDate}T12:00:00`)
+        date.setHours(now.getHours(), now.getMinutes(), 0, 0)
+        return date.toISOString()
+    }
 
     useEffect(() => {
         const timeout = window.setTimeout(() => {
@@ -68,13 +85,22 @@ export function Nutrition() {
     }, [query])
 
     const refreshNutrition = useCallback(() => {
-        void Promise.all([listRecipes(), listMeals()])
+        const from = new Date(`${selectedDate}T00:00:00`)
+        const to = new Date(`${selectedDate}T00:00:00`)
+        to.setDate(to.getDate() + 1)
+        void Promise.all([
+            listRecipes(),
+            listMeals({ from: from.toISOString(), to: to.toISOString() }),
+        ])
             .then(([nextRecipes, nextMeals]) => {
                 setRecipes(nextRecipes)
                 setMeals(nextMeals)
             })
             .catch(() => undefined)
-    }, [])
+    }, [selectedDate])
+    useEffect(() => {
+        onSelectedDateChange?.(selectedDate)
+    }, [onSelectedDateChange, selectedDate])
 
     useEffect(() => {
         refreshNutrition()
@@ -93,7 +119,7 @@ export function Nutrition() {
         month: '2-digit',
         day: '2-digit',
     })
-    const todayKey = dayFormatter.format(new Date())
+    const todayKey = selectedDate
     const todayMeals = meals.filter(
         meal => dayFormatter.format(new Date(meal.eatenAt)) === todayKey,
     )
@@ -115,6 +141,7 @@ export function Nutrition() {
                 nutrients,
                 selected.nutritionQuality,
                 selected.version ? selected.id : undefined,
+                selectedTimestamp(),
             )
             setMessage(`${selected.name} added to ${mealType.toLowerCase()}.`)
             setSelected(null)
@@ -134,6 +161,8 @@ export function Nutrition() {
                     ...meal.nutrientSnapshot,
                 },
                 meal.nutritionQuality,
+                undefined,
+                selectedTimestamp(),
             )
             setMessage(`${meal.name} logged again.`)
             refreshNutrition()
@@ -172,6 +201,8 @@ export function Nutrition() {
                 mealType ?? 'Lunch',
                 recipe.nutrientsPerServing,
                 recipe.nutritionQuality,
+                undefined,
+                selectedTimestamp(),
             )
             setMessage(`${recipe.name} logged from one saved serving.`)
             refreshNutrition()
@@ -182,37 +213,61 @@ export function Nutrition() {
 
     return (
         <div className="page-content simple-page">
-            <div className="section-title nutrition-title">
+            <PageHeader
+                title="Nutrition"
+                description="Log familiar foods quickly and keep the math visible."
+                actions={
+                    <Group className="nutrition-admin" gap="xs">
+                        <FoodCatalogLookup
+                            onCreated={food => setFoods(current => [food, ...current])}
+                        />
+                        <Button
+                            variant="default"
+                            size="sm"
+                            leftSection={<IconPlus size={17} />}
+                            onClick={() => setCreateOpened(true)}
+                        >
+                            New food
+                        </Button>
+                    </Group>
+                }
+            />
+            {message && <Alert mt="md">{message}</Alert>}
+            <Group className="nutrition-day" justify="space-between" mb="md">
                 <div>
-                    <h1>Nutrition</h1>
-                    <Text className="subhead">
-                        Log familiar foods quickly and keep the math visible.
+                    <Text fw={650}>Viewing nutrition for</Text>
+                    <Text size="sm" c="dimmed">
+                        Meals you add will be logged on this date.
                     </Text>
                 </div>
-                <Group className="nutrition-admin" gap="xs">
-                    <FoodCatalogLookup
-                        onCreated={food => setFoods(current => [food, ...current])}
+                <Group>
+                    <TextInput
+                        type="date"
+                        aria-label="Nutrition date"
+                        value={selectedDate}
+                        onChange={event => setSelectedDate(event.currentTarget.value)}
                     />
-                    <FoodCsvImport onImported={imported => setFoods(imported)} />
-                    <Button
-                        variant="default"
-                        size="sm"
-                        leftSection={<IconPlus size={17} />}
-                        onClick={() => setCreateOpened(true)}
-                    >
-                        New food
-                    </Button>
-                    <Button
-                        variant="subtle"
-                        color="gray"
-                        size="sm"
-                        onClick={() => setRecipeOpened(true)}
-                    >
-                        New recipe
+                    <Button variant="default" onClick={() => setSelectedDate(dateKey(new Date()))}>
+                        Today
                     </Button>
                 </Group>
-            </div>
-            {message && <Alert mt="md">{message}</Alert>}
+            </Group>
+            <Group className="nutrition-library-actions" gap="xs" mb="md">
+                <Text size="sm" c="dimmed">
+                    Library tools
+                </Text>
+                <FoodCsvImport onImported={imported => setFoods(imported)} />
+                <Button
+                    variant="subtle"
+                    color="gray"
+                    size="sm"
+                    leftSection={<IconPlus size={17} />}
+                    disabled={foods.length === 0}
+                    onClick={() => setRecipeOpened(true)}
+                >
+                    New recipe
+                </Button>
+            </Group>
             <section className="nutrition-layout">
                 <article className="panel food-browser">
                     <div className="food-browser-heading">

@@ -41,10 +41,15 @@ export type ExperiencePreferences = {
     dismissedWeeklyReflection?: string
 }
 
-export async function getPreferences(): Promise<Preferences> {
-    const response = await authRequest('/api/preferences')
-    if (!response.ok) throw new Error('Preferences unavailable')
-    return ((await response.json()) as { data: Preferences }).data
+let preferencesRequest: Promise<Preferences> | null = null
+export function getPreferences(): Promise<Preferences> {
+    preferencesRequest ??= authRequest('/api/preferences')
+        .then(async response => {
+            if (!response.ok) throw new Error('Preferences unavailable')
+            return ((await response.json()) as { data: Preferences }).data
+        })
+        .catch(error => { preferencesRequest = null; throw error })
+    return preferencesRequest
 }
 
 export async function updatePreferences(input: Partial<Preferences>): Promise<Preferences> {
@@ -54,5 +59,7 @@ export async function updatePreferences(input: Partial<Preferences>): Promise<Pr
         body: JSON.stringify(input),
     })
     if (!response.ok) throw new Error('Preferences could not be saved')
-    return ((await response.json()) as { data: Preferences }).data
+    const saved = ((await response.json()) as { data: Preferences }).data
+    preferencesRequest = Promise.resolve(saved)
+    return saved
 }

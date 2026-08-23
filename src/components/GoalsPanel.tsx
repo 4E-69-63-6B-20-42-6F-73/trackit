@@ -1,9 +1,13 @@
 import {
+    ActionIcon,
     Alert,
     Badge,
     Button,
     Group,
-    Loader,
+    Skeleton,
+    Menu,
+    Modal,
+    Progress,
     MultiSelect,
     NumberInput,
     Select,
@@ -12,10 +16,12 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { IconTargetArrow } from '@tabler/icons-react'
+import { IconDots, IconTargetArrow } from '@tabler/icons-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
-import { createGoal, listGoals, retireGoal, type GoalRecord } from '../lib/goalApi'
+import { createGoal, listGoals, retireGoal, updateGoal, type GoalRecord } from '../lib/goalApi'
+import { formatMetricValue } from '../domain/formatting'
+import { listDailyMetrics, type DailyMetric } from '../lib/observationApi'
 
 const metricDefaults: Record<string, number> = {
     steps: 10_000,
@@ -54,9 +60,23 @@ const goalTemplates = [
     { label: 'Check in with energy', metric: 'energy', target: 7 },
 ]
 
-function GoalCard({ goal, onRetire }: { goal: GoalRecord; onRetire: () => Promise<void> }) {
+function GoalCard({
+    goal,
+    onRetire,
+    metrics,
+    onEdit,
+}: {
+    goal: GoalRecord
+    onRetire: () => Promise<void>
+    metrics: DailyMetric[]
+    onEdit: () => void
+}) {
     const definition = metricDefinition(goal.metric)
     const active = !goal.effectiveTo || new Date(goal.effectiveTo) > new Date()
+    const matching = metrics.filter(item => item.metric === goal.metric)
+    const today = new Date().toISOString().slice(0, 10)
+    const current = matching.find(item => item.date === today)?.value ?? null
+    const achieved = matching.filter(item => item.value >= goal.targetValue).length
 
     return (
         <article className="goal-card">
@@ -67,9 +87,30 @@ function GoalCard({ goal, onRetire }: { goal: GoalRecord; onRetire: () => Promis
                         {goal.targetValue.toLocaleString()} {goal.canonicalUnit}
                     </Text>
                 </div>
-                <Badge color={active ? 'teal' : 'gray'} variant="light">
-                    {active ? 'Active' : 'Past'}
-                </Badge>
+                <Group gap="xs">
+                    <Badge color={active ? 'teal' : 'gray'} variant="light">
+                        {active ? 'Active' : 'Past'}
+                    </Badge>
+                    {active && (
+                        <Menu>
+                            <Menu.Target>
+                                <ActionIcon
+                                    variant="subtle"
+                                    color="gray"
+                                    aria-label={`Actions for ${definition?.label ?? goal.metric}`}
+                                >
+                                    <IconDots size={17} />
+                                </ActionIcon>
+                            </Menu.Target>
+                            <Menu.Dropdown>
+                                <Menu.Item onClick={onEdit}>Edit goal</Menu.Item>
+                                <Menu.Item color="red" onClick={() => void onRetire()}>
+                                    Retire goal today
+                                </Menu.Item>
+                            </Menu.Dropdown>
+                        </Menu>
+                    )}
+                </Group>
             </Group>
             <Text size="sm" c="dimmed">
                 From {new Date(goal.effectiveFrom).toLocaleDateString()}
@@ -83,9 +124,24 @@ function GoalCard({ goal, onRetire }: { goal: GoalRecord; onRetire: () => Promis
                     : 'Every day'}
             </Text>
             {active && (
-                <Button size="xs" variant="default" onClick={() => void onRetire()}>
-                    Retire goal today
-                </Button>
+                <>
+                    <Progress
+                        value={
+                            current === null ? 0 : Math.min(100, (current / goal.targetValue) * 100)
+                        }
+                        color="trackit"
+                        aria-label="Goal progress"
+                    />
+                    <Text size="sm" fw={600}>
+                        {current === null
+                            ? 'No data recorded today'
+                            : `${formatMetricValue(current, goal.canonicalUnit)} of ${formatMetricValue(goal.targetValue, goal.canonicalUnit)}`}
+                    </Text>
+                    <Text size="xs" c="dimmed">
+                        {matching.length} of the last 30 days have data · goal met on {achieved}{' '}
+                        {achieved === 1 ? 'day' : 'days'}
+                    </Text>
+                </>
             )}
         </article>
     )
@@ -100,6 +156,9 @@ export function GoalsPanel() {
     const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>([])
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
+    const [metrics, setMetrics] = useState<DailyMetric[]>([])
+    const [editing, setEditing] = useState<GoalRecord | null>(null)
+    const [editTarget, setEditTarget] = useState<number | string>(0)
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
 
@@ -108,6 +167,17 @@ export function GoalsPanel() {
             .then(setGoals)
             .catch(() => setError('Goals are unavailable. Check the server connection and retry.'))
             .finally(() => setLoading(false))
+    }, [])
+    useEffect(() => {
+        const to = new Date()
+        const from = new Date()
+        from.setDate(from.getDate() - 29)
+        void listDailyMetrics({
+            from: from.toISOString().slice(0, 10),
+            to: to.toISOString().slice(0, 10),
+        })
+            .then(setMetrics)
+            .catch(() => undefined)
     }, [])
 
     const selectedDefinition = metricDefinition(metric)
@@ -120,6 +190,13 @@ export function GoalsPanel() {
         [goals],
     )
     const invalidDateRange = Boolean(effectiveTo && effectiveTo < effectiveDate)
+    const overlapping = activeGoals.some(
+        goal =>
+            goal.metric === metric &&
+            (!effectiveTo ||
+                !goal.effectiveTo ||
+                goal.effectiveTo >= new Date(`${effectiveDate}T00:00:00`).toISOString()),
+    )
 
     const save = async (event: FormEvent) => {
         event.preventDefault()
@@ -137,6 +214,7 @@ export function GoalsPanel() {
                 schedule: { weekdays: selectedWeekdays.map(Number) },
             })
             setGoals(current => [goal, ...current])
+            window.dispatchEvent(new Event('trackit:goals-changed'))
             setMessage(`${selectedDefinition.label} goal added.`)
         } catch {
             setError('The goal could not be saved. Check the values and try again.')
@@ -151,9 +229,25 @@ export function GoalsPanel() {
         try {
             const retired = await retireGoal(goal)
             setGoals(current => current.map(item => (item.id === retired.id ? retired : item)))
+            window.dispatchEvent(new Event('trackit:goals-changed'))
             setMessage(`${metricDefinition(goal.metric)?.label ?? goal.metric} goal retired.`)
         } catch {
             setError('The goal could not be retired. Try again.')
+        }
+    }
+    const saveEdit = async () => {
+        if (!editing || Number(editTarget) <= 0) return
+        setSaving(true)
+        try {
+            const saved = await updateGoal(editing.id, { targetValue: Number(editTarget) })
+            setGoals(current => current.map(goal => (goal.id === saved.id ? saved : goal)))
+            window.dispatchEvent(new Event('trackit:goals-changed'))
+            setEditing(null)
+            setMessage('Goal updated.')
+        } catch {
+            setError('The goal could not be updated. Try again.')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -247,6 +341,12 @@ export function GoalsPanel() {
                                 The end date must be on or after the start date.
                             </Alert>
                         )}
+                        {overlapping && (
+                            <Alert color="yellow">
+                                An active {selectedDefinition?.label.toLowerCase()} goal overlaps
+                                this period. Today uses the most recently effective matching goal.
+                            </Alert>
+                        )}
                         <Button
                             type="submit"
                             loading={saving}
@@ -278,7 +378,10 @@ export function GoalsPanel() {
                 )}
                 {error && <Alert color="orange">{error}</Alert>}
                 {loading ? (
-                    <Loader role="status" aria-label="Loading goals" />
+                    <Stack aria-label="Loading goals" role="status">
+                        <Skeleton height={126} radius="md" />
+                        <Skeleton height={126} radius="md" />
+                    </Stack>
                 ) : error ? null : goals.length === 0 ? (
                     <div className="goal-empty">
                         <IconTargetArrow size={28} />
@@ -291,7 +394,16 @@ export function GoalsPanel() {
                 ) : (
                     <Stack gap="sm">
                         {activeGoals.map(goal => (
-                            <GoalCard key={goal.id} goal={goal} onRetire={() => retire(goal)} />
+                            <GoalCard
+                                key={goal.id}
+                                goal={goal}
+                                metrics={metrics}
+                                onEdit={() => {
+                                    setEditing(goal)
+                                    setEditTarget(goal.targetValue)
+                                }}
+                                onRetire={() => retire(goal)}
+                            />
                         ))}
                         {pastGoals.length > 0 && (
                             <Text fw={700} mt="sm">
@@ -299,11 +411,51 @@ export function GoalsPanel() {
                             </Text>
                         )}
                         {pastGoals.map(goal => (
-                            <GoalCard key={goal.id} goal={goal} onRetire={() => retire(goal)} />
+                            <GoalCard
+                                key={goal.id}
+                                goal={goal}
+                                metrics={metrics}
+                                onEdit={() => {
+                                    setEditing(goal)
+                                    setEditTarget(goal.targetValue)
+                                }}
+                                onRetire={() => retire(goal)}
+                            />
                         ))}
                     </Stack>
                 )}
             </section>
+            <Modal
+                opened={Boolean(editing)}
+                onClose={() => setEditing(null)}
+                title={`Edit ${metricDefinition(editing?.metric ?? null)?.label ?? 'goal'}`}
+                size="sm"
+            >
+                <Stack>
+                    <NumberInput
+                        label="Daily target"
+                        min={0.01}
+                        value={editTarget}
+                        onChange={setEditTarget}
+                        suffix={editing ? ` ${editing.canonicalUnit}` : undefined}
+                    />
+                    <Text size="sm" c="dimmed">
+                        The existing schedule and effective dates remain unchanged.
+                    </Text>
+                    <Group justify="flex-end">
+                        <Button variant="default" onClick={() => setEditing(null)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            loading={saving}
+                            disabled={Number(editTarget) <= 0}
+                            onClick={() => void saveEdit()}
+                        >
+                            Save changes
+                        </Button>
+                    </Group>
+                </Stack>
+            </Modal>
         </div>
     )
 }

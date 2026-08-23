@@ -66,13 +66,13 @@ export default function App() {
           ? 'Connections'
           : (pathPages[location.pathname] ?? 'Today')
     const [quick, setQuick] = useState<QuickAddKind | null>(null)
-    const [todayDate, setTodayDate] = useState<string | null>(null)
-    const [journalDate, setJournalDate] = useState<string | null>(null)
+    const [selectedDay, setSelectedDay] = useState<string | null>(null)
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
     const [insight, setInsight] = useState(true)
     const [observationRetry, setObservationRetry] = useState<JournalEvent | null>(null)
-    const { events, add, remove, update, syncFailure, retry } = useJournal()
+    const { events, add, remove, update, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
+        useJournal()
     const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
@@ -157,7 +157,8 @@ export default function App() {
                                         openConnections={() => openPage('Connections')}
                                         openGoals={() => openPage('Goals')}
                                         quickAdd={setQuick}
-                                        onSelectedDateChange={setTodayDate}
+                                        onSelectedDateChange={setSelectedDay}
+                                        initialSelectedDate={selectedDay}
                                     />
                                 }
                             />
@@ -169,11 +170,15 @@ export default function App() {
                                         remove={remove}
                                         duplicate={duplicate}
                                         update={update}
-                                        onSelectedDateChange={setJournalDate}
+                                        onSelectedDateChange={setSelectedDay}
+                                        hasOlder={hasOlder}
+                                        loadingOlder={loadingOlder}
+                                        loadOlder={loadOlder}
+                                        initialSelectedDate={selectedDay}
                                     />
                                 }
                             />
-                            <Route path="/nutrition" element={<Nutrition />} />
+                            <Route path="/nutrition" element={<Nutrition selectedDate={selectedDay} onSelectedDateChange={setSelectedDay} />} />
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
                             <Route path="/connections" element={<Connections />} />
@@ -262,7 +267,7 @@ export default function App() {
                         initialKind={quick}
                         recentEvents={events.filter(event => event.source === 'You')}
                         selectedDate={
-                            page === 'Today' ? todayDate : page === 'Journal' ? journalDate : null
+                            ['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null
                         }
                     />
                 </Suspense>

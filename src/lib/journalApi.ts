@@ -1,5 +1,6 @@
 import { environment } from '../app/env'
 import type { JournalEvent } from '../domain/types'
+import { friendlySourceName } from '../domain/formatting'
 
 type ApiJournalEntry = {
     id: string
@@ -7,6 +8,7 @@ type ApiJournalEntry = {
     title: string
     detail: string
     source: string
+    deviceName?: string
     observedAt: string
     version: number
 }
@@ -23,7 +25,8 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     category: entry.category,
     title: entry.title,
     detail: entry.detail,
-    source: entry.source,
+    source: friendlySourceName(entry.source),
+    deviceName: entry.deviceName,
     observedAt: entry.observedAt,
     time: new Date(entry.observedAt).toLocaleTimeString([], {
         hour: '2-digit',
@@ -62,8 +65,21 @@ export async function updateJournal(
     return toEvent(body.data)
 }
 
-export async function listJournal(): Promise<JournalEvent[]> {
-    const response = await fetch(apiUrl('/api/journal'), { credentials: 'same-origin' })
+export async function listJournal(
+    filters: {
+        from?: string
+        to?: string
+        before?: string
+        category?: JournalEvent['category']
+        source?: string
+        limit?: number
+    } = {},
+): Promise<JournalEvent[]> {
+    const query = new URLSearchParams()
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined) query.set(key, String(value))
+    })
+    const response = await fetch(apiUrl(`/api/journal?${query}`), { credentials: 'same-origin' })
     if (!response.ok) throw new Error(`Journal request failed (${response.status})`)
     const body = (await response.json()) as { data: ApiJournalEntry[] }
     return body.data.map(toEvent)

@@ -17,7 +17,7 @@ export type Food = {
     barcode?: string
     catalogSource?: string
     catalogId?: string
-    per100g: Nutrients
+    per100g: Partial<Nutrients>
     servingName: string
     servingGrams: number
     favorite: boolean
@@ -39,7 +39,7 @@ export const emptyNutrients = (): Nutrients => ({
     potassium: 0,
 })
 
-export const nutrientsFor = (food: Food, grams: number): Nutrients => {
+export const nutrientsFor = (food: Food, grams: number): Partial<Nutrients> => {
     const factor = grams / 100
     return Object.fromEntries(
         Object.entries(food.per100g).map(([key, value]) => [key, value * factor]),
@@ -62,7 +62,7 @@ export const nutrientsPerServing = (items: FoodAmount[], servings: number): Nutr
     ) as Nutrients
 }
 
-export const roundedNutrients = (nutrients: Nutrients): Nutrients =>
+export const roundedNutrients = (nutrients: Partial<Nutrients>): Partial<Nutrients> =>
     Object.fromEntries(
         Object.entries(nutrients).map(([key, value]) => [key, Math.round(value * 10) / 10]),
-    ) as Nutrients
+    ) as Partial<Nutrients>

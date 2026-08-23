@@ -1,9 +1,10 @@
 import { Button, Group, Stack, Text } from '@mantine/core'
 import type { Observation } from '../domain/health'
+import { formatMetricValue, friendlySourceName } from '../domain/formatting'
 
 function sourceLabel(observation: Observation) {
     const origin = observation.metadata?.dataOrigin
-    if (typeof origin === 'string') return `Health Connect (${origin})`
+    if (typeof origin === 'string') return friendlySourceName(origin)
     if (observation.sourceId) return `source ${observation.sourceId}`
     return 'manual source'
 }
@@ -25,7 +26,7 @@ export function ObservationRecords({
                 <Group key={observation.id} justify="space-between" wrap="nowrap">
                     <div>
                         <Text size="sm" fw={600}>
-                            {observation.originalValue} {observation.originalUnit}
+                            {formatMetricValue(observation.originalValue, observation.originalUnit)}
                         </Text>
                         <Text size="xs" c="dimmed">
                             {new Date(observation.observedAt).toLocaleString()} · original value ·{' '}

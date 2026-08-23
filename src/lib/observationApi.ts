@@ -18,15 +18,30 @@ export async function createObservation(
 
 export async function listObservations(
     range: { from?: string; to?: string } = {},
+    signal?: AbortSignal,
 ): Promise<Observation[]> {
     const query = new URLSearchParams(
         Object.entries(range).filter((entry): entry is [string, string] => Boolean(entry[1])),
     )
     const response = await fetch(`${environment.VITE_API_URL}/api/observations?${query}`, {
         credentials: 'same-origin',
+        signal,
     })
     if (!response.ok) throw new Error('Observations unavailable')
     return ((await response.json()) as { data: Observation[] }).data
+}
+
+export type DailyMetric = { date: string; metric: string; value: number; unit: string }
+export async function listDailyMetrics(range: {
+    from: string
+    to: string
+}): Promise<DailyMetric[]> {
+    const query = new URLSearchParams(range)
+    const response = await fetch(`${environment.VITE_API_URL}/api/daily-metrics?${query}`, {
+        credentials: 'same-origin',
+    })
+    if (!response.ok) throw new Error('Daily metrics unavailable')
+    return ((await response.json()) as { data: DailyMetric[] }).data
 }
 
 export async function setObservationExcluded(observation: Observation, excluded: boolean) {

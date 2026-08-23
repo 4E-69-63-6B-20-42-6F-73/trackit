@@ -13,33 +13,48 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
 
     useEffect(() => {
         let active = true
-        const load = () => {
+        let controller: AbortController | null = null
+        const loadObservations = () => {
+            controller?.abort()
+            controller = new AbortController()
             const from = new Date(selectedDate)
             from.setDate(from.getDate() - 30)
-            void Promise.all([
-                listObservations({ from: from.toISOString() }),
-                listGoals(),
-                getPreferences().catch(() => null),
-            ])
-                .then(([records, savedGoals, savedPreferences]) => {
+            const to = new Date(selectedDate)
+            to.setDate(to.getDate() + 1)
+            void listObservations({ from: from.toISOString(), to: to.toISOString() }, controller.signal)
+                .then(records => {
                     if (!active) return
                     setObservations(records)
-                    setGoals(savedGoals)
-                    if (savedPreferences) setPreferences(savedPreferences)
                     setUnavailable(false)
                 })
-                .catch(() => active && setUnavailable(true))
+                .catch(error => {
+                    if (active && !(error instanceof DOMException && error.name === 'AbortError'))
+                        setUnavailable(true)
+                })
                 .finally(() => active && setLoading(false))
         }
-        load()
-        window.addEventListener('trackit:observations-changed', load)
-        window.addEventListener('trackit:preferences-changed', load)
+        loadObservations()
+        window.addEventListener('trackit:observations-changed', loadObservations)
         return () => {
             active = false
-            window.removeEventListener('trackit:observations-changed', load)
-            window.removeEventListener('trackit:preferences-changed', load)
+            controller?.abort()
+            window.removeEventListener('trackit:observations-changed', loadObservations)
         }
     }, [selectedDate])
+
+    useEffect(() => {
+        const loadGoals = () => void listGoals().then(setGoals).catch(() => setUnavailable(true))
+        loadGoals()
+        window.addEventListener('trackit:goals-changed', loadGoals)
+        return () => window.removeEventListener('trackit:goals-changed', loadGoals)
+    }, [])
+
+    useEffect(() => {
+        const loadPreferences = () => void getPreferences().then(setPreferences).catch(() => null)
+        loadPreferences()
+        window.addEventListener('trackit:preferences-changed', loadPreferences)
+        return () => window.removeEventListener('trackit:preferences-changed', loadPreferences)
+    }, [])
 
     return useMemo(() => {
         const now = selectedDate

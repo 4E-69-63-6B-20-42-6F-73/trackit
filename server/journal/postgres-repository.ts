@@ -1,7 +1,7 @@
-import { and, desc, eq, isNull } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, lte } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { journalEntries } from '../db/schema.js'
+import { devices, journalEntries } from '../db/schema.js'
 import type {
     CreateJournalEntry,
     JournalEntityLink,
@@ -12,7 +12,10 @@ import type {
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
-const toEntry = (row: typeof journalEntries.$inferSelect): JournalEntry => ({
+const toEntry = (
+    row: typeof journalEntries.$inferSelect,
+    deviceName?: string | null,
+): JournalEntry => ({
     id: row.id,
     category: row.category,
     title: row.title,
@@ -23,6 +26,7 @@ const toEntry = (row: typeof journalEntries.$inferSelect): JournalEntry => ({
     version: row.version,
     createdAt: row.createdAt.toISOString(),
     updatedAt: row.updatedAt.toISOString(),
+    deviceName: deviceName ?? undefined,
     entityType: row.entityType
         ? (row.entityType as 'meal' | 'observation' | 'health_record')
         : undefined,
@@ -32,13 +36,23 @@ const toEntry = (row: typeof journalEntries.$inferSelect): JournalEntry => ({
 export class PostgresJournalRepository implements JournalRepository {
     constructor(private readonly database: Database) {}
 
-    async list() {
+    async list(filters: Parameters<JournalRepository['list']>[0] = {}) {
+        const conditions = [
+            isNull(journalEntries.deletedAt),
+            ...(filters.from ? [gte(journalEntries.observedAt, new Date(filters.from))] : []),
+            ...(filters.to ? [lte(journalEntries.observedAt, new Date(filters.to))] : []),
+            ...(filters.before ? [lt(journalEntries.observedAt, new Date(filters.before))] : []),
+            ...(filters.category ? [eq(journalEntries.category, filters.category)] : []),
+            ...(filters.source ? [eq(journalEntries.sourceLabel, filters.source)] : []),
+        ]
         const rows = await this.database
-            .select()
+            .select({ entry: journalEntries, deviceName: devices.name })
             .from(journalEntries)
-            .where(isNull(journalEntries.deletedAt))
+            .leftJoin(devices, eq(journalEntries.sourceId, devices.id))
+            .where(and(...conditions))
             .orderBy(desc(journalEntries.observedAt))
-        return rows.map(toEntry)
+            .limit(Math.min(filters.limit ?? 100, 100))
+        return rows.map(row => toEntry(row.entry, row.deviceName))
     }
 
     async create(input: CreateJournalEntry & JournalEntityLink) {

@@ -66,6 +66,12 @@ describe('Health Connect journal projections', () => {
                 [observation('exercise', 42, 'min')],
             ),
         ).toMatchObject({ category: 'Activity', title: 'Morning run' })
+        expect(
+            projectHealthRecordToJournal(
+                record('ExerciseSessionRecord', { exerciseType: 'trail_running' }),
+                [observation('exercise', 42, 'min')],
+            ),
+        ).toMatchObject({ category: 'Activity', title: 'Trail running' })
     })
 
     it('does not expose unsupported or empty records', () => {

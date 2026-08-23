@@ -36,3 +36,13 @@ export async function retireGoal(goal: GoalRecord) {
     if (!response.ok) throw new Error('Could not retire goal')
     return ((await response.json()) as { data: GoalRecord }).data
 }
+
+export async function updateGoal(id: string, input: Partial<Omit<GoalRecord, 'id'>>) {
+    const response = await authRequest(`/api/goals/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+    })
+    if (!response.ok) throw new Error('Could not update goal')
+    return ((await response.json()) as { data: GoalRecord }).data
+}

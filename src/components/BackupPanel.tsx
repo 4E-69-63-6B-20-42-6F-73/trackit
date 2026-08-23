@@ -6,6 +6,8 @@ export function BackupPanel() {
     const [backups, setBackups] = useState<BackupRecord[]>([])
     const [configured, setConfigured] = useState(false)
     const [message, setMessage] = useState('')
+    const latest = backups[0]
+    const lastVerified = backups.find(backup => backup.verifiedAt)
 
     const refresh = useCallback(() => {
         void listBackups()
@@ -40,6 +42,32 @@ export function BackupPanel() {
 
     return (
         <Stack>
+            <section className="backup-summary" aria-label="Backup readiness">
+                <Group justify="space-between">
+                    <Text fw={700}>Encryption readiness</Text>
+                    <Text size="sm" c={configured ? 'teal' : 'orange'} fw={600}>
+                        {configured ? 'Ready' : 'Not configured'}
+                    </Text>
+                </Group>
+                <Text size="sm" c="dimmed">
+                    Last backup: {latest ? new Date(latest.createdAt).toLocaleString() : 'Never'}
+                </Text>
+                <Text size="sm" c="dimmed">
+                    Last verified:{' '}
+                    {lastVerified?.verifiedAt
+                        ? new Date(lastVerified.verifiedAt).toLocaleString()
+                        : 'Never'}
+                </Text>
+                <Text size="sm" c="dimmed">
+                    Latest size:{' '}
+                    {latest?.sizeBytes == null
+                        ? 'Unknown'
+                        : `${(latest.sizeBytes / 1024 / 1024).toFixed(1)} MB`}
+                </Text>
+                <Text size="sm" c="dimmed">
+                    Destination and archive retention are controlled by the server installation.
+                </Text>
+            </section>
             {!configured && (
                 <Alert color="orange" title="Backup key required">
                     Set TRACKIT_BACKUP_KEY to 32 random bytes encoded as base64 and enable scheduled
@@ -50,6 +78,11 @@ export function BackupPanel() {
                 Create encrypted backup now
             </Button>
             {message && <Alert>{message}</Alert>}
+            {configured && backups.length === 0 && (
+                <Text size="sm" c="dimmed">
+                    No restore points have been created yet.
+                </Text>
+            )}
             {backups.map(backup => (
                 <Group key={backup.id} justify="space-between" wrap="nowrap">
                     <div>

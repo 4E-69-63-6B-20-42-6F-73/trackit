@@ -1,15 +1,20 @@
-import { Alert, Button, Modal, NumberInput, Stack, TextInput } from '@mantine/core'
+import {
+    Alert,
+    Button,
+    Collapse,
+    Group,
+    Modal,
+    NumberInput,
+    Stack,
+    Text,
+    TextInput,
+} from '@mantine/core'
+import { IconChevronDown, IconChevronUp } from '@tabler/icons-react'
 import { useState } from 'react'
-import { emptyNutrients, type Food, type Nutrients } from '../domain/nutrition'
+import type { Food, Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
 
-type NewFoodModalProps = {
-    opened: boolean
-    onClose: () => void
-    onCreate: (food: Food) => void
-}
-
-const nutrientLabels: Record<keyof Nutrients, string> = {
+const labels: Record<keyof Nutrients, string> = {
     calories: 'Calories',
     protein: 'Protein',
     carbs: 'Carbs',
@@ -20,57 +25,127 @@ const nutrientLabels: Record<keyof Nutrients, string> = {
     sodium: 'Sodium',
     potassium: 'Potassium',
 }
+const primary: (keyof Nutrients)[] = ['calories', 'protein', 'carbs', 'fat']
+const optional: (keyof Nutrients)[] = ['fiber', 'sugar', 'saturatedFat', 'sodium', 'potassium']
 
-export function NewFoodModal({ opened, onClose, onCreate }: NewFoodModalProps) {
+export function NewFoodModal({
+    opened,
+    onClose,
+    onCreate,
+}: {
+    opened: boolean
+    onClose: () => void
+    onCreate: (food: Food) => void
+}) {
     const [name, setName] = useState('')
-    const [nutrients, setNutrients] = useState<Nutrients>(emptyNutrients())
+    const [brand, setBrand] = useState('')
+    const [barcode, setBarcode] = useState('')
+    const [servingName, setServingName] = useState('serving')
+    const [servingGrams, setServingGrams] = useState<number | string>(100)
+    const [nutrients, setNutrients] = useState<Partial<Nutrients>>({})
+    const [more, setMore] = useState(false)
     const [error, setError] = useState('')
-
+    const field = (key: keyof Nutrients) => (
+        <NumberInput
+            key={key}
+            label={`${labels[key]} per 100 g`}
+            placeholder="Unknown"
+            value={nutrients[key] ?? ''}
+            onChange={value =>
+                setNutrients(current => ({
+                    ...current,
+                    [key]: value === '' ? undefined : Number(value),
+                }))
+            }
+            min={0}
+        />
+    )
     const save = async () => {
-        const input: Omit<Food, 'id'> = {
-            name,
-            per100g: {
-                ...nutrients,
-            },
-            servingName: 'serving',
-            servingGrams: 100,
-            favorite: false,
-        }
-
         try {
-            onCreate(await createFood(input))
+            const food = await createFood({
+                name,
+                brand: brand || undefined,
+                barcode: barcode || undefined,
+                per100g: nutrients,
+                servingName,
+                servingGrams: Number(servingGrams),
+                favorite: false,
+                nutritionQuality: Object.keys(nutrients).length === 9 ? 'complete' : 'incomplete',
+            })
+            onCreate(food)
+            setName('')
+            setBrand('')
+            setBarcode('')
+            setNutrients({})
+            onClose()
         } catch {
             setError('The food could not be saved to your server. No local copy was created.')
-            return
         }
-
-        setName('')
-        onClose()
     }
-
     return (
-        <Modal opened={opened} onClose={onClose} title="Create food" centered>
+        <Modal opened={opened} onClose={onClose} title="Create food" centered size="md">
             <Stack>
                 {error && <Alert color="orange">{error}</Alert>}
+                <Text fw={650}>Basics</Text>
                 <TextInput
                     label="Name"
+                    required
                     value={name}
                     onChange={event => setName(event.currentTarget.value)}
                 />
-                {(Object.keys(nutrients) as (keyof Nutrients)[]).map(key => (
-                    <NumberInput
-                        key={key}
-                        label={`${nutrientLabels[key]} per 100 g`}
-                        value={nutrients[key]}
-                        onChange={value =>
-                            setNutrients(current => ({ ...current, [key]: Number(value) || 0 }))
-                        }
-                        min={0}
+                <TextInput
+                    label="Brand (optional)"
+                    value={brand}
+                    onChange={event => setBrand(event.currentTarget.value)}
+                />
+                <Group grow>
+                    <TextInput
+                        label="Serving name"
+                        value={servingName}
+                        onChange={event => setServingName(event.currentTarget.value)}
                     />
-                ))}
-                <Button disabled={!name.trim()} onClick={() => void save()}>
-                    Save food
+                    <NumberInput
+                        label="Serving weight"
+                        suffix=" g"
+                        min={0.1}
+                        value={servingGrams}
+                        onChange={setServingGrams}
+                    />
+                </Group>
+                <TextInput
+                    label="Barcode (optional)"
+                    value={barcode}
+                    onChange={event => setBarcode(event.currentTarget.value)}
+                />
+                <Text size="sm" c="dimmed">
+                    Leave nutrients blank when they are unknown. Unknown values are not counted as
+                    zero.
+                </Text>
+                <Group grow>{primary.map(field)}</Group>
+                <Button
+                    variant="subtle"
+                    color="gray"
+                    rightSection={
+                        more ? <IconChevronUp size={16} /> : <IconChevronDown size={16} />
+                    }
+                    onClick={() => setMore(value => !value)}
+                >
+                    {more ? 'Hide more nutrients' : 'More nutrients'}
                 </Button>
+                <Collapse expanded={more}>
+                    <Stack>{optional.map(field)}</Stack>
+                </Collapse>
+                <Group justify="flex-end">
+                    <Button variant="default" onClick={onClose}>
+                        Cancel
+                    </Button>
+                    <Button
+                        disabled={!name.trim() || !servingName.trim() || Number(servingGrams) <= 0}
+                        onClick={() => void save()}
+                    >
+                        Save food
+                    </Button>
+                </Group>
             </Stack>
         </Modal>
     )
