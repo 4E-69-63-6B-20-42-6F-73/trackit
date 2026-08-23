@@ -25,6 +25,8 @@
         "test:watch": "vitest",
         "test:e2e": "playwright test",
         "test:android": "node scripts/android-check.mjs",
+        "install:android": "adb install android\\app\\build\\outputs\\apk\\debug\\app-debug.apk",
+        "build:android": "cd android && gradlew.bat assembleDebug",
         "security:secrets": "node scripts/scan-secrets.mjs",
         "security:deps": "npm audit --omit=dev --audit-level=high",
         "check": "npm run format && npm run lint:fix && npm run db:check && npm run security:secrets && npm run test && npm run build",
