@@ -808,7 +808,25 @@ export async function createApp(
     }
 
     app.setErrorHandler((error, request, reply) => {
-        request.log.error({ err: error, requestId: request.id }, 'request failed')
+        request.log.error(
+            {
+                err: error,
+                requestId: request.id,
+                method: request.method,
+                url: request.url,
+                body: request.body,
+                validation:
+                    typeof error === 'object' && error !== null && 'validation' in error
+                        ? error.validation
+                        : undefined,
+                validationContext:
+                    typeof error === 'object' && error !== null && 'validationContext' in error
+                        ? error.validationContext
+                        : undefined,
+            },
+            'request failed',
+        )
+
         const statusCode =
             typeof error === 'object' &&
             error !== null &&
@@ -816,12 +834,14 @@ export async function createApp(
             typeof error.statusCode === 'number'
                 ? error.statusCode
                 : undefined
+
         if (statusCode && statusCode >= 400 && statusCode < 500) {
             return reply.code(statusCode).send({
                 error: statusCode === 429 ? 'rate_limited' : 'request_rejected',
                 requestId: request.id,
             })
         }
+
         return reply.code(500).send({ error: 'internal_error', requestId: request.id })
     })
 
