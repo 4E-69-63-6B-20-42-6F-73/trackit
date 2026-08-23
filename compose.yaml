@@ -10,6 +10,7 @@ services:
             TRACKIT_DB_PASSWORD: ${TRACKIT_DB_PASSWORD:?Set TRACKIT_DB_PASSWORD in .env}
             WEB_ORIGIN: ${TRACKIT_ORIGIN:-http://localhost:3000}
             TRUST_PROXY: ${TRACKIT_TRUST_PROXY:-false}
+            API_RATE_LIMIT_MAX: ${TRACKIT_API_RATE_LIMIT_MAX:-600}
             BACKUPS_ENABLED: ${TRACKIT_BACKUPS_ENABLED:-false}
             BACKUP_ENCRYPTION_KEY: ${TRACKIT_BACKUP_KEY:-}
             BACKUP_DIR: /backups

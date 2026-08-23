@@ -113,7 +113,7 @@ export async function createApp(
         },
     })
     await app.register(cors, { origin: false })
-    await app.register(rateLimit, { max: 120, timeWindow: '1 minute' })
+    await app.register(rateLimit, { max: config.API_RATE_LIMIT_MAX, timeWindow: '1 minute' })
 
     const badRequest = (
         request: FastifyRequest,

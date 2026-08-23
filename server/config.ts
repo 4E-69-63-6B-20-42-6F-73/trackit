@@ -11,6 +11,7 @@ const configSchema = z.object({
         .enum(['true', 'false'])
         .default('false')
         .transform(value => value === 'true'),
+    API_RATE_LIMIT_MAX: z.coerce.number().int().min(60).max(10_000).default(600),
     BACKUPS_ENABLED: z
         .enum(['true', 'false'])
         .default('false')
