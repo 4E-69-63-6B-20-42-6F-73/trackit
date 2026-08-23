@@ -1,8 +1,17 @@
 import { useMemo, useState } from 'react'
 import { ActionIcon, Badge, Button, Group, Menu, Modal, Text, TextInput } from '@mantine/core'
-import { IconChevronDown, IconPlus, IconSearch } from '@tabler/icons-react'
+import {
+    IconChevronDown,
+    IconChevronLeft,
+    IconChevronRight,
+    IconPlus,
+    IconSearch,
+} from '@tabler/icons-react'
 import { eventVisual } from '../domain/data'
 import type { Category, JournalEvent } from '../domain/types'
+
+const localDateKey = (date: Date) =>
+    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
 
 export function Journal({
     events,
@@ -20,6 +29,7 @@ export function Journal({
 }) {
     const [filter, setFilter] = useState<'All' | Category>('All')
     const [query, setQuery] = useState('')
+    const [selectedDate, setSelectedDate] = useState<string | null>(null)
     const [editing, setEditing] = useState<JournalEvent | null>(null)
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
@@ -28,12 +38,14 @@ export function Journal({
         () =>
             events.filter(
                 event =>
+                    (!selectedDate ||
+                        localDateKey(new Date(event.observedAt ?? 0)) === selectedDate) &&
                     (filter === 'All' || event.category === filter) &&
                     `${event.title} ${event.detail} ${event.source}`
                         .toLowerCase()
                         .includes(query.toLowerCase()),
             ),
-        [events, filter, query],
+        [events, filter, query, selectedDate],
     )
     const groups = useMemo(() => {
         const today = new Date()
@@ -68,6 +80,11 @@ export function Journal({
         setDraftTitle(event.title)
         setDraftDetail(event.detail)
     }
+    const moveDay = (days: number) => {
+        const date = selectedDate ? new Date(`${selectedDate}T12:00:00`) : new Date()
+        date.setDate(date.getDate() + days)
+        setSelectedDate(localDateKey(date))
+    }
 
     return (
         <div className="page-content journal-page">
@@ -84,6 +101,35 @@ export function Journal({
                     placeholder="Search your journal"
                     leftSection={<IconSearch size={16} />}
                 />
+            </div>
+            <div className="day-navigation" aria-label="Journal day">
+                <ActionIcon variant="default" aria-label="Previous day" onClick={() => moveDay(-1)}>
+                    <IconChevronLeft size={18} />
+                </ActionIcon>
+                <TextInput
+                    type="date"
+                    aria-label="Journal date"
+                    value={selectedDate ?? ''}
+                    onChange={event => setSelectedDate(event.currentTarget.value || null)}
+                />
+                <ActionIcon variant="default" aria-label="Next day" onClick={() => moveDay(1)}>
+                    <IconChevronRight size={18} />
+                </ActionIcon>
+                <Button
+                    variant="default"
+                    size="xs"
+                    onClick={() => setSelectedDate(localDateKey(new Date()))}
+                >
+                    Today
+                </Button>
+                <Button
+                    variant={selectedDate ? 'subtle' : 'filled'}
+                    color={selectedDate ? 'gray' : 'dark'}
+                    size="xs"
+                    onClick={() => setSelectedDate(null)}
+                >
+                    All dates
+                </Button>
             </div>
             <div className="filter-row" aria-label="Journal categories">
                 {(['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const).map(
@@ -175,8 +221,8 @@ export function Journal({
                         <IconSearch size={24} />
                         <Text fw={600}>Nothing matches</Text>
                         <Text size="sm" c="dimmed">
-                            No entries match this search or category. Clear a filter to see your
-                            timeline again.
+                            No entries match this date, search, or category. Change the day or clear
+                            a filter to see your timeline again.
                         </Text>
                     </div>
                 )}

@@ -211,6 +211,13 @@ textarea:focus-visible,
     display: flex;
     gap: 8px;
 }
+.journal-page > .day-navigation {
+    flex-wrap: wrap;
+    margin-bottom: 14px;
+}
+.journal-page > .day-navigation .mantine-TextInput-root {
+    width: 158px;
+}
 .date,
 .eyebrow {
     color: #626862;
