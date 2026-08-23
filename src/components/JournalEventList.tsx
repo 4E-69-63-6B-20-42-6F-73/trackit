@@ -26,20 +26,15 @@ export function JournalEventList({
                 <div className="event-copy">
                     <Text fw={600} size={roomy ? undefined : 'sm'}>
                         {event.title}
+                        {event.source !== 'You' && (
+                            <Badge variant="light" color="gray" fw={500}>
+                                {event.source}
+                            </Badge>
+                        )}
                     </Text>
                     <Text size="sm" c="dimmed">
                         {event.detail}
                     </Text>
-                    {event.source !== 'You' && (
-                        <Badge variant="light" color="gray" fw={500}>
-                            {event.source}
-                        </Badge>
-                    )}
-                    {roomy && event.deviceName && (
-                        <Text size="xs" c="dimmed">
-                            Device: {event.deviceName}
-                        </Text>
-                    )}
                 </div>
                 {renderActions?.(event)}
                 {showChevron && <IconChevronRight size={17} color="#a3a49e" />}
