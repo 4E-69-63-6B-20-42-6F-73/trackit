@@ -9,12 +9,14 @@ import {
     deviceUploadBatches,
     dailyMetrics,
     healthRecords,
+    journalEntries,
     observations,
     pairingCodes,
     sources,
     syncCursors,
 } from '../db/schema.js'
 import { deriveRecord } from '../health-records/derive.js'
+import { projectHealthRecordToJournal } from '../health-records/journal.js'
 import { aggregateMetric, metricDefinition } from '../health-records/metric-registry.js'
 import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
@@ -534,6 +536,15 @@ export class DeviceService {
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
+                await transaction
+                    .update(journalEntries)
+                    .set({ deletedAt: stored.deletedAt ? now : null, updatedAt: now })
+                    .where(
+                        and(
+                            eq(journalEntries.entityType, 'health_record'),
+                            eq(journalEntries.entityId, stored.id),
+                        ),
+                    )
                 if (!stored.deletedAt) {
                     const projections = deriveRecord({
                         ...input,
@@ -566,6 +577,50 @@ export class DeviceService {
                                 },
                             })),
                         )
+                    const journal = projectHealthRecordToJournal(
+                        {
+                            ...input,
+                            id: stored.id,
+                            userId: stored.userId,
+                            startTime: stored.startTime,
+                            endTime: stored.endTime,
+                        },
+                        projections,
+                    )
+                    if (journal)
+                        await transaction
+                            .insert(journalEntries)
+                            .values({
+                                id: stored.id,
+                                ...journal,
+                                sourceId: deviceId,
+                                sourceLabel: stored.dataOrigin
+                                    ? `Health Connect · ${stored.dataOrigin}`
+                                    : 'Health Connect',
+                                observedAt:
+                                    stored.recordType === 'SleepSessionRecord' && stored.endTime
+                                        ? stored.endTime
+                                        : stored.startTime,
+                                externalId: `${stored.provider}:${stored.externalId}`,
+                                entityType: 'health_record',
+                                entityId: stored.id,
+                            })
+                            .onConflictDoUpdate({
+                                target: journalEntries.id,
+                                set: {
+                                    ...journal,
+                                    sourceId: deviceId,
+                                    sourceLabel: stored.dataOrigin
+                                        ? `Health Connect · ${stored.dataOrigin}`
+                                        : 'Health Connect',
+                                    observedAt:
+                                        stored.recordType === 'SleepSessionRecord' && stored.endTime
+                                            ? stored.endTime
+                                            : stored.startTime,
+                                    deletedAt: null,
+                                    updatedAt: now,
+                                },
+                            })
                 }
             }
 
@@ -581,6 +636,11 @@ export class DeviceService {
 
     async rebuildHealthRecordObservations() {
         return this.database.transaction(async transaction => {
+            const rebuiltAt = new Date()
+            await transaction
+                .update(journalEntries)
+                .set({ deletedAt: rebuiltAt, updatedAt: rebuiltAt })
+                .where(eq(journalEntries.entityType, 'health_record'))
             const records = await transaction
                 .select()
                 .from(healthRecords)
@@ -626,6 +686,56 @@ export class DeviceService {
                             metadata: { source: 'Health Connect', dataOrigin: stored.dataOrigin },
                         })),
                     )
+                const journal = projectHealthRecordToJournal(
+                    {
+                        id: stored.id,
+                        userId: stored.userId,
+                        provider: stored.provider,
+                        recordType: stored.recordType,
+                        externalId: stored.externalId,
+                        externalVersion: stored.externalVersion,
+                        startTime: stored.startTime,
+                        endTime: stored.endTime,
+                        dataOrigin: stored.dataOrigin ?? undefined,
+                        recordingMethod: stored.recordingMethod ?? undefined,
+                        device: stored.device as Record<string, unknown>,
+                        payload: stored.payload as Record<string, unknown>,
+                        lastModifiedTime: stored.lastModifiedTime?.toISOString(),
+                    },
+                    projections,
+                )
+                if (journal)
+                    await transaction
+                        .insert(journalEntries)
+                        .values({
+                            id: stored.id,
+                            ...journal,
+                            sourceLabel: stored.dataOrigin
+                                ? `Health Connect · ${stored.dataOrigin}`
+                                : 'Health Connect',
+                            observedAt:
+                                stored.recordType === 'SleepSessionRecord' && stored.endTime
+                                    ? stored.endTime
+                                    : stored.startTime,
+                            externalId: `${stored.provider}:${stored.externalId}`,
+                            entityType: 'health_record',
+                            entityId: stored.id,
+                        })
+                        .onConflictDoUpdate({
+                            target: journalEntries.id,
+                            set: {
+                                ...journal,
+                                sourceLabel: stored.dataOrigin
+                                    ? `Health Connect · ${stored.dataOrigin}`
+                                    : 'Health Connect',
+                                observedAt:
+                                    stored.recordType === 'SleepSessionRecord' && stored.endTime
+                                        ? stored.endTime
+                                        : stored.startTime,
+                                deletedAt: null,
+                                updatedAt: rebuiltAt,
+                            },
+                        })
             }
             for (const date of dates) await this.rebuildDailyDate(transaction, date)
             return { records: records.length }

@@ -40,13 +40,16 @@ export function useJournal() {
     }, [])
 
     const add = (event: JournalEvent, allowDuplicate = false) => {
-        const eventTime = new Date()
-        const [hours, minutes] = event.time.split(':').map(Number)
-        eventTime.setHours(hours, minutes, 0, 0)
+        const timestamp = (item: JournalEvent) => {
+            if (item.observedAt) return new Date(item.observedAt)
+            const date = new Date()
+            const [hours, minutes] = item.time.split(':').map(Number)
+            date.setHours(hours, minutes, 0, 0)
+            return date
+        }
+        const eventTime = timestamp(event)
         const duplicate = events.some(item => {
-            const itemTime = new Date()
-            const [itemHours, itemMinutes] = item.time.split(':').map(Number)
-            itemTime.setHours(itemHours, itemMinutes, 0, 0)
+            const itemTime = timestamp(item)
             return (
                 item.category === event.category &&
                 item.title.trim().toLowerCase() === event.title.trim().toLowerCase() &&

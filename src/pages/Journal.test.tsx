@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -14,6 +14,7 @@ const records: JournalEvent[] = [
         title: 'Breakfast',
         detail: 'Oats',
         source: 'You',
+        observedAt: '2026-08-23T08:00:00.000Z',
     },
     {
         id: '2',
@@ -22,6 +23,7 @@ const records: JournalEvent[] = [
         title: 'Walk',
         detail: '20 minutes',
         source: 'Health Connect',
+        observedAt: '2026-08-22T09:00:00.000Z',
     },
 ]
 
@@ -37,7 +39,7 @@ describe('Journal', () => {
         )
 
         const user = userEvent.setup()
-        const search = screen.getByPlaceholderText('Search your journal')
+        const search = screen.getByRole('textbox', { name: 'Search journal' })
 
         await user.type(search, 'walk')
 
@@ -78,5 +80,30 @@ describe('Journal', () => {
                 }),
             )
         })
+    })
+
+    it('can select a specific journal day and return to all dates', async () => {
+        render(
+            <MantineProvider>
+                <Journal
+                    events={records}
+                    remove={vi.fn()}
+                    duplicate={vi.fn()}
+                    update={vi.fn().mockResolvedValue(true)}
+                />
+            </MantineProvider>,
+        )
+
+        const user = userEvent.setup()
+        await user.click(screen.getByText('Single day'))
+        fireEvent.change(screen.getByLabelText('Journal date'), {
+            target: { value: '2026-08-23' },
+        })
+
+        expect(screen.getByText('Breakfast')).toBeInTheDocument()
+        expect(screen.queryByText('Walk')).not.toBeInTheDocument()
+
+        await user.click(screen.getByText('All entries'))
+        expect(screen.getByText('Walk')).toBeInTheDocument()
     })
 })
