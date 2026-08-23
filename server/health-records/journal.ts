@@ -10,68 +10,26 @@ export type HealthRecordJournalProjection = {
 
 const definitions: Record<string, { title: string; category: JournalCategory; metrics: string[] }> =
     {
-        StepsRecord: { title: 'Steps', category: 'Activity', metrics: ['steps'] },
         SleepSessionRecord: {
             title: 'Sleep session',
             category: 'Sleep',
             metrics: ['sleep', 'sleep_deep', 'sleep_rem'],
         },
         WeightRecord: { title: 'Weight', category: 'Measurements', metrics: ['weight'] },
-        HeartRateRecord: {
-            title: 'Heart rate',
-            category: 'Measurements',
-            metrics: ['heart_rate', 'heart_rate_min', 'heart_rate_max'],
-        },
-        RestingHeartRateRecord: {
-            title: 'Resting heart rate',
-            category: 'Measurements',
-            metrics: ['resting_heart_rate'],
-        },
         ExerciseSessionRecord: { title: 'Exercise', category: 'Activity', metrics: ['exercise'] },
         BloodPressureRecord: {
             title: 'Blood pressure',
             category: 'Measurements',
             metrics: ['blood_pressure_systolic', 'blood_pressure_diastolic'],
         },
-        HeartRateVariabilityRmssdRecord: {
-            title: 'Heart rate variability',
-            category: 'Measurements',
-            metrics: ['hrv_rmssd'],
-        },
-        OxygenSaturationRecord: {
-            title: 'Oxygen saturation',
-            category: 'Measurements',
-            metrics: ['oxygen_saturation'],
-        },
-        RespiratoryRateRecord: {
-            title: 'Respiratory rate',
-            category: 'Measurements',
-            metrics: ['respiratory_rate'],
-        },
         BodyFatRecord: { title: 'Body fat', category: 'Measurements', metrics: ['body_fat'] },
         HeightRecord: { title: 'Height', category: 'Measurements', metrics: ['height'] },
-        DistanceRecord: { title: 'Distance', category: 'Activity', metrics: ['distance'] },
-        ActiveCaloriesBurnedRecord: {
-            title: 'Active calories',
-            category: 'Activity',
-            metrics: ['active_calories'],
-        },
-        TotalCaloriesBurnedRecord: {
-            title: 'Total calories',
-            category: 'Activity',
-            metrics: ['total_calories'],
-        },
         Vo2MaxRecord: { title: 'VO₂ max', category: 'Measurements', metrics: ['vo2_max'] },
         HydrationRecord: { title: 'Hydration', category: 'Measurements', metrics: ['hydration'] },
         LeanBodyMassRecord: {
             title: 'Lean body mass',
             category: 'Measurements',
             metrics: ['lean_body_mass'],
-        },
-        BasalMetabolicRateRecord: {
-            title: 'Basal metabolic rate',
-            category: 'Measurements',
-            metrics: ['basal_metabolic_rate'],
         },
     }
 
@@ -86,7 +44,11 @@ const format = (observation: DerivedObservation) => {
     return `${metricLabel(observation.metric)} ${observation.value.toFixed(precision)} ${observation.unit}`
 }
 
-/** Returns one concise journal row for a source record, never one row per derived observation. */
+/**
+ * Returns one row for an intentional measurement or meaningful session. Passive interval and
+ * time-series records remain available through observations/daily metrics without flooding the
+ * human-readable journal.
+ */
 export function projectHealthRecordToJournal(
     record: CanonicalHealthRecord,
     observations: DerivedObservation[],

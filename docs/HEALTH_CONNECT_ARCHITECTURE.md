@@ -18,5 +18,17 @@ Deletion uses Health Connect source identity, tombstones `health_records`, remov
 
 Dense series such as heart-rate samples remain in `health_records.payload`; only summaries are projected into observations. Nutrition remains in TrackIt's nutrition model.
 
+## Journal visibility
+
+The Journal is a human-readable event timeline, not another canonical record store. It projects only meaningful sessions and intentional measurements:
+
+- sleep and exercise sessions;
+- weight and blood pressure;
+- body fat, height, VO2 max, hydration, and lean body mass.
+
+Passive interval and time-series records—including steps, heart-rate series, resting heart rate, HRV, oxygen saturation, respiratory rate, distance, calories, and basal metabolic rate—remain fully preserved in `health_records`, projected into `observations`, and aggregated into `daily_metrics`, but do not create Journal rows. This prevents high-frequency Health Connect records from overwhelming the Journal or its consumers.
+
+Migration `0004_quiet_health_journal` soft-deletes older passive Journal projections. It does not delete canonical records or observations. A projection rebuild applies the same allowlist deterministically.
+
 Record derivation lives in `derive.ts`. Rolling calculations live separately in `derive-window.ts`
 and consume `daily_metrics`, preventing cross-record policy from leaking into source ingestion.

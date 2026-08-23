@@ -26,19 +26,37 @@ const observation = (metric: string, value: number, unit: string) =>
     }) satisfies DerivedObservation
 
 describe('Health Connect journal projections', () => {
-    it('summarizes a dense heart-rate record into one useful entry', () => {
-        const projection = projectHealthRecordToJournal(record('HeartRateRecord'), [
-            observation('heart_rate', 72, 'bpm'),
-            observation('heart_rate_min', 58, 'bpm'),
-            observation('heart_rate_max', 101, 'bpm'),
-            observation('heart_rate_sample_count', 900, 'count'),
-        ])
+    it('does not expose passive interval or dense time-series records', () => {
+        expect(
+            projectHealthRecordToJournal(record('HeartRateRecord'), [
+                observation('heart_rate', 72, 'bpm'),
+            ]),
+        ).toBeNull()
+        expect(
+            projectHealthRecordToJournal(record('StepsRecord'), [
+                observation('steps', 12, 'count'),
+            ]),
+        ).toBeNull()
+        expect(
+            projectHealthRecordToJournal(record('ActiveCaloriesBurnedRecord'), [
+                observation('active_calories', 4, 'kcal'),
+            ]),
+        ).toBeNull()
+    })
 
-        expect(projection).toEqual({
-            category: 'Measurements',
-            title: 'Heart rate',
-            detail: 'Heart rate 72 bpm · Heart rate min 58 bpm · Heart rate max 101 bpm',
-        })
+    it('keeps meaningful sessions and intentional measurements', () => {
+        expect(
+            projectHealthRecordToJournal(record('SleepSessionRecord'), [
+                observation('sleep', 7.5, 'hours'),
+                observation('sleep_deep', 1.2, 'hours'),
+            ]),
+        ).toMatchObject({ category: 'Sleep', title: 'Sleep session' })
+        expect(
+            projectHealthRecordToJournal(record('BloodPressureRecord'), [
+                observation('blood_pressure_systolic', 122, 'mmHg'),
+                observation('blood_pressure_diastolic', 76, 'mmHg'),
+            ]),
+        ).toMatchObject({ category: 'Measurements', title: 'Blood pressure' })
     })
 
     it('preserves a meaningful exercise title', () => {

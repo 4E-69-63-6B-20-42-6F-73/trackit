@@ -106,4 +106,41 @@ describe('database migration', () => {
         expect(views.rows).toEqual([{ name: 'Upgrade view', granularity: 'daily' }])
         await database.close()
     })
+
+    it('removes passive Health Connect projections without deleting source health data', async () => {
+        const database = new PGlite()
+        const files = await migrationFiles()
+        await applyTestMigrations(
+            database,
+            files.filter(file => file <= '0003_health_connect_records.sql'),
+        )
+        await database.exec(`
+            insert into health_records (id, provider, record_type, external_id, start_time, payload)
+            values
+                ('00000000-0000-4000-8000-000000000010', 'health_connect', 'StepsRecord', 'steps', now(), '{}'),
+                ('00000000-0000-4000-8000-000000000011', 'health_connect', 'SleepSessionRecord', 'sleep', now(), '{}');
+            insert into journal_entries (
+                id, category, title, source_label, observed_at, entity_type, entity_id
+            ) values
+                ('00000000-0000-4000-8000-000000000010', 'Activity', 'Steps', 'Health Connect', now(), 'health_record', '00000000-0000-4000-8000-000000000010'),
+                ('00000000-0000-4000-8000-000000000011', 'Sleep', 'Sleep session', 'Health Connect', now(), 'health_record', '00000000-0000-4000-8000-000000000011');
+            insert into observations (
+                metric, canonical_value, canonical_unit, original_value, original_unit,
+                observed_at, source_record_id
+            ) values ('steps', 12, 'count', 12, 'count', now(), '00000000-0000-4000-8000-000000000010');
+        `)
+        await applyTestMigrations(database, ['0004_quiet_health_journal.sql'])
+
+        const journal = await database.query<{ title: string; deleted: boolean }>(`
+            select title, deleted_at is not null as deleted
+            from journal_entries order by title
+        `)
+        expect(journal.rows).toEqual([
+            { title: 'Sleep session', deleted: false },
+            { title: 'Steps', deleted: true },
+        ])
+        expect((await database.query(`select id from health_records`)).rows).toHaveLength(2)
+        expect((await database.query(`select id from observations`)).rows).toHaveLength(1)
+        await database.close()
+    })
 })

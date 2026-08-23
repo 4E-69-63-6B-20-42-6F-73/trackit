@@ -29,6 +29,13 @@
             "when": 1787493238912,
             "tag": "0003_health_connect_records",
             "breakpoints": true
+        },
+        {
+            "idx": 4,
+            "version": "7",
+            "when": 1787508000000,
+            "tag": "0004_quiet_health_journal",
+            "breakpoints": true
         }
     ]
 }

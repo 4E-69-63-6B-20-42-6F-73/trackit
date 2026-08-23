@@ -536,15 +536,16 @@ export class DeviceService {
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
-                await transaction
-                    .update(journalEntries)
-                    .set({ deletedAt: stored.deletedAt ? now : null, updatedAt: now })
-                    .where(
-                        and(
-                            eq(journalEntries.entityType, 'health_record'),
-                            eq(journalEntries.entityId, stored.id),
-                        ),
-                    )
+                if (stored.deletedAt)
+                    await transaction
+                        .update(journalEntries)
+                        .set({ deletedAt: now, updatedAt: now })
+                        .where(
+                            and(
+                                eq(journalEntries.entityType, 'health_record'),
+                                eq(journalEntries.entityId, stored.id),
+                            ),
+                        )
                 if (!stored.deletedAt) {
                     const projections = deriveRecord({
                         ...input,
