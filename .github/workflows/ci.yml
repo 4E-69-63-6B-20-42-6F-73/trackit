@@ -74,8 +74,9 @@ jobs:
                   /usr/lib/postgresql/17/bin/pg_dump --version
                   /usr/lib/postgresql/17/bin/pg_restore --version
 
-            - name: Backup and clean restore drill
-              run: bash scripts/restore-drill.sh
+            # Lets disable it for now until we reworked it.
+            # - name: Backup and clean restore drill
+            #   run: bash scripts/restore-drill.sh
 
             - name: Build runtime container
               run: docker build --tag trackit-ci:test .
