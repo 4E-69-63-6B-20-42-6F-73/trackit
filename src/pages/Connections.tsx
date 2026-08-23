@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Alert, Badge, Button, Modal, Stack, Text } from '@mantine/core'
 import {
     IconArrowDownRight,
@@ -13,6 +14,7 @@ import { downloadExport } from '../lib/lifecycleApi'
 import { listDevices } from '../lib/deviceApi'
 
 export function Connections() {
+    const navigate = useNavigate()
     const [dialog, setDialog] = useState<'mcp' | 'export' | null>(null)
     const [mcp, setMcp] = useState(false)
     const [exportError, setExportError] = useState('')
@@ -119,7 +121,7 @@ export function Connections() {
                                     color="trackit"
                                     onClick={
                                         key === 'health'
-                                            ? () => (window.location.href = '/connections/devices')
+                                            ? () => navigate('/connections/devices')
                                             : () => setDialog(key)
                                     }
                                 >

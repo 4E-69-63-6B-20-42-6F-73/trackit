@@ -142,6 +142,29 @@ export class DeviceService {
         return device ?? null
     }
 
+    async reject(id: string) {
+        const now = new Date()
+        const [device] = await this.database
+            .update(devices)
+            .set({
+                status: 'revoked',
+                revokedAt: now,
+            })
+            .where(
+                and(eq(devices.id, id), eq(devices.status, 'pending'), isNull(devices.revokedAt)),
+            )
+            .returning()
+        if (device) {
+            await this.database.insert(auditEvents).values({
+                actor: 'owner',
+                action: 'device.pairing.rejected',
+                targetType: 'device',
+                targetId: id,
+            })
+        }
+        return device ?? null
+    }
+
     async authenticate(input: {
         credential?: string
         deviceId?: string

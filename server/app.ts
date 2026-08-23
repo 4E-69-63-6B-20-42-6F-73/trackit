@@ -532,6 +532,10 @@ export async function createApp(
             const device = await devices.confirm(request.params.id)
             return device ? { data: device } : reply.code(409).send({ error: 'not_pending' })
         })
+        app.post<{ Params: { id: string } }>('/api/devices/:id/reject', async (request, reply) => {
+            const device = await devices.reject(request.params.id)
+            return device ? { data: device } : reply.code(409).send({ error: 'not_pending' })
+        })
         app.delete<{ Params: { id: string } }>('/api/devices/:id', async (request, reply) => {
             await devices.revoke(request.params.id)
             return reply.code(204).send()
