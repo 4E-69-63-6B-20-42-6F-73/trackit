@@ -30,6 +30,12 @@ const DeviceManagement = lazy(() =>
 const DeviceNew = lazy(() =>
     import('./pages/connections/devices/new').then(module => ({ default: module.DeviceNew })),
 )
+const McpAccess = lazy(() =>
+    import('./pages/connections/mcp/index').then(module => ({ default: module.McpAccess })),
+)
+const McpNew = lazy(() =>
+    import('./pages/connections/mcp/new').then(module => ({ default: module.McpNew })),
+)
 const Settings = lazy(() =>
     import('./pages/Settings').then(module => ({ default: module.Settings })),
 )
@@ -85,8 +91,8 @@ export default function App() {
     const page = location.pathname.startsWith('/settings')
         ? 'Settings'
         : location.pathname.startsWith('/connections')
-          ? 'Connections'
-          : (pathPages[location.pathname] ?? 'Today')
+            ? 'Connections'
+            : (pathPages[location.pathname] ?? 'Today')
     const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
@@ -95,14 +101,14 @@ export default function App() {
     const journalQuery =
         page === 'Today' && selectedDay
             ? {
-                  ...(selectedDay === localDateKey(new Date())
-                      ? currentWeekRange()
-                      : dayRange(selectedDay)),
-                  limit: 100,
-              }
+                ...(selectedDay === localDateKey(new Date())
+                    ? currentWeekRange()
+                    : dayRange(selectedDay)),
+                limit: 100,
+            }
             : page === 'Journal' && selectedDay
-              ? { ...dayRange(selectedDay), limit: 100 }
-              : { limit: page === 'Journal' ? 100 : 10 }
+                ? { ...dayRange(selectedDay), limit: 100 }
+                : { limit: page === 'Journal' ? 100 : 10 }
     const { events, add, remove, update, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
     const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
@@ -223,6 +229,8 @@ export default function App() {
                             <Route path="/connections" element={<Connections />} />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route path="/connections/devices/new" element={<DeviceNew />} />
+                            <Route path="/connections/mcp" element={<McpAccess />} />
+                            <Route path="/connections/mcp/new" element={<McpNew />} />
                             <Route
                                 path="/settings/goals"
                                 element={<Navigate to="/goals" replace />}
@@ -289,7 +297,7 @@ export default function App() {
                 add={addQuick}
                 selectedDate={['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null}
             />
-            {!['Goals', 'Metrics'].includes(page) && <GlobalLogFab />}
+            {!['Goals', 'Metrics', "Connections"].includes(page) && <GlobalLogFab />}
             {lastAdded && (
                 <Notification
                     className="record-feedback"

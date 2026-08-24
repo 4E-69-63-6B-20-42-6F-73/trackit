@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import { and, count, desc, eq, gt, gte, isNull } from 'drizzle-orm'
+import { and, count, desc, eq, gt, gte, isNull, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import {
     auditEvents,
@@ -18,7 +18,7 @@ export type McpClient = {
     scopes: string[]
     dateFrom: Date | null
     dateTo: Date | null
-    expiresAt: Date
+    expiresAt: Date | null
 }
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
@@ -34,7 +34,7 @@ export class McpAccessService {
                 and(
                     eq(mcpClients.id, id),
                     isNull(mcpClients.revokedAt),
-                    gt(mcpClients.expiresAt, new Date()),
+                    or(isNull(mcpClients.expiresAt), gt(mcpClients.expiresAt, new Date())),
                 ),
             )
             .limit(1)
@@ -66,7 +66,7 @@ export class McpAccessService {
         scopes: string[]
         dateFrom?: string
         dateTo?: string
-        expiresAt: string
+        expiresAt?: string
     }) {
         const token = `trk_mcp_${randomBytes(32).toString('base64url')}`
         const [client] = await this.database
@@ -77,7 +77,7 @@ export class McpAccessService {
                 scopes: input.scopes,
                 dateFrom: input.dateFrom ? new Date(input.dateFrom) : undefined,
                 dateTo: input.dateTo ? new Date(input.dateTo) : undefined,
-                expiresAt: new Date(input.expiresAt),
+                expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,
             })
             .returning()
         await this.audit('owner', 'mcp.client.created', 'mcp_client', client.id, {
@@ -96,7 +96,7 @@ export class McpAccessService {
                 and(
                     eq(mcpClients.tokenHash, tokenHash(token)),
                     isNull(mcpClients.revokedAt),
-                    gt(mcpClients.expiresAt, new Date()),
+                    or(isNull(mcpClients.expiresAt), gt(mcpClients.expiresAt, new Date())),
                 ),
             )
             .limit(1)
@@ -146,6 +146,11 @@ export class McpAccessService {
             .set({ revokedAt: new Date() })
             .where(eq(mcpClients.id, id))
         await this.audit('owner', 'mcp.client.revoked', 'mcp_client', id)
+    }
+
+    async delete(id: string) {
+        await this.database.delete(mcpClients).where(eq(mcpClients.id, id))
+        await this.audit('owner', 'mcp.client.deleted', 'mcp_client', id)
     }
 
     async auditRequest(client: McpClient, tool: string) {

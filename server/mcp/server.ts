@@ -7,6 +7,58 @@ import { PostgresJournalRepository } from '../journal/postgres-repository.js'
 import type { McpAccessService, McpClient } from './service.js'
 
 type DatedRecord = Record<string, unknown> & { observedAt?: Date | string; eatenAt?: Date | string }
+type FoodRecord = Record<string, unknown> & {
+    id: string
+    name: string
+    brand?: string | null
+    version: number
+    servingName: string
+    servingGrams: number
+    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+}
+
+const foodFields = {
+    name: z.string().trim().min(1).max(160),
+    brand: z.string().trim().max(120).optional(),
+    barcode: z
+        .string()
+        .trim()
+        .regex(/^\d{8,14}$/)
+        .optional(),
+    caloriesPer100g: z.number().finite().nonnegative().optional(),
+    proteinPer100g: z.number().finite().nonnegative().optional(),
+    carbsPer100g: z.number().finite().nonnegative().optional(),
+    fatPer100g: z.number().finite().nonnegative().optional(),
+    fiberPer100g: z.number().finite().nonnegative().optional(),
+    sugarPer100g: z.number().finite().nonnegative().optional(),
+    saturatedFatPer100g: z.number().finite().nonnegative().optional(),
+    sodiumPer100g: z.number().finite().nonnegative().optional(),
+    potassiumPer100g: z.number().finite().nonnegative().optional(),
+    servingName: z.string().trim().min(1).max(60).default('serving'),
+    servingGrams: z.number().finite().positive().default(100),
+    nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
+}
+
+const foodNutrients = (food: FoodRecord, grams: number) => {
+    const factor = grams / 100
+    const mappings = {
+        calories: 'caloriesPer100g',
+        protein: 'proteinPer100g',
+        carbs: 'carbsPer100g',
+        fat: 'fatPer100g',
+        fiber: 'fiberPer100g',
+        sugar: 'sugarPer100g',
+        saturatedFat: 'saturatedFatPer100g',
+        sodium: 'sodiumPer100g',
+        potassium: 'potassiumPer100g',
+    } as const
+    return Object.fromEntries(
+        Object.entries(mappings).flatMap(([nutrient, field]) => {
+            const value = food[field]
+            return typeof value === 'number' ? [[nutrient, value * factor]] : []
+        }),
+    )
+}
 
 const textResult = (data: unknown) => ({
     content: [{ type: 'text' as const, text: JSON.stringify(data) }],
@@ -282,20 +334,71 @@ export function createTrackItMcpServer(
     )
 
     server.registerTool(
-        'preview_meal',
+        'search_foods',
         {
-            description: 'Preview the exact nutrient snapshot before creating a meal.',
+            description:
+                'Fuzzy-search the owner food catalog before creating a food. If selectionRequired is true, ask the owner the returned clarificationQuestion and never guess.',
             inputSchema: {
-                name: z.string().min(1).max(160),
-                mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
-                nutrients: z.record(z.string(), z.number().finite()),
+                query: z.string().trim().min(1).max(160),
+                limit: z.number().int().min(1).max(50).default(15),
             },
+        },
+        async ({ query, limit }) => {
+            if (!scoped('meals') && !scoped('meals:write')) {
+                return denied('Scope meals or meals:write is required.')
+            }
+            const foods = ((await data.listFoods(query)) as FoodRecord[]).slice(0, limit)
+            const normalizedQuery = query.trim().toLocaleLowerCase()
+            const exactMatches = foods.filter(
+                food => food.name.trim().toLocaleLowerCase() === normalizedQuery,
+            )
+            const selectionRequired = foods.length > 0 && exactMatches.length !== 1
+            const choices = foods.slice(0, 5).map(food => ({
+                id: food.id,
+                label: [food.name, food.brand].filter(Boolean).join(' — '),
+                serving: `${food.servingGrams} g ${food.servingName}`,
+            }))
+            return textResult({
+                foods,
+                matchCount: foods.length,
+                selectionRequired,
+                clarificationQuestion: selectionRequired
+                    ? `I found several possible foods: ${choices.map((choice, index) => `${index + 1}. ${choice.label} (${choice.serving})`).join('; ')}. Which one did you mean?`
+                    : null,
+                choices,
+                guidance: foods.length
+                    ? selectionRequired
+                        ? 'Ask the owner to choose a food id before previewing a meal addition.'
+                        : 'Use the exact returned food id when previewing a meal addition.'
+                    : 'No saved food matched. Preview creation before creating a new food.',
+                provenance: 'TrackIt food catalog',
+            })
+        },
+    )
+
+    server.registerTool(
+        'preview_create_food',
+        {
+            description:
+                'Preview a new catalog food after search_foods found no suitable match. Nutrition values are per 100 g.',
+            inputSchema: foodFields,
         },
         async input => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
+            const existing = ((await data.listFoods(input.name)) as FoodRecord[]).find(
+                food =>
+                    food.name.toLocaleLowerCase() === input.name.toLocaleLowerCase() &&
+                    String(food.brand ?? '').toLocaleLowerCase() ===
+                        String(input.brand ?? '').toLocaleLowerCase(),
+            )
+            if (existing) {
+                return denied(
+                    `A matching food already exists. Use food id ${existing.id} instead of creating a duplicate.`,
+                )
+            }
             const confirmation = await access.issueConfirmation(
                 client,
-                'create_meal',
+                'create_food',
                 input.name,
                 input,
             )
@@ -308,15 +411,115 @@ export function createTrackItMcpServer(
     )
 
     server.registerTool(
-        'log_meal',
+        'create_food',
         {
-            description: 'Create the exact previously previewed meal nutrient snapshot.',
+            description:
+                'Create the exact catalog food previously returned by preview_create_food.',
             inputSchema: {
-                name: z.string().min(1).max(160),
+                ...foodFields,
+                confirmationToken: z.string().min(1),
+                idempotencyKey: z.string().uuid(),
+            },
+        },
+        async ({ confirmationToken, idempotencyKey, ...food }) => {
+            if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
+            let operation
+            try {
+                operation = await access.runIdempotent(
+                    client,
+                    'create_food',
+                    idempotencyKey,
+                    async transaction => {
+                        const transactionalData = new PostgresDataRepository(transaction)
+                        const duplicate = (
+                            (await transactionalData.listFoods(food.name)) as FoodRecord[]
+                        ).find(
+                            candidate =>
+                                candidate.name.toLocaleLowerCase() ===
+                                    food.name.toLocaleLowerCase() &&
+                                String(candidate.brand ?? '').toLocaleLowerCase() ===
+                                    String(food.brand ?? '').toLocaleLowerCase(),
+                        )
+                        if (duplicate) throw new Error(`food_exists:${duplicate.id}`)
+                        const confirmed = await access.consumeConfirmation(
+                            client,
+                            confirmationToken,
+                            'create_food',
+                            food.name,
+                            food,
+                        )
+                        if (!confirmed) throw new Error('confirmation_required')
+                        const created = await transactionalData.createFood({
+                            ...food,
+                            catalogSource: `MCP: ${client.name}`,
+                            favorite: false,
+                        })
+                        return { food: created }
+                    },
+                )
+            } catch (error) {
+                return denied(
+                    error instanceof Error && error.message.startsWith('food_exists:')
+                        ? `A matching food already exists. Use food id ${error.message.slice('food_exists:'.length)} instead.`
+                        : 'A valid unexpired food preview confirmation is required.',
+                )
+            }
+            return textResult({ ...operation, provenance: `MCP client ${client.name}` })
+        },
+    )
+
+    server.registerTool(
+        'preview_add_food_to_meal',
+        {
+            description:
+                'Preview adding a saved catalog food to a meal. Nutrients are calculated from the saved per-100-g values.',
+            inputSchema: {
+                foodId: z.string().uuid(),
+                grams: z.number().finite().positive().max(100_000),
                 mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
-                nutrients: z.record(z.string(), z.number().finite()),
                 eatenAt: z.string().datetime(),
-                confirmationToken: z.string(),
+            },
+        },
+        async input => {
+            if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
+            if (!validGrantTimestamp(client, input.eatenAt)) {
+                return denied('The meal timestamp is outside this client grant.')
+            }
+            const food = ((await data.listFoods()) as FoodRecord[]).find(
+                candidate => candidate.id === input.foodId,
+            )
+            if (!food) return denied('The selected food does not exist.')
+            const preview = { ...input, foodVersion: food.version }
+            const confirmation = await access.issueConfirmation(
+                client,
+                'add_food_to_meal',
+                input.foodId,
+                preview,
+            )
+            return textResult({
+                preview: {
+                    ...preview,
+                    food: { id: food.id, name: food.name, brand: food.brand ?? null },
+                    nutrients: foodNutrients(food, input.grams),
+                },
+                confirmationToken: confirmation.token,
+                expiresAt: confirmation.expiresAt,
+            })
+        },
+    )
+
+    server.registerTool(
+        'add_food_to_meal',
+        {
+            description:
+                'Add the exact saved food and amount previously returned by preview_add_food_to_meal.',
+            inputSchema: {
+                foodId: z.string().uuid(),
+                foodVersion: z.number().int().positive(),
+                grams: z.number().finite().positive().max(100_000),
+                mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+                eatenAt: z.string().datetime(),
+                confirmationToken: z.string().min(1),
                 idempotencyKey: z.string().uuid(),
             },
         },
@@ -325,40 +528,49 @@ export function createTrackItMcpServer(
             if (!validGrantTimestamp(client, input.eatenAt)) {
                 return denied('The meal timestamp is outside this client grant.')
             }
-            const preview = {
-                name: input.name,
-                mealType: input.mealType,
-                nutrients: input.nutrients,
-            }
             let operation
             try {
                 operation = await access.runIdempotent(
                     client,
-                    'log_meal',
+                    'add_food_to_meal',
                     input.idempotencyKey,
                     async transaction => {
                         const transactionalData = new PostgresDataRepository(transaction)
-                        const transactionalJournal = new PostgresJournalRepository(transaction)
+                        const food = ((await transactionalData.listFoods()) as FoodRecord[]).find(
+                            candidate => candidate.id === input.foodId,
+                        )
+                        if (!food || food.version !== input.foodVersion) {
+                            throw new Error('food_changed')
+                        }
                         const confirmed = await access.consumeConfirmation(
                             client,
                             input.confirmationToken,
-                            'create_meal',
-                            input.name,
-                            preview,
+                            'add_food_to_meal',
+                            input.foodId,
+                            {
+                                foodId: input.foodId,
+                                grams: input.grams,
+                                mealType: input.mealType,
+                                eatenAt: input.eatenAt,
+                                foodVersion: input.foodVersion,
+                            },
                         )
                         if (!confirmed) throw new Error('confirmation_required')
-                        const meal = await transactionalData.createMeal({
-                            name: input.name,
+                        const nutrients = foodNutrients(food, input.grams)
+                        const meal = (await transactionalData.createMeal({
+                            name: food.name,
                             mealType: input.mealType,
                             eatenAt: input.eatenAt,
-                            nutrients: input.nutrients,
+                            nutrients,
                             favorite: false,
-                            nutritionQuality: 'complete',
-                        })
+                            nutritionQuality: food.nutritionQuality,
+                            foodId: food.id,
+                        })) as { id: string }
+                        const transactionalJournal = new PostgresJournalRepository(transaction)
                         const journalEntry = await transactionalJournal.create({
                             category: 'Meals',
-                            title: input.name,
-                            detail: 'Meal nutrient snapshot created by an authorized assistant',
+                            title: food.name,
+                            detail: `${input.grams} g added by an authorized assistant`,
                             source: `MCP: ${client.name}`,
                             observedAt: input.eatenAt,
                             entityType: 'meal',
@@ -367,8 +579,12 @@ export function createTrackItMcpServer(
                         return { meal, journalEntryId: journalEntry.id }
                     },
                 )
-            } catch {
-                return denied('A valid unexpired preview confirmation is required.')
+            } catch (error) {
+                return denied(
+                    error instanceof Error && error.message === 'food_changed'
+                        ? 'The food changed after preview. Preview it again before adding it.'
+                        : 'A valid unexpired add-food preview confirmation is required.',
+                )
             }
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },

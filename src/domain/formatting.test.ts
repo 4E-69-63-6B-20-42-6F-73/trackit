@@ -10,6 +10,6 @@ describe('shared display formatting', () => {
     it('uses human labels for counts and known Health Connect sources', () => {
         expect(formatMetricValue(10000, 'count', 'en-US')).toBe('10,000 steps')
         expect(friendlySourceName('COM.GOOGLE.ANDROID.APPS.FITNESS')).toBe('Google Fit')
-        expect(friendlySourceName('CN.FITDAYS.FITDAYS')).toBe('Fitdays scale')
+        expect(friendlySourceName('CN.FITDAYS.FITDAYS')).toBe('Fitdays')
     })
 })

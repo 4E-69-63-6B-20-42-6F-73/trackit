@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, ilike, isNull, lte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -20,6 +20,50 @@ import type { Observation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+
+const normalizeFoodSearch = (value: string) =>
+    value
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLocaleLowerCase()
+        .replace(/[^a-z0-9]+/g, ' ')
+        .trim()
+
+const editDistance = (left: string, right: string) => {
+    const previous = Array.from({ length: right.length + 1 }, (_, index) => index)
+    for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+        const current = [leftIndex]
+        for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+            current[rightIndex] = Math.min(
+                current[rightIndex - 1] + 1,
+                previous[rightIndex] + 1,
+                previous[rightIndex - 1] + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+            )
+        }
+        previous.splice(0, previous.length, ...current)
+    }
+    return previous[right.length]
+}
+
+const foodMatchScore = (query: string, name: string, brand?: string | null) => {
+    const normalizedName = normalizeFoodSearch(name)
+    const combined = normalizeFoodSearch(`${name} ${brand ?? ''}`)
+    if (normalizedName === query) return 0
+    if (normalizedName.startsWith(query)) return 0.1
+    if (normalizedName.includes(query)) return 0.2
+    if (combined.includes(query)) return 0.3
+    const queryTokens = query.split(' ')
+    if (queryTokens.every(token => combined.split(' ').some(word => word.startsWith(token)))) {
+        return 0.4
+    }
+    const words = combined.split(' ')
+    const distance = Math.min(
+        editDistance(query, normalizedName),
+        ...words.map(word => editDistance(query, word)),
+    )
+    const ratio = distance / Math.max(query.length, normalizedName.length, 1)
+    return ratio <= 0.34 || (query.length >= 5 && distance <= 2) ? 0.5 + ratio : Infinity
+}
 
 export class PostgresDataRepository implements DataRepository {
     listHealthRecords() {
@@ -245,22 +289,26 @@ export class PostgresDataRepository implements DataRepository {
         return record ?? current
     }
 
-    listFoods(query?: string) {
-        const select = this.database.select().from(foods)
-        return query
-            ? select
-                  .where(ilike(foods.name, `%${query}%`))
-                  .orderBy(
-                      sql`case when lower(${foods.name}) = lower(${query}) then 0 else 1 end`,
-                      desc(foods.favorite),
-                      sql`${foods.lastUsedAt} desc nulls last`,
-                      desc(foods.updatedAt),
-                  )
-            : select.orderBy(
-                  desc(foods.favorite),
-                  sql`${foods.lastUsedAt} desc nulls last`,
-                  desc(foods.updatedAt),
-              )
+    async listFoods(query?: string) {
+        const records = await this.database
+            .select()
+            .from(foods)
+            .orderBy(
+                desc(foods.favorite),
+                sql`${foods.lastUsedAt} desc nulls last`,
+                desc(foods.updatedAt),
+            )
+        const normalizedQuery = query ? normalizeFoodSearch(query) : ''
+        if (!normalizedQuery) return records
+        return records
+            .map((food, index) => ({
+                food,
+                index,
+                score: foodMatchScore(normalizedQuery, food.name, food.brand),
+            }))
+            .filter(match => Number.isFinite(match.score))
+            .sort((left, right) => left.score - right.score || left.index - right.index)
+            .map(match => match.food)
     }
 
     async createFood(input: typeof foods.$inferInsert) {

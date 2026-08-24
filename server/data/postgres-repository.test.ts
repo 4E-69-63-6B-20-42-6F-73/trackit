@@ -62,6 +62,8 @@ describe('nutrition snapshot persistence', () => {
         expect(ranked[1].lastUsedAt).toEqual(new Date('2026-08-20T08:00:00Z'))
         const exact = (await repository.listFoods('Snapshot oats')) as { id: string }[]
         expect(exact.map(record => record.id)).toEqual([food.id, favoriteFood.id])
+        const fuzzy = (await repository.listFoods('Snaphot otes')) as { id: string }[]
+        expect(fuzzy[0].id).toBe(food.id)
         await repository.updateFood(food.id, {
             caloriesPer100g: 200,
             version: food.version,

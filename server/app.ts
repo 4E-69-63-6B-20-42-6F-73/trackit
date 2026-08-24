@@ -484,7 +484,7 @@ export async function createApp(
                     .min(1),
                 dateFrom: z.string().datetime().optional(),
                 dateTo: z.string().datetime().optional(),
-                expiresAt: z.string().datetime(),
+                expiresAt: z.string().datetime().optional(),
             })
             .refine(
                 input =>
@@ -493,7 +493,7 @@ export async function createApp(
                     new Date(input.dateFrom) <= new Date(input.dateTo),
                 { message: 'Invalid date grant' },
             )
-            .refine(input => new Date(input.expiresAt) > new Date(), {
+            .refine(input => !input.expiresAt || new Date(input.expiresAt) > new Date(), {
                 message: 'Expiry must be in the future',
             })
         app.get('/api/mcp/status', async () => ({
@@ -516,6 +516,13 @@ export async function createApp(
             await mcp.revoke(request.params.id)
             return reply.code(204).send()
         })
+        app.delete<{ Params: { id: string } }>(
+            '/api/mcp/clients/:id/permanent',
+            async (request, reply) => {
+                await mcp.delete(request.params.id)
+                return reply.code(204).send()
+            },
+        )
         app.post('/mcp', async (request, reply) => {
             const authorization = request.headers.authorization
             const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined
@@ -629,6 +636,13 @@ export async function createApp(
             await devices.revoke(request.params.id)
             return reply.code(204).send()
         })
+        app.delete<{ Params: { id: string } }>(
+            '/api/devices/:id/permanent',
+            async (request, reply) => {
+                await devices.delete(request.params.id)
+                return reply.code(204).send()
+            },
+        )
         app.get('/api/devices', async () => ({ data: await devices.list() }))
         app.get('/api/device/status', async (request, reply) => {
             const credentials = deviceCredentials(request)
