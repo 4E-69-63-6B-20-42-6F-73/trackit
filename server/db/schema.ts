@@ -235,7 +235,7 @@ export const mcpClients = pgTable('mcp_clients', {
     scopes: jsonb('scopes').notNull().default([]),
     dateFrom: timestamp('date_from', { withTimezone: true }),
     dateTo: timestamp('date_to', { withTimezone: true }),
-    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

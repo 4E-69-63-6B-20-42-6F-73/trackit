@@ -84,3 +84,8 @@ export async function revokeDevice(id: string) {
     const response = await authRequest(`/api/devices/${id}`, { method: 'DELETE' })
     if (!response.ok) throw new Error('Could not revoke device')
 }
+
+export async function deleteDevice(id: string) {
+    const response = await authRequest(`/api/devices/${id}/permanent`, { method: 'DELETE' })
+    if (!response.ok) throw new Error('Could not delete device')
+}
