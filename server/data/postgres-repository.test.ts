@@ -103,3 +103,33 @@ describe('nutrition snapshot persistence', () => {
         await client.close()
     })
 })
+
+describe('goal lifecycle persistence', () => {
+    it('only permanently deletes goals after they have been retired', async () => {
+        const client = new PGlite()
+        for (const filename of (await readdir('server/db/migrations'))
+            .filter(name => name.endsWith('.sql'))
+            .sort()) {
+            const migration = await readFile(`server/db/migrations/${filename}`, 'utf8')
+            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
+        }
+        const repository = new PostgresDataRepository(drizzle(client, { schema }) as never)
+        const active = (await repository.createGoal({
+            metricId: 'weight',
+            aggregation: 'average',
+            comparator: 'lte',
+            target: { value: 80 },
+            period: { type: 'rolling', days: 7 },
+            canonicalUnit: 'kg',
+            effectiveFrom: '2026-08-24T00:00:00.000Z',
+            effectiveTo: null,
+            schedule: {},
+        })) as { id: string }
+
+        expect(await repository.removeGoal(active.id)).toBe(false)
+        await repository.retireGoal(active.id, '2026-08-24T12:00:00.000Z')
+        expect(await repository.removeGoal(active.id)).toBe(true)
+        expect(await repository.listGoals()).toEqual([])
+        await client.close()
+    })
+})

@@ -3,7 +3,12 @@ import type { Page } from '@playwright/test'
 /** Authenticates through a server response; no application data is stored in the browser. */
 export async function useAuthenticatedServer(
     page: Page,
-    options: { journal?: Record<string, unknown>[] } = {},
+    options: {
+        journal?: Record<string, unknown>[]
+        goals?: Record<string, unknown>[]
+        observations?: Record<string, unknown>[]
+        preferences?: Record<string, unknown>
+    } = {},
 ) {
     await page.route('**/api/**', route => {
         const path = new URL(route.request().url()).pathname
@@ -46,9 +51,64 @@ export async function useAuthenticatedServer(
                 }),
             })
         }
+        if (path === '/api/goals' && options.goals) {
+            if (route.request().method() === 'POST') {
+                const input = route.request().postDataJSON()
+                const saved = { id: `goal-${options.goals.length + 1}`, ...input }
+                options.goals.unshift(saved)
+                return route.fulfill({
+                    status: 201,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ data: saved }),
+                })
+            }
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data: options.goals }),
+            })
+        }
+        if (
+            path.startsWith('/api/goals/') &&
+            options.goals &&
+            route.request().method() === 'PATCH'
+        ) {
+            const id = path.split('/').at(-1)
+            const index = options.goals.findIndex(goal => goal.id === id)
+            const saved = { ...options.goals[index], ...route.request().postDataJSON(), id }
+            if (index >= 0) options.goals[index] = saved
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data: saved }),
+            })
+        }
+        if (
+            path.startsWith('/api/goals/') &&
+            options.goals &&
+            route.request().method() === 'DELETE'
+        ) {
+            const id = path.split('/').at(-1)
+            const index = options.goals.findIndex(goal => goal.id === id && goal.effectiveTo)
+            if (index < 0)
+                return route.fulfill({
+                    status: 409,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ error: 'retire_before_delete' }),
+                })
+            options.goals.splice(index, 1)
+            return route.fulfill({ status: 204, body: '' })
+        }
+        if (path === '/api/observations' && options.observations) {
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data: options.observations }),
+            })
+        }
         const data =
             path === '/api/preferences'
-                ? {
+                ? (options.preferences ?? {
                       id: 'owner',
                       displayName: 'Owner',
                       timezone: 'UTC',
@@ -57,7 +117,7 @@ export async function useAuthenticatedServer(
                       goals: {},
                       mcpEnabled: false,
                       experience: { onboardingComplete: true, onboardingStep: 5 },
-                  }
+                  })
                 : []
         return route.fulfill({
             status: 200,

@@ -428,19 +428,23 @@ export class PostgresDataRepository implements DataRepository {
     }
 
     async createGoal(input: {
-        metric: string
-        targetValue: number
+        metricId: string
+        aggregation: 'latest' | 'average' | 'total'
+        comparator: 'gte' | 'lte' | 'between'
+        target: { value: number } | { min: number; max: number }
+        period: { type: 'day' | 'week' } | { type: 'rolling'; days: 7 | 14 | 30 }
         canonicalUnit: string
         effectiveFrom: string
-        effectiveTo?: string
-        schedule: Record<string, unknown>
+        effectiveTo?: string | null
+        schedule: { weekdays?: number[] }
     }) {
         const [record] = await this.database
             .insert(goals)
             .values({
                 ...input,
+                legacyTargetValue: 'value' in input.target ? input.target.value : input.target.min,
                 effectiveFrom: new Date(input.effectiveFrom),
-                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
             })
             .returning()
         return record
@@ -458,24 +462,46 @@ export class PostgresDataRepository implements DataRepository {
     async updateGoal(
         id: string,
         input: {
-            metric?: string
-            targetValue?: number
+            metricId?: string
+            aggregation?: 'latest' | 'average' | 'total'
+            comparator?: 'gte' | 'lte' | 'between'
+            target?: { value: number } | { min: number; max: number }
+            period?: { type: 'day' | 'week' } | { type: 'rolling'; days: 7 | 14 | 30 }
             canonicalUnit?: string
             effectiveFrom?: string
-            effectiveTo?: string
-            schedule?: Record<string, unknown>
+            effectiveTo?: string | null
+            schedule?: { weekdays?: number[] }
         },
     ) {
         const [record] = await this.database
             .update(goals)
             .set({
                 ...input,
+                legacyTargetValue: input.target
+                    ? 'value' in input.target
+                        ? input.target.value
+                        : input.target.min
+                    : undefined,
                 effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : undefined,
-                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+                effectiveTo:
+                    input.effectiveTo === null
+                        ? null
+                        : input.effectiveTo
+                          ? new Date(input.effectiveTo)
+                          : undefined,
+                updatedAt: new Date(),
             })
             .where(eq(goals.id, id))
             .returning()
         return record ?? null
+    }
+
+    async removeGoal(id: string) {
+        const removed = await this.database
+            .delete(goals)
+            .where(and(eq(goals.id, id), lte(goals.effectiveTo, new Date())))
+            .returning({ id: goals.id })
+        return removed.length > 0
     }
 
     listSavedTrendViews() {

@@ -695,9 +695,6 @@ textarea:focus-visible,
 .event.roomy {
     min-height: 78px;
 }
-.journal-page > .page-header {
-    display: none;
-}
 .journal-timeline {
     padding: 16px 22px 6px;
 }
@@ -974,12 +971,69 @@ textarea:focus-visible,
     border-radius: 12px;
     display: flex;
     flex-direction: column;
-    gap: 10px;
-    padding: 16px;
+    gap: 7px;
+    padding: 13px 14px;
 }
 .goal-target {
-    font-size: 20px;
-    margin-top: 3px;
+    font-size: 19px;
+    font-weight: 650;
+    line-height: 1.25;
+    margin-top: 1px;
+}
+.goal-target-input {
+    align-items: end;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+}
+.goal-target-unit {
+    align-items: center;
+    background: #f5f4ef;
+    border: 1px solid var(--line);
+    border-left: 0;
+    border-radius: 0 8px 8px 0;
+    display: flex;
+    font-weight: 650;
+    height: 36px;
+    min-width: 52px;
+    padding: 0 12px;
+}
+.goal-target-input .mantine-NumberInput-input {
+    border-radius: 8px 0 0 8px;
+}
+.goal-range-inputs {
+    align-items: end;
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.goal-range-separator {
+    height: 36px;
+    line-height: 36px;
+}
+.goal-timing {
+    border-top: 1px solid var(--line);
+    display: grid;
+    gap: 9px;
+    margin-top: 4px;
+    padding-top: 13px;
+}
+.goal-date-button .mantine-Button-label {
+    font-weight: 500;
+}
+.goal-weekday-grid {
+    display: grid;
+    gap: 6px;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    width: 100%;
+}
+.goal-weekday-chip,
+.goal-weekday-chip .mantine-Chip-label {
+    min-width: 0;
+    width: 100%;
+}
+.goal-weekday-chip .mantine-Chip-label {
+    justify-content: center;
+    padding-inline: 0;
 }
 .goal-empty {
     align-items: center;
@@ -1856,6 +1910,16 @@ textarea:focus-visible,
 }
 
 @media (max-width: 48em) {
+    .goal-range-inputs {
+        align-items: stretch;
+        grid-template-columns: 1fr;
+    }
+
+    .goal-range-separator {
+        height: auto;
+        line-height: 1;
+    }
+
     .global-log {
         right: 16px;
         bottom: calc(82px + env(safe-area-inset-bottom));

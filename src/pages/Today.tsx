@@ -135,8 +135,14 @@ export function Today({
             hourCycle: 'h23',
         }).format(now),
     )
-    const stepsTarget = health.stepsGoal?.targetValue
-    const waterTarget = health.waterGoal?.targetValue
+    const stepsTarget =
+        health.stepsGoal?.target && 'value' in health.stepsGoal.target
+            ? health.stepsGoal.target.value
+            : undefined
+    const waterTarget =
+        health.waterGoal?.target && 'value' in health.waterGoal.target
+            ? health.waterGoal.target.value
+            : undefined
     const sleepPointCount = health.sleepSeries.filter(point => point.sleep !== null).length
     const defaultCards: DashboardCard[] = [
         'sleep',

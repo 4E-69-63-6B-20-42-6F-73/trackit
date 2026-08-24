@@ -50,6 +50,13 @@
             "when": 1787529600000,
             "tag": "0006_metric_preferences",
             "breakpoints": true
+        },
+        {
+            "idx": 7,
+            "version": "7",
+            "when": 1787533200000,
+            "tag": "0007_generalized_goals",
+            "breakpoints": true
         }
     ]
 }

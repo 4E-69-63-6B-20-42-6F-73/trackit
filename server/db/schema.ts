@@ -360,13 +360,20 @@ export const retentionRules = pgTable('retention_rules', {
 
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),
-    metric: text('metric').notNull(),
-    targetValue: doublePrecision('target_value').notNull(),
+    metricId: text('metric').notNull(),
+    legacyTargetValue: doublePrecision('target_value').notNull(),
+    aggregation: text('aggregation').notNull().default('latest'),
+    comparator: text('comparator').notNull().default('gte'),
+    target: jsonb('target').$type<{ value: number } | { min: number; max: number }>().notNull(),
+    period: jsonb('period')
+        .$type<{ type: 'day' | 'week' } | { type: 'rolling'; days: 7 | 14 | 30 }>()
+        .notNull(),
     canonicalUnit: text('canonical_unit').notNull(),
     effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull(),
     effectiveTo: timestamp('effective_to', { withTimezone: true }),
     schedule: jsonb('schedule').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const savedTrendViews = pgTable('saved_trend_views', {

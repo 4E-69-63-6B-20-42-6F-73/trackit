@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { dailySeries, type Observation } from './health'
-import { metricCatalog } from './metricCatalog'
+import { metricCatalog, metricDefinition } from './metricCatalog'
 
 describe('metric catalog', () => {
     it('includes every stored nutrition total', () => {
@@ -39,5 +39,34 @@ describe('metric catalog', () => {
         )
 
         expect(dailySeries(records, new Date('2026-08-20T12:00:00Z'), 1, 'UTC')[0].value).toBe(50)
+    })
+
+    it('defines valid, metric-appropriate goal aggregation and period combinations', () => {
+        expect(metricDefinition('weight')?.goalCapabilities?.aggregations).toEqual({
+            latest: ['day', 'week', 'rolling'],
+            average: ['week', 'rolling'],
+        })
+        expect(metricDefinition('steps')?.goalCapabilities?.aggregations).toEqual({
+            total: ['day', 'week', 'rolling'],
+            average: ['week', 'rolling'],
+        })
+        expect(metricDefinition('sleep')?.goalCapabilities?.aggregations).toEqual({
+            total: ['week', 'rolling'],
+            average: ['week', 'rolling'],
+        })
+        expect(metricDefinition('resting_heart_rate')?.goalCapabilities?.aggregations).toEqual({
+            latest: ['day', 'week', 'rolling'],
+            average: ['week', 'rolling'],
+        })
+    })
+
+    it('keeps each suggested goal inside the metric capability matrix', () => {
+        for (const metric of metricCatalog.filter(item => item.goalDefaults)) {
+            const defaults = metric.goalDefaults!
+            expect(metric.goalCapabilities?.aggregations[defaults.aggregation]).toContain(
+                defaults.period,
+            )
+            expect(metric.goalCapabilities?.comparators).toContain(defaults.comparator)
+        }
     })
 })
