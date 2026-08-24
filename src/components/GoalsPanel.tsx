@@ -36,6 +36,8 @@ import {
 import { useServerData } from '../hooks/useServerData'
 import { createGoal, deleteGoal, retireGoal, updateGoal, type GoalRecord } from '../lib/goalApi'
 import { listObservations } from '../lib/observationApi'
+import { listMeals } from '../lib/nutritionApi'
+import { effectiveMetricSeries, mealMetricObservations } from '../domain/effectiveMetrics'
 import type { Observation } from '../domain/health'
 
 const weekdays = [
@@ -419,10 +421,20 @@ export function GoalsPanel() {
     useEffect(() => {
         const from = new Date()
         from.setDate(from.getDate() - 31)
-        void listObservations({ from: from.toISOString() })
-            .then(setObservations)
+        void Promise.all([
+            listObservations({ from: from.toISOString() }),
+            listMeals({ from: from.toISOString() }).catch(() => []),
+        ])
+            .then(([records, meals]) =>
+                setObservations(
+                    effectiveMetricSeries(
+                        [...records, ...mealMetricObservations(meals)],
+                        preferences?.metricPreferences,
+                    ),
+                ),
+            )
             .catch(() => setError('Goal observations could not be loaded.'))
-    }, [])
+    }, [preferences?.metricPreferences])
     const resetForMetric = (next: string) => {
         setMetricId(next)
         const choice = preferredMeasurement(next)

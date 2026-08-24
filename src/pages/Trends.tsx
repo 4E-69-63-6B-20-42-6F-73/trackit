@@ -30,13 +30,13 @@ import {
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
+import { effectiveMetricSeries, mealMetricObservations } from '../domain/effectiveMetrics'
 import {
     convertMetricValue,
     displayUnitFor,
     formatMetricDisplayValue,
     unitPresentation,
 } from '../domain/metrics'
-import type { Nutrients } from '../domain/nutrition'
 import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
 import { updatePreferences } from '../lib/preferencesApi'
@@ -47,19 +47,6 @@ const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
 const metricLabel = (metric: string) =>
     metricDefinition(metric)?.label ??
     metric.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
-
-const nutrientMetrics: (keyof Nutrients)[] = [
-    'calories',
-    'protein',
-    'carbs',
-    'fat',
-    'fiber',
-    'sugar',
-    'saturatedFat',
-    'sodium',
-    'potassium',
-]
-
 export function Trends() {
     const navigate = useNavigate()
     const [observations, setObservations] = useState<Observation[]>([])
@@ -106,37 +93,11 @@ export function Trends() {
             .catch(() => undefined)
     }, [])
 
-    const nutritionObservations: Observation[] = meals.flatMap(meal =>
-        nutrientMetrics.flatMap(nutrient => {
-            const value = meal.nutrientSnapshot[nutrient]
-            if (value === undefined) return []
-            return [
-                {
-                    id: `${meal.id}:${nutrient}`,
-                    metric: nutrient,
-                    canonicalValue: value,
-                    canonicalUnit:
-                        nutrient === 'calories'
-                            ? 'kcal'
-                            : ['sodium', 'potassium'].includes(nutrient)
-                              ? 'mg'
-                              : 'g',
-                    originalValue: value,
-                    originalUnit:
-                        nutrient === 'calories'
-                            ? 'kcal'
-                            : ['sodium', 'potassium'].includes(nutrient)
-                              ? 'mg'
-                              : 'g',
-                    observedAt: meal.eatenAt,
-                    excluded: false,
-                    version: meal.version,
-                    metadata: { recordType: 'meal_nutrient', mealId: meal.id },
-                },
-            ]
-        }),
+    const nutritionObservations = mealMetricObservations(meals)
+    const allObservations = effectiveMetricSeries(
+        [...observations, ...nutritionObservations],
+        preferences?.metricPreferences,
     )
-    const allObservations = [...observations, ...nutritionObservations]
     const recordedMetrics = [...new Set(allObservations.map(record => record.metric))]
     const unknownMetrics = recordedMetrics.filter(
         value => !metricCatalog.some(definition => definition.value === value),

@@ -8,6 +8,9 @@ export type Observation = {
     observedAt: string
     endedAt?: string | null
     sourceId?: string | null
+    externalId?: string | null
+    provider?: string | null
+    connector?: string | null
     metadata?: Record<string, unknown>
     excluded: boolean
     version: number
@@ -28,6 +31,8 @@ const additiveMetrics = new Set([
     'exercise',
     'water',
     'calories',
+    'active_calories',
+    'calorie_balance',
     'protein',
     'carbs',
     'fat',

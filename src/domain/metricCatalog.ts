@@ -1,5 +1,9 @@
 export type MetricCategory = 'Body' | 'Activity' | 'Health' | 'Sleep' | 'Wellbeing' | 'Nutrition'
-export type MetricSource = 'observation' | 'manual' | 'meal'
+export type MetricSource = 'observation' | 'manual' | 'meal' | 'derived'
+export type DerivedMetricDefinition = {
+    inputs: readonly string[]
+    calculation: 'bmi' | 'calorie_balance'
+}
 export type MetricAggregation = 'latest' | 'sum' | 'average' | 'min' | 'max'
 export type MetricComparison = 'gte' | 'lte' | 'between'
 export type GoalAggregation = 'latest' | 'average' | 'total'
@@ -35,6 +39,7 @@ export type MetricDefinition = {
     label: string
     unit: string
     group: MetricCategory
+    derived?: DerivedMetricDefinition
 }
 type DefinitionInput = Omit<MetricDefinition, 'value' | 'label' | 'unit' | 'group'>
 const define = (d: DefinitionInput): MetricDefinition => ({
@@ -114,6 +119,21 @@ export const metricCatalog: MetricDefinition[] = [
         goalDefaults: { aggregation: 'latest', period: 'day', comparator: 'lte', target: 60 },
     },
     define({
+        id: 'height',
+        name: 'Height',
+        category: 'Body',
+        canonicalUnit: 'cm',
+        displayUnits: ['cm', 'in'],
+        metricUnit: 'cm',
+        imperialUnit: 'in',
+        precision: 1,
+        manuallyLoggable: true,
+        source: 'observation',
+        comparisons,
+        aggregations,
+        goalCapabilities: measuredGoals,
+    }),
+    define({
         id: 'weight',
         name: 'Weight',
         category: 'Body',
@@ -159,6 +179,45 @@ export const metricCatalog: MetricDefinition[] = [
         ...shared('calories', 'Calories', 'Nutrition', 'kcal', 'meal'),
         goalCapabilities: additiveGoals,
     },
+    {
+        ...shared('active_calories', 'Calories burned', 'Activity', 'kcal', 'observation'),
+        goalCapabilities: additiveGoals,
+    },
+    define({
+        id: 'bmi',
+        name: 'BMI',
+        category: 'Body',
+        canonicalUnit: 'kg/m²',
+        displayUnits: ['kg/m²'],
+        metricUnit: 'kg/m²',
+        imperialUnit: 'kg/m²',
+        precision: 1,
+        manuallyLoggable: false,
+        source: 'derived',
+        comparisons,
+        aggregations,
+        goalCapabilities: measuredGoals,
+        derived: { inputs: ['weight', 'height'], calculation: 'bmi' },
+    }),
+    define({
+        id: 'calorie_balance',
+        name: 'Calorie balance',
+        category: 'Nutrition',
+        canonicalUnit: 'kcal',
+        displayUnits: ['kcal'],
+        metricUnit: 'kcal',
+        imperialUnit: 'kcal',
+        precision: 0,
+        manuallyLoggable: false,
+        source: 'derived',
+        comparisons,
+        aggregations: ['sum', 'average', 'min', 'max'],
+        goalCapabilities: additiveGoals,
+        derived: {
+            inputs: ['calories', 'active_calories'],
+            calculation: 'calorie_balance',
+        },
+    }),
     {
         ...shared('protein', 'Protein', 'Nutrition', 'g', 'meal', 1),
         goalCapabilities: additiveGoals,

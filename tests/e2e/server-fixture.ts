@@ -106,6 +106,20 @@ export async function useAuthenticatedServer(
                 body: JSON.stringify({ data: options.observations }),
             })
         }
+        if (path === '/api/data-summary') {
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({
+                    data: {
+                        count: 0,
+                        oldest: null,
+                        newest: null,
+                        lastRetentionRun: null,
+                    },
+                }),
+            })
+        }
         const data =
             path === '/api/preferences'
                 ? (options.preferences ?? {

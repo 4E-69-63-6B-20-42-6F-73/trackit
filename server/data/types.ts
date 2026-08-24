@@ -10,7 +10,7 @@ export const observationInputSchema = z.object({
     source: z.string().trim().min(1).max(120).default('You'),
 })
 
-export type RecordRange = { from?: string; to?: string }
+export type RecordRange = { from?: string; to?: string; series?: 'raw' | 'effective' }
 
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),
@@ -70,6 +70,16 @@ export const preferencesInputSchema = z.object({
             z.object({
                 displayUnit: z.string().trim().min(1).max(20),
                 precision: z.number().int().min(0).max(6).optional(),
+                deduplication: z
+                    .object({
+                        policy: z.enum(['keep_all', 'prefer_priority', 'metric_merge']),
+                        sourcePriority: z.array(z.string().trim().min(1).max(240)).max(50),
+                        disabledSources: z
+                            .array(z.string().trim().min(1).max(240))
+                            .max(50)
+                            .optional(),
+                    })
+                    .optional(),
             }),
         )
         .optional(),

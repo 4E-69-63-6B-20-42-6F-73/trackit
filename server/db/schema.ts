@@ -60,6 +60,7 @@ export const healthRecords = pgTable(
     {
         id: uuid('id').primaryKey().defaultRandom(),
         userId: text('user_id').notNull().default('owner'),
+        connector: text('connector').notNull().default('direct'),
         provider: text('provider').notNull(),
         recordType: text('record_type').notNull(),
         externalId: text('external_id').notNull(),
@@ -78,6 +79,7 @@ export const healthRecords = pgTable(
     table => [
         uniqueIndex('health_record_source_identity_idx').on(
             table.userId,
+            table.connector,
             table.provider,
             table.externalId,
         ),

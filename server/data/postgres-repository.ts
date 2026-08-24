@@ -15,6 +15,9 @@ import {
     savedTrendViews,
 } from '../db/schema.js'
 import type { DataRepository, RecordRange } from './types.js'
+import { effectiveMetricSeries } from '../../src/domain/effectiveMetrics.js'
+import type { Observation } from '../../src/domain/health.js'
+import type { MetricPreferences } from '../../src/domain/metrics.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -40,15 +43,31 @@ export class PostgresDataRepository implements DataRepository {
 
     constructor(private readonly database: Database) {}
 
-    listObservations(range: RecordRange = {}) {
+    async listObservations(range: RecordRange = {}) {
         const conditions = [isNull(observations.deletedAt)]
         if (range.from) conditions.push(gte(observations.observedAt, new Date(range.from)))
         if (range.to) conditions.push(lte(observations.observedAt, new Date(range.to)))
-        return this.database
+        const records = await this.database
             .select()
             .from(observations)
             .where(and(...conditions))
             .orderBy(desc(observations.observedAt))
+        if (range.series === 'raw') return records
+        const [saved] = await this.database
+            .select({ metricPreferences: preferences.metricPreferences })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+        const normalized = records.map(record => ({
+            ...record,
+            observedAt: record.observedAt.toISOString(),
+            endedAt: record.endedAt?.toISOString() ?? null,
+            metadata: record.metadata as Record<string, unknown>,
+            version: Number(record.version),
+        })) as Observation[]
+        return effectiveMetricSeries(
+            normalized,
+            (saved?.metricPreferences ?? undefined) as MetricPreferences | undefined,
+        )
     }
 
     async createObservation(input: {
@@ -209,7 +228,7 @@ export class PostgresDataRepository implements DataRepository {
         timezone?: string
         locale?: string
         units?: 'metric' | 'imperial'
-        metricPreferences?: Record<string, { displayUnit: string; precision?: number }>
+        metricPreferences?: MetricPreferences
         goals?: Record<string, number>
         mcpEnabled?: boolean
         experience?: Record<string, unknown>

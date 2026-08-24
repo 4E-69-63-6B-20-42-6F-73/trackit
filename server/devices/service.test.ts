@@ -230,7 +230,7 @@ describe('Android device pairing and upload', () => {
             { ...records[0], externalId: 'deleted-before-import', version: 5 },
         ])
         const deletedBeforeImport = (await database.select().from(schema.observations)).find(
-            observation => observation.externalId === 'deleted-before-import',
+            observation => observation.externalId?.endsWith(':deleted-before-import'),
         )
         expect(deletedBeforeImport).toMatchObject({
             canonicalValue: 0,

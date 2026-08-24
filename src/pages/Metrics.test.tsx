@@ -5,9 +5,11 @@ import { MantineProvider } from '@mantine/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { updatePreferences, type Preferences } from '../lib/preferencesApi'
+import { listObservations } from '../lib/observationApi'
 import { Metrics } from './Metrics'
 
 vi.mock('../lib/preferencesApi', () => ({ getPreferences: vi.fn(), updatePreferences: vi.fn() }))
+vi.mock('../lib/observationApi', () => ({ listObservations: vi.fn() }))
 
 const base: Preferences = { displayName: 'Alex', timezone: 'UTC', locale: 'en-US', units: 'metric' }
 const renderPage = (preferences = base) =>
@@ -24,6 +26,7 @@ const renderPage = (preferences = base) =>
 describe('Metrics page', () => {
     beforeEach(() => {
         vi.mocked(updatePreferences).mockReset()
+        vi.mocked(listObservations).mockResolvedValue([])
         Element.prototype.scrollIntoView = vi.fn()
     })
     it('renders registered metrics and saves a selected unit', async () => {
@@ -83,6 +86,71 @@ describe('Metrics page', () => {
                     metricPreferences: expect.objectContaining({
                         weight: { displayUnit: 'lb' },
                         water: { displayUnit: 'fl oz' },
+                    }),
+                }),
+            ),
+        )
+    })
+    it('shows provider-aware sources and persists overlap priority', async () => {
+        vi.mocked(listObservations).mockResolvedValue([
+            {
+                id: 'garmin',
+                metric: 'steps',
+                canonicalValue: 4200,
+                canonicalUnit: 'count',
+                originalValue: 4200,
+                originalUnit: 'count',
+                observedAt: '2026-08-24T08:00:00.000Z',
+                metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
+                excluded: false,
+                version: 1,
+            },
+            {
+                id: 'samsung',
+                metric: 'steps',
+                canonicalValue: 4180,
+                canonicalUnit: 'count',
+                originalValue: 4180,
+                originalUnit: 'count',
+                observedAt: '2026-08-24T08:00:00.000Z',
+                metadata: { source: 'Health Connect', dataOrigin: 'Samsung Health' },
+                excluded: false,
+                version: 1,
+            },
+        ])
+        vi.mocked(updatePreferences).mockImplementation(async input => ({
+            ...base,
+            ...input,
+        }))
+        renderPage()
+        await userEvent.click(await screen.findByRole('button', { name: /Configure Steps/ }))
+        expect(await screen.findByText('Garmin')).toBeInTheDocument()
+        expect(await screen.findAllByText('via Health Connect')).toHaveLength(2)
+        expect(screen.getByText('Included')).toBeInTheDocument()
+        expect(screen.getByLabelText('Move Samsung Health up')).toBeDisabled()
+        await userEvent.click(
+            screen.getByRole('combobox', { name: 'When included sources overlap' }),
+        )
+        await userEvent.keyboard('{ArrowDown}{Enter}')
+        expect(screen.getByLabelText('Move Samsung Health up')).toBeEnabled()
+        await userEvent.click(screen.getByLabelText('Move Samsung Health up'))
+        await userEvent.click(screen.getByLabelText('Include Garmin in Steps'))
+        expect(screen.getByText('via Health Connect · Excluded')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+        await waitFor(() =>
+            expect(updatePreferences).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    metricPreferences: expect.objectContaining({
+                        steps: expect.objectContaining({
+                            deduplication: {
+                                policy: 'prefer_priority',
+                                sourcePriority: [
+                                    'Health Connect::Samsung Health',
+                                    'Health Connect::Garmin',
+                                ],
+                                disabledSources: ['Health Connect::Garmin'],
+                            },
+                        }),
                     }),
                 }),
             ),

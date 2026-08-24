@@ -1,6 +1,15 @@
-import { metricCatalog, metricDefinition } from './metricCatalog'
+import { metricCatalog, metricDefinition } from './metricCatalog.js'
 export type UnitPreset = 'metric' | 'imperial' | 'custom'
-export type MetricPreference = { displayUnit: string; precision?: number }
+export type DeduplicationPolicy = 'keep_all' | 'prefer_priority' | 'metric_merge'
+export type MetricPreference = {
+    displayUnit: string
+    precision?: number
+    deduplication?: {
+        policy: DeduplicationPolicy
+        sourcePriority: string[]
+        disabledSources?: string[]
+    }
+}
 export type MetricPreferences = Record<string, MetricPreference>
 export type UnitPresentation = { label: string; name: string }
 const unitPresentations: Record<string, UnitPresentation> = {
@@ -17,6 +26,9 @@ const unitPresentations: Record<string, UnitPresentation> = {
     kcal: { label: 'kcal', name: 'Kilocalories' },
     g: { label: 'g', name: 'Grams' },
     mg: { label: 'mg', name: 'Milligrams' },
+    cm: { label: 'cm', name: 'Centimetres' },
+    in: { label: 'in', name: 'Inches' },
+    'kg/m²': { label: 'kg/m²', name: 'Body mass index' },
 }
 export const unitPresentation = (unit: string): UnitPresentation =>
     unitPresentations[unit] ?? { label: unit, name: unit }
@@ -26,6 +38,8 @@ const factors: Record<string, number> = {
     ml: 1,
     L: 1000,
     'fl oz': 29.5735295625,
+    cm: 1,
+    in: 2.54,
 }
 export function convertMetricValue(
     metricId: string,

@@ -80,7 +80,10 @@ describe('ManualEntryLogger', () => {
         await user.click(screen.getByRole('button', { name: 'Save weight' }))
 
         const saved = add.mock.calls[0][0]
-        expect(saved.observedAt).toMatch(/^2026-08-20T/)
+        const observed = new Date(saved.observedAt)
+        expect(
+            `${observed.getFullYear()}-${String(observed.getMonth() + 1).padStart(2, '0')}-${String(observed.getDate()).padStart(2, '0')}`,
+        ).toBe('2026-08-20')
         expect(saved.observation.observedAt).toBe(saved.observedAt)
     })
 })

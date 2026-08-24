@@ -18,7 +18,7 @@ export async function createObservation(
 }
 
 export async function listObservations(
-    range: { from?: string; to?: string } = {},
+    range: { from?: string; to?: string; series?: 'raw' | 'effective' } = {},
     signal?: AbortSignal,
 ): Promise<Observation[]> {
     const query = new URLSearchParams(
