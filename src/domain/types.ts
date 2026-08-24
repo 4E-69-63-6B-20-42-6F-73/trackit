@@ -1,5 +1,5 @@
 export type Page =
-    'Today' | 'Nutrition' | 'Journal' | 'Goals' | 'Trends' | 'Connections' | 'Settings'
+    'Today' | 'Nutrition' | 'Journal' | 'Goals' | 'Trends' | 'Metrics' | 'Connections' | 'Settings'
 
 export type Category = 'Meals' | 'Activity' | 'Sleep' | 'Measurements' | 'Check-ins'
 

@@ -25,13 +25,17 @@ import { TrendChart } from '../components/TrendChart'
 import { PageHeader } from '../components/PageHeader'
 import {
     dailySeries,
-    displayValue,
     weeklySeries,
     type Observation,
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
-import { formatMetricValue } from '../domain/formatting'
+import {
+    convertMetricValue,
+    displayUnitFor,
+    formatMetricDisplayValue,
+    unitPresentation,
+} from '../domain/metrics'
 import type { Nutrients } from '../domain/nutrition'
 import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
@@ -164,13 +168,26 @@ export function Trends() {
     )
     const isNutritionMetric = metricDefinition(metric)?.source === 'meal'
     const isManualMetric = metricDefinition(metric)?.source === 'manual'
-    const displayUnit =
-        preferences?.units === 'imperial' && metricRecords[0]?.canonicalUnit === 'kg'
-            ? 'lb'
-            : metricRecords[0]?.canonicalUnit
+    const displayUnit = metric
+        ? displayUnitFor(metric, preferences?.metricPreferences, preferences?.units)
+        : undefined
+    const formatDisplayValue = (
+        value: number,
+        options?: { signed?: boolean; withUnit?: boolean },
+    ) =>
+        metric && displayUnit
+            ? formatMetricDisplayValue(
+                  metric,
+                  value,
+                  displayUnit,
+                  preferences?.metricPreferences,
+                  preferences?.locale,
+                  options,
+              )
+            : value.toLocaleString(preferences?.locale)
     const convert = (value: number) =>
-        metricRecords[0]?.canonicalUnit && displayUnit
-            ? displayValue(value, metricRecords[0].canonicalUnit, displayUnit)
+        metric && metricDefinition(metric) && metricRecords[0]?.canonicalUnit && displayUnit
+            ? convertMetricValue(metric, value, metricRecords[0].canonicalUnit, displayUnit)
             : value
     const points = (() => {
         const series = (granularity === 'weekly' ? weeklySeries : dailySeries)(
@@ -435,9 +452,7 @@ export function Trends() {
                                 <Text size="xs" c="dimmed">
                                     Average
                                 </Text>
-                                <Text fw={700}>
-                                    {formatMetricValue(average, displayUnit ?? '')}
-                                </Text>
+                                <Text fw={700}>{formatDisplayValue(average)}</Text>
                             </div>
                             <div>
                                 <Text size="xs" c="dimmed">
@@ -446,18 +461,14 @@ export function Trends() {
                                 <Text fw={700}>
                                     {change === null
                                         ? 'Needs 2 points'
-                                        : formatMetricValue(change, displayUnit ?? '', undefined, {
-                                              signed: true,
-                                          })}
+                                        : formatDisplayValue(change, { signed: true })}
                                 </Text>
                             </div>
                             <div>
                                 <Text size="xs" c="dimmed">
                                     Variation
                                 </Text>
-                                <Text fw={700}>
-                                    {formatMetricValue(variation ?? 0, displayUnit ?? '')}
-                                </Text>
+                                <Text fw={700}>{formatDisplayValue(variation ?? 0)}</Text>
                             </div>
                             <div>
                                 <Text size="xs" c="dimmed">
@@ -535,6 +546,12 @@ export function Trends() {
                                 comparisonMetric ? metricLabel(comparisonMetric) : undefined
                             }
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
+                            valueLabel={
+                                metric && displayUnit
+                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit).label})`
+                                    : undefined
+                            }
+                            formatValue={value => formatDisplayValue(value, { withUnit: false })}
                         />
                     )}
                     {actionError && (

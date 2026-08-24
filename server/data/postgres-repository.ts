@@ -209,6 +209,7 @@ export class PostgresDataRepository implements DataRepository {
         timezone?: string
         locale?: string
         units?: 'metric' | 'imperial'
+        metricPreferences?: Record<string, { displayUnit: string; precision?: number }>
         goals?: Record<string, number>
         mcpEnabled?: boolean
         experience?: Record<string, unknown>

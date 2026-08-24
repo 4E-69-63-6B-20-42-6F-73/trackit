@@ -59,17 +59,6 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                 onChange={event => setValue({ ...value, displayName: event.currentTarget.value })}
             />
             <Select
-                label="Units"
-                value={value.units}
-                onChange={units =>
-                    units && setValue({ ...value, units: units as Preferences['units'] })
-                }
-                data={[
-                    { label: 'Metric', value: 'metric' },
-                    { label: 'Imperial', value: 'imperial' },
-                ]}
-            />
-            <Select
                 label="Timezone"
                 description={`Browser recommendation: ${detectedTimezone}. Changing this can move records between days.`}
                 value={value.timezone}

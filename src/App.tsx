@@ -19,6 +19,7 @@ const Nutrition = lazy(() =>
     import('./pages/Nutrition').then(module => ({ default: module.Nutrition })),
 )
 const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: module.Trends })))
+const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
 const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: module.Goals })))
 const Connections = lazy(() =>
     import('./pages/Connections').then(module => ({ default: module.Connections })),
@@ -48,6 +49,7 @@ const pagePaths: Record<Page, string> = {
     Journal: '/journal',
     Goals: '/goals',
     Trends: '/trends',
+    Metrics: '/metrics',
     Connections: '/connections',
     Settings: '/settings',
 }
@@ -217,6 +219,7 @@ export default function App() {
                             />
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
+                            <Route path="/metrics" element={<Metrics />} />
                             <Route path="/connections" element={<Connections />} />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route path="/connections/devices/new" element={<DeviceNew />} />
@@ -259,7 +262,7 @@ export default function App() {
                     ))}
                 <button
                     className={
-                        ['Nutrition', 'Goals', 'Connections', 'Settings'].includes(page)
+                        ['Nutrition', 'Goals', 'Metrics', 'Connections', 'Settings'].includes(page)
                             ? 'active'
                             : ''
                     }

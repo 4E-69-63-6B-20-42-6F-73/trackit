@@ -4,6 +4,7 @@ import {
     IconDashboard,
     IconLink,
     IconMoon,
+    IconRulerMeasure,
     IconNotes,
     IconScale,
     IconSparkles,
@@ -29,5 +30,6 @@ export const nav: { label: Page; icon: typeof IconDashboard }[] = [
     { label: 'Journal', icon: IconNotes },
     { label: 'Goals', icon: IconTargetArrow },
     { label: 'Trends', icon: IconTrendingUp },
+    { label: 'Metrics', icon: IconRulerMeasure },
     { label: 'Connections', icon: IconLink },
 ]

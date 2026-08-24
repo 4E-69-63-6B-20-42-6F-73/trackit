@@ -39,21 +39,18 @@ import { MetricCard } from '../components/MetricCard'
 import { WeeklyReflection } from '../components/WeeklyReflection'
 import type { LogActionId } from '../logging/logActions'
 import { displayValue, type Observation } from '../domain/health'
-import { formatMetricValue } from '../domain/formatting'
+import { formatMetric, type MetricPreferences } from '../domain/metrics'
 import type { JournalEvent } from '../domain/types'
 import { useTodayHealth } from '../hooks/useTodayHealth'
 import { updatePreferences, type DashboardCard } from '../lib/preferencesApi'
 
 const reading = (
     record: Observation | null,
-    units: 'metric' | 'imperial' = 'metric',
+    metricPreferences?: MetricPreferences,
     empty = 'No reading today',
 ) => {
     if (!record) return empty
-    const displayUnit =
-        units === 'imperial' && record.canonicalUnit === 'kg' ? 'lb' : record.canonicalUnit
-    const value = displayValue(record.canonicalValue, record.canonicalUnit, displayUnit)
-    return formatMetricValue(value, displayUnit)
+    return formatMetric(record.metric, record.canonicalValue, metricPreferences)
 }
 
 const rollingAverageChange = (
@@ -77,16 +74,9 @@ const rollingAverageChange = (
     const delta = currentValue - average
     const averageLabel = `${baseline.sampleSize}-day rolling average`
     if (Math.abs(delta) < 0.01) return `In line with your ${averageLabel}`
-    const amount = formatMetricValue(Math.abs(delta), displayUnit)
+    const amount =
+        Math.abs(delta).toLocaleString(undefined, { maximumFractionDigits: 1 }) + ` ${displayUnit}`
     return `${amount} ${delta > 0 ? 'higher' : 'lower'} than your ${averageLabel}`
-}
-
-const sleepReading = (record: Observation | null) => {
-    if (!record) return 'No sleep record'
-    const value = Math.round(
-        record.canonicalUnit === 'hours' ? record.canonicalValue * 60 : record.canonicalValue,
-    )
-    return `${Math.floor(value / 60)}h ${value % 60}m`
 }
 
 const percentage = (value: number, target?: number) =>
@@ -355,7 +345,11 @@ export function Today({
                             tone="indigo"
                             label="Sleep"
                             record={health.sleepToday}
-                            value={sleepReading(health.sleepToday)}
+                            value={reading(
+                                health.sleepToday,
+                                health.preferences?.metricPreferences,
+                                'No sleep record',
+                            )}
                             note={
                                 health.sleepToday
                                     ? rollingAverageChange(health.sleepToday, health.sleepBaseline)
@@ -377,7 +371,10 @@ export function Today({
                             tone="rose"
                             label="Resting heart rate"
                             record={health.restingHeartRate}
-                            value={reading(health.restingHeartRate)}
+                            value={reading(
+                                health.restingHeartRate,
+                                health.preferences?.metricPreferences,
+                            )}
                             note={
                                 health.restingHeartRate
                                     ? rollingAverageChange(
@@ -402,7 +399,7 @@ export function Today({
                             tone="violet"
                             label="Energy"
                             record={health.energy}
-                            value={reading(health.energy)}
+                            value={reading(health.energy, health.preferences?.metricPreferences)}
                             note={
                                 health.energy
                                     ? rollingAverageChange(health.energy, health.energyBaseline)
@@ -424,7 +421,7 @@ export function Today({
                             tone="blue"
                             label="Weight"
                             record={health.weight}
-                            value={reading(health.weight, health.preferences?.units)}
+                            value={reading(health.weight, health.preferences?.metricPreferences)}
                             note={
                                 health.weight
                                     ? rollingAverageChange(

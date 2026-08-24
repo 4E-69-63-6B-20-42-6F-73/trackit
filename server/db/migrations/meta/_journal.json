@@ -43,6 +43,13 @@
             "when": 1787509000000,
             "tag": "0005_nullable_food_nutrients",
             "breakpoints": true
+        },
+        {
+            "idx": 6,
+            "version": "7",
+            "when": 1787529600000,
+            "tag": "0006_metric_preferences",
+            "breakpoints": true
         }
     ]
 }

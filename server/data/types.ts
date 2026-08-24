@@ -63,6 +63,15 @@ export const preferencesInputSchema = z.object({
         }, 'Invalid locale')
         .optional(),
     units: z.enum(['metric', 'imperial']).optional(),
+    metricPreferences: z
+        .record(
+            z.string(),
+            z.object({
+                displayUnit: z.string().trim().min(1).max(20),
+                precision: z.number().int().min(0).max(6).optional(),
+            }),
+        )
+        .optional(),
     goals: z.record(z.string(), z.number().finite()).optional(),
     mcpEnabled: z.boolean().optional(),
     experience: z

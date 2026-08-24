@@ -13,6 +13,7 @@ import {
 import { IconSearch } from '@tabler/icons-react'
 import type { JournalEvent } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
+import { displayUnitFor, toCanonicalMetricValue } from '../domain/metrics'
 
 export type ManualEntryKind = 'Meal' | 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
 
@@ -38,7 +39,8 @@ export function ManualEntryLogger({
     )
     const [description, setDescription] = useState('')
     const { preferences } = useServerData()
-    const weightUnit = preferences?.units === 'imperial' ? 'lb' : 'kg'
+    const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
+    const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
     const [amount, setAmount] = useState<number | string>(
         initialKind === 'Weight' ? (weightUnit === 'lb' ? 165 : 75) : 250,
     )
@@ -105,12 +107,12 @@ export function ManualEntryLogger({
                 time,
                 category: 'Measurements',
                 title: 'Water',
-                detail: `${amount || 0} ml`,
+                detail: `${amount || 0} ${waterUnit}`,
                 source: 'You',
                 observedAt: recordedAt,
                 observation: {
                     metric: 'water',
-                    value: Number(amount) || 0,
+                    value: toCanonicalMetricValue('water', Number(amount) || 0, waterUnit),
                     unit: 'ml',
                     observedAt: recordedAt,
                 },
@@ -126,10 +128,7 @@ export function ManualEntryLogger({
                 observedAt: recordedAt,
                 observation: {
                     metric: 'weight',
-                    value:
-                        weightUnit === 'lb'
-                            ? (Number(amount) || 0) / 2.2046226218
-                            : Number(amount) || 0,
+                    value: toCanonicalMetricValue('weight', Number(amount) || 0, weightUnit),
                     unit: 'kg',
                     observedAt: recordedAt,
                 },
@@ -336,7 +335,7 @@ export function ManualEntryLogger({
                             label="Custom amount"
                             value={amount}
                             onChange={setAmount}
-                            suffix=" ml"
+                            suffix={` ${waterUnit}`}
                             step={50}
                             min={1}
                         />
@@ -444,7 +443,7 @@ export function ManualEntryLogger({
                     </Button>
                     <Button color="trackit" onClick={submit}>
                         {kind === 'Water'
-                            ? `Log ${amount || 0} ml`
+                            ? `Log ${amount || 0} ${waterUnit}`
                             : kind === 'Weight'
                               ? 'Save weight'
                               : kind === 'Check-in'

@@ -222,6 +222,7 @@ export const preferences = pgTable('preferences', {
     timezone: text('timezone').notNull().default('UTC'),
     locale: text('locale').notNull().default('en'),
     units: text('units').notNull().default('metric'),
+    metricPreferences: jsonb('metric_preferences'),
     goals: jsonb('goals').notNull().default({}),
     mcpEnabled: boolean('mcp_enabled').notNull().default(false),
     experience: jsonb('experience').notNull().default({}),

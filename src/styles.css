@@ -466,6 +466,80 @@ textarea:focus-visible,
 .panel {
     padding: 20px 22px;
 }
+.metrics-page {
+    max-width: 900px;
+}
+.metrics-units {
+    padding: 18px 20px;
+}
+.metrics-units .mantine-SegmentedControl-root {
+    max-width: 360px;
+    width: 100%;
+}
+.metric-category {
+    margin-top: 22px;
+}
+.metric-row-list {
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: 15px;
+    box-shadow: var(--shadow);
+    overflow: hidden;
+}
+.metric-row {
+    align-items: center;
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    display: grid;
+    font: inherit;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 50px;
+    padding: 11px 16px;
+    text-align: left;
+    width: 100%;
+}
+.metric-row:last-child {
+    border-bottom: 0;
+}
+.metric-row-name {
+    font-weight: 600;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.metric-row-value {
+    align-items: center;
+    color: var(--muted);
+    display: grid;
+    gap: 8px;
+    grid-template-columns: minmax(38px, auto) 17px;
+    justify-items: end;
+    margin-left: 16px;
+}
+.metric-row:not(.metric-row-clickable) .metric-row-value {
+    grid-template-columns: minmax(38px, auto);
+}
+.metric-row-unit {
+    text-align: right;
+    white-space: nowrap;
+}
+.metric-row-clickable {
+    cursor: pointer;
+}
+.metric-row-clickable:hover {
+    background: #f2f6f3;
+    color: var(--teal);
+}
+.metric-row-clickable:focus-visible {
+    background: #f2f6f3;
+    outline: 2px solid var(--mantine-color-trackit-6);
+    outline-offset: -2px;
+    position: relative;
+    z-index: 1;
+}
 .panel-head {
     display: flex;
     justify-content: space-between;
@@ -1241,6 +1315,16 @@ textarea:focus-visible,
     }
     .panel {
         padding: 18px 15px;
+    }
+    .metrics-units {
+        padding: 16px;
+    }
+    .metric-category {
+        margin-top: 18px;
+    }
+    .metric-row {
+        min-height: 48px;
+        padding-inline: 13px;
     }
     .event {
         grid-template-columns: 42px 34px 1fr 18px;
