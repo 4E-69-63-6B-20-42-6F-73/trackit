@@ -243,7 +243,7 @@ export function Journal({
         <div className="page-content journal-page">
             <PageHeader
                 title="Journal"
-                description="Everything you’ve logged and synced, in one honest timeline."
+                description="Everything you've logged and synced, in one honest timeline."
             />
             <div className="journal-toolbar">
                 <div className="filter-row" aria-label="Journal categories">

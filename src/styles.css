@@ -622,9 +622,6 @@ textarea:focus-visible,
 .event.roomy {
     min-height: 78px;
 }
-.journal-page > .page-header {
-    display: none;
-}
 .journal-timeline {
     padding: 16px 22px 6px;
 }
