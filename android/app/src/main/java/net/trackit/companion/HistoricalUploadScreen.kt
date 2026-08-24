@@ -172,6 +172,7 @@ fun HistoricalUploadScreen(
                 val required = healthSync.permissionsFor(
                     recordTypes = types,
                     includeBackground = true,
+                    includeHistory = days > 30,
                 )
 
                 if (healthSync.hasPermissions(required)) {
@@ -192,6 +193,7 @@ fun HistoricalUploadScreen(
             val required = healthSync.permissionsFor(
                 recordTypes = types,
                 includeBackground = true,
+                includeHistory = days > 30,
             )
 
             if (healthSync.hasPermissions(required)) {
