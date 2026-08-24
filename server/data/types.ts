@@ -244,6 +244,7 @@ export const recipeUpdateSchema = z.object({
 
 export interface DataRepository {
     listSources(): Promise<unknown[]>
+    listMetricSources?(): Promise<unknown[]>
     listHealthRecords?(): Promise<unknown[]>
     listDailyMetrics?(range?: { from?: string; to?: string }): Promise<unknown[]>
     listObservations(range?: RecordRange): Promise<unknown[]>

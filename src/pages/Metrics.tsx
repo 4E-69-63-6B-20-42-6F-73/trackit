@@ -14,9 +14,8 @@ import {
 } from '../domain/metrics'
 import { useServerData } from '../hooks/useServerData'
 import { updatePreferences } from '../lib/preferencesApi'
-import { listObservations } from '../lib/observationApi'
-import { sourcesByMetric } from '../domain/effectiveMetrics'
-import type { Observation } from '../domain/health'
+import { listMetricSources, type MetricSourceSummary } from '../lib/observationApi'
+import type { MetricSourceDescriptor } from '../domain/effectiveMetrics'
 import type { DeduplicationPolicy } from '../domain/metrics'
 
 export function Metrics() {
@@ -29,13 +28,27 @@ export function Metrics() {
     const [draftDisabledSources, setDraftDisabledSources] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
-    const [rawObservations, setRawObservations] = useState<Observation[]>([])
+    const [sourceSummaries, setSourceSummaries] = useState<MetricSourceSummary[]>([])
     const selected = normalizedMetricPreferences(preferences?.metricPreferences, preferences?.units)
     const preset = detectUnitPreset(selected)
     const categories = useMemo(() => [...new Set(metricCatalog.map(metric => metric.category))], [])
-    const metricSources = useMemo(() => sourcesByMetric(rawObservations), [rawObservations])
+    const metricSources = useMemo(
+        () =>
+            sourceSummaries.reduce<Record<string, MetricSourceDescriptor[]>>((result, source) => {
+                const descriptor = {
+                    key: `${source.connector ?? 'direct'}::${source.provider}`,
+                    provider: source.provider,
+                    connector: source.connector ?? undefined,
+                }
+                ;(result[source.metric] ??= []).push(descriptor)
+                return result
+            }, {}),
+        [sourceSummaries],
+    )
     useEffect(() => {
-        void listObservations({ series: 'raw' }).then(setRawObservations).catch(() => undefined)
+        const controller = new AbortController()
+        void listMetricSources(controller.signal).then(setSourceSummaries).catch(() => undefined)
+        return () => controller.abort()
     }, [])
     const save = async (
         metricPreferences: typeof selected,

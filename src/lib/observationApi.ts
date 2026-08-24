@@ -4,6 +4,12 @@ import type { JournalEvent } from '../domain/types'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 
+export type MetricSourceSummary = {
+    metric: string
+    provider: string
+    connector: string | null
+}
+
 export async function createObservation(
     id: string,
     input: NonNullable<JournalEvent['observation']>,
@@ -27,6 +33,15 @@ export async function listObservations(
     return (
         await sharedJsonRequest<{ data: Observation[] }>(
             `${environment.VITE_API_URL}/api/observations?${query}`,
+            signal,
+        )
+    ).data
+}
+
+export async function listMetricSources(signal?: AbortSignal): Promise<MetricSourceSummary[]> {
+    return (
+        await sharedJsonRequest<{ data: MetricSourceSummary[] }>(
+            `${environment.VITE_API_URL}/api/metric-sources`,
             signal,
         )
     ).data

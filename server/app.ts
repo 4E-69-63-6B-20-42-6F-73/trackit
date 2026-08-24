@@ -852,6 +852,9 @@ export async function createApp(
                 return { data: await data.listObservations(range.data) }
             },
         )
+        app.get('/api/metric-sources', async () => ({
+            data: (await data.listMetricSources?.()) ?? [],
+        }))
         app.get<{ Querystring: { from?: string; to?: string } }>(
             '/api/daily-metrics',
             async (request, reply) => {

@@ -5,6 +5,59 @@ import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { PostgresDataRepository } from './postgres-repository.js'
 
+async function migratedDatabase() {
+    const client = new PGlite()
+    for (const filename of (await readdir('server/db/migrations'))
+        .filter(name => name.endsWith('.sql'))
+        .sort()) {
+        const migration = await readFile(`server/db/migrations/${filename}`, 'utf8')
+        await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
+    }
+    return { client, database: drizzle(client, { schema }) }
+}
+
+describe('metric source summaries', () => {
+    it('returns distinct provider-aware sources without returning observation history', async () => {
+        const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values([
+            {
+                metric: 'steps',
+                canonicalValue: 4200,
+                canonicalUnit: 'count',
+                originalValue: 4200,
+                originalUnit: 'count',
+                observedAt: new Date('2026-08-24T08:00:00Z'),
+                metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
+            },
+            {
+                metric: 'steps',
+                canonicalValue: 4300,
+                canonicalUnit: 'count',
+                originalValue: 4300,
+                originalUnit: 'count',
+                observedAt: new Date('2026-08-25T08:00:00Z'),
+                metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
+            },
+            {
+                metric: 'weight',
+                canonicalValue: 80,
+                canonicalUnit: 'kg',
+                originalValue: 80,
+                originalUnit: 'kg',
+                observedAt: new Date('2026-08-25T09:00:00Z'),
+                metadata: { source: 'You' },
+            },
+        ])
+
+        const repository = new PostgresDataRepository(database as never)
+        expect(await repository.listMetricSources()).toEqual([
+            { metric: 'steps', provider: 'Garmin', connector: 'Health Connect' },
+            { metric: 'weight', provider: 'You', connector: null },
+        ])
+        await client.close()
+    })
+})
+
 describe('nutrition snapshot persistence', () => {
     it('keeps meal history stable and recalculates future recipe servings after edits', async () => {
         const client = new PGlite()

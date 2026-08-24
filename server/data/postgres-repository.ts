@@ -85,6 +85,26 @@ export class PostgresDataRepository implements DataRepository {
         return this.database.select().from(sources).orderBy(sources.name)
     }
 
+    listMetricSources() {
+        const provider = sql<string>`coalesce(
+            nullif(${observations.metadata}->>'dataOrigin', ''),
+            nullif(${observations.metadata}->>'source', ''),
+            'Manual'
+        )`
+        const connector = sql<string | null>`coalesce(
+            nullif(${observations.metadata}->>'connector', ''),
+            case
+                when ${observations.metadata}->>'source' = 'Health Connect' then 'Health Connect'
+                else null
+            end
+        )`
+        return this.database
+            .selectDistinct({ metric: observations.metric, provider, connector })
+            .from(observations)
+            .where(isNull(observations.deletedAt))
+            .orderBy(observations.metric, provider, connector)
+    }
+
     constructor(private readonly database: Database) {}
 
     async listObservations(range: RecordRange = {}) {

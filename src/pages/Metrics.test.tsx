@@ -5,11 +5,11 @@ import { MantineProvider } from '@mantine/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { updatePreferences, type Preferences } from '../lib/preferencesApi'
-import { listObservations } from '../lib/observationApi'
+import { listMetricSources } from '../lib/observationApi'
 import { Metrics } from './Metrics'
 
 vi.mock('../lib/preferencesApi', () => ({ getPreferences: vi.fn(), updatePreferences: vi.fn() }))
-vi.mock('../lib/observationApi', () => ({ listObservations: vi.fn() }))
+vi.mock('../lib/observationApi', () => ({ listMetricSources: vi.fn() }))
 
 const base: Preferences = { displayName: 'Alex', timezone: 'UTC', locale: 'en-US', units: 'metric' }
 const renderPage = (preferences = base) =>
@@ -26,7 +26,7 @@ const renderPage = (preferences = base) =>
 describe('Metrics page', () => {
     beforeEach(() => {
         vi.mocked(updatePreferences).mockReset()
-        vi.mocked(listObservations).mockResolvedValue([])
+        vi.mocked(listMetricSources).mockResolvedValue([])
         Element.prototype.scrollIntoView = vi.fn()
     })
     it('renders registered metrics and saves a selected unit', async () => {
@@ -92,30 +92,16 @@ describe('Metrics page', () => {
         )
     })
     it('shows provider-aware sources and persists overlap priority', async () => {
-        vi.mocked(listObservations).mockResolvedValue([
+        vi.mocked(listMetricSources).mockResolvedValue([
             {
-                id: 'garmin',
                 metric: 'steps',
-                canonicalValue: 4200,
-                canonicalUnit: 'count',
-                originalValue: 4200,
-                originalUnit: 'count',
-                observedAt: '2026-08-24T08:00:00.000Z',
-                metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
-                excluded: false,
-                version: 1,
+                provider: 'Garmin',
+                connector: 'Health Connect',
             },
             {
-                id: 'samsung',
                 metric: 'steps',
-                canonicalValue: 4180,
-                canonicalUnit: 'count',
-                originalValue: 4180,
-                originalUnit: 'count',
-                observedAt: '2026-08-24T08:00:00.000Z',
-                metadata: { source: 'Health Connect', dataOrigin: 'Samsung Health' },
-                excluded: false,
-                version: 1,
+                provider: 'Samsung Health',
+                connector: 'Health Connect',
             },
         ])
         vi.mocked(updatePreferences).mockImplementation(async input => ({
