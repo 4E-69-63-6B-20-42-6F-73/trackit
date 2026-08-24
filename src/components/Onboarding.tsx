@@ -19,6 +19,7 @@ import {
     type FocusArea,
     type Preferences,
 } from '../lib/preferencesApi'
+import { preferencesForPreset } from '../domain/metrics'
 import { useServerData } from '../hooks/useServerData'
 
 const focusOptions: Array<{ value: FocusArea; label: string; description: string }> = [
@@ -219,6 +220,9 @@ export function Onboarding() {
                                     setPreferences({
                                         ...preferences,
                                         units: value as 'metric' | 'imperial',
+                                        metricPreferences: preferencesForPreset(
+                                            value as 'metric' | 'imperial',
+                                        ),
                                     })
                                 }
                             />

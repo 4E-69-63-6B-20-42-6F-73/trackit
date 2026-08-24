@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { validateGoal } from '../../src/domain/goals.js'
 
 export const observationInputSchema = z.object({
     id: z.string().uuid().optional(),
@@ -9,7 +10,7 @@ export const observationInputSchema = z.object({
     source: z.string().trim().min(1).max(120).default('You'),
 })
 
-export type RecordRange = { from?: string; to?: string }
+export type RecordRange = { from?: string; to?: string; series?: 'raw' | 'effective' }
 
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),
@@ -63,6 +64,25 @@ export const preferencesInputSchema = z.object({
         }, 'Invalid locale')
         .optional(),
     units: z.enum(['metric', 'imperial']).optional(),
+    metricPreferences: z
+        .record(
+            z.string(),
+            z.object({
+                displayUnit: z.string().trim().min(1).max(20),
+                precision: z.number().int().min(0).max(6).optional(),
+                deduplication: z
+                    .object({
+                        policy: z.enum(['keep_all', 'prefer_priority', 'metric_merge']),
+                        sourcePriority: z.array(z.string().trim().min(1).max(240)).max(50),
+                        disabledSources: z
+                            .array(z.string().trim().min(1).max(240))
+                            .max(50)
+                            .optional(),
+                    })
+                    .optional(),
+            }),
+        )
+        .optional(),
     goals: z.record(z.string(), z.number().finite()).optional(),
     mcpEnabled: z.boolean().optional(),
     experience: z
@@ -122,16 +142,39 @@ export const preferencesInputSchema = z.object({
         .optional(),
 })
 
-export const goalInputSchema = z.object({
-    metric: z.string().trim().min(1).max(100),
-    targetValue: z.number().finite().positive(),
-    canonicalUnit: z.string().trim().min(1).max(40),
-    effectiveFrom: z.string().datetime(),
-    effectiveTo: z.string().datetime().optional(),
-    schedule: z.record(z.string(), z.unknown()).default({}),
-})
+const goalTargetSchema = z.union([
+    z.object({ value: z.number().finite() }),
+    z.object({ min: z.number().finite(), max: z.number().finite() }),
+])
+const goalPeriodSchema = z.union([
+    z.object({ type: z.literal('day') }),
+    z.object({ type: z.literal('week') }),
+    z.object({
+        type: z.literal('rolling'),
+        days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
+    }),
+])
+export const goalInputSchema = z
+    .object({
+        metricId: z.string().trim().min(1).max(100),
+        aggregation: z.enum(['latest', 'average', 'total']),
+        comparator: z.enum(['gte', 'lte', 'between']),
+        target: goalTargetSchema,
+        period: goalPeriodSchema,
+        canonicalUnit: z.string().trim().min(1).max(40),
+        effectiveFrom: z.string().datetime(),
+        effectiveTo: z.string().datetime().nullable().optional(),
+        schedule: z
+            .object({ weekdays: z.array(z.number().int().min(0).max(6)).max(7).optional() })
+            .default({}),
+    })
+    .superRefine((goal, context) =>
+        validateGoal({ ...goal, effectiveTo: goal.effectiveTo ?? null }).forEach(message =>
+            context.addIssue({ code: 'custom', message }),
+        ),
+    )
 export const goalRetireSchema = z.object({ effectiveTo: z.string().datetime() })
-export const goalUpdateSchema = goalInputSchema.partial()
+export const goalUpdateSchema = z.union([goalInputSchema, goalRetireSchema])
 
 export const savedTrendViewInputSchema = z.object({
     name: z.string().trim().min(1).max(100),
@@ -227,6 +270,7 @@ export interface DataRepository {
     createGoal(input: z.infer<typeof goalInputSchema>): Promise<unknown>
     retireGoal(id: string, effectiveTo: string): Promise<unknown | null>
     updateGoal(id: string, input: z.infer<typeof goalUpdateSchema>): Promise<unknown | null>
+    removeGoal(id: string): Promise<boolean>
     listSavedTrendViews(): Promise<unknown[]>
     createSavedTrendView(input: z.infer<typeof savedTrendViewInputSchema>): Promise<unknown>
 }

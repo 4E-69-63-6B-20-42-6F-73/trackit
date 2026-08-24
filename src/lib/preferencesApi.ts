@@ -1,10 +1,12 @@
 import { authRequest } from './authApi'
+import { preferencesForPreset, type MetricPreferences } from '../domain/metrics'
 
 export type Preferences = {
     displayName: string
     timezone: string
     locale: string
     units: 'metric' | 'imperial'
+    metricPreferences?: MetricPreferences
     experience?: ExperiencePreferences
 }
 
@@ -44,7 +46,17 @@ export type ExperiencePreferences = {
 export async function getPreferences(signal?: AbortSignal): Promise<Preferences> {
     const response = await authRequest('/api/preferences', { signal })
     if (!response.ok) throw new Error('Preferences unavailable')
-    return ((await response.json()) as { data: Preferences }).data
+    const preferences = ((await response.json()) as { data: Preferences }).data
+    if (preferences.metricPreferences) return preferences
+    const migrated = { metricPreferences: preferencesForPreset(preferences.units) }
+    const migrationResponse = await authRequest('/api/preferences', {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(migrated),
+        signal,
+    })
+    if (!migrationResponse.ok) return { ...preferences, ...migrated }
+    return ((await migrationResponse.json()) as { data: Preferences }).data
 }
 
 export async function updatePreferences(input: Partial<Preferences>): Promise<Preferences> {

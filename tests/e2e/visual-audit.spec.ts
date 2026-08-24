@@ -10,6 +10,7 @@ const pages = [
     ['nutrition', '/nutrition'],
     ['goals', '/goals'],
     ['trends', '/trends'],
+    ['metrics', '/metrics'],
     ['connections', '/connections'],
     ['settings', '/settings'],
     ['settings-profile', '/settings/profile'],
@@ -18,13 +19,11 @@ const pages = [
     ['settings-system', '/settings/system'],
 ] as const
 
-test('capture every page for visual review', async ({ page }, testInfo) => {
-    test.setTimeout(90_000)
-    const size = testInfo.project.name === 'mobile-chromium' ? 'mobile' : 'desktop'
-    const output = `docs/ui-screenshots/${size}`
-    await mkdir(output, { recursive: true })
-
-    for (const [name, route] of pages) {
+for (const [name, route] of pages) {
+    test(`capture ${name} for visual review`, async ({ page }, testInfo) => {
+        const size = testInfo.project.name === 'mobile-chromium' ? 'mobile' : 'desktop'
+        const output = `docs/ui-screenshots/${size}`
+        await mkdir(output, { recursive: true })
         for (let attempt = 0; attempt < 3; attempt += 1) {
             await page.goto(route)
             try {
@@ -46,5 +45,5 @@ test('capture every page for visual review', async ({ page }, testInfo) => {
                 await page.waitForTimeout(250 * (attempt + 1))
             }
         }
-    }
-})
+    })
+}

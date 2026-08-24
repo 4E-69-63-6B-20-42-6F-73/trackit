@@ -381,12 +381,14 @@ export class DeviceService {
                             originalUnit: record.unit,
                             observedAt: effectiveObservedAt,
                             sourceId: deviceId,
-                            externalId: record.externalId,
+                            externalId: `${record.dataOrigin ?? 'unknown'}:${record.externalId}`,
                             version: deletionTombstoneVersion,
                             deletedAt,
                             metadata: {
                                 source: 'Health Connect',
                                 dataOrigin: record.dataOrigin,
+                                connector: 'Health Connect',
+                                provider: record.dataOrigin,
                             },
                         })
                         .onConflictDoUpdate({
@@ -420,11 +422,13 @@ export class DeviceService {
                         observedAt: effectiveObservedAt,
                         endedAt,
                         sourceId: deviceId,
-                        externalId: record.externalId,
+                        externalId: `${record.dataOrigin ?? 'unknown'}:${record.externalId}`,
                         version: record.version,
                         metadata: {
                             source: 'Health Connect',
                             dataOrigin: record.dataOrigin,
+                            connector: 'Health Connect',
+                            provider: record.dataOrigin,
                         },
                     })
                     .onConflictDoUpdate({
@@ -443,6 +447,8 @@ export class DeviceService {
                             metadata: {
                                 source: 'Health Connect',
                                 dataOrigin: record.dataOrigin,
+                                connector: 'Health Connect',
+                                provider: record.dataOrigin,
                             },
                         },
                     })
@@ -487,6 +493,8 @@ export class DeviceService {
             const affectedDates = new Set<string>()
             for (const input of records) {
                 const now = new Date()
+                const connector = input.provider
+                const provider = input.dataOrigin ?? input.provider
                 const startTime = new Date(input.startTime)
                 const endTime = input.endTime ? new Date(input.endTime) : null
                 const [previous] = await transaction
@@ -495,7 +503,8 @@ export class DeviceService {
                     .where(
                         and(
                             eq(healthRecords.userId, 'owner'),
-                            eq(healthRecords.provider, input.provider),
+                            eq(healthRecords.connector, connector),
+                            eq(healthRecords.provider, provider),
                             eq(healthRecords.externalId, input.externalId),
                         ),
                     )
@@ -510,7 +519,8 @@ export class DeviceService {
                     .insert(healthRecords)
                     .values({
                         userId: 'owner',
-                        provider: input.provider,
+                        connector,
+                        provider,
                         recordType: input.recordType,
                         externalId: input.externalId,
                         externalVersion: input.externalVersion,
@@ -528,6 +538,7 @@ export class DeviceService {
                     .onConflictDoUpdate({
                         target: [
                             healthRecords.userId,
+                            healthRecords.connector,
                             healthRecords.provider,
                             healthRecords.externalId,
                         ],
@@ -555,7 +566,8 @@ export class DeviceService {
                     .where(
                         and(
                             eq(healthRecords.userId, 'owner'),
-                            eq(healthRecords.provider, input.provider),
+                            eq(healthRecords.connector, connector),
+                            eq(healthRecords.provider, provider),
                             eq(healthRecords.externalId, input.externalId),
                         ),
                     )
@@ -607,6 +619,8 @@ export class DeviceService {
                                 metadata: {
                                     source: 'Health Connect',
                                     dataOrigin: stored.dataOrigin,
+                                    connector: 'Health Connect',
+                                    provider: stored.dataOrigin,
                                 },
                             })),
                         )
@@ -716,7 +730,12 @@ export class DeviceService {
                             derivation: projection.derivation,
                             derivationVersion: projection.derivationVersion,
                             version: stored.externalVersion,
-                            metadata: { source: 'Health Connect', dataOrigin: stored.dataOrigin },
+                            metadata: {
+                                source: 'Health Connect',
+                                dataOrigin: stored.dataOrigin,
+                                connector: 'Health Connect',
+                                provider: stored.dataOrigin,
+                            },
                         })),
                     )
                 const journal = projectHealthRecordToJournal(

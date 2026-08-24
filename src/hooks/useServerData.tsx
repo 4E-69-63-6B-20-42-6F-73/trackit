@@ -67,6 +67,10 @@ export function ServerDataProvider({
             const goal = (event as CustomEvent<GoalRecord>).detail
             setGoals(current => [goal, ...current.filter(item => item.id !== goal.id)])
         }
+        const deletedGoal = (event: Event) => {
+            const id = (event as CustomEvent<string>).detail
+            if (active) setGoals(current => current.filter(item => item.id !== id))
+        }
         void Promise.all([loadPreferences(), loadGoals()])
             .then(([savedPreferences, savedGoals]) => {
                 if (!active) return
@@ -80,12 +84,14 @@ export function ServerDataProvider({
         window.addEventListener('trackit:preferences-saved', savedPreferences)
         window.addEventListener('trackit:goals-changed', refreshGoals)
         window.addEventListener('trackit:goal-saved', savedGoal)
+        window.addEventListener('trackit:goal-deleted', deletedGoal as EventListener)
         return () => {
             active = false
             window.removeEventListener('trackit:preferences-changed', refreshPreferences)
             window.removeEventListener('trackit:preferences-saved', savedPreferences)
             window.removeEventListener('trackit:goals-changed', refreshGoals)
             window.removeEventListener('trackit:goal-saved', savedGoal)
+            window.removeEventListener('trackit:goal-deleted', deletedGoal as EventListener)
         }
     }, [initialData])
 

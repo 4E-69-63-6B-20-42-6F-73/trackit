@@ -6,13 +6,16 @@ import type { Page } from '../domain/types'
 const paths: Partial<Record<Page, string>> = {
     Nutrition: '/nutrition',
     Goals: '/goals',
+    Metrics: '/metrics',
     Connections: '/connections',
     Settings: '/settings',
 }
 
 export function MobileMore({ page, close }: { page: Page; close: () => void }) {
     const links = [
-        ...nav.filter(({ label }) => ['Nutrition', 'Goals', 'Connections'].includes(label)),
+        ...nav.filter(({ label }) =>
+            ['Nutrition', 'Goals', 'Metrics', 'Connections'].includes(label),
+        ),
         { label: 'Settings' as const, icon: IconSettings },
     ]
 

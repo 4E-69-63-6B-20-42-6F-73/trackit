@@ -16,6 +16,11 @@ RUN npm ci --omit=dev \
 
 COPY --from=build /app/dist ./dist
 COPY --chown=node:node --from=build /app/server ./server
+COPY --chown=node:node --from=build /app/src/domain/goals.ts ./src/domain/goals.ts
+COPY --chown=node:node --from=build /app/src/domain/health.ts ./src/domain/health.ts
+COPY --chown=node:node --from=build /app/src/domain/metricCatalog.ts ./src/domain/metricCatalog.ts
+COPY --chown=node:node --from=build /app/src/domain/effectiveMetrics.ts ./src/domain/effectiveMetrics.ts
+COPY --chown=node:node --from=build /app/src/domain/metrics.ts ./src/domain/metrics.ts
 COPY --chown=node:node --from=build /app/tsconfig.server.json ./
 RUN mkdir -p /backups && chown node:node /backups
 USER node

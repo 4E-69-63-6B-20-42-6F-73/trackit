@@ -15,6 +15,9 @@ import {
     savedTrendViews,
 } from '../db/schema.js'
 import type { DataRepository, RecordRange } from './types.js'
+import { effectiveMetricSeries } from '../../src/domain/effectiveMetrics.js'
+import type { Observation } from '../../src/domain/health.js'
+import type { MetricPreferences } from '../../src/domain/metrics.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -84,15 +87,31 @@ export class PostgresDataRepository implements DataRepository {
 
     constructor(private readonly database: Database) {}
 
-    listObservations(range: RecordRange = {}) {
+    async listObservations(range: RecordRange = {}) {
         const conditions = [isNull(observations.deletedAt)]
         if (range.from) conditions.push(gte(observations.observedAt, new Date(range.from)))
         if (range.to) conditions.push(lte(observations.observedAt, new Date(range.to)))
-        return this.database
+        const records = await this.database
             .select()
             .from(observations)
             .where(and(...conditions))
             .orderBy(desc(observations.observedAt))
+        if (range.series === 'raw') return records
+        const [saved] = await this.database
+            .select({ metricPreferences: preferences.metricPreferences })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+        const normalized = records.map(record => ({
+            ...record,
+            observedAt: record.observedAt.toISOString(),
+            endedAt: record.endedAt?.toISOString() ?? null,
+            metadata: record.metadata as Record<string, unknown>,
+            version: Number(record.version),
+        })) as Observation[]
+        return effectiveMetricSeries(
+            normalized,
+            (saved?.metricPreferences ?? undefined) as MetricPreferences | undefined,
+        )
     }
 
     async createObservation(input: {
@@ -253,6 +272,7 @@ export class PostgresDataRepository implements DataRepository {
         timezone?: string
         locale?: string
         units?: 'metric' | 'imperial'
+        metricPreferences?: MetricPreferences
         goals?: Record<string, number>
         mcpEnabled?: boolean
         experience?: Record<string, unknown>
@@ -475,19 +495,23 @@ export class PostgresDataRepository implements DataRepository {
     }
 
     async createGoal(input: {
-        metric: string
-        targetValue: number
+        metricId: string
+        aggregation: 'latest' | 'average' | 'total'
+        comparator: 'gte' | 'lte' | 'between'
+        target: { value: number } | { min: number; max: number }
+        period: { type: 'day' | 'week' } | { type: 'rolling'; days: 7 | 14 | 30 }
         canonicalUnit: string
         effectiveFrom: string
-        effectiveTo?: string
-        schedule: Record<string, unknown>
+        effectiveTo?: string | null
+        schedule: { weekdays?: number[] }
     }) {
         const [record] = await this.database
             .insert(goals)
             .values({
                 ...input,
+                legacyTargetValue: 'value' in input.target ? input.target.value : input.target.min,
                 effectiveFrom: new Date(input.effectiveFrom),
-                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
             })
             .returning()
         return record
@@ -505,24 +529,46 @@ export class PostgresDataRepository implements DataRepository {
     async updateGoal(
         id: string,
         input: {
-            metric?: string
-            targetValue?: number
+            metricId?: string
+            aggregation?: 'latest' | 'average' | 'total'
+            comparator?: 'gte' | 'lte' | 'between'
+            target?: { value: number } | { min: number; max: number }
+            period?: { type: 'day' | 'week' } | { type: 'rolling'; days: 7 | 14 | 30 }
             canonicalUnit?: string
             effectiveFrom?: string
-            effectiveTo?: string
-            schedule?: Record<string, unknown>
+            effectiveTo?: string | null
+            schedule?: { weekdays?: number[] }
         },
     ) {
         const [record] = await this.database
             .update(goals)
             .set({
                 ...input,
+                legacyTargetValue: input.target
+                    ? 'value' in input.target
+                        ? input.target.value
+                        : input.target.min
+                    : undefined,
                 effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : undefined,
-                effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : undefined,
+                effectiveTo:
+                    input.effectiveTo === null
+                        ? null
+                        : input.effectiveTo
+                          ? new Date(input.effectiveTo)
+                          : undefined,
+                updatedAt: new Date(),
             })
             .where(eq(goals.id, id))
             .returning()
         return record ?? null
+    }
+
+    async removeGoal(id: string) {
+        const removed = await this.database
+            .delete(goals)
+            .where(and(eq(goals.id, id), lte(goals.effectiveTo, new Date())))
+            .returning({ id: goals.id })
+        return removed.length > 0
     }
 
     listSavedTrendViews() {

@@ -60,6 +60,7 @@ export const healthRecords = pgTable(
     {
         id: uuid('id').primaryKey().defaultRandom(),
         userId: text('user_id').notNull().default('owner'),
+        connector: text('connector').notNull().default('direct'),
         provider: text('provider').notNull(),
         recordType: text('record_type').notNull(),
         externalId: text('external_id').notNull(),
@@ -78,6 +79,7 @@ export const healthRecords = pgTable(
     table => [
         uniqueIndex('health_record_source_identity_idx').on(
             table.userId,
+            table.connector,
             table.provider,
             table.externalId,
         ),
@@ -222,6 +224,7 @@ export const preferences = pgTable('preferences', {
     timezone: text('timezone').notNull().default('UTC'),
     locale: text('locale').notNull().default('en'),
     units: text('units').notNull().default('metric'),
+    metricPreferences: jsonb('metric_preferences'),
     goals: jsonb('goals').notNull().default({}),
     mcpEnabled: boolean('mcp_enabled').notNull().default(false),
     experience: jsonb('experience').notNull().default({}),
@@ -359,13 +362,20 @@ export const retentionRules = pgTable('retention_rules', {
 
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),
-    metric: text('metric').notNull(),
-    targetValue: doublePrecision('target_value').notNull(),
+    metricId: text('metric').notNull(),
+    legacyTargetValue: doublePrecision('target_value').notNull(),
+    aggregation: text('aggregation').notNull().default('latest'),
+    comparator: text('comparator').notNull().default('gte'),
+    target: jsonb('target').$type<{ value: number } | { min: number; max: number }>().notNull(),
+    period: jsonb('period')
+        .$type<{ type: 'day' | 'week' } | { type: 'rolling'; days: 7 | 14 | 30 }>()
+        .notNull(),
     canonicalUnit: text('canonical_unit').notNull(),
     effectiveFrom: timestamp('effective_from', { withTimezone: true }).notNull(),
     effectiveTo: timestamp('effective_to', { withTimezone: true }),
     schedule: jsonb('schedule').notNull().default({}),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
 export const savedTrendViews = pgTable('saved_trend_views', {

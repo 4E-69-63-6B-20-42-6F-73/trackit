@@ -20,7 +20,7 @@ export function Sidebar({
         },
         {
             label: 'Explore',
-            items: nav.filter(item => ['Nutrition', 'Trends'].includes(item.label)),
+            items: nav.filter(item => ['Nutrition', 'Trends', 'Metrics'].includes(item.label)),
         },
         { label: 'Data', items: nav.filter(item => item.label === 'Connections') },
     ]

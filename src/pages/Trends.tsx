@@ -25,14 +25,18 @@ import { TrendChart } from '../components/TrendChart'
 import { PageHeader } from '../components/PageHeader'
 import {
     dailySeries,
-    displayValue,
     weeklySeries,
     type Observation,
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
-import { formatMetricValue } from '../domain/formatting'
-import type { Nutrients } from '../domain/nutrition'
+import { effectiveMetricSeries, mealMetricObservations } from '../domain/effectiveMetrics'
+import {
+    convertMetricValue,
+    displayUnitFor,
+    formatMetricDisplayValue,
+    unitPresentation,
+} from '../domain/metrics'
 import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
 import { updatePreferences } from '../lib/preferencesApi'
@@ -43,19 +47,6 @@ const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
 const metricLabel = (metric: string) =>
     metricDefinition(metric)?.label ??
     metric.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
-
-const nutrientMetrics: (keyof Nutrients)[] = [
-    'calories',
-    'protein',
-    'carbs',
-    'fat',
-    'fiber',
-    'sugar',
-    'saturatedFat',
-    'sodium',
-    'potassium',
-]
-
 export function Trends() {
     const navigate = useNavigate()
     const [observations, setObservations] = useState<Observation[]>([])
@@ -102,37 +93,11 @@ export function Trends() {
             .catch(() => undefined)
     }, [])
 
-    const nutritionObservations: Observation[] = meals.flatMap(meal =>
-        nutrientMetrics.flatMap(nutrient => {
-            const value = meal.nutrientSnapshot[nutrient]
-            if (value === undefined) return []
-            return [
-                {
-                    id: `${meal.id}:${nutrient}`,
-                    metric: nutrient,
-                    canonicalValue: value,
-                    canonicalUnit:
-                        nutrient === 'calories'
-                            ? 'kcal'
-                            : ['sodium', 'potassium'].includes(nutrient)
-                              ? 'mg'
-                              : 'g',
-                    originalValue: value,
-                    originalUnit:
-                        nutrient === 'calories'
-                            ? 'kcal'
-                            : ['sodium', 'potassium'].includes(nutrient)
-                              ? 'mg'
-                              : 'g',
-                    observedAt: meal.eatenAt,
-                    excluded: false,
-                    version: meal.version,
-                    metadata: { recordType: 'meal_nutrient', mealId: meal.id },
-                },
-            ]
-        }),
+    const nutritionObservations = mealMetricObservations(meals)
+    const allObservations = effectiveMetricSeries(
+        [...observations, ...nutritionObservations],
+        preferences?.metricPreferences,
     )
-    const allObservations = [...observations, ...nutritionObservations]
     const recordedMetrics = [...new Set(allObservations.map(record => record.metric))]
     const unknownMetrics = recordedMetrics.filter(
         value => !metricCatalog.some(definition => definition.value === value),
@@ -164,13 +129,26 @@ export function Trends() {
     )
     const isNutritionMetric = metricDefinition(metric)?.source === 'meal'
     const isManualMetric = metricDefinition(metric)?.source === 'manual'
-    const displayUnit =
-        preferences?.units === 'imperial' && metricRecords[0]?.canonicalUnit === 'kg'
-            ? 'lb'
-            : metricRecords[0]?.canonicalUnit
+    const displayUnit = metric
+        ? displayUnitFor(metric, preferences?.metricPreferences, preferences?.units)
+        : undefined
+    const formatDisplayValue = (
+        value: number,
+        options?: { signed?: boolean; withUnit?: boolean },
+    ) =>
+        metric && displayUnit
+            ? formatMetricDisplayValue(
+                  metric,
+                  value,
+                  displayUnit,
+                  preferences?.metricPreferences,
+                  preferences?.locale,
+                  options,
+              )
+            : value.toLocaleString(preferences?.locale)
     const convert = (value: number) =>
-        metricRecords[0]?.canonicalUnit && displayUnit
-            ? displayValue(value, metricRecords[0].canonicalUnit, displayUnit)
+        metric && metricDefinition(metric) && metricRecords[0]?.canonicalUnit && displayUnit
+            ? convertMetricValue(metric, value, metricRecords[0].canonicalUnit, displayUnit)
             : value
     const points = (() => {
         const series = (granularity === 'weekly' ? weeklySeries : dailySeries)(
@@ -435,9 +413,7 @@ export function Trends() {
                                 <Text size="xs" c="dimmed">
                                     Average
                                 </Text>
-                                <Text fw={700}>
-                                    {formatMetricValue(average, displayUnit ?? '')}
-                                </Text>
+                                <Text fw={700}>{formatDisplayValue(average)}</Text>
                             </div>
                             <div>
                                 <Text size="xs" c="dimmed">
@@ -446,18 +422,14 @@ export function Trends() {
                                 <Text fw={700}>
                                     {change === null
                                         ? 'Needs 2 points'
-                                        : formatMetricValue(change, displayUnit ?? '', undefined, {
-                                              signed: true,
-                                          })}
+                                        : formatDisplayValue(change, { signed: true })}
                                 </Text>
                             </div>
                             <div>
                                 <Text size="xs" c="dimmed">
                                     Variation
                                 </Text>
-                                <Text fw={700}>
-                                    {formatMetricValue(variation ?? 0, displayUnit ?? '')}
-                                </Text>
+                                <Text fw={700}>{formatDisplayValue(variation ?? 0)}</Text>
                             </div>
                             <div>
                                 <Text size="xs" c="dimmed">
@@ -535,6 +507,12 @@ export function Trends() {
                                 comparisonMetric ? metricLabel(comparisonMetric) : undefined
                             }
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
+                            valueLabel={
+                                metric && displayUnit
+                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit).label})`
+                                    : undefined
+                            }
+                            formatValue={value => formatDisplayValue(value, { withUnit: false })}
                         />
                     )}
                     {actionError && (

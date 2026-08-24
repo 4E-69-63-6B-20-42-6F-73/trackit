@@ -838,8 +838,9 @@ export async function createApp(
         const recordRangeSchema = z.object({
             from: z.string().datetime().optional(),
             to: z.string().datetime().optional(),
+            series: z.enum(['raw', 'effective']).default('effective'),
         })
-        app.get<{ Querystring: { from?: string; to?: string } }>(
+        app.get<{ Querystring: { from?: string; to?: string; series?: 'raw' | 'effective' } }>(
             '/api/observations',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)
@@ -1013,6 +1014,12 @@ export async function createApp(
             if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.updateGoal(request.params.id, input.data)
             return updated ? { data: updated } : reply.code(404).send({ error: 'not_found' })
+        })
+        app.delete<{ Params: { id: string } }>('/api/goals/:id', async (request, reply) => {
+            const removed = await data.removeGoal(request.params.id)
+            return removed
+                ? reply.code(204).send()
+                : reply.code(409).send({ error: 'retire_before_delete' })
         })
         app.get('/api/trend-views', async () => ({ data: await data.listSavedTrendViews() }))
         app.post('/api/trend-views', async (request, reply) => {

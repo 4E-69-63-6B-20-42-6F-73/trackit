@@ -3,6 +3,53 @@ import { describe, expect, it } from 'vitest'
 import { applyTestMigrations, migrationFiles } from './test-migrations.js'
 
 describe('database migration', () => {
+    it('migrates legacy goals once while preserving their meaning and schedule', async () => {
+        const database = new PGlite()
+        const files = await migrationFiles()
+        await applyTestMigrations(
+            database,
+            files.filter(file => file < '0007_generalized_goals.sql'),
+        )
+        await database.exec(`
+            insert into goals (
+                id, metric, target_value, canonical_unit, effective_from, effective_to, schedule
+            ) values (
+                '00000000-0000-4000-8000-000000000099',
+                'steps', 10000, 'count',
+                '2026-09-01T00:00:00Z', '2026-12-31T23:59:59Z',
+                '{"weekdays":[1,2,3,4,5]}'::jsonb
+            );
+        `)
+        await applyTestMigrations(database, ['0007_generalized_goals.sql'])
+
+        const result = await database.query<{
+            id: string
+            metric: string
+            target_value: number
+            aggregation: string
+            comparator: string
+            target: { value: number }
+            period: { type: string }
+            effective_from: Date
+            effective_to: Date
+            schedule: { weekdays: number[] }
+        }>(`select * from goals where id = '00000000-0000-4000-8000-000000000099'`)
+
+        expect(result.rows[0]).toMatchObject({
+            id: '00000000-0000-4000-8000-000000000099',
+            metric: 'steps',
+            target_value: 10000,
+            aggregation: 'total',
+            comparator: 'gte',
+            target: { value: 10000 },
+            period: { type: 'day' },
+            schedule: { weekdays: [1, 2, 3, 4, 5] },
+        })
+        expect(result.rows[0].effective_from.toISOString()).toBe('2026-09-01T00:00:00.000Z')
+        expect(result.rows[0].effective_to.toISOString()).toBe('2026-12-31T23:59:59.000Z')
+        await database.close()
+    })
+
     it('creates the persistent health record tables in PostgreSQL', async () => {
         const database = new PGlite()
         await applyTestMigrations(database)

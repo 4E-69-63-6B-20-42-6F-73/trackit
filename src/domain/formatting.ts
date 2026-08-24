@@ -1,7 +1,7 @@
 const sourceNames: Record<string, string> = {
     'com.google.android.apps.fitness': 'Google Fit',
     'com.fitbit.FitbitMobile': 'Fitbit',
-    'cn.fitdays.fitdays': 'Fitdays',
+    'cn.fitdays.fitdays': 'Fitdays scale',
     'com.google.android.apps.healthdata': 'Health Connect',
 }
 

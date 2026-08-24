@@ -20,6 +20,8 @@ export function TrendChart({
     comparisonPoints,
     comparisonLabel,
     periodLabel = 'day',
+    valueLabel,
+    formatValue,
 }: {
     points: DailyPoint[]
     loading: boolean
@@ -29,6 +31,8 @@ export function TrendChart({
     comparisonPoints?: DailyPoint[]
     comparisonLabel?: string
     periodLabel?: 'day' | 'week'
+    valueLabel?: string
+    formatValue?: (value: number) => string
 }) {
     if (loading)
         return <Skeleton role="status" aria-label="Loading trend" height={280} radius="md" />
@@ -53,15 +57,31 @@ export function TrendChart({
     }))
     return (
         <>
+            {!compared && valueLabel && (
+                <Text size="xs" c="dimmed" fw={600}>
+                    {valueLabel}
+                </Text>
+            )}
             <ResponsiveContainer width="100%" height={310}>
                 <LineChart data={chartData} margin={{ top: 25, right: 15, left: -10, bottom: 0 }}>
                     <CartesianGrid vertical={false} stroke="#ebe9e1" />
                     <XAxis dataKey="date" axisLine={false} tickLine={false} />
-                    <YAxis axisLine={false} tickLine={false} />
-                    <ChartTooltip />
+                    <YAxis
+                        axisLine={false}
+                        tickLine={false}
+                        tickFormatter={compared ? undefined : formatValue}
+                    />
+                    <ChartTooltip
+                        formatter={
+                            compared || !formatValue
+                                ? undefined
+                                : value => formatValue(Number(value))
+                        }
+                    />
                     <Line
                         type="monotone"
                         dataKey="primary"
+                        name={valueLabel ?? metric}
                         connectNulls={false}
                         stroke="#4f61a8"
                         strokeWidth={3}

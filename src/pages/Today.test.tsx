@@ -18,7 +18,7 @@ vi.mock('../hooks/useTodayHealth', () => ({
         sleepSeries: [],
         sleepBaseline: null,
         restingBaseline: null,
-        stepsGoal: { targetValue: 8000, canonicalUnit: 'count' },
+        stepsGoal: { target: { value: 8000 }, canonicalUnit: 'count' },
         waterGoal: null,
         preferences: { displayName: 'Owner', timezone: 'UTC', locale: 'en', units: 'metric' },
     }),

@@ -38,20 +38,23 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                     return total
                 }, emptyNutrients())
                 const weekday = selectedDate.getDay()
+                const proteinGoal = goals.find(
+                    goal =>
+                        goal.metricId === 'protein' &&
+                        new Date(goal.effectiveFrom) <= selectedDate &&
+                        (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
+                        (!goal.schedule.weekdays?.length ||
+                            goal.schedule.weekdays.includes(weekday)),
+                )
                 setState({
                     nutrients,
                     mealCount: meals.length,
                     loading: false,
                     unavailable: false,
                     proteinGoal:
-                        goals.find(
-                            goal =>
-                                goal.metric === 'protein' &&
-                                new Date(goal.effectiveFrom) <= selectedDate &&
-                                (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
-                                (!goal.schedule.weekdays?.length ||
-                                    goal.schedule.weekdays.includes(weekday)),
-                        )?.targetValue ?? null,
+                        proteinGoal && 'value' in proteinGoal.target
+                            ? proteinGoal.target.value
+                            : null,
                     nutritionQuality: meals.some(meal => meal.nutritionQuality === 'incomplete')
                         ? 'incomplete'
                         : meals.some(meal => meal.nutritionQuality === 'estimated')

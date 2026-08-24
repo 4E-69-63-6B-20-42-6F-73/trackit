@@ -47,8 +47,29 @@
         {
             "idx": 6,
             "version": "7",
-            "when": 1787510000000,
-            "tag": "0006_mcp_optional_expiry",
+            "when": 1787529600000,
+            "tag": "0006_metric_preferences",
+            "breakpoints": true
+        },
+        {
+            "idx": 7,
+            "version": "7",
+            "when": 1787533200000,
+            "tag": "0007_generalized_goals",
+            "breakpoints": true
+        },
+        {
+            "idx": 8,
+            "version": "7",
+            "when": 1787590800000,
+            "tag": "0008_metric_sources",
+            "breakpoints": true
+        },
+        {
+            "idx": 9,
+            "version": "7",
+            "when": 1787594400000,
+            "tag": "0009_mcp_optional_expiry",
             "breakpoints": true
         }
     ]

@@ -118,7 +118,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             goals.find(goal => {
                 const weekday = selectedDate.getDay()
                 return (
-                    goal.metric === metric &&
+                    goal.metricId === metric &&
                     new Date(goal.effectiveFrom) <= selectedDate &&
                     (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
                     (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))
