@@ -219,7 +219,7 @@ export function McpNew() {
                                                     checked={selectedScopes.includes(scope.value)}
                                                     onChange={event =>
                                                         setSelectedScopes(current =>
-                                                            event.currentTarget.checked
+                                                            event.target.checked
                                                                 ? [...current, scope.value]
                                                                 : current.filter(
                                                                       value =>
