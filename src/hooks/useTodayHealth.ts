@@ -37,7 +37,8 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             fromDate.setDate(fromDate.getDate() - 29)
             const dayStart = new Date(selectedDate)
             dayStart.setHours(0, 0, 0, 0)
-            const dayEnd = new Date(dayStart)
+            const dayEnd = new Date(selectedDate)
+            dayEnd.setHours(0, 0, 0, 0)
             dayEnd.setDate(dayEnd.getDate() + 1)
             queueMicrotask(() => {
                 if (!signal.aborted) setLoading(true)
@@ -74,9 +75,11 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             void load(controller.signal)
         }
         window.addEventListener('trackit:observations-changed', refresh)
+        window.addEventListener('trackit:preferences-saved', refresh)
         return () => {
             controller.abort()
             window.removeEventListener('trackit:observations-changed', refresh)
+            window.removeEventListener('trackit:preferences-saved', refresh)
         }
     }, [load])
 
@@ -90,13 +93,12 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             (dailyMetric(metric) ? asObservation(dailyMetric(metric)!) : null)
         const aggregateDetail = (metric: string) => {
             const rows = details.filter(row => row.metric === metric && !row.excluded)
-            const aggregate = dailyMetric(metric)
-            if (aggregate) return asObservation(aggregate)
-            if (!rows.length) return null
-            return {
-                ...rows[0],
-                canonicalValue: rows.reduce((sum, row) => sum + row.canonicalValue, 0),
-            }
+            if (rows.length)
+                return {
+                    ...rows[0],
+                    canonicalValue: rows.reduce((sum, row) => sum + row.canonicalValue, 0),
+                }
+            return dailyMetric(metric) ? asObservation(dailyMetric(metric)!) : null
         }
         const values = (metric: string) =>
             daily.filter(row => row.metric === metric).sort((a, b) => a.date.localeCompare(b.date))
@@ -131,15 +133,17 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             const key = dateKey(date)
             return { key, row: sleepByDate.get(key) }
         })
-        const detailSum = (metric: string) =>
-            details
-                .filter(row => row.metric === metric && !row.excluded)
-                .reduce((sum, row) => sum + row.canonicalValue, 0)
+        const effectiveTotal = (metric: string) => {
+            const rows = details.filter(row => row.metric === metric && !row.excluded)
+            return rows.length
+                ? rows.reduce((sum, row) => sum + row.canonicalValue, 0)
+                : (dailyMetric(metric)?.value ?? 0)
+        }
         return {
             loading: loading || sharedLoading,
             unavailable: unavailable || sharedUnavailable,
-            steps: dailyMetric('steps')?.value ?? detailSum('steps'),
-            water: dailyMetric('water')?.value ?? detailSum('water'),
+            steps: effectiveTotal('steps'),
+            water: effectiveTotal('water'),
             sleepToday: aggregateDetail('sleep'),
             restingHeartRate: latestDetail('resting_heart_rate'),
             energy: latestDetail('energy'),

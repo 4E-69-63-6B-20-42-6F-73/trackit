@@ -1,4 +1,5 @@
 import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -18,6 +19,7 @@ import type { DataRepository, RecordRange } from './types.js'
 import { effectiveMetricSeries } from '../../src/domain/effectiveMetrics.js'
 import type { Observation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
+import { rebuildEffectiveDailyMetric } from './daily-projection.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -70,15 +72,32 @@ export class PostgresDataRepository implements DataRepository {
         return this.database.select().from(healthRecords).orderBy(desc(healthRecords.startTime))
     }
 
-    listDailyMetrics(range: { from?: string; to?: string } = {}) {
-        const conditions = []
+    async listDailyMetrics(range: { from?: string; to?: string } = {}) {
+        const conditions: SQL[] = []
         if (range.from) conditions.push(gte(dailyMetrics.date, range.from))
         if (range.to) conditions.push(lte(dailyMetrics.date, range.to))
-        return this.database
+        const query = () =>
+            this.database
             .select()
             .from(dailyMetrics)
             .where(conditions.length ? and(...conditions) : undefined)
             .orderBy(desc(dailyMetrics.date))
+        const [rows, saved] = await Promise.all([
+            query(),
+            this.database
+                .select({ updatedAt: preferences.updatedAt })
+                .from(preferences)
+                .where(eq(preferences.id, 'owner')),
+        ])
+        const preferenceUpdatedAt = saved[0]?.updatedAt
+        const staleDates = new Set(
+            rows
+                .filter(row => preferenceUpdatedAt && row.updatedAt < preferenceUpdatedAt)
+                .map(row => row.date),
+        )
+        if (!staleDates.size) return rows
+        for (const date of staleDates) await rebuildEffectiveDailyMetric(this.database, date)
+        return query()
     }
 
     listSources() {
@@ -107,16 +126,23 @@ export class PostgresDataRepository implements DataRepository {
 
     constructor(private readonly database: Database) {}
 
-    async listObservations(range: RecordRange = {}) {
+    private observationQuery(range: RecordRange = {}) {
         const conditions = [isNull(observations.deletedAt)]
         if (range.from) conditions.push(gte(observations.observedAt, new Date(range.from)))
         if (range.to) conditions.push(lte(observations.observedAt, new Date(range.to)))
-        const records = await this.database
+        return this.database
             .select()
             .from(observations)
             .where(and(...conditions))
             .orderBy(desc(observations.observedAt))
-        if (range.series === 'raw') return records
+    }
+
+    listRawObservations(range: RecordRange = {}) {
+        return this.observationQuery(range)
+    }
+
+    async listObservations(range: RecordRange = {}) {
+        const records = await this.observationQuery(range)
         const [saved] = await this.database
             .select({ metricPreferences: preferences.metricPreferences })
             .from(preferences)
@@ -156,7 +182,10 @@ export class PostgresDataRepository implements DataRepository {
             })
             .onConflictDoNothing({ target: observations.id })
             .returning()
-        if (record) return record
+        if (record) {
+            await rebuildEffectiveDailyMetric(this.database, record.observedAt.toISOString().slice(0, 10))
+            return record
+        }
         const [existing] = await this.database
             .select()
             .from(observations)
@@ -180,6 +209,11 @@ export class PostgresDataRepository implements DataRepository {
                 ),
             )
             .returning()
+        if (record)
+            await rebuildEffectiveDailyMetric(
+                this.database,
+                record.observedAt.toISOString().slice(0, 10),
+            )
         return record ?? null
     }
 
@@ -188,7 +222,12 @@ export class PostgresDataRepository implements DataRepository {
             .update(observations)
             .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(and(eq(observations.id, id), isNull(observations.deletedAt)))
-            .returning({ id: observations.id })
+            .returning({ id: observations.id, observedAt: observations.observedAt })
+        if (removed[0])
+            await rebuildEffectiveDailyMetric(
+                this.database,
+                removed[0].observedAt.toISOString().slice(0, 10),
+            )
         return removed.length > 0
     }
 
@@ -306,6 +345,16 @@ export class PostgresDataRepository implements DataRepository {
                 set: { ...input, updatedAt: new Date() },
             })
             .returning()
+        if (input.metricPreferences) {
+            const timestamps = await this.database
+                .select({ observedAt: observations.observedAt })
+                .from(observations)
+                .where(isNull(observations.deletedAt))
+            const dates = new Set(
+                timestamps.map(item => item.observedAt.toISOString().slice(0, 10)),
+            )
+            for (const date of dates) await rebuildEffectiveDailyMetric(this.database, date)
+        }
         return record ?? current
     }
 

@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, randomBytes, randomInt, verify } from 'node:crypto'
-import { and, desc, eq, gte, gt, isNull, lt } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -7,7 +7,6 @@ import {
     devices,
     deviceRequestNonces,
     deviceUploadBatches,
-    dailyMetrics,
     healthRecords,
     journalEntries,
     observations,
@@ -17,7 +16,7 @@ import {
 } from '../db/schema.js'
 import { deriveRecord } from '../health-records/derive.js'
 import { projectHealthRecordToJournal } from '../health-records/journal.js'
-import { aggregateMetric, metricDefinition } from '../health-records/metric-registry.js'
+import { rebuildEffectiveDailyMetric } from '../data/daily-projection.js'
 import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -800,43 +799,7 @@ export class DeviceService {
     }
 
     private async rebuildDailyDate(transaction: Transaction, date: string) {
-        const from = new Date(`${date}T00:00:00.000Z`)
-        const to = new Date(from.getTime() + 86_400_000)
-        const rows = await transaction
-            .select({
-                metric: observations.metric,
-                value: observations.canonicalValue,
-                unit: observations.canonicalUnit,
-                observedAt: observations.observedAt,
-                derivationVersion: observations.derivationVersion,
-            })
-            .from(observations)
-            .where(
-                and(
-                    eq(observations.userId, 'owner'),
-                    isNull(observations.deletedAt),
-                    gte(observations.observedAt, from),
-                    lt(observations.observedAt, to),
-                ),
-            )
-        await transaction
-            .delete(dailyMetrics)
-            .where(and(eq(dailyMetrics.userId, 'owner'), eq(dailyMetrics.date, date)))
-        const byMetric = new Map<string, typeof rows>()
-        for (const row of rows) byMetric.set(row.metric, [...(byMetric.get(row.metric) ?? []), row])
-        for (const [metric, values] of byMetric) {
-            const definition = metricDefinition(metric)
-            if (!definition || !values.length) continue
-            const aggregate = aggregateMetric(definition.aggregation, values)!
-            await transaction.insert(dailyMetrics).values({
-                userId: 'owner',
-                date,
-                metric,
-                value: aggregate,
-                unit: definition.canonicalUnit,
-                derivationVersion: Math.max(...values.map(row => row.derivationVersion ?? 1)),
-            })
-        }
+        await rebuildEffectiveDailyMetric(transaction, date)
     }
 
     async updateCursor(

@@ -43,6 +43,14 @@ const additiveMetrics = new Set([
     'potassium',
 ])
 
+export function aggregateDailyObservations(records: Observation[]) {
+    if (!records.length) return null
+    return additiveMetrics.has(records[0].metric)
+        ? records.reduce((sum, record) => sum + record.canonicalValue, 0)
+        : [...records].sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0]
+              .canonicalValue
+}
+
 export function displayValue(value: number, canonicalUnit: string, displayUnit: string) {
     if (canonicalUnit === displayUnit) return value
     if (canonicalUnit === 'kg' && displayUnit === 'lb') return value * 2.2046226218
@@ -80,11 +88,7 @@ export function dailySeries(
         const additive = records.length > 0 && additiveMetrics.has(records[0].metric)
         return {
             date: key,
-            value: records.length
-                ? additive
-                    ? records.reduce((sum, record) => sum + record.canonicalValue, 0)
-                    : ordered[0].canonicalValue
-                : null,
+            value: aggregateDailyObservations(records),
             recordIds: additive
                 ? records.map(record => record.id)
                 : ordered.slice(0, 1).map(record => record.id),

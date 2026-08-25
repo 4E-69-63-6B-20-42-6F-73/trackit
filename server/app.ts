@@ -838,9 +838,8 @@ export async function createApp(
         const recordRangeSchema = z.object({
             from: z.string().datetime().optional(),
             to: z.string().datetime().optional(),
-            series: z.enum(['raw', 'effective']).default('effective'),
         })
-        app.get<{ Querystring: { from?: string; to?: string; series?: 'raw' | 'effective' } }>(
+        app.get<{ Querystring: { from?: string; to?: string } }>(
             '/api/observations',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)

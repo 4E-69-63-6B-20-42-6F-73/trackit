@@ -10,7 +10,7 @@ export const observationInputSchema = z.object({
     source: z.string().trim().min(1).max(120).default('You'),
 })
 
-export type RecordRange = { from?: string; to?: string; series?: 'raw' | 'effective' }
+export type RecordRange = { from?: string; to?: string }
 
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),
@@ -247,6 +247,7 @@ export interface DataRepository {
     listMetricSources?(): Promise<unknown[]>
     listHealthRecords?(): Promise<unknown[]>
     listDailyMetrics?(range?: { from?: string; to?: string }): Promise<unknown[]>
+    listRawObservations?(range?: RecordRange): Promise<unknown[]>
     listObservations(range?: RecordRange): Promise<unknown[]>
     createObservation(input: z.infer<typeof observationInputSchema>): Promise<unknown>
     updateObservation(

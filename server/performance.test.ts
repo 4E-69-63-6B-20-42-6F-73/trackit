@@ -1,5 +1,5 @@
 import { performance } from 'node:perf_hooks'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
 import type {
     CreateJournalEntry,
@@ -71,6 +71,10 @@ class FiveYearData implements DataRepository {
     }
 
     async listObservations(range?: RecordRange): Promise<unknown[]> {
+        return this.records.filter(record => this.inRange(record.observedAt, range))
+    }
+
+    async listRawObservations(range?: RecordRange): Promise<unknown[]> {
         return this.records.filter(record => this.inRange(record.observedAt, range))
     }
 
@@ -165,6 +169,24 @@ class FiveYearData implements DataRepository {
 }
 
 describe('large-history performance', () => {
+    it('does not allow the observations API to bypass the effective series', async () => {
+        const data = new FiveYearData()
+        const effective = [{ id: 'effective', metric: 'steps', canonicalValue: 7000 }]
+        data.listObservations = vi.fn().mockResolvedValue(effective)
+        data.listRawObservations = vi.fn().mockResolvedValue([
+            { id: 'raw-garmin', metric: 'steps', canonicalValue: 7000 },
+            { id: 'raw-samsung', metric: 'steps', canonicalValue: 7000 },
+        ])
+        const app = await createApp(new FiveYearJournal(), { dataRepository: data })
+
+        const response = await app.inject({ method: 'GET', url: '/api/observations?series=raw' })
+
+        expect(response.statusCode).toBe(200)
+        expect(response.json()).toEqual({ data: effective })
+        expect(data.listRawObservations).not.toHaveBeenCalled()
+        await app.close()
+    })
+
     it('keeps the journal API P95 below 500 ms with five representative years', async () => {
         const app = await createApp(new FiveYearJournal())
         await app.inject({ method: 'GET', url: '/api/journal' })

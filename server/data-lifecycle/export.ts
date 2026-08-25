@@ -28,7 +28,7 @@ export class ExportService {
             dailyMetrics,
         ] = await Promise.all([
             this.journal.list(),
-            this.data.listObservations(),
+            this.data.listRawObservations?.() ?? this.data.listObservations(),
             this.data.listMeals(),
             this.data.getPreferences(),
             this.data.listFoods(),

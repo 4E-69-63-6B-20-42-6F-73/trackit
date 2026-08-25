@@ -28,12 +28,12 @@ describe.runIf(enabled)('PostgreSQL integration', () => {
             const records = (await repository.listObservations({
                 from: '2026-08-20T00:00:00.000Z',
                 to: '2026-08-21T00:00:00.000Z',
-            })) as { id: string; originalUnit: string; observedAt: Date }[]
+            })) as { id: string; originalUnit: string; observedAt: string }[]
             expect(records).toContainEqual(
                 expect.objectContaining({
                     id: created.id,
                     originalUnit: 'kg',
-                    observedAt: new Date('2026-08-20T08:30:00.000Z'),
+                    observedAt: '2026-08-20T08:30:00.000Z',
                 }),
             )
         } finally {

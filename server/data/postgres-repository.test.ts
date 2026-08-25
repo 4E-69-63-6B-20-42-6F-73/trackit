@@ -56,6 +56,48 @@ describe('metric source summaries', () => {
         ])
         await client.close()
     })
+
+    it('precomputes daily totals from the resolved effective sources', async () => {
+        const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values([
+            {
+                metric: 'steps',
+                canonicalValue: 7000,
+                canonicalUnit: 'count',
+                originalValue: 7000,
+                originalUnit: 'count',
+                observedAt: new Date('2026-08-25T08:00:00Z'),
+                metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
+            },
+            {
+                metric: 'steps',
+                canonicalValue: 7000,
+                canonicalUnit: 'count',
+                originalValue: 7000,
+                originalUnit: 'count',
+                observedAt: new Date('2026-08-25T08:00:00Z'),
+                metadata: { source: 'Health Connect', dataOrigin: 'Samsung Health' },
+            },
+        ])
+        const repository = new PostgresDataRepository(database as never)
+        await repository.updatePreferences({
+            metricPreferences: {
+                steps: {
+                    displayUnit: 'count',
+                    deduplication: {
+                        policy: 'prefer_priority',
+                        sourcePriority: ['Health Connect::Garmin'],
+                        disabledSources: ['Health Connect::Samsung Health'],
+                    },
+                },
+            },
+        })
+
+        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual([
+            expect.objectContaining({ date: '2026-08-25', metric: 'steps', value: 7000 }),
+        ])
+        await client.close()
+    })
 })
 
 describe('nutrition snapshot persistence', () => {
