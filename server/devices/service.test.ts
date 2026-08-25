@@ -272,7 +272,11 @@ describe('Android device pairing and upload', () => {
         let projections = (await database.select().from(schema.observations)).filter(
             observation => observation.sourceRecordId === source.id,
         )
-        expect(projections).toHaveLength(6)
+        expect(projections).toHaveLength(7)
+        expect(projections.find(item => item.valueType === 'compound')).toMatchObject({
+            id: source.id,
+            origin: 'external',
+        })
         expect(projections.find(item => item.metric === 'heart_rate')).toMatchObject({
             canonicalValue: 70,
             derivation: 'heart_rate_summary',
@@ -288,7 +292,7 @@ describe('Android device pairing and upload', () => {
         projections = (await database.select().from(schema.observations)).filter(
             observation => observation.sourceRecordId === source.id,
         )
-        expect(projections).toHaveLength(6)
+        expect(projections).toHaveLength(7)
         expect(projections.find(item => item.metric === 'heart_rate')?.canonicalValue).toBe(90)
         expect(await database.select().from(schema.dailyMetrics)).toHaveLength(0)
         expect((await database.select().from(schema.projectionDirtyDates)).length).toBeGreaterThan(
@@ -311,7 +315,7 @@ describe('Android device pairing and upload', () => {
             (await database.select().from(schema.observations)).filter(
                 observation => observation.sourceRecordId === source.id,
             ),
-        ).toHaveLength(6)
+        ).toHaveLength(7)
 
         await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
             {

@@ -195,18 +195,22 @@ export function deriveMetrics(records: Observation[]) {
         bucket[record.metric === 'calories' ? 'intake' : 'burned'].push(record)
         byDay.set(day, bucket)
     }
-    for (const [day, bucket] of byDay) {
+    for (const bucket of byDay.values()) {
         if (!bucket.intake.length || !bucket.burned.length) continue
         const inputs = [...bucket.intake, ...bucket.burned]
         const value =
             bucket.intake.reduce((sum, item) => sum + item.canonicalValue, 0) -
             bucket.burned.reduce((sum, item) => sum + item.canonicalValue, 0)
-        derived.push(derivedObservation('calorie_balance', value, `${day}T23:59:59.999Z`, inputs))
+        const observedAt = inputs.reduce(
+            (latest, input) => (input.observedAt > latest ? input.observedAt : latest),
+            inputs[0].observedAt,
+        )
+        derived.push(derivedObservation('calorie_balance', value, observedAt, inputs))
     }
     return derived
 }
 
-export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
+export function effectiveBaseMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
     const base = resolveOverlaps(
         removeExactDuplicates(raw.filter(record => !record.excluded)),
         preferences,
@@ -215,6 +219,11 @@ export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPr
         metricCatalog.filter(metric => metric.derived).map(metric => metric.id),
     )
     const normalized = base.filter(record => !derivedIds.has(record.metric))
+    return normalized.sort((a, b) => a.observedAt.localeCompare(b.observedAt))
+}
+
+export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
+    const normalized = effectiveBaseMetricSeries(raw, preferences)
     return [...normalized, ...deriveMetrics(normalized)].sort((a, b) =>
         a.observedAt.localeCompare(b.observedAt),
     )

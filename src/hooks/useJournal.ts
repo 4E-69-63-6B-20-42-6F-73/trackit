@@ -91,6 +91,8 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
                 setEvents(current => [saved, ...current.filter(item => item.id !== saved.id)])
                 setFailure(null)
                 setStatus('online')
+                if (event.observation)
+                    window.dispatchEvent(new Event('trackit:observations-changed'))
             } catch {
                 setEvents(current => current.filter(item => item.id !== event.id))
                 setFailure({

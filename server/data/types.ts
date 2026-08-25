@@ -1,14 +1,32 @@
 import { z } from 'zod'
 import { validateGoal } from '../../src/domain/goals.js'
 
-export const observationInputSchema = z.object({
-    id: z.string().uuid().optional(),
-    metric: z.string().trim().min(1).max(100),
-    value: z.number().finite(),
-    unit: z.string().trim().min(1).max(40),
-    observedAt: z.string().datetime(),
-    source: z.string().trim().min(1).max(120).default('You'),
-})
+export const observationInputSchema = z
+    .object({
+        id: z.string().uuid().optional(),
+        metric: z.string().trim().min(1).max(100),
+        valueType: z.enum(['number', 'text', 'boolean', 'category', 'event']).default('number'),
+        value: z.number().finite().optional(),
+        unit: z.string().trim().min(1).max(40).optional(),
+        textValue: z.string().max(2000).optional(),
+        detail: z.string().max(2000).optional(),
+        booleanValue: z.boolean().optional(),
+        categoryValue: z.string().max(160).optional(),
+        title: z.string().trim().min(1).max(160).optional(),
+        category: z.enum(['Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins']).optional(),
+        attributes: z.record(z.string(), z.unknown()).default({}),
+        observedAt: z.string().datetime(),
+        source: z.string().trim().min(1).max(120).default('You'),
+    })
+    .superRefine((input, context) => {
+        if (input.valueType === 'number' && (input.value === undefined || !input.unit))
+            context.addIssue({
+                code: 'custom',
+                message: 'Numeric observations require value and unit',
+            })
+        if (input.valueType === 'text' && input.textValue === undefined)
+            context.addIssue({ code: 'custom', message: 'Text observations require textValue' })
+    })
 
 /** UTC instant range. `from` is inclusive and `to` is exclusive. */
 export type RecordRange = { from?: string; to?: string; metrics?: string[] }
@@ -186,7 +204,10 @@ export const savedTrendViewInputSchema = z.object({
 })
 
 export const observationUpdateSchema = z.object({
-    excluded: z.boolean(),
+    excluded: z.boolean().optional(),
+    title: z.string().trim().min(1).max(160).optional(),
+    textValue: z.string().max(2000).optional(),
+    observedAt: z.string().datetime().optional(),
     version: z.number().int().positive(),
 })
 

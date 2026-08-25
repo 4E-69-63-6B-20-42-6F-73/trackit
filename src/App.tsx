@@ -10,7 +10,6 @@ import { SyncStatus } from './components/SyncStatus'
 import { nav } from './domain/data'
 import type { JournalEvent, Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
-import { createObservation } from './lib/observationApi'
 import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
@@ -97,7 +96,6 @@ export default function App() {
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
     const [insight, setInsight] = useState(true)
-    const [observationRetry, setObservationRetry] = useState<JournalEvent | null>(null)
     const journalQuery =
         page === 'Today' && selectedDay
             ? {
@@ -132,19 +130,8 @@ export default function App() {
         add(copy, true)
         setLastAdded(copy)
     }
-    const persistObservation = async (event: JournalEvent) => {
-        if (!event.observation) return
-        try {
-            await createObservation(event.id, event.observation)
-            window.dispatchEvent(new Event('trackit:observations-changed'))
-            setObservationRetry(null)
-        } catch {
-            setObservationRetry(event)
-        }
-    }
     const addQuick = (event: JournalEvent, allowDuplicate = false) => {
         if (!add(event, allowDuplicate)) return false
-        void persistObservation(event)
         setLastAdded(event)
         return true
     }
@@ -171,14 +158,6 @@ export default function App() {
                     {syncFailure && (
                         <Box px="xl" pt="md">
                             <SyncStatus message={syncFailure} retry={retry} />
-                        </Box>
-                    )}
-                    {observationRetry && (
-                        <Box px="xl" pt="md">
-                            <SyncStatus
-                                message="The journal entry is safe, but its dashboard measurement is not saved yet."
-                                retry={() => void persistObservation(observationRetry)}
-                            />
                         </Box>
                     )}
                     <Suspense fallback={loading}>

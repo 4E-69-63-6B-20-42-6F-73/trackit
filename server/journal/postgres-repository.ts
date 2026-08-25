@@ -1,119 +1,83 @@
-import { and, desc, eq, gte, isNull, lt } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, notExists, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { devices, journalEntries } from '../db/schema.js'
-import type {
-    CreateJournalEntry,
-    JournalEntityLink,
-    JournalEntry,
-    JournalListQuery,
-    JournalRepository,
-    UpdateJournalEntry,
-} from './types.js'
+import { observationRelations, observations } from '../db/schema.js'
+import type { JournalEntry, JournalListQuery, JournalRepository } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
-const toEntry = (
-    row: typeof journalEntries.$inferSelect,
-    deviceName?: string | null,
-): JournalEntry => ({
-    id: row.id,
-    category: row.category,
-    title: row.title,
-    detail: row.detail,
-    source: row.sourceLabel,
-    observedAt: row.observedAt.toISOString(),
-    externalId: row.externalId ?? undefined,
-    version: row.version,
-    createdAt: row.createdAt.toISOString(),
-    updatedAt: row.updatedAt.toISOString(),
-    deviceName: deviceName ?? undefined,
-    entityType: row.entityType
-        ? (row.entityType as 'meal' | 'observation' | 'health_record')
-        : undefined,
-    entityId: row.entityId ?? undefined,
-})
+const sourceLabel = (row: typeof observations.$inferSelect) => {
+    const attributes = row.attributes as Record<string, unknown>
+    const metadata = row.metadata as Record<string, unknown>
+    return typeof attributes.sourceLabel === 'string'
+        ? attributes.sourceLabel
+        : typeof metadata.dataOrigin === 'string'
+          ? metadata.dataOrigin
+          : row.origin === 'external'
+            ? 'Imported'
+            : row.origin === 'derived'
+              ? 'TrackIt'
+              : 'You'
+}
+
+const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
+    const attributes = row.attributes as Record<string, unknown>
+    const detail =
+        typeof attributes.journalDetail === 'string'
+            ? attributes.journalDetail
+            : (row.textValue ??
+              (row.valueType === 'number' && row.canonicalValue !== null
+                  ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
+                  : ''))
+    return {
+        id: row.id,
+        category: (row.category ?? 'Check-ins') as JournalEntry['category'],
+        title: row.title ?? row.metric.replaceAll('_', ' '),
+        detail,
+        source: sourceLabel(row),
+        observedAt: row.observedAt.toISOString(),
+        externalId: row.externalId ?? undefined,
+        version: Number(row.version),
+        createdAt: row.createdAt.toISOString(),
+        updatedAt: row.updatedAt.toISOString(),
+        entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
+        entityId: row.id,
+    }
+}
 
 export class PostgresJournalRepository implements JournalRepository {
     constructor(private readonly database: Database) {}
 
     async list(filters: JournalListQuery = {}) {
-        const conditions = [
-            isNull(journalEntries.deletedAt),
-            ...(filters.from ? [gte(journalEntries.observedAt, new Date(filters.from))] : []),
-            ...(filters.to ? [lt(journalEntries.observedAt, new Date(filters.to))] : []),
-            ...(filters.before ? [lt(journalEntries.observedAt, new Date(filters.before))] : []),
-            ...(filters.category ? [eq(journalEntries.category, filters.category)] : []),
-            ...(filters.source ? [eq(journalEntries.sourceLabel, filters.source)] : []),
-        ]
-        const rows = await this.database
-            .select({ entry: journalEntries, deviceName: devices.name })
-            .from(journalEntries)
-            .leftJoin(devices, eq(journalEntries.sourceId, devices.id))
-            .where(and(...conditions))
-            .orderBy(desc(journalEntries.observedAt))
-            .limit(Math.min(filters.limit ?? 100, 100))
-        return rows.map(row => toEntry(row.entry, row.deviceName))
-    }
-
-    async create(input: CreateJournalEntry & JournalEntityLink) {
-        const [row] = await this.database
-            .insert(journalEntries)
-            .values({
-                id: input.id,
-                category: input.category,
-                title: input.title,
-                detail: input.detail,
-                sourceLabel: input.source,
-                observedAt: new Date(input.observedAt),
-                externalId: input.externalId,
-                entityType: input.entityType,
-                entityId: input.entityId,
-            })
-            .onConflictDoUpdate({
-                target: journalEntries.id,
-                set: {
-                    title: input.title,
-                    detail: input.detail,
-                    updatedAt: new Date(),
-                },
-            })
-            .returning()
-        return toEntry(row)
-    }
-
-    async remove(id: string) {
-        const rows = await this.database
-            .update(journalEntries)
-            .set({ deletedAt: new Date(), updatedAt: new Date() })
-            .where(and(eq(journalEntries.id, id), isNull(journalEntries.deletedAt)))
-            .returning({ id: journalEntries.id })
-        return rows.length > 0
-    }
-
-    async update(id: string, input: UpdateJournalEntry) {
-        const [row] = await this.database
-            .update(journalEntries)
-            .set({
-                title: input.title,
-                detail: input.detail,
-                observedAt: input.observedAt ? new Date(input.observedAt) : undefined,
-                version: input.version + 1,
-                updatedAt: new Date(),
-            })
+        const component = this.database
+            .select({ id: observationRelations.childObservationId })
+            .from(observationRelations)
             .where(
                 and(
-                    eq(journalEntries.id, id),
-                    eq(journalEntries.version, input.version),
-                    isNull(journalEntries.deletedAt),
+                    eq(observationRelations.childObservationId, observations.id),
+                    eq(observationRelations.kind, 'component'),
                 ),
             )
-            .returning()
-        return row ? toEntry(row) : null
+        const conditions = [
+            isNull(observations.deletedAt),
+            sql`${observations.category} is not null`,
+            notExists(component),
+            ...(filters.from ? [gte(observations.observedAt, new Date(filters.from))] : []),
+            ...(filters.to ? [lt(observations.observedAt, new Date(filters.to))] : []),
+            ...(filters.before ? [lt(observations.observedAt, new Date(filters.before))] : []),
+            ...(filters.category ? [eq(observations.category, filters.category)] : []),
+        ]
+        const rows = await this.database
+            .select()
+            .from(observations)
+            .where(and(...conditions))
+            .orderBy(desc(observations.observedAt))
+            .limit(Math.min(filters.limit ?? 100, 100))
+        return rows.map(toEntry).filter(entry => !filters.source || entry.source === filters.source)
     }
 
     async ready() {
-        await this.database.select({ id: journalEntries.id }).from(journalEntries).limit(1)
+        await this.database.select({ id: observations.id }).from(observations).limit(1)
         return true
     }
 }

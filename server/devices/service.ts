@@ -9,6 +9,7 @@ import {
     deviceUploadBatches,
     healthRecords,
     journalEntries,
+    observationRelations,
     observations,
     pairingCodes,
     sources,
@@ -18,12 +19,101 @@ import { deriveRecord } from '../health-records/derive.js'
 import { projectHealthRecordToJournal } from '../health-records/journal.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { nextDate } from '../data/timezone.js'
-import type { CanonicalHealthRecordInput } from '../health-records/types.js'
+import type { CanonicalHealthRecord, CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const deletionTombstoneVersion = Number.MAX_SAFE_INTEGER
+const writeLegacyJournal: boolean = false
+
+async function insertHealthObservationGraph(
+    transaction: Transaction,
+    record: CanonicalHealthRecord,
+    sourceId?: string,
+) {
+    const projections = deriveRecord(record)
+    const components = projections.length
+        ? await transaction
+              .insert(observations)
+              .values(
+                  projections.map(projection => ({
+                      userId: record.userId,
+                      definitionId: projection.metric,
+                      valueType: 'number',
+                      origin: 'external',
+                      metric: projection.metric,
+                      canonicalValue: projection.value,
+                      canonicalUnit: projection.unit,
+                      originalValue: projection.value,
+                      originalUnit: projection.unit,
+                      observedAt: projection.observedAt!,
+                      endedAt: projection.endedAt,
+                      sourceId,
+                      externalId: `${record.externalId}:${projection.metric}:v${projection.derivationVersion}`,
+                      kind: projection.kind,
+                      sourceRecordId: record.id,
+                      derivation: projection.derivation,
+                      derivationVersion: projection.derivationVersion,
+                      version: record.externalVersion,
+                      metadata: {
+                          source: 'Health Connect',
+                          dataOrigin: record.dataOrigin,
+                          connector: 'Health Connect',
+                          provider: record.dataOrigin,
+                      },
+                  })),
+              )
+              .returning({ id: observations.id, metric: observations.metric })
+        : []
+    const journal = projectHealthRecordToJournal(record, projections)
+    const observedAt =
+        record.recordType === 'SleepSessionRecord' && record.endTime
+            ? record.endTime
+            : record.startTime
+    const [root] = await transaction
+        .insert(observations)
+        .values({
+            id: record.id,
+            userId: record.userId,
+            definitionId: record.recordType,
+            valueType: 'compound',
+            origin: 'external',
+            metric: 'health_record',
+            title: journal?.title,
+            category: journal?.category,
+            observedAt,
+            endedAt: record.endTime,
+            sourceId,
+            sourceRecordId: record.id,
+            externalId: record.externalId,
+            attributes: {
+                journalDetail: journal?.detail ?? '',
+                sourceLabel: record.dataOrigin
+                    ? `Health Connect · ${record.dataOrigin}`
+                    : 'Health Connect',
+                recordType: record.recordType,
+            },
+            metadata: {
+                connector: 'Health Connect',
+                provider: record.dataOrigin,
+                dataOrigin: record.dataOrigin,
+            },
+            version: record.externalVersion,
+        })
+        .returning({ id: observations.id })
+    if (root && components.length)
+        await transaction.insert(observationRelations).values(
+            components.map((component, ordinal) => ({
+                parentObservationId: root.id,
+                childObservationId: component.id,
+                kind: 'component',
+                role: component.metric,
+                ordinal,
+            })),
+        )
+    return projections
+}
 
 export type DeviceUploadRecord = {
     externalId: string
@@ -566,53 +656,21 @@ export class DeviceService {
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
-                if (stored.deletedAt)
-                    await transaction
-                        .update(journalEntries)
-                        .set({ deletedAt: now, updatedAt: now })
-                        .where(
-                            and(
-                                eq(journalEntries.entityType, 'health_record'),
-                                eq(journalEntries.entityId, stored.id),
-                            ),
-                        )
                 if (!stored.deletedAt) {
-                    const projections = deriveRecord({
-                        ...input,
-                        id: stored.id,
-                        userId: stored.userId,
-                        startTime: stored.startTime,
-                        endTime: stored.endTime,
-                    })
+                    const projections = await insertHealthObservationGraph(
+                        transaction,
+                        {
+                            ...input,
+                            id: stored.id,
+                            userId: stored.userId,
+                            startTime: stored.startTime,
+                            endTime: stored.endTime,
+                        },
+                        deviceId,
+                    )
                     for (const projection of projections)
                         if (projection.observedAt)
                             affectedDates.add(projection.observedAt.toISOString().slice(0, 10))
-                    if (projections.length)
-                        await transaction.insert(observations).values(
-                            projections.map(projection => ({
-                                userId: stored.userId,
-                                metric: projection.metric,
-                                canonicalValue: projection.value,
-                                canonicalUnit: projection.unit,
-                                originalValue: projection.value,
-                                originalUnit: projection.unit,
-                                observedAt: projection.observedAt!,
-                                endedAt: projection.endedAt,
-                                sourceId: deviceId,
-                                externalId: `${stored.externalId}:${projection.metric}:v${projection.derivationVersion}`,
-                                kind: projection.kind,
-                                sourceRecordId: stored.id,
-                                derivation: projection.derivation,
-                                derivationVersion: projection.derivationVersion,
-                                version: stored.externalVersion,
-                                metadata: {
-                                    source: 'Health Connect',
-                                    dataOrigin: stored.dataOrigin,
-                                    connector: 'Health Connect',
-                                    provider: stored.dataOrigin,
-                                },
-                            })),
-                        )
                     const journal = projectHealthRecordToJournal(
                         {
                             ...input,
@@ -623,7 +681,7 @@ export class DeviceService {
                         },
                         projections,
                     )
-                    if (journal)
+                    if (writeLegacyJournal && journal)
                         await transaction
                             .insert(journalEntries)
                             .values({
@@ -635,7 +693,7 @@ export class DeviceService {
                                     : 'Health Connect',
                                 observedAt:
                                     stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                        ? stored.endTime
+                                        ? stored.endTime!
                                         : stored.startTime,
                                 externalId: `${stored.provider}:${stored.externalId}`,
                                 entityType: 'health_record',
@@ -651,7 +709,7 @@ export class DeviceService {
                                         : 'Health Connect',
                                     observedAt:
                                         stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                            ? stored.endTime
+                                            ? stored.endTime!
                                             : stored.startTime,
                                     deletedAt: null,
                                     updatedAt: now,
@@ -672,11 +730,6 @@ export class DeviceService {
 
     async rebuildHealthRecordObservations() {
         return this.database.transaction(async transaction => {
-            const rebuiltAt = new Date()
-            await transaction
-                .update(journalEntries)
-                .set({ deletedAt: rebuiltAt, updatedAt: rebuiltAt })
-                .where(eq(journalEntries.entityType, 'health_record'))
             const records = await transaction
                 .select()
                 .from(healthRecords)
@@ -692,7 +745,7 @@ export class DeviceService {
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
-                const projections = deriveRecord({
+                const projections = await insertHealthObservationGraph(transaction, {
                     id: stored.id,
                     userId: stored.userId,
                     provider: stored.provider,
@@ -710,7 +763,7 @@ export class DeviceService {
                 for (const projection of projections)
                     if (projection.observedAt)
                         dates.add(projection.observedAt.toISOString().slice(0, 10))
-                if (projections.length)
+                if (false && projections.length)
                     await transaction.insert(observations).values(
                         projections.map(projection => ({
                             userId: stored.userId,
@@ -753,7 +806,7 @@ export class DeviceService {
                     },
                     projections,
                 )
-                if (journal)
+                if (writeLegacyJournal && journal)
                     await transaction
                         .insert(journalEntries)
                         .values({
@@ -764,7 +817,7 @@ export class DeviceService {
                                 : 'Health Connect',
                             observedAt:
                                 stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                    ? stored.endTime
+                                    ? stored.endTime!
                                     : stored.startTime,
                             externalId: `${stored.provider}:${stored.externalId}`,
                             entityType: 'health_record',
@@ -779,10 +832,10 @@ export class DeviceService {
                                     : 'Health Connect',
                                 observedAt:
                                     stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                        ? stored.endTime
+                                        ? stored.endTime!
                                         : stored.startTime,
                                 deletedAt: null,
-                                updatedAt: rebuiltAt,
+                                updatedAt: new Date(),
                             },
                         })
             }

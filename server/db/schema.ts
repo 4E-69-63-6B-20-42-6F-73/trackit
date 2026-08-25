@@ -93,13 +93,24 @@ export const observations = pgTable(
     {
         id: uuid('id').primaryKey().defaultRandom(),
         userId: text('user_id').notNull().default('owner'),
+        definitionId: text('definition_id').notNull().default('metric'),
+        definitionVersion: integer('definition_version').notNull().default(1),
+        valueType: text('value_type').notNull().default('number'),
+        origin: text('origin').notNull().default('manual'),
+        state: text('state').notNull().default('active'),
         metric: text('metric').notNull(),
-        canonicalValue: doublePrecision('canonical_value').notNull(),
-        canonicalUnit: text('canonical_unit').notNull(),
-        originalValue: doublePrecision('original_value').notNull(),
-        originalUnit: text('original_unit').notNull(),
+        canonicalValue: doublePrecision('canonical_value'),
+        canonicalUnit: text('canonical_unit'),
+        originalValue: doublePrecision('original_value'),
+        originalUnit: text('original_unit'),
+        textValue: text('text_value'),
+        booleanValue: boolean('boolean_value'),
+        categoryValue: text('category_value'),
+        title: text('title'),
+        category: text('category'),
         observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
         endedAt: timestamp('ended_at', { withTimezone: true }),
+        recordedAt: timestamp('recorded_at', { withTimezone: true }).notNull().defaultNow(),
         sourceId: uuid('source_id').references(() => sources.id),
         externalId: text('external_id'),
         kind: text('kind').notNull().default('raw_metric'),
@@ -109,6 +120,7 @@ export const observations = pgTable(
         derivation: text('derivation'),
         derivationVersion: integer('derivation_version'),
         metadata: jsonb('metadata').notNull().default({}),
+        attributes: jsonb('attributes').notNull().default({}),
         excluded: boolean('excluded').notNull().default(false),
         version: bigint('version', { mode: 'number' }).notNull().default(1),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
@@ -123,6 +135,88 @@ export const observations = pgTable(
             table.derivationVersion,
         ),
         index('observation_metric_observed_idx').on(table.metric, table.observedAt),
+        index('observation_definition_observed_idx').on(table.definitionId, table.observedAt),
+        index('observation_category_observed_idx').on(table.category, table.observedAt),
+    ],
+)
+
+export const observationRelations = pgTable(
+    'observation_relations',
+    {
+        parentObservationId: uuid('parent_observation_id')
+            .notNull()
+            .references(() => observations.id, { onDelete: 'cascade' }),
+        childObservationId: uuid('child_observation_id')
+            .notNull()
+            .references(() => observations.id, { onDelete: 'cascade' }),
+        kind: text('kind').notNull(),
+        role: text('role').notNull(),
+        ordinal: integer('ordinal').notNull().default(0),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        uniqueIndex('observation_relation_identity_idx').on(
+            table.parentObservationId,
+            table.childObservationId,
+            table.kind,
+            table.role,
+        ),
+        index('observation_relation_child_idx').on(table.childObservationId),
+    ],
+)
+
+// Rebuildable materialization of system-derived observations. These rows are
+// deliberately separate from observations: they accelerate reads without
+// becoming authoritative facts or obscuring their input lineage.
+export const derivedObservations = pgTable(
+    'derived_observations',
+    {
+        id: text('id').primaryKey(),
+        userId: text('user_id').notNull().default('owner'),
+        date: text('date').notNull(),
+        metric: text('metric').notNull(),
+        canonicalValue: doublePrecision('canonical_value').notNull(),
+        canonicalUnit: text('canonical_unit').notNull(),
+        observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
+        endedAt: timestamp('ended_at', { withTimezone: true }),
+        derivation: text('derivation').notNull(),
+        derivationVersion: integer('derivation_version').notNull(),
+        resolutionVersion: integer('resolution_version').notNull(),
+        timezone: text('timezone').notNull(),
+        inputFingerprint: text('input_fingerprint').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        index('derived_observation_metric_observed_idx').on(table.metric, table.observedAt),
+        index('derived_observation_materialization_idx').on(
+            table.userId,
+            table.date,
+            table.resolutionVersion,
+            table.derivationVersion,
+        ),
+    ],
+)
+
+export const derivedObservationInputs = pgTable(
+    'derived_observation_inputs',
+    {
+        derivedObservationId: text('derived_observation_id')
+            .notNull()
+            .references(() => derivedObservations.id, { onDelete: 'cascade' }),
+        inputObservationId: text('input_observation_id').notNull(),
+        inputVersion: bigint('input_version', { mode: 'number' }).notNull(),
+        role: text('role').notNull().default('input'),
+        ordinal: integer('ordinal').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        uniqueIndex('derived_observation_input_identity_idx').on(
+            table.derivedObservationId,
+            table.inputObservationId,
+            table.role,
+        ),
+        index('derived_observation_input_reverse_idx').on(table.inputObservationId),
     ],
 )
 

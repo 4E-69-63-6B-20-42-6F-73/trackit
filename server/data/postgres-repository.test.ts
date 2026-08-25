@@ -4,6 +4,7 @@ import { drizzle } from 'drizzle-orm/pglite'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { PostgresDataRepository } from './postgres-repository.js'
+import { rebuildEffectiveDailyMetric } from './daily-projection.js'
 
 async function migratedDatabase() {
     const client = new PGlite()
@@ -37,16 +38,24 @@ describe('metric source summaries', () => {
                 observedAt: new Date('2026-08-26T00:00:00.000Z'),
             },
         ])
-        await database.insert(schema.meals).values([
+        await database.insert(schema.observations).values([
             {
-                name: 'Before midnight',
-                mealType: 'Snack',
-                eatenAt: new Date('2026-08-25T23:59:59.999Z'),
+                definitionId: 'meal',
+                valueType: 'compound',
+                metric: 'meal',
+                title: 'Before midnight',
+                category: 'Meals',
+                observedAt: new Date('2026-08-25T23:59:59.999Z'),
+                attributes: { mealType: 'Snack', nutrientSnapshot: {} },
             },
             {
-                name: 'At midnight',
-                mealType: 'Snack',
-                eatenAt: new Date('2026-08-26T00:00:00.000Z'),
+                definitionId: 'meal',
+                valueType: 'compound',
+                metric: 'meal',
+                title: 'At midnight',
+                category: 'Meals',
+                observedAt: new Date('2026-08-26T00:00:00.000Z'),
+                attributes: { mealType: 'Snack', nutrientSnapshot: {} },
             },
         ])
         const repository = new PostgresDataRepository(database as never)
@@ -145,6 +154,54 @@ describe('metric source summaries', () => {
         expect(records.find(record => record.metric === 'calorie_balance')?.canonicalValue).toBe(
             1600,
         )
+        await client.close()
+    })
+
+    it('materializes derived observations with lineage and serves the valid cache', async () => {
+        const { client, database } = await migratedDatabase()
+        const [height, weight] = await database
+            .insert(schema.observations)
+            .values([
+                {
+                    metric: 'height',
+                    canonicalValue: 180,
+                    canonicalUnit: 'cm',
+                    originalValue: 180,
+                    originalUnit: 'cm',
+                    observedAt: new Date('2026-08-20T07:00:00Z'),
+                },
+                {
+                    metric: 'weight',
+                    canonicalValue: 81,
+                    canonicalUnit: 'kg',
+                    originalValue: 81,
+                    originalUnit: 'kg',
+                    observedAt: new Date('2026-08-25T08:00:00Z'),
+                },
+            ])
+            .returning()
+        await rebuildEffectiveDailyMetric(database as never, '2026-08-25')
+
+        const [cached] = await database.select().from(schema.derivedObservations)
+        expect(cached).toMatchObject({
+            metric: 'bmi',
+            canonicalUnit: 'kg/m²',
+            derivationVersion: 1,
+            resolutionVersion: 1,
+        })
+        const lineage = await database.select().from(schema.derivedObservationInputs)
+        expect(lineage.map(input => input.inputObservationId).sort()).toEqual(
+            [height.id, weight.id].sort(),
+        )
+
+        const repository = new PostgresDataRepository(database as never)
+        const [record] = (await repository.listObservations({
+            from: '2026-08-25T00:00:00.000Z',
+            to: '2026-08-26T00:00:00.000Z',
+            metrics: ['bmi'],
+        })) as Array<{ metadata: { cached?: boolean; inputRecordIds?: string[] } }>
+        expect(record.metadata).toMatchObject({ cached: true })
+        expect(record.metadata.inputRecordIds?.sort()).toEqual([height.id, weight.id].sort())
         await client.close()
     })
 

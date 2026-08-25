@@ -10,6 +10,14 @@ export const createJournalEntrySchema = z.object({
     source: z.string().trim().min(1).max(120).default('You'),
     observedAt: z.string().datetime(),
     externalId: z.string().max(255).optional(),
+    observation: z
+        .object({
+            metric: z.string().trim().min(1).max(100),
+            value: z.number().finite(),
+            unit: z.string().trim().min(1).max(40),
+            observedAt: z.string().datetime(),
+        })
+        .optional(),
 })
 
 export type CreateJournalEntry = z.infer<typeof createJournalEntrySchema>
@@ -45,8 +53,5 @@ export type JournalListQuery = {
 
 export interface JournalRepository {
     list(query?: JournalListQuery): Promise<JournalEntry[]>
-    create(input: CreateJournalEntry & JournalEntityLink): Promise<JournalEntry>
-    update(id: string, input: UpdateJournalEntry): Promise<JournalEntry | null>
-    remove(id: string): Promise<boolean>
     ready(): Promise<boolean>
 }

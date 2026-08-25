@@ -9,6 +9,7 @@ import {
     deviceUploadBatches,
     dailyMetrics,
     dailyProjectionRuns,
+    derivedObservations,
     foods,
     goals,
     healthRecords,
@@ -231,6 +232,7 @@ export class DataLifecycleService {
                 }
                 await transaction.delete(observations)
                 await transaction.delete(healthRecords)
+                await transaction.delete(derivedObservations)
                 await transaction.delete(dailyMetrics)
                 await transaction.delete(dailyProjectionRuns)
             }
@@ -250,6 +252,9 @@ export class DataLifecycleService {
                     )
                 }
                 await transaction.delete(meals)
+                await transaction
+                    .delete(derivedObservations)
+                    .where(eq(derivedObservations.metric, 'calorie_balance'))
                 const [saved] = await transaction
                     .select({ timezone: preferences.timezone })
                     .from(preferences)
@@ -282,6 +287,7 @@ export class DataLifecycleService {
             await transaction.delete(foods)
             await transaction.delete(observations)
             await transaction.delete(healthRecords)
+            await transaction.delete(derivedObservations)
             await transaction.delete(dailyMetrics)
             await transaction.delete(dailyProjectionRuns)
             await transaction.delete(projectionDirtyDates)
