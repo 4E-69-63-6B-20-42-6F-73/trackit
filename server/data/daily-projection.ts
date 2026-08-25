@@ -9,6 +9,7 @@ import type { MetricPreferences } from '../../src/domain/metrics.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
+export const EFFECTIVE_DAILY_DERIVATION_VERSION = 2
 
 export async function rebuildEffectiveDailyMetric(
     database: Database | Transaction,
@@ -61,7 +62,7 @@ export async function rebuildEffectiveDailyMetric(
             metric,
             value,
             unit: definition.canonicalUnit,
-            derivationVersion: Math.max(...values.map(record => record.version)),
+            derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
         })
     }
 }

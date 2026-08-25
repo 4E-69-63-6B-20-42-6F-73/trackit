@@ -37,6 +37,7 @@ describe('metric source summaries', () => {
                 originalUnit: 'count',
                 observedAt: new Date('2026-08-25T08:00:00Z'),
                 metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
+                version: 1787185408646,
             },
             {
                 metric: 'weight',
@@ -94,7 +95,12 @@ describe('metric source summaries', () => {
         })
 
         expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual([
-            expect.objectContaining({ date: '2026-08-25', metric: 'steps', value: 7000 }),
+            expect.objectContaining({
+                date: '2026-08-25',
+                metric: 'steps',
+                value: 7000,
+                derivationVersion: 2,
+            }),
         ])
         await client.close()
     })

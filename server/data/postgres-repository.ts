@@ -19,7 +19,10 @@ import type { DataRepository, RecordRange } from './types.js'
 import { effectiveMetricSeries } from '../../src/domain/effectiveMetrics.js'
 import type { Observation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
-import { rebuildEffectiveDailyMetric } from './daily-projection.js'
+import {
+    EFFECTIVE_DAILY_DERIVATION_VERSION,
+    rebuildEffectiveDailyMetric,
+} from './daily-projection.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -92,9 +95,30 @@ export class PostgresDataRepository implements DataRepository {
         const preferenceUpdatedAt = saved[0]?.updatedAt
         const staleDates = new Set(
             rows
-                .filter(row => preferenceUpdatedAt && row.updatedAt < preferenceUpdatedAt)
+                .filter(
+                    row =>
+                        row.derivationVersion !== EFFECTIVE_DAILY_DERIVATION_VERSION ||
+                        Boolean(preferenceUpdatedAt && row.updatedAt < preferenceUpdatedAt),
+                )
                 .map(row => row.date),
         )
+        if (staleDates.size || !rows.length) {
+            const observationConditions = [isNull(observations.deletedAt)]
+            if (range.from)
+                observationConditions.push(
+                    gte(observations.observedAt, new Date(`${range.from}T00:00:00.000Z`)),
+                )
+            if (range.to)
+                observationConditions.push(
+                    lte(observations.observedAt, new Date(`${range.to}T23:59:59.999Z`)),
+                )
+            const timestamps = await this.database
+                .select({ observedAt: observations.observedAt })
+                .from(observations)
+                .where(and(...observationConditions))
+            for (const item of timestamps)
+                staleDates.add(item.observedAt.toISOString().slice(0, 10))
+        }
         if (!staleDates.size) return rows
         for (const date of staleDates) await rebuildEffectiveDailyMetric(this.database, date)
         return query()
