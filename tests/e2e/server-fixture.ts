@@ -1,4 +1,6 @@
 import type { Page } from '@playwright/test'
+import { evaluateGoal, type Goal } from '../../src/domain/goals'
+import type { Observation } from '../../src/domain/health'
 
 /** Authenticates through a server response; no application data is stored in the browser. */
 export async function useAuthenticatedServer(
@@ -66,6 +68,28 @@ export async function useAuthenticatedServer(
                 status: 200,
                 contentType: 'application/json',
                 body: JSON.stringify({ data: options.goals }),
+            })
+        }
+        if (path === '/api/goals/evaluations' && options.goals) {
+            const requestUrl = new URL(route.request().url())
+            const evaluatedAt = requestUrl.searchParams.get('at')
+            const now = evaluatedAt ? new Date(evaluatedAt) : new Date()
+            const timezone = String(options.preferences?.timezone ?? 'UTC')
+            const evaluations = Object.fromEntries(
+                options.goals.map(goal => [
+                    String(goal.id),
+                    evaluateGoal(
+                        goal as Goal,
+                        (options.observations ?? []) as unknown as Observation[],
+                        now,
+                        timezone,
+                    ),
+                ]),
+            )
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data: evaluations }),
             })
         }
         if (

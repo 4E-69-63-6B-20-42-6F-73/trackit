@@ -1,7 +1,9 @@
 import { expect, test } from '@playwright/test'
 import { useAuthenticatedServer } from './server-fixture'
 
-test('configures provider-aware source priority without exposing raw internals', async ({ page }) => {
+test('configures provider-aware source priority without exposing raw internals', async ({
+    page,
+}) => {
     const observations = ['Garmin', 'Samsung Health'].map((provider, index) => ({
         id: `source-${index}`,
         metric: 'steps',

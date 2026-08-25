@@ -10,7 +10,8 @@ export const observationInputSchema = z.object({
     source: z.string().trim().min(1).max(120).default('You'),
 })
 
-export type RecordRange = { from?: string; to?: string }
+/** UTC instant range. `from` is inclusive and `to` is exclusive. */
+export type RecordRange = { from?: string; to?: string; metrics?: string[] }
 
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),

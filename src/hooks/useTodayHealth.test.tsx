@@ -5,9 +5,11 @@ import { ServerDataProvider } from './useServerData'
 import { useTodayHealth } from './useTodayHealth'
 import { listDailyMetrics } from '../lib/dailyMetricApi'
 import { listObservations } from '../lib/observationApi'
+import { listGoalEvaluations } from '../lib/goalApi'
 
 vi.mock('../lib/dailyMetricApi', () => ({ listDailyMetrics: vi.fn() }))
 vi.mock('../lib/observationApi', () => ({ listObservations: vi.fn() }))
+vi.mock('../lib/goalApi', () => ({ listGoalEvaluations: vi.fn() }))
 
 const wrapper = ({ children }: { children: ReactNode }) => (
     <ServerDataProvider
@@ -36,6 +38,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 
 describe('useTodayHealth effective totals', () => {
     beforeEach(() => {
+        vi.mocked(listGoalEvaluations).mockResolvedValue({})
         vi.mocked(listDailyMetrics).mockResolvedValue([
             {
                 date: '2026-08-25',
@@ -76,8 +79,15 @@ describe('useTodayHealth effective totals', () => {
         const observationRange = vi.mocked(listObservations).mock.calls.at(-1)?.[0]
         expect(observationRange).toBeDefined()
         expect(
-            new Date(observationRange!.to!).getTime() -
-                new Date(observationRange!.from!).getTime(),
+            new Date(observationRange!.to!).getTime() - new Date(observationRange!.from!).getTime(),
         ).toBe(86_400_000)
+        expect(observationRange!.metrics).toEqual([
+            'steps',
+            'water',
+            'sleep',
+            'resting_heart_rate',
+            'energy',
+            'weight',
+        ])
     })
 })

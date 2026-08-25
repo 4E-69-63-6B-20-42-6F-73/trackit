@@ -8,6 +8,7 @@ import {
     devices,
     deviceUploadBatches,
     dailyMetrics,
+    dailyProjectionRuns,
     foods,
     goals,
     healthRecords,
@@ -22,6 +23,7 @@ import {
     pairingCodes,
     passkeys,
     preferences,
+    projectionDirtyDates,
     recipeItems,
     recipes,
     retentionRules,
@@ -30,6 +32,8 @@ import {
     sources,
     syncCursors,
 } from '../db/schema.js'
+import { markProjectionDatesDirty } from '../data/projection-state.js'
+import { dateKeyInTimezone } from '../data/timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -125,6 +129,10 @@ export class DataLifecycleService {
                         .select({ id: healthRecords.id })
                         .from(healthRecords)
                         .where(lt(healthRecords.startTime, cutoff))
+                    const linked = await transaction
+                        .select({ id: observations.id, observedAt: observations.observedAt })
+                        .from(observations)
+                        .where(lt(observations.observedAt, cutoff))
                     if (sourceRecords.length)
                         await transaction.delete(journalEntries).where(
                             and(
@@ -135,13 +143,6 @@ export class DataLifecycleService {
                                 ),
                             ),
                         )
-                    await transaction
-                        .delete(healthRecords)
-                        .where(lt(healthRecords.startTime, cutoff))
-                    const linked = await transaction
-                        .select({ id: observations.id })
-                        .from(observations)
-                        .where(lt(observations.observedAt, cutoff))
                     if (linked.length)
                         await transaction.delete(journalEntries).where(
                             and(
@@ -153,14 +154,24 @@ export class DataLifecycleService {
                             ),
                         )
                     await transaction
+                        .delete(healthRecords)
+                        .where(lt(healthRecords.startTime, cutoff))
+                    await transaction
                         .delete(observations)
                         .where(lt(observations.observedAt, cutoff))
-                    await transaction
-                        .delete(dailyMetrics)
-                        .where(lt(dailyMetrics.date, cutoff.toISOString().slice(0, 10)))
+                    const [saved] = await transaction
+                        .select({ timezone: preferences.timezone })
+                        .from(preferences)
+                        .where(eq(preferences.id, 'owner'))
+                    await markProjectionDatesDirty(
+                        transaction,
+                        linked.map(item =>
+                            dateKeyInTimezone(item.observedAt, saved?.timezone ?? 'UTC'),
+                        ),
+                    )
                 } else if (rule.category === 'meals') {
                     const linked = await transaction
-                        .select({ id: meals.id })
+                        .select({ id: meals.id, eatenAt: meals.eatenAt })
                         .from(meals)
                         .where(lt(meals.eatenAt, cutoff))
                     if (linked.length)
@@ -174,6 +185,16 @@ export class DataLifecycleService {
                             ),
                         )
                     await transaction.delete(meals).where(lt(meals.eatenAt, cutoff))
+                    const [saved] = await transaction
+                        .select({ timezone: preferences.timezone })
+                        .from(preferences)
+                        .where(eq(preferences.id, 'owner'))
+                    await markProjectionDatesDirty(
+                        transaction,
+                        linked.map(item =>
+                            dateKeyInTimezone(item.eatenAt, saved?.timezone ?? 'UTC'),
+                        ),
+                    )
                 } else if (rule.category === 'journal') {
                     await transaction
                         .delete(journalEntries)
@@ -211,9 +232,12 @@ export class DataLifecycleService {
                 await transaction.delete(observations)
                 await transaction.delete(healthRecords)
                 await transaction.delete(dailyMetrics)
+                await transaction.delete(dailyProjectionRuns)
             }
             if (category === 'meals') {
-                const linked = await transaction.select({ id: meals.id }).from(meals)
+                const linked = await transaction
+                    .select({ id: meals.id, eatenAt: meals.eatenAt })
+                    .from(meals)
                 if (linked.length) {
                     await transaction.delete(journalEntries).where(
                         and(
@@ -226,6 +250,14 @@ export class DataLifecycleService {
                     )
                 }
                 await transaction.delete(meals)
+                const [saved] = await transaction
+                    .select({ timezone: preferences.timezone })
+                    .from(preferences)
+                    .where(eq(preferences.id, 'owner'))
+                await markProjectionDatesDirty(
+                    transaction,
+                    linked.map(item => dateKeyInTimezone(item.eatenAt, saved?.timezone ?? 'UTC')),
+                )
             }
             if (category === 'journal') await transaction.delete(journalEntries)
             await transaction.insert(auditEvents).values({
@@ -251,6 +283,8 @@ export class DataLifecycleService {
             await transaction.delete(observations)
             await transaction.delete(healthRecords)
             await transaction.delete(dailyMetrics)
+            await transaction.delete(dailyProjectionRuns)
+            await transaction.delete(projectionDirtyDates)
             await transaction.delete(journalEntries)
             await transaction.delete(goals)
             await transaction.delete(savedTrendViews)

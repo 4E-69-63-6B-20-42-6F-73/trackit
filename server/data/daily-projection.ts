@@ -1,50 +1,36 @@
-import { and, eq, gte, isNull, lt } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { dailyMetrics, observations, preferences } from '../db/schema.js'
-import { effectiveMetricSeries } from '../../src/domain/effectiveMetrics.js'
+import {
+    dailyMetrics,
+    dailyProjectionRuns,
+    preferences,
+    projectionDirtyDates,
+} from '../db/schema.js'
 import { aggregateDailyObservations, type Observation } from '../../src/domain/health.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import type { MetricPreferences } from '../../src/domain/metrics.js'
+import { localDayRange } from './timezone.js'
+import { getEffectiveMetricSeries } from './effective-series.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 export const EFFECTIVE_DAILY_DERIVATION_VERSION = 2
 
-export async function rebuildEffectiveDailyMetric(
-    database: Database | Transaction,
-    date: string,
-) {
-    const from = new Date(`${date}T00:00:00.000Z`)
-    const to = new Date(from.getTime() + 86_400_000)
-    const [records, saved] = await Promise.all([
-        database
-            .select()
-            .from(observations)
-            .where(
-                and(
-                    eq(observations.userId, 'owner'),
-                    isNull(observations.deletedAt),
-                    gte(observations.observedAt, from),
-                    lt(observations.observedAt, to),
-                ),
-            ),
-        database
-            .select({ metricPreferences: preferences.metricPreferences })
-            .from(preferences)
-            .where(eq(preferences.id, 'owner')),
-    ])
-    const normalized = records.map(record => ({
-        ...record,
-        observedAt: record.observedAt.toISOString(),
-        endedAt: record.endedAt?.toISOString() ?? null,
-        metadata: record.metadata as Record<string, unknown>,
-        version: Number(record.version),
-    })) as Observation[]
-    const effective = effectiveMetricSeries(
-        normalized,
-        (saved[0]?.metricPreferences ?? undefined) as MetricPreferences | undefined,
-    )
+export async function replaceEffectiveDailyMetric(database: Transaction, date: string) {
+    const [saved] = await database
+        .select({
+            metricPreferences: preferences.metricPreferences,
+            metricResolutionVersion: preferences.metricResolutionVersion,
+            timezone: preferences.timezone,
+        })
+        .from(preferences)
+        .where(eq(preferences.id, 'owner'))
+    const timezone = saved?.timezone ?? 'UTC'
+    const { from, to } = localDayRange(date, timezone)
+    const effective = await getEffectiveMetricSeries(database, {
+        from: from.toISOString(),
+        to: to.toISOString(),
+    })
 
     await database
         .delete(dailyMetrics)
@@ -63,6 +49,36 @@ export async function rebuildEffectiveDailyMetric(
             value,
             unit: definition.canonicalUnit,
             derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
+            resolutionVersion: saved?.metricResolutionVersion ?? 1,
+            timezone,
         })
     }
+    await database
+        .insert(dailyProjectionRuns)
+        .values({
+            userId: 'owner',
+            date,
+            derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
+            resolutionVersion: saved?.metricResolutionVersion ?? 1,
+            timezone,
+            status: 'complete',
+        })
+        .onConflictDoUpdate({
+            target: [dailyProjectionRuns.userId, dailyProjectionRuns.date],
+            set: {
+                derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
+                resolutionVersion: saved?.metricResolutionVersion ?? 1,
+                timezone,
+                status: 'complete',
+                completedAt: new Date(),
+                updatedAt: new Date(),
+            },
+        })
+    await database
+        .delete(projectionDirtyDates)
+        .where(and(eq(projectionDirtyDates.userId, 'owner'), eq(projectionDirtyDates.date, date)))
+}
+
+export function rebuildEffectiveDailyMetric(database: Database, date: string) {
+    return database.transaction(transaction => replaceEffectiveDailyMetric(transaction, date))
 }

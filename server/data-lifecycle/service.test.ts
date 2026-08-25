@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { applyTestMigrations } from '../db/test-migrations.js'
 import { DataLifecycleService } from './service.js'
+import { PostgresDataRepository } from '../data/postgres-repository.js'
 
 describe('data lifecycle', () => {
     it('deletes linked journal representations with selected health categories', async () => {
@@ -77,6 +78,35 @@ describe('data lifecycle', () => {
         await lifecycle.applyRetention()
         expect(await database.select().from(schema.meals)).toHaveLength(0)
         expect(await database.select().from(schema.journalEntries)).toHaveLength(0)
+        await client.close()
+    })
+
+    it('marks meal projections dirty and removes deleted nutrients on the next read', async () => {
+        const client = new PGlite()
+        await applyTestMigrations(client)
+        const database = drizzle(client, { schema })
+        await database.insert(schema.meals).values({
+            name: 'Retained in projection',
+            mealType: 'Dinner',
+            eatenAt: new Date('2026-08-25T18:00:00Z'),
+            nutrientSnapshot: { calories: 800 },
+        })
+        const repository = new PostgresDataRepository(database as never)
+        expect(
+            (await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).some(
+                row => (row as { metric: string }).metric === 'calories',
+            ),
+        ).toBe(true)
+
+        const lifecycle = new DataLifecycleService(database as never)
+        await lifecycle.deleteCategory('meals')
+        expect(await database.select().from(schema.projectionDirtyDates)).toHaveLength(1)
+        expect(
+            (await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).some(
+                row => (row as { metric: string }).metric === 'calories',
+            ),
+        ).toBe(false)
+        expect(await database.select().from(schema.projectionDirtyDates)).toHaveLength(0)
         await client.close()
     })
 })

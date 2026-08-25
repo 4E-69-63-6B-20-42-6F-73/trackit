@@ -9,8 +9,15 @@ export function DailyNutritionPanel({
     openGoals?: () => void
     selectedDate: Date
 }) {
-    const { nutrients, mealCount, loading, unavailable, proteinGoal, nutritionQuality } =
-        useDailyNutrition(selectedDate)
+    const {
+        nutrients,
+        mealCount,
+        loading,
+        unavailable,
+        proteinGoal,
+        hasProteinGoal,
+        nutritionQuality,
+    } = useDailyNutrition(selectedDate)
 
     if (loading)
         return (
@@ -52,6 +59,16 @@ export function DailyNutritionPanel({
                     size="sm"
                     aria-label="Daily protein progress"
                 />
+            ) : hasProteinGoal ? (
+                <Button
+                    variant="subtle"
+                    color="trackit"
+                    size="compact-sm"
+                    onClick={openGoals}
+                    disabled={!openGoals}
+                >
+                    View protein goal
+                </Button>
             ) : (
                 <Button
                     variant="subtle"

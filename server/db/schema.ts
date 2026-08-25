@@ -135,10 +135,37 @@ export const dailyMetrics = pgTable(
         value: doublePrecision('value').notNull(),
         unit: text('unit').notNull(),
         derivationVersion: integer('derivation_version').notNull(),
+        resolutionVersion: integer('resolution_version').notNull().default(1),
+        timezone: text('timezone').notNull().default('UTC'),
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
     table => [uniqueIndex('daily_metric_identity_idx').on(table.userId, table.date, table.metric)],
+)
+
+export const dailyProjectionRuns = pgTable(
+    'daily_projection_runs',
+    {
+        userId: text('user_id').notNull().default('owner'),
+        date: text('date').notNull(),
+        derivationVersion: integer('derivation_version').notNull(),
+        resolutionVersion: integer('resolution_version').notNull(),
+        timezone: text('timezone').notNull(),
+        status: text('status').notNull().default('complete'),
+        completedAt: timestamp('completed_at', { withTimezone: true }).notNull().defaultNow(),
+        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [uniqueIndex('daily_projection_run_identity_idx').on(table.userId, table.date)],
+)
+
+export const projectionDirtyDates = pgTable(
+    'projection_dirty_dates',
+    {
+        userId: text('user_id').notNull().default('owner'),
+        date: text('date').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [uniqueIndex('projection_dirty_date_identity_idx').on(table.userId, table.date)],
 )
 
 export const meals = pgTable(
@@ -225,6 +252,7 @@ export const preferences = pgTable('preferences', {
     locale: text('locale').notNull().default('en'),
     units: text('units').notNull().default('metric'),
     metricPreferences: jsonb('metric_preferences'),
+    metricResolutionVersion: integer('metric_resolution_version').notNull().default(1),
     goals: jsonb('goals').notNull().default({}),
     mcpEnabled: boolean('mcp_enabled').notNull().default(false),
     experience: jsonb('experience').notNull().default({}),

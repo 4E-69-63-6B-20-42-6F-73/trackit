@@ -1,4 +1,16 @@
-import { ActionIcon, Alert, Button, Group, Modal, Radio, SegmentedControl, Select, Stack, Switch, Text } from '@mantine/core'
+import {
+    ActionIcon,
+    Alert,
+    Button,
+    Group,
+    Modal,
+    Radio,
+    SegmentedControl,
+    Select,
+    Stack,
+    Switch,
+    Text,
+} from '@mantine/core'
 import { IconArrowDown, IconArrowUp } from '@tabler/icons-react'
 import { useEffect, useMemo, useState } from 'react'
 import { PageHeader } from '../components/PageHeader'
@@ -47,7 +59,9 @@ export function Metrics() {
     )
     useEffect(() => {
         const controller = new AbortController()
-        void listMetricSources(controller.signal).then(setSourceSummaries).catch(() => undefined)
+        void listMetricSources(controller.signal)
+            .then(setSourceSummaries)
+            .catch(() => undefined)
         return () => controller.abort()
     }, [])
     const save = async (
@@ -90,9 +104,7 @@ export function Metrics() {
             ...(selected[metric.id].deduplication?.sourcePriority ?? []),
             ...(metricSources[metric.id] ?? [])
                 .map(source => source.key)
-                .filter(
-                    key => !selected[metric.id].deduplication?.sourcePriority.includes(key),
-                ),
+                .filter(key => !selected[metric.id].deduplication?.sourcePriority.includes(key)),
         ])
     }
     const moveSource = (index: number, direction: -1 | 1) => {
@@ -146,7 +158,10 @@ export function Metrics() {
                             .filter(metric => metric.category === category)
                             .map(metric => {
                                 const configurable =
-                                    metric.displayUnits.length > 1 || metric.precision > 0 || Boolean(metric.derived) || (metricSources[metric.id]?.length ?? 0) > 1
+                                    metric.displayUnits.length > 1 ||
+                                    metric.precision > 0 ||
+                                    Boolean(metric.derived) ||
+                                    (metricSources[metric.id]?.length ?? 0) > 1
                                 return (
                                     <MetricRow
                                         key={metric.id}
@@ -207,14 +222,27 @@ export function Metrics() {
                 )}
                 {editing?.derived && (
                     <section className="metric-derived-note">
-                        <Text fw={650} size="sm">Calculated automatically</Text>
+                        <Text fw={650} size="sm">
+                            Calculated automatically
+                        </Text>
                         <Text size="sm" c="dimmed">
-                            Uses {editing.derived.inputs.map(input => metricCatalog.find(metric => metric.id === input)?.name ?? input).join(' and ')} from your effective metric series.
+                            Uses{' '}
+                            {editing.derived.inputs
+                                .map(
+                                    input =>
+                                        metricCatalog.find(metric => metric.id === input)?.name ??
+                                        input,
+                                )
+                                .join(' and ')}{' '}
+                            from your effective metric series.
                         </Text>
                     </section>
                 )}
                 {editing && (metricSources[editing.id]?.length ?? 0) > 1 && (
-                    <section className="metric-source-settings" aria-labelledby="metric-data-sources">
+                    <section
+                        className="metric-source-settings"
+                        aria-labelledby="metric-data-sources"
+                    >
                         <div>
                             <Text id="metric-data-sources" fw={650}>
                                 Data sources
@@ -236,7 +264,9 @@ export function Metrics() {
                                 </Text>
                             </div>
                             {draftSourcePriority.map((key, index) => {
-                                const source = metricSources[editing.id].find(item => item.key === key)
+                                const source = metricSources[editing.id].find(
+                                    item => item.key === key,
+                                )
                                 if (!source) return null
                                 const included = !draftDisabledSources.includes(key)
                                 return (
@@ -304,11 +334,23 @@ export function Metrics() {
                             label="When included sources overlap"
                             value={draftPolicy}
                             disabled={saving}
-                            onChange={value => value && setDraftPolicy(value as DeduplicationPolicy)}
+                            onChange={value =>
+                                value && setDraftPolicy(value as DeduplicationPolicy)
+                            }
                             data={[
                                 { value: 'keep_all', label: 'Keep all records' },
-                                { value: 'prefer_priority', label: 'Prefer higher-priority source' },
-                                ...(['steps', 'active_calories'].includes(editing.id) ? [{ value: 'metric_merge', label: 'Merge overlapping records' }] : []),
+                                {
+                                    value: 'prefer_priority',
+                                    label: 'Prefer higher-priority source',
+                                },
+                                ...(['steps', 'active_calories'].includes(editing.id)
+                                    ? [
+                                          {
+                                              value: 'metric_merge',
+                                              label: 'Merge overlapping records',
+                                          },
+                                      ]
+                                    : []),
                             ]}
                         />
                         <Text size="xs" c="dimmed">
@@ -328,35 +370,35 @@ export function Metrics() {
                     (editing.displayUnits.length > 1 ||
                     editing.precision > 0 ||
                     (metricSources[editing.id]?.length ?? 0) > 1 ? (
-                    <Group justify="flex-end" mt="xl">
-                        <Button variant="default" onClick={() => setEditing(null)}>
-                            Cancel
-                        </Button>
-                        <Button
-                            loading={saving}
-                            onClick={() =>
-                                void save({
-                                    ...selected,
-                                    [editing.id]: {
-                                        ...selected[editing.id],
-                                        displayUnit: draftUnit,
-                                        precision: draftPrecision ?? editing.precision,
-                                        ...((metricSources[editing.id]?.length ?? 0) > 1
-                                            ? {
-                                                  deduplication: {
-                                                      policy: draftPolicy,
-                                                      sourcePriority: draftSourcePriority,
-                                                      disabledSources: draftDisabledSources,
-                                                  },
-                                              }
-                                            : {}),
-                                    },
-                                })
-                            }
-                        >
-                            Save
-                        </Button>
-                    </Group>
+                        <Group justify="flex-end" mt="xl">
+                            <Button variant="default" onClick={() => setEditing(null)}>
+                                Cancel
+                            </Button>
+                            <Button
+                                loading={saving}
+                                onClick={() =>
+                                    void save({
+                                        ...selected,
+                                        [editing.id]: {
+                                            ...selected[editing.id],
+                                            displayUnit: draftUnit,
+                                            precision: draftPrecision ?? editing.precision,
+                                            ...((metricSources[editing.id]?.length ?? 0) > 1
+                                                ? {
+                                                      deduplication: {
+                                                          policy: draftPolicy,
+                                                          sourcePriority: draftSourcePriority,
+                                                          disabledSources: draftDisabledSources,
+                                                      },
+                                                  }
+                                                : {}),
+                                        },
+                                    })
+                                }
+                            >
+                                Save
+                            </Button>
+                        </Group>
                     ) : (
                         <Group justify="flex-end" mt="xl">
                             <Button onClick={() => setEditing(null)}>Close</Button>

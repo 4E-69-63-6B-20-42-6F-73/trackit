@@ -1510,7 +1510,7 @@ textarea:focus-visible,
     .sidebar.collapsed + .main {
         margin-left: 0;
         width: 100%;
-        padding-bottom: 64px;
+        padding-bottom: calc(82px + env(safe-area-inset-bottom));
     }
     .topbar {
         height: 62px;
@@ -1572,6 +1572,12 @@ textarea:focus-visible,
         min-height: 142px;
         padding: 14px;
     }
+    .metric-card .mantine-Text-root,
+    .metric-action .mantine-Button-label {
+        overflow: visible;
+        text-overflow: clip;
+        white-space: normal;
+    }
     .metric-top {
         left: 14px;
         right: 10px;
@@ -1610,9 +1616,24 @@ textarea:focus-visible,
         background: #fffefaf0;
         backdrop-filter: blur(15px);
         border-top: 1px solid var(--line);
-        height: 65px;
+        height: calc(65px + env(safe-area-inset-bottom));
         justify-content: space-around;
         padding-top: 7px;
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .goals-layout.has-goals .goal-list {
+        order: -1;
+    }
+
+    .weekly-reflection {
+        align-items: start;
+        grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .weekly-reflection > :last-child {
+        grid-column: 1 / -1;
+        justify-self: stretch;
     }
     .mobile-nav a,
     .mobile-nav > button {
@@ -2120,7 +2141,7 @@ textarea:focus-visible,
         width: auto;
     }
 }
-@media (max-width: 360px) {
+@media (max-width: 420px) {
     .welcome {
         flex-direction: column;
     }
@@ -2131,6 +2152,10 @@ textarea:focus-visible,
     }
     .metric-grid {
         grid-template-columns: 1fr;
+    }
+
+    .metric-card {
+        min-height: 118px;
     }
 }
 .global-log {

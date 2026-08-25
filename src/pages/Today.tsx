@@ -79,8 +79,14 @@ const rollingAverageChange = (
     return `${amount} ${delta > 0 ? 'higher' : 'lower'} than your ${averageLabel}`
 }
 
-const percentage = (value: number, target?: number) =>
-    target && target > 0 ? Math.min(100, (value / target) * 100) : 0
+const isCumulativeGoal = (goal: ReturnType<typeof useTodayHealth>['stepsGoal']) =>
+    Boolean(
+        goal &&
+        goal.aggregation === 'total' &&
+        goal.period.type === 'day' &&
+        goal.comparator === 'gte' &&
+        'value' in goal.target,
+    )
 
 export function Today({
     events,
@@ -143,6 +149,14 @@ export function Today({
         health.waterGoal?.target && 'value' in health.waterGoal.target
             ? health.waterGoal.target.value
             : undefined
+    const stepsEvaluation = health.stepsGoal
+        ? health.goalEvaluations?.[health.stepsGoal.id]
+        : undefined
+    const waterEvaluation = health.waterGoal
+        ? health.goalEvaluations?.[health.waterGoal.id]
+        : undefined
+    const stepsCumulative = isCumulativeGoal(health.stepsGoal)
+    const waterCumulative = isCumulativeGoal(health.waterGoal)
     const sleepPointCount = health.sleepSeries.filter(point => point.sleep !== null).length
     const defaultCards: DashboardCard[] = [
         'sleep',
@@ -476,19 +490,30 @@ export function Today({
                                     {health.steps.toLocaleString()}
                                     <small>
                                         {stepsTarget
-                                            ? `of ${stepsTarget.toLocaleString()}`
+                                            ? stepsCumulative
+                                                ? `of ${stepsTarget.toLocaleString()}`
+                                                : 'general goal'
                                             : 'no goal set'}
                                     </small>
                                 </strong>
                             </div>
-                            {stepsTarget ? (
+                            {stepsTarget && stepsCumulative ? (
                                 <Progress
-                                    value={percentage(health.steps, stepsTarget)}
+                                    value={(stepsEvaluation?.progress ?? 0) * 100}
                                     color="trackit"
                                     radius="xl"
                                     size="sm"
                                     aria-label="Daily steps progress"
                                 />
+                            ) : health.stepsGoal ? (
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    size="compact-sm"
+                                    onClick={openGoals}
+                                >
+                                    View steps goal
+                                </Button>
                             ) : (
                                 <Button
                                     variant="subtle"
@@ -510,19 +535,30 @@ export function Today({
                                     {health.water.toLocaleString()} ml
                                     <small>
                                         {waterTarget
-                                            ? `of ${waterTarget.toLocaleString()} ${health.waterGoal?.canonicalUnit ?? ''}`
+                                            ? waterCumulative
+                                                ? `of ${waterTarget.toLocaleString()} ${health.waterGoal?.canonicalUnit ?? ''}`
+                                                : 'general goal'
                                             : 'no goal set'}
                                     </small>
                                 </strong>
                             </div>
-                            {waterTarget ? (
+                            {waterTarget && waterCumulative ? (
                                 <Progress
-                                    value={percentage(health.water, waterTarget)}
+                                    value={(waterEvaluation?.progress ?? 0) * 100}
                                     color="cyan"
                                     radius="xl"
                                     size="sm"
                                     aria-label="Daily water progress"
                                 />
+                            ) : health.waterGoal ? (
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    size="compact-sm"
+                                    onClick={openGoals}
+                                >
+                                    View water goal
+                                </Button>
                             ) : (
                                 <Button
                                     variant="subtle"

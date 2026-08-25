@@ -18,8 +18,27 @@ vi.mock('../hooks/useTodayHealth', () => ({
         sleepSeries: [],
         sleepBaseline: null,
         restingBaseline: null,
-        stepsGoal: { target: { value: 8000 }, canonicalUnit: 'count' },
+        stepsGoal: {
+            id: 'steps-goal',
+            metricId: 'steps',
+            aggregation: 'total',
+            comparator: 'gte',
+            target: { value: 8000 },
+            period: { type: 'day' },
+            canonicalUnit: 'count',
+        },
         waterGoal: null,
+        goalEvaluations: {
+            'steps-goal': {
+                value: 4321,
+                met: false,
+                progress: 4321 / 8000,
+                observationCount: 1,
+                periodStart: '2026-08-25T00:00:00Z',
+                periodEnd: '2026-08-25T12:00:00Z',
+                difference: 3679,
+            },
+        },
         preferences: { displayName: 'Owner', timezone: 'UTC', locale: 'en', units: 'metric' },
     }),
 }))

@@ -12,8 +12,13 @@ export type MetricSourceDescriptor = {
 
 export function observationSource(record: Observation): MetricSourceDescriptor {
     const provider =
-        record.provider ?? sourcePart(record.metadata?.dataOrigin) ?? sourcePart(record.metadata?.source) ?? 'Manual'
-    const connector = record.connector ?? sourcePart(record.metadata?.connector) ??
+        record.provider ??
+        sourcePart(record.metadata?.dataOrigin) ??
+        sourcePart(record.metadata?.source) ??
+        'Manual'
+    const connector =
+        record.connector ??
+        sourcePart(record.metadata?.connector) ??
         (sourcePart(record.metadata?.source) === 'Health Connect' ? 'Health Connect' : undefined)
     return { key: `${connector ?? 'direct'}::${provider}`, provider, connector }
 }
@@ -69,26 +74,61 @@ function resolveOverlaps(records: Observation[], preferences?: MetricPreferences
             result.push(...pending)
             continue
         }
-        while (pending.length) {
-            const first = pending.shift()!
-            const group = [first]
-            for (let index = pending.length - 1; index >= 0; index--) {
-                const candidate = pending[index]
-                if (
-                    observationSource(candidate).key !== observationSource(first).key &&
-                    group.some(record => overlaps(record, candidate))
-                ) {
-                    group.push(candidate)
-                    pending.splice(index, 1)
-                }
+        const parents = pending.map((_, index) => index)
+        const find = (index: number): number =>
+            parents[index] === index ? index : (parents[index] = find(parents[index]))
+        const union = (left: number, right: number) => {
+            const leftRoot = find(left)
+            const rightRoot = find(right)
+            if (leftRoot !== rightRoot) parents[rightRoot] = leftRoot
+        }
+        const active: number[] = []
+        for (let index = 0; index < pending.length; index += 1) {
+            const candidate = pending[index]
+            const start = new Date(candidate.observedAt).getTime()
+            for (let activeIndex = active.length - 1; activeIndex >= 0; activeIndex--) {
+                const other = pending[active[activeIndex]]
+                const end = new Date(other.endedAt ?? other.observedAt).getTime()
+                if (end < start) active.splice(activeIndex, 1)
             }
+            for (const otherIndex of active) {
+                const other = pending[otherIndex]
+                if (
+                    observationSource(other).key !== observationSource(candidate).key &&
+                    overlaps(other, candidate)
+                )
+                    union(otherIndex, index)
+            }
+            active.push(index)
+        }
+        const groups = new Map<number, Observation[]>()
+        pending.forEach((record, index) =>
+            groups.set(find(index), [...(groups.get(find(index)) ?? []), record]),
+        )
+        for (const group of groups.values()) {
             if (group.length === 1) {
-                result.push(first)
+                result.push(group[0])
             } else if (config.policy === 'prefer_priority') {
-                result.push([...group].sort((a, b) => sourceRank(a, config.sourcePriority) - sourceRank(b, config.sourcePriority))[0])
-            } else if (config.policy === 'metric_merge' && ['steps', 'active_calories'].includes(metric)) {
+                result.push(
+                    [...group].sort(
+                        (a, b) =>
+                            sourceRank(a, config.sourcePriority) -
+                            sourceRank(b, config.sourcePriority),
+                    )[0],
+                )
+            } else if (
+                config.policy === 'metric_merge' &&
+                ['steps', 'active_calories'].includes(metric)
+            ) {
                 const winner = [...group].sort((a, b) => b.canonicalValue - a.canonicalValue)[0]
-                result.push({ ...winner, id: `merged:${group.map(item => item.id).sort().join(':')}`, metadata: { ...winner.metadata, effectiveMerge: true } })
+                result.push({
+                    ...winner,
+                    id: `merged:${group
+                        .map(item => item.id)
+                        .sort()
+                        .join(':')}`,
+                    metadata: { ...winner.metadata, effectiveMerge: true },
+                })
             } else {
                 result.push(...group)
             }
@@ -97,8 +137,16 @@ function resolveOverlaps(records: Observation[], preferences?: MetricPreferences
     return result
 }
 
-const derivedObservation = (metric: string, value: number, observedAt: string, inputs: Observation[]): Observation => ({
-    id: `derived:${metric}:${inputs.map(item => item.id).sort().join(':')}`,
+const derivedObservation = (
+    metric: string,
+    value: number,
+    observedAt: string,
+    inputs: Observation[],
+): Observation => ({
+    id: `derived:${metric}:${inputs
+        .map(item => item.id)
+        .sort()
+        .join(':')}`,
     metric,
     canonicalValue: value,
     canonicalUnit: metric === 'bmi' ? 'kg/m²' : 'kcal',
@@ -115,16 +163,25 @@ const derivedObservation = (metric: string, value: number, observedAt: string, i
 
 export function deriveMetrics(records: Observation[]) {
     const derived: Observation[] = []
-    const heights = records.filter(record => record.metric === 'height').sort((a, b) => a.observedAt.localeCompare(b.observedAt))
+    const heights = records
+        .filter(record => record.metric === 'height')
+        .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
     for (const weight of records.filter(record => record.metric === 'weight')) {
         const eligible = heights.filter(height => height.observedAt <= weight.observedAt)
         const height = eligible.at(-1) ?? heights.at(-1)
         if (!height || height.canonicalValue <= 0) continue
         const metres = height.canonicalValue / 100
-        derived.push(derivedObservation('bmi', weight.canonicalValue / metres ** 2, weight.observedAt, [weight, height]))
+        derived.push(
+            derivedObservation('bmi', weight.canonicalValue / metres ** 2, weight.observedAt, [
+                weight,
+                height,
+            ]),
+        )
     }
     const byDay = new Map<string, { intake: Observation[]; burned: Observation[] }>()
-    for (const record of records.filter(item => ['calories', 'active_calories'].includes(item.metric))) {
+    for (const record of records.filter(item =>
+        ['calories', 'active_calories'].includes(item.metric),
+    )) {
         const day = record.observedAt.slice(0, 10)
         const bucket = byDay.get(day) ?? { intake: [], burned: [] }
         bucket[record.metric === 'calories' ? 'intake' : 'burned'].push(record)
@@ -133,39 +190,59 @@ export function deriveMetrics(records: Observation[]) {
     for (const [day, bucket] of byDay) {
         if (!bucket.intake.length || !bucket.burned.length) continue
         const inputs = [...bucket.intake, ...bucket.burned]
-        const value = bucket.intake.reduce((sum, item) => sum + item.canonicalValue, 0) - bucket.burned.reduce((sum, item) => sum + item.canonicalValue, 0)
+        const value =
+            bucket.intake.reduce((sum, item) => sum + item.canonicalValue, 0) -
+            bucket.burned.reduce((sum, item) => sum + item.canonicalValue, 0)
         derived.push(derivedObservation('calorie_balance', value, `${day}T23:59:59.999Z`, inputs))
     }
     return derived
 }
 
 export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
-    const base = resolveOverlaps(removeExactDuplicates(raw.filter(record => !record.excluded)), preferences)
-    const derivedIds = new Set(metricCatalog.filter(metric => metric.derived).map(metric => metric.id))
+    const base = resolveOverlaps(
+        removeExactDuplicates(raw.filter(record => !record.excluded)),
+        preferences,
+    )
+    const derivedIds = new Set(
+        metricCatalog.filter(metric => metric.derived).map(metric => metric.id),
+    )
     const normalized = base.filter(record => !derivedIds.has(record.metric))
-    return [...normalized, ...deriveMetrics(normalized)].sort((a, b) => a.observedAt.localeCompare(b.observedAt))
+    return [...normalized, ...deriveMetrics(normalized)].sort((a, b) =>
+        a.observedAt.localeCompare(b.observedAt),
+    )
 }
 
 export function mealMetricObservations(
-    meals: Array<{ id: string; eatenAt: string; nutrientSnapshot: Record<string, number | undefined>; version: number }>,
+    meals: Array<{
+        id: string
+        eatenAt: string
+        nutrientSnapshot: Record<string, number | undefined>
+        version: number
+    }>,
 ) {
     const units: Record<string, string> = { calories: 'kcal', sodium: 'mg', potassium: 'mg' }
     return meals.flatMap(meal =>
-        Object.entries(meal.nutrientSnapshot).flatMap(([metric, value]): Observation[] => value === undefined ? [] : [{
-            id: `meal:${meal.id}:${metric}`,
-            metric,
-            canonicalValue: value,
-            canonicalUnit: units[metric] ?? 'g',
-            originalValue: value,
-            originalUnit: units[metric] ?? 'g',
-            observedAt: meal.eatenAt,
-            externalId: `${meal.id}:${metric}`,
-            provider: 'Nutrition',
-            connector: null,
-            metadata: { recordType: 'meal_nutrient', mealId: meal.id },
-            excluded: false,
-            version: meal.version,
-        }]),
+        Object.entries(meal.nutrientSnapshot).flatMap(([metric, value]): Observation[] =>
+            value === undefined
+                ? []
+                : [
+                      {
+                          id: `meal:${meal.id}:${metric}`,
+                          metric,
+                          canonicalValue: value,
+                          canonicalUnit: units[metric] ?? 'g',
+                          originalValue: value,
+                          originalUnit: units[metric] ?? 'g',
+                          observedAt: meal.eatenAt,
+                          externalId: `${meal.id}:${metric}`,
+                          provider: 'Nutrition',
+                          connector: null,
+                          metadata: { recordType: 'meal_nutrient', mealId: meal.id },
+                          excluded: false,
+                          version: meal.version,
+                      },
+                  ],
+        ),
     )
 }
 

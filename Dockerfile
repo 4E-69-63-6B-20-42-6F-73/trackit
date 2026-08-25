@@ -14,15 +14,13 @@ RUN npm ci --omit=dev \
     && rm -rf /usr/local/lib/node_modules/npm \
     && rm -f /usr/local/bin/npm /usr/local/bin/npx
 
-COPY --from=build /app/dist ./dist
-COPY --chown=node:node --from=build /app/server ./server
-COPY --chown=node:node --from=build /app/src/domain/goals.ts ./src/domain/goals.ts
-COPY --chown=node:node --from=build /app/src/domain/health.ts ./src/domain/health.ts
-COPY --chown=node:node --from=build /app/src/domain/metricCatalog.ts ./src/domain/metricCatalog.ts
-COPY --chown=node:node --from=build /app/src/domain/effectiveMetrics.ts ./src/domain/effectiveMetrics.ts
-COPY --chown=node:node --from=build /app/src/domain/metrics.ts ./src/domain/metrics.ts
-COPY --chown=node:node --from=build /app/tsconfig.server.json ./
-RUN mkdir -p /backups && chown node:node /backups
+COPY --chown=node:node --from=build /app/dist ./dist-seed
+COPY --chown=node:node --from=build /app/build ./build
+COPY --chown=node:node --from=build /app/server/db/migrations ./server/db/migrations
+COPY --chown=node:node scripts/container-entrypoint.sh ./container-entrypoint.sh
+RUN mkdir -p /backups /app/dist \
+    && chown node:node /backups /app/dist \
+    && chmod 755 /app/container-entrypoint.sh
 USER node
 EXPOSE 3000
-CMD ["node", "--import", "tsx", "server/index.ts"]
+ENTRYPOINT ["/app/container-entrypoint.sh"]

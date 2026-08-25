@@ -17,6 +17,48 @@ async function migratedDatabase() {
 }
 
 describe('metric source summaries', () => {
+    it('uses an exclusive upper boundary for observations and meals', async () => {
+        const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values([
+            {
+                metric: 'steps',
+                canonicalValue: 100,
+                canonicalUnit: 'count',
+                originalValue: 100,
+                originalUnit: 'count',
+                observedAt: new Date('2026-08-25T23:59:59.999Z'),
+            },
+            {
+                metric: 'steps',
+                canonicalValue: 200,
+                canonicalUnit: 'count',
+                originalValue: 200,
+                originalUnit: 'count',
+                observedAt: new Date('2026-08-26T00:00:00.000Z'),
+            },
+        ])
+        await database.insert(schema.meals).values([
+            {
+                name: 'Before midnight',
+                mealType: 'Snack',
+                eatenAt: new Date('2026-08-25T23:59:59.999Z'),
+            },
+            {
+                name: 'At midnight',
+                mealType: 'Snack',
+                eatenAt: new Date('2026-08-26T00:00:00.000Z'),
+            },
+        ])
+        const repository = new PostgresDataRepository(database as never)
+        const range = {
+            from: '2026-08-25T00:00:00.000Z',
+            to: '2026-08-26T00:00:00.000Z',
+        }
+        expect((await repository.listObservations(range)) as unknown[]).toHaveLength(1)
+        expect(await repository.listMeals(range)).toHaveLength(1)
+        await client.close()
+    })
+
     it('returns distinct provider-aware sources without returning observation history', async () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
@@ -58,6 +100,54 @@ describe('metric source summaries', () => {
         await client.close()
     })
 
+    it('serves cross-day BMI and meal-backed calorie balance from one effective series', async () => {
+        const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values([
+            {
+                metric: 'height',
+                canonicalValue: 180,
+                canonicalUnit: 'cm',
+                originalValue: 180,
+                originalUnit: 'cm',
+                observedAt: new Date('2026-08-01T08:00:00Z'),
+            },
+            {
+                metric: 'weight',
+                canonicalValue: 81,
+                canonicalUnit: 'kg',
+                originalValue: 81,
+                originalUnit: 'kg',
+                observedAt: new Date('2026-08-25T08:00:00Z'),
+            },
+            {
+                metric: 'active_calories',
+                canonicalValue: 600,
+                canonicalUnit: 'kcal',
+                originalValue: 600,
+                originalUnit: 'kcal',
+                observedAt: new Date('2026-08-25T18:00:00Z'),
+            },
+        ])
+        await database.insert(schema.meals).values({
+            name: 'Daily intake',
+            mealType: 'Dinner',
+            eatenAt: new Date('2026-08-25T19:00:00Z'),
+            nutrientSnapshot: { calories: 2200 },
+        })
+        const repository = new PostgresDataRepository(database as never)
+        const records = (await repository.listObservations({
+            from: '2026-08-25T00:00:00.000Z',
+            to: '2026-08-25T23:59:59.999Z',
+            metrics: ['bmi', 'calorie_balance'],
+        })) as Array<{ metric: string; canonicalValue: number }>
+
+        expect(records.find(record => record.metric === 'bmi')?.canonicalValue).toBeCloseTo(25)
+        expect(records.find(record => record.metric === 'calorie_balance')?.canonicalValue).toBe(
+            1600,
+        )
+        await client.close()
+    })
+
     it('precomputes daily totals from the resolved effective sources', async () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
@@ -94,14 +184,32 @@ describe('metric source summaries', () => {
             },
         })
 
-        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual([
-            expect.objectContaining({
-                date: '2026-08-25',
-                metric: 'steps',
-                value: 7000,
-                derivationVersion: 2,
-            }),
-        ])
+        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
+            [
+                expect.objectContaining({
+                    date: '2026-08-25',
+                    metric: 'steps',
+                    value: 7000,
+                    derivationVersion: 2,
+                }),
+            ],
+        )
+        await client.close()
+    })
+
+    it('materializes an empty day only once', async () => {
+        const { client, database } = await migratedDatabase()
+        const repository = new PostgresDataRepository(database as never)
+        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
+            [],
+        )
+        const [first] = await database.select().from(schema.dailyProjectionRuns)
+        expect(first).toMatchObject({ date: '2026-08-25', status: 'complete' })
+        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
+            [],
+        )
+        const [second] = await database.select().from(schema.dailyProjectionRuns)
+        expect(second.completedAt.getTime()).toBe(first.completedAt.getTime())
         await client.close()
     })
 })

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { Observation } from '../domain/health'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { listObservations } from '../lib/observationApi'
+import { listGoalEvaluations } from '../lib/goalApi'
+import type { GoalEvaluation } from '../domain/goals'
 import { useServerData } from './useServerData'
 
 const dateKey = (date: Date) =>
@@ -28,6 +30,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
     } = useServerData()
     const [daily, setDaily] = useState<DailyMetric[]>([])
     const [details, setDetails] = useState<Observation[]>([])
+    const [goalEvaluations, setGoalEvaluations] = useState<Record<string, GoalEvaluation>>({})
     const [loading, setLoading] = useState(true)
     const [unavailable, setUnavailable] = useState(false)
     const selectedKey = dateKey(selectedDate)
@@ -46,13 +49,26 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             return Promise.all([
                 listDailyMetrics({ from: dateKey(fromDate), to: selectedKey }, signal),
                 listObservations(
-                    { from: dayStart.toISOString(), to: dayEnd.toISOString() },
+                    {
+                        from: dayStart.toISOString(),
+                        to: dayEnd.toISOString(),
+                        metrics: [
+                            'steps',
+                            'water',
+                            'sleep',
+                            'resting_heart_rate',
+                            'energy',
+                            'weight',
+                        ],
+                    },
                     signal,
                 ),
+                listGoalEvaluations(signal, selectedDate.toISOString()),
             ])
-                .then(([metrics, observations]) => {
+                .then(([metrics, observations, evaluations]) => {
                     setDaily(metrics)
                     setDetails(observations)
+                    setGoalEvaluations(evaluations)
                     setUnavailable(false)
                 })
                 .catch(error => {
@@ -162,12 +178,14 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             weightBaseline: baseline('weight'),
             stepsGoal: activeGoal('steps'),
             waterGoal: activeGoal('water'),
+            goalEvaluations,
             preferences,
         }
     }, [
         daily,
         details,
         goals,
+        goalEvaluations,
         loading,
         preferences,
         selectedDate,

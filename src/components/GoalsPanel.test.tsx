@@ -3,11 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
-import type { Goal } from '../domain/goals'
+import { evaluateGoal, type Goal } from '../domain/goals'
 import type { Observation } from '../domain/health'
 import type { Preferences } from '../lib/preferencesApi'
-import { createGoal, deleteGoal, updateGoal } from '../lib/goalApi'
-import { listObservations } from '../lib/observationApi'
+import { createGoal, deleteGoal, listGoalEvaluations, updateGoal } from '../lib/goalApi'
 import { GoalsPanel } from './GoalsPanel'
 
 vi.mock('../lib/goalApi', () => ({
@@ -16,8 +15,8 @@ vi.mock('../lib/goalApi', () => ({
     updateGoal: vi.fn(),
     retireGoal: vi.fn(),
     deleteGoal: vi.fn(),
+    listGoalEvaluations: vi.fn(),
 }))
-vi.mock('../lib/observationApi', () => ({ listObservations: vi.fn() }))
 
 const preferences: Preferences = {
     displayName: 'Alex',
@@ -70,7 +69,9 @@ describe('GoalsPanel', () => {
         vi.mocked(createGoal).mockReset()
         vi.mocked(updateGoal).mockReset()
         vi.mocked(deleteGoal).mockReset()
-        vi.mocked(listObservations).mockResolvedValue(observations)
+        vi.mocked(listGoalEvaluations).mockResolvedValue({
+            [goal.id]: evaluateGoal(goal, observations, new Date(), 'UTC'),
+        })
         Element.prototype.scrollIntoView = vi.fn()
     })
 
@@ -173,7 +174,7 @@ describe('GoalsPanel', () => {
     })
 
     it('uses friendly guidance when the current period has no observations', async () => {
-        vi.mocked(listObservations).mockResolvedValue([])
+        vi.mocked(listGoalEvaluations).mockResolvedValue({})
         renderPanel([goal])
         expect(await screen.findByText('Nothing recorded yet')).toBeVisible()
         expect(screen.getByText('Record weight to see how this goal is tracking.')).toBeVisible()

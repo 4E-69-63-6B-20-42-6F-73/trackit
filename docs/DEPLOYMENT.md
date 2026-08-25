@@ -9,7 +9,11 @@ private network.
 
 ```caddyfile
 trackit.example.net {
-    reverse_proxy app:3000
+    reverse_proxy app:3000 {
+        health_uri /api/ready
+        lb_try_duration 15s
+        lb_try_interval 250ms
+    }
     encode zstd gzip
 }
 ```
@@ -30,8 +34,22 @@ For private certificate authorities, install the CA certificate on every client 
 - Preserve `Host`, `X-Forwarded-Proto`, and the client address.
 - Redirect HTTP to HTTPS.
 - Do not cache `/api`, `/mcp`, authentication responses, or exports.
+- Retry unavailable upstreams during the short single-instance replacement window. The Caddy
+  example holds safe reads while the readiness check changes to the new process.
 - Limit request bodies and connection rates at the edge.
 - Back up PostgreSQL separately from the application container.
 
 After deployment, verify `/api/health`, owner setup, logout, passkey registration, and a new browser
 login before importing health data.
+
+## Upgrade-safe browser assets
+
+The runtime keeps content-addressed assets from recent releases in the `trackit-assets` volume.
+This allows a browser that loaded the previous HTML document to finish a lazy import after an
+upgrade. Assets older than 30 days are pruned at startup. If a proxy or browser still encounters an
+obsolete chunk, the client performs one guarded refresh instead of entering a reload loop.
+
+The deployment helper builds the candidate while the current container remains active, then
+replaces it and waits for `/api/ready`. Configure the reverse proxy retry window shown above before
+using in-place upgrades. A failed candidate remains a failed deployment and must not be exposed by
+the proxy.

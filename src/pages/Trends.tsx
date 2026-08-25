@@ -30,15 +30,14 @@ import {
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
-import { effectiveMetricSeries, mealMetricObservations } from '../domain/effectiveMetrics'
 import {
     convertMetricValue,
     displayUnitFor,
     formatMetricDisplayValue,
     unitPresentation,
 } from '../domain/metrics'
-import { listMeals, type MealRecord } from '../lib/nutritionApi'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
+import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { updatePreferences } from '../lib/preferencesApi'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
 
@@ -50,8 +49,7 @@ const metricLabel = (metric: string) =>
 export function Trends() {
     const navigate = useNavigate()
     const [observations, setObservations] = useState<Observation[]>([])
-    const [meals, setMeals] = useState<MealRecord[]>([])
-    const [mealsLoading, setMealsLoading] = useState(true)
+    const [availableMetrics, setAvailableMetrics] = useState<DailyMetric[]>([])
     const [range, setRange] = useState<keyof typeof ranges>('7 days')
     const [metric, setMetric] = useState<string | null>(null)
     const [comparisonMetric, setComparisonMetric] = useState<string | null>(null)
@@ -70,10 +68,12 @@ export function Trends() {
     useEffect(() => {
         const from = new Date()
         from.setUTCDate(from.getUTCDate() - 180)
-        const to = new Date().toISOString()
-        void listObservations({ from: from.toISOString(), to })
+        void listDailyMetrics({
+            from: from.toISOString().slice(0, 10),
+            to: new Date().toISOString().slice(0, 10),
+        })
             .then(records => {
-                setObservations(records)
+                setAvailableMetrics(records)
                 const preferred = ['sleep', 'steps', 'weight', 'energy'].find(candidate =>
                     records.some(record => record.metric === candidate),
                 )
@@ -81,24 +81,33 @@ export function Trends() {
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
-        void listMeals({ from: from.toISOString(), to })
-            .then(records => {
-                setMeals(records)
-                setMetric(current => current ?? (records.length ? 'calories' : null))
-            })
-            .catch(() => undefined)
-            .finally(() => setMealsLoading(false))
         void listTrendViews()
             .then(setSavedViews)
             .catch(() => undefined)
     }, [])
 
-    const nutritionObservations = mealMetricObservations(meals)
-    const allObservations = effectiveMetricSeries(
-        [...observations, ...nutritionObservations],
-        preferences?.metricPreferences,
-    )
-    const recordedMetrics = [...new Set(allObservations.map(record => record.metric))]
+    useEffect(() => {
+        if (!metric) {
+            return
+        }
+        const from = new Date()
+        from.setUTCDate(from.getUTCDate() - ranges[range] + 1)
+        queueMicrotask(() => setLoading(true))
+        void listObservations({
+            from: from.toISOString(),
+            to: new Date().toISOString(),
+            metrics: [metric, ...(comparisonMetric ? [comparisonMetric] : [])],
+        })
+            .then(records => {
+                setObservations(records)
+                setError(false)
+            })
+            .catch(() => setError(true))
+            .finally(() => setLoading(false))
+    }, [comparisonMetric, metric, range])
+
+    const allObservations = observations
+    const recordedMetrics = [...new Set(availableMetrics.map(record => record.metric))]
     const unknownMetrics = recordedMetrics.filter(
         value => !metricCatalog.some(definition => definition.value === value),
     )
@@ -182,7 +191,7 @@ export function Trends() {
     const variation = coveredValues.length
         ? Math.max(...coveredValues) - Math.min(...coveredValues)
         : null
-    const pageLoading = loading || mealsLoading
+    const pageLoading = loading
     const coverageRatio = points.length ? coveredValues.length / points.length : 0
     const confidence =
         coverageRatio >= 0.75
@@ -237,7 +246,7 @@ export function Trends() {
                 title="Trends"
                 description="See how your recorded health changes over time."
             />
-            {!pageLoading && ((error && meals.length === 0) || allObservations.length === 0) ? (
+            {!pageLoading && (error || allObservations.length === 0) ? (
                 <section className="panel page-empty">
                     <IconChartLine size={28} />
                     <h2>{error ? 'Trends are unavailable' : 'No trends to show yet'}</h2>
@@ -255,12 +264,6 @@ export function Trends() {
                 </section>
             ) : (
                 <section className="panel chart-large">
-                    {error && meals.length > 0 && (
-                        <Alert color="orange" mb="md">
-                            Health observations are unavailable, but nutrition trends from saved
-                            meals remain available.
-                        </Alert>
-                    )}
                     <div className="trend-questions" aria-label="Questions to explore">
                         <div>
                             <Text fw={700}>What would you like to understand?</Text>

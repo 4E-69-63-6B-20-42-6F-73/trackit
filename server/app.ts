@@ -41,6 +41,8 @@ import type { DataLifecycleService } from './data-lifecycle/service.js'
 import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
 import { config } from './config.js'
+import { evaluateGoal, type Goal } from '../src/domain/goals.js'
+import type { Observation } from '../src/domain/health.js'
 
 export async function createApp(
     repository: JournalRepository,
@@ -838,8 +840,13 @@ export async function createApp(
         const recordRangeSchema = z.object({
             from: z.string().datetime().optional(),
             to: z.string().datetime().optional(),
+            metrics: z
+                .string()
+                .transform(value => value.split(',').filter(Boolean))
+                .pipe(z.array(z.string().trim().min(1).max(100)).max(50))
+                .optional(),
         })
-        app.get<{ Querystring: { from?: string; to?: string } }>(
+        app.get<{ Querystring: { from?: string; to?: string; metrics?: string } }>(
             '/api/observations',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)
@@ -848,7 +855,20 @@ export async function createApp(
                         error: 'invalid_range',
                         validation: range.error,
                     })
-                return { data: await data.listObservations(range.data) }
+                const bounded = { ...range.data }
+                if (!bounded.from) {
+                    const from = new Date()
+                    from.setUTCDate(from.getUTCDate() - 365)
+                    bounded.from = from.toISOString()
+                }
+                bounded.to ??= new Date().toISOString()
+                if (
+                    new Date(bounded.to).getTime() <= new Date(bounded.from).getTime() ||
+                    new Date(bounded.to).getTime() - new Date(bounded.from).getTime() >
+                        366 * 86_400_000
+                )
+                    return badRequest(request, reply, { error: 'range_too_large' })
+                return { data: await data.listObservations(bounded) }
             },
         )
         app.get('/api/metric-sources', async () => ({
@@ -865,6 +885,14 @@ export async function createApp(
                     .safeParse(request.query)
                 if (!dateRange.success)
                     return badRequest(request, reply, { validation: dateRange.error })
+                if (!dateRange.data.from || !dateRange.data.to)
+                    return badRequest(request, reply, { error: 'date_range_required' })
+                const days =
+                    (new Date(`${dateRange.data.to}T00:00:00.000Z`).getTime() -
+                        new Date(`${dateRange.data.from}T00:00:00.000Z`).getTime()) /
+                    86_400_000
+                if (days < 0 || days > 365)
+                    return badRequest(request, reply, { error: 'range_too_large' })
                 return { data: (await data.listDailyMetrics?.(dateRange.data)) ?? [] }
             },
         )
@@ -1006,6 +1034,37 @@ export async function createApp(
             return { data: updated }
         })
         app.get('/api/goals', async () => ({ data: await data.listGoals() }))
+        app.get<{ Querystring: { at?: string } }>(
+            '/api/goals/evaluations',
+            async (request, reply) => {
+                const parsedAt = z.string().datetime().optional().safeParse(request.query.at)
+                if (!parsedAt.success)
+                    return badRequest(request, reply, { error: 'invalid_evaluation_time' })
+                const now = parsedAt.data ? new Date(parsedAt.data) : new Date()
+                const from = new Date(now)
+                from.setUTCDate(from.getUTCDate() - 31)
+                const [storedGoals, preference] = await Promise.all([
+                    data.listGoals() as Promise<Goal[]>,
+                    data.getPreferences() as Promise<{ timezone?: string }>,
+                ])
+                const metrics = [...new Set(storedGoals.map(goal => goal.metricId))]
+                const records = metrics.length
+                    ? ((await data.listObservations({
+                          from: from.toISOString(),
+                          to: now.toISOString(),
+                          metrics,
+                      })) as Observation[])
+                    : []
+                return {
+                    data: Object.fromEntries(
+                        storedGoals.map(goal => [
+                            goal.id,
+                            evaluateGoal(goal, records, now, preference.timezone ?? 'UTC'),
+                        ]),
+                    ),
+                }
+            },
+        )
         app.post('/api/goals', async (request, reply) => {
             const input = goalInputSchema.safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })

@@ -19,7 +19,7 @@ import {
 } from '@mantine/core'
 import { IconChevronDown, IconDots, IconTargetArrow, IconTrash } from '@tabler/icons-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
-import { evaluateGoal, validateGoal, type Goal, type GoalPeriod } from '../domain/goals'
+import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '../domain/goals'
 import {
     metricCatalog,
     metricDefinition,
@@ -34,11 +34,14 @@ import {
     unitPresentation,
 } from '../domain/metrics'
 import { useServerData } from '../hooks/useServerData'
-import { createGoal, deleteGoal, retireGoal, updateGoal, type GoalRecord } from '../lib/goalApi'
-import { listObservations } from '../lib/observationApi'
-import { listMeals } from '../lib/nutritionApi'
-import { effectiveMetricSeries, mealMetricObservations } from '../domain/effectiveMetrics'
-import type { Observation } from '../domain/health'
+import {
+    createGoal,
+    deleteGoal,
+    listGoalEvaluations,
+    retireGoal,
+    updateGoal,
+    type GoalRecord,
+} from '../lib/goalApi'
 
 const weekdays = [
     { value: '1', label: 'Monday' },
@@ -222,7 +225,7 @@ function TimingDateControl({
 
 function GoalCard({
     goal,
-    observations,
+    evaluation,
     timezone,
     locale,
     metricPreferences,
@@ -231,7 +234,7 @@ function GoalCard({
     onDelete,
 }: {
     goal: GoalRecord
-    observations: Observation[]
+    evaluation?: GoalEvaluation
     timezone: string
     locale?: string
     metricPreferences?: Parameters<typeof formatMetric>[2]
@@ -241,7 +244,13 @@ function GoalCard({
 }) {
     const definition = metricDefinition(goal.metricId)
     const now = new Date()
-    const evaluation = evaluateGoal(goal, observations, now, timezone)
+    const result = evaluation ?? {
+        value: null,
+        met: null,
+        progress: null,
+        observationCount: 0,
+        difference: null,
+    }
     const upcoming = new Date(goal.effectiveFrom) > now
     const retired = Boolean(goal.effectiveTo && new Date(goal.effectiveTo) < now)
     const targetLabel =
@@ -251,11 +260,11 @@ function GoalCard({
               ? `${goal.comparator === 'gte' ? '≥' : '≤'} ${formatMetric(goal.metricId, goal.target.value, metricPreferences, locale)}`
               : ''
     const differenceLabel =
-        evaluation.value !== null &&
-        evaluation.met === false &&
-        evaluation.difference !== null &&
+        result.value !== null &&
+        result.met === false &&
+        result.difference !== null &&
         goal.comparator !== 'between'
-            ? `${formatMetric(goal.metricId, evaluation.difference, metricPreferences, locale)} ${goal.comparator === 'lte' ? 'above' : 'below'} target`
+            ? `${formatMetric(goal.metricId, result.difference, metricPreferences, locale)} ${goal.comparator === 'lte' ? 'above' : 'below'} target`
             : null
     const scheduledDays = (
         goal.schedule.weekdays?.length ? goal.schedule.weekdays.map(String) : everyDay
@@ -297,9 +306,9 @@ function GoalCard({
                         color={
                             retired || upcoming
                                 ? 'gray'
-                                : evaluation.met === null
+                                : result.met === null
                                   ? 'gray'
-                                  : evaluation.met
+                                  : result.met
                                     ? 'teal'
                                     : 'orange'
                         }
@@ -309,9 +318,9 @@ function GoalCard({
                             ? 'Past'
                             : upcoming
                               ? 'Upcoming'
-                              : evaluation.met === null
+                              : result.met === null
                                 ? 'No data'
-                                : evaluation.met
+                                : result.met
                                   ? 'On target'
                                   : 'Not on target'}
                     </Badge>
@@ -347,11 +356,11 @@ function GoalCard({
                 </Group>
             </Group>
             <Text className="goal-target">
-                {evaluation.value === null
+                {result.value === null
                     ? upcoming
                         ? 'Starts soon'
                         : 'Nothing recorded yet'
-                    : formatMetric(goal.metricId, evaluation.value, metricPreferences, locale)}
+                    : formatMetric(goal.metricId, result.value, metricPreferences, locale)}
             </Text>
             <Text size="sm">Goal {targetLabel}</Text>
             {timingLabel && (
@@ -370,21 +379,21 @@ function GoalCard({
                     })}
                     .
                 </Text>
-            ) : evaluation.value === null ? (
+            ) : result.value === null ? (
                 <Text size="sm" c="dimmed">
                     Record {definition?.name.toLowerCase() ?? 'this metric'} to see how this goal is
                     tracking.
                 </Text>
             ) : (
                 <Text size="sm" c="dimmed">
-                    {evaluation.observationCount} measurement
-                    {evaluation.observationCount === 1 ? '' : 's'}
+                    {result.observationCount} measurement
+                    {result.observationCount === 1 ? '' : 's'}
                     {differenceLabel ? ` · ${differenceLabel}` : ''}
                 </Text>
             )}
-            {evaluation.progress !== null && (
+            {result.progress !== null && (
                 <Progress
-                    value={evaluation.progress * 100}
+                    value={result.progress * 100}
                     color="trackit"
                     aria-label="Goal progress"
                 />
@@ -409,7 +418,7 @@ export function GoalsPanel() {
     const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>(everyDay)
     const [editing, setEditing] = useState<GoalRecord | null>(null)
     const [deleting, setDeleting] = useState<GoalRecord | null>(null)
-    const [observations, setObservations] = useState<Observation[]>([])
+    const [evaluations, setEvaluations] = useState<Record<string, GoalEvaluation>>({})
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
@@ -419,22 +428,11 @@ export function GoalsPanel() {
     const selectedMeasurement =
         options.find(item => item.value === measurement) ?? preferredMeasurement(metricId, options)!
     useEffect(() => {
-        const from = new Date()
-        from.setDate(from.getDate() - 31)
-        void Promise.all([
-            listObservations({ from: from.toISOString() }),
-            listMeals({ from: from.toISOString() }).catch(() => []),
-        ])
-            .then(([records, meals]) =>
-                setObservations(
-                    effectiveMetricSeries(
-                        [...records, ...mealMetricObservations(meals)],
-                        preferences?.metricPreferences,
-                    ),
-                ),
-            )
+        if (!goals.length) return
+        void listGoalEvaluations()
+            .then(setEvaluations)
             .catch(() => setError('Goal observations could not be loaded.'))
-    }, [preferences?.metricPreferences])
+    }, [goals])
     const resetForMetric = (next: string) => {
         setMetricId(next)
         const choice = preferredMeasurement(next)
@@ -592,7 +590,7 @@ export function GoalsPanel() {
         }
     }
     return (
-        <div className="goals-layout">
+        <div className={`goals-layout${goals.length ? ' has-goals' : ''}`}>
             <section className="panel goal-create" aria-labelledby="create-goal-title">
                 <div className="goal-section-heading">
                     <IconTargetArrow size={24} />
@@ -782,7 +780,7 @@ export function GoalsPanel() {
                             <GoalCard
                                 key={goal.id}
                                 goal={goal}
-                                observations={observations}
+                                evaluation={evaluations[goal.id]}
                                 timezone={preferences?.timezone ?? 'UTC'}
                                 locale={preferences?.locale}
                                 metricPreferences={preferences?.metricPreferences}
@@ -796,7 +794,7 @@ export function GoalsPanel() {
                             <GoalCard
                                 key={goal.id}
                                 goal={goal}
-                                observations={observations}
+                                evaluation={evaluations[goal.id]}
                                 timezone={preferences?.timezone ?? 'UTC'}
                                 locale={preferences?.locale}
                                 metricPreferences={preferences?.metricPreferences}

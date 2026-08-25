@@ -24,12 +24,13 @@ export async function createObservation(
 }
 
 export async function listObservations(
-    range: { from?: string; to?: string } = {},
+    range: { from?: string; to?: string; metrics?: string[] } = {},
     signal?: AbortSignal,
 ): Promise<Observation[]> {
-    const query = new URLSearchParams(
-        Object.entries(range).filter((entry): entry is [string, string] => Boolean(entry[1])),
-    )
+    const query = new URLSearchParams()
+    if (range.from) query.set('from', range.from)
+    if (range.to) query.set('to', range.to)
+    if (range.metrics?.length) query.set('metrics', range.metrics.join(','))
     return (
         await sharedJsonRequest<{ data: Observation[] }>(
             `${environment.VITE_API_URL}/api/observations?${query}`,

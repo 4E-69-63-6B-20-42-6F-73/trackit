@@ -5,7 +5,7 @@ import { migrate } from 'drizzle-orm/postgres-js/migrator'
 import { createApp } from './app.js'
 import { AuthService } from './auth/service.js'
 import { config } from './config.js'
-import { db } from './db/client.js'
+import { db, sql } from './db/client.js'
 import { PostgresDataRepository } from './data/postgres-repository.js'
 import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { McpAccessService } from './mcp/service.js'
@@ -13,6 +13,7 @@ import { DeviceService } from './devices/service.js'
 import { BackupService } from './backup/service.js'
 import { DataLifecycleService } from './data-lifecycle/service.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
+import { ProjectionWorker } from './data/projection-state.js'
 
 await migrate(db, { migrationsFolder: './server/db/migrations' })
 
@@ -25,6 +26,8 @@ const backup = new BackupService(
 if (config.BACKUPS_ENABLED) backup.start(config.BACKUP_INTERVAL_HOURS)
 const lifecycle = new DataLifecycleService(db)
 lifecycle.start()
+const projections = new ProjectionWorker(db)
+projections.start()
 
 const app = await createApp(new PostgresJournalRepository(db), {
     logger: true,
@@ -54,3 +57,12 @@ if (existsSync(webRoot)) {
 }
 
 await app.listen({ host: config.HOST, port: config.PORT })
+
+const shutdown = async () => {
+    projections.stop()
+    lifecycle.stop()
+    await app.close()
+    await sql.end()
+}
+process.once('SIGTERM', () => void shutdown())
+process.once('SIGINT', () => void shutdown())

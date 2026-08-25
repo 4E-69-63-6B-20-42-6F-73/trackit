@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, lte } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { devices, journalEntries } from '../db/schema.js'
@@ -41,7 +41,7 @@ export class PostgresJournalRepository implements JournalRepository {
         const conditions = [
             isNull(journalEntries.deletedAt),
             ...(filters.from ? [gte(journalEntries.observedAt, new Date(filters.from))] : []),
-            ...(filters.to ? [lte(journalEntries.observedAt, new Date(filters.to))] : []),
+            ...(filters.to ? [lt(journalEntries.observedAt, new Date(filters.to))] : []),
             ...(filters.before ? [lt(journalEntries.observedAt, new Date(filters.before))] : []),
             ...(filters.category ? [eq(journalEntries.category, filters.category)] : []),
             ...(filters.source ? [eq(journalEntries.sourceLabel, filters.source)] : []),

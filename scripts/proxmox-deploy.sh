@@ -127,9 +127,16 @@ else
     fi
 fi
 
-run_docker compose up -d --build
+echo "Building the candidate image while the current application keeps serving traffic..."
+run_docker compose build app
+echo "Activating the candidate and waiting for readiness..."
+if ! run_docker compose up -d --no-build --wait app; then
+    echo "The candidate did not become ready. Inspecting application logs..."
+    run_docker compose logs --tail=200 app
+    exit 1
+fi
 run_docker compose ps
 
 echo "TrackIt is starting on port 3000."
 echo "Point your HTTPS reverse proxy at this host and open: $1"
-echo "Check health with: curl -f http://127.0.0.1:3000/api/health"
+echo "Check readiness with: curl -f http://127.0.0.1:3000/api/ready"

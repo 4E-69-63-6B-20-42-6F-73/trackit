@@ -15,7 +15,9 @@
 
 Copy `.env.example` to `.env`, replace the database password, set the public HTTPS origin, and run
 `npm start`. Create and verify an encrypted backup before every upgrade. Pull the desired release,
-review `CHANGELOG.md`, then run `npm start`; migrations run automatically before traffic is served.
+review `CHANGELOG.md`, then use `scripts/proxmox-deploy.sh` for a health-gated build and activation;
+migrations run automatically before traffic is served. Configure the reverse proxy retry window
+from `DEPLOYMENT.md` so safe reads wait through the short container replacement.
 Never downgrade the database schema in place. Roll back by stopping the stack, restoring the
 pre-upgrade archive into a clean database, and starting the previous application image.
 
@@ -23,8 +25,8 @@ pre-upgrade archive into a clean database, and starting the previous application
 
 - `{"error":"unauthorized"}` at `/api/*` is expected without a session. At `/`, rebuild the current
   image; the static login shell must load before authentication.
-- `tsx` missing in a container means the image predates the runtime-dependency correction; rebuild
-  without using the old app layer.
+- A runtime image containing application TypeScript or `tsx` is obsolete. Current images execute
+  compiled `build/server/index.js`; rebuild and replace any older image.
 - A readiness failure usually means PostgreSQL is still starting or credentials differ between app
   and database containers. Use `docker compose ps` and `docker compose logs db app`.
 - Passkeys require the browser origin to match `TRACKIT_ORIGIN` exactly and to use HTTPS outside

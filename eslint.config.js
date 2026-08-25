@@ -68,7 +68,15 @@ const jsxLayout = {
 
 export default tseslint.config(
     {
-        ignores: ['dist', 'node_modules', 'coverage', 'android/**/build', '*.d.ts', '.kilo/**'],
+        ignores: [
+            'build',
+            'dist',
+            'node_modules',
+            'coverage',
+            'android/**/build',
+            '*.d.ts',
+            '.kilo/**',
+        ],
     },
     js.configs.recommended,
     ...tseslint.configs.recommended,

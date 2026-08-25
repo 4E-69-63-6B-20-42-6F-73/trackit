@@ -48,6 +48,11 @@ jobs:
             - name: Static checks and unit tests
               run: npm run check
 
+            - name: Verify migration snapshot matches schema
+              run: |
+                  npm run db:generate -- --name=ci_schema_drift
+                  test -z "$(git status --porcelain -- server/db/migrations)"
+
             - name: Dependency security audit
               run: npm run security:deps
 
@@ -80,6 +85,22 @@ jobs:
 
             - name: Build runtime container
               run: docker build --tag trackit-ci:test .
+
+            - name: Smoke test runtime container
+              run: |
+                  container=$(docker run --detach --network host \
+                    --env HOST=127.0.0.1 \
+                    --env PORT=3000 \
+                    --env TRACKIT_DB_HOST=127.0.0.1 \
+                    --env TRACKIT_DB_PASSWORD=trackit-ci \
+                    --env BOOTSTRAP_SECRET=0123456789abcdef0123456789abcdef \
+                    trackit-ci:test)
+                  trap 'docker logs "$container"; docker rm --force "$container"' EXIT
+                  for attempt in $(seq 1 30); do
+                    curl --fail --silent http://127.0.0.1:3000/api/ready && exit 0
+                    sleep 1
+                  done
+                  exit 1
 
             - name: Scan container image
               uses: aquasecurity/trivy-action@v0.36.0

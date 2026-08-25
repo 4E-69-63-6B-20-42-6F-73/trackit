@@ -6,6 +6,7 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { DeviceService } from './service.js'
+import { ProjectionWorker } from '../data/projection-state.js'
 
 describe('Android device pairing and upload', () => {
     it('requires confirmation, consumes pairing codes, deduplicates batches, and revokes immediately', async () => {
@@ -289,6 +290,11 @@ describe('Android device pairing and upload', () => {
         )
         expect(projections).toHaveLength(6)
         expect(projections.find(item => item.metric === 'heart_rate')?.canonicalValue).toBe(90)
+        expect(await database.select().from(schema.dailyMetrics)).toHaveLength(0)
+        expect((await database.select().from(schema.projectionDirtyDates)).length).toBeGreaterThan(
+            0,
+        )
+        await new ProjectionWorker(database as never).runOnce(20)
         const daily = await database.select().from(schema.dailyMetrics)
         expect(daily.find(item => item.metric === 'heart_rate')).toMatchObject({
             value: 90,

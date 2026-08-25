@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lte, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
@@ -6,23 +6,25 @@ import {
     foods,
     healthRecords,
     dailyMetrics,
+    dailyProjectionRuns,
     goals,
     meals,
     observations,
     preferences,
+    projectionDirtyDates,
     sources,
     recipeItems,
     recipes,
     savedTrendViews,
 } from '../db/schema.js'
 import type { DataRepository, RecordRange } from './types.js'
-import { effectiveMetricSeries } from '../../src/domain/effectiveMetrics.js'
-import type { Observation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
 import {
     EFFECTIVE_DAILY_DERIVATION_VERSION,
     rebuildEffectiveDailyMetric,
 } from './daily-projection.js'
+import { dateKeyInTimezone, datesThrough, localDayRange } from './timezone.js'
+import { getEffectiveMetricSeries } from './effective-series.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -71,6 +73,14 @@ const foodMatchScore = (query: string, name: string, brand?: string | null) => {
 }
 
 export class PostgresDataRepository implements DataRepository {
+    private async projectionDate(observedAt: Date) {
+        const [saved] = await this.database
+            .select({ timezone: preferences.timezone })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+        return dateKeyInTimezone(observedAt, saved?.timezone ?? 'UTC')
+    }
+
     listHealthRecords() {
         return this.database.select().from(healthRecords).orderBy(desc(healthRecords.startTime))
     }
@@ -81,44 +91,118 @@ export class PostgresDataRepository implements DataRepository {
         if (range.to) conditions.push(lte(dailyMetrics.date, range.to))
         const query = () =>
             this.database
-            .select()
-            .from(dailyMetrics)
-            .where(conditions.length ? and(...conditions) : undefined)
-            .orderBy(desc(dailyMetrics.date))
-        const [rows, saved] = await Promise.all([
+                .select()
+                .from(dailyMetrics)
+                .where(conditions.length ? and(...conditions) : undefined)
+                .orderBy(desc(dailyMetrics.date))
+        const runConditions: SQL[] = [eq(dailyProjectionRuns.userId, 'owner')]
+        const dirtyConditions: SQL[] = [eq(projectionDirtyDates.userId, 'owner')]
+        if (range.from) {
+            runConditions.push(gte(dailyProjectionRuns.date, range.from))
+            dirtyConditions.push(gte(projectionDirtyDates.date, range.from))
+        }
+        if (range.to) {
+            runConditions.push(lte(dailyProjectionRuns.date, range.to))
+            dirtyConditions.push(lte(projectionDirtyDates.date, range.to))
+        }
+        const [rows, saved, runs, dirty] = await Promise.all([
             query(),
             this.database
-                .select({ updatedAt: preferences.updatedAt })
+                .select({
+                    metricResolutionVersion: preferences.metricResolutionVersion,
+                    timezone: preferences.timezone,
+                })
                 .from(preferences)
                 .where(eq(preferences.id, 'owner')),
+            this.database
+                .select()
+                .from(dailyProjectionRuns)
+                .where(and(...runConditions)),
+            this.database
+                .select({ date: projectionDirtyDates.date })
+                .from(projectionDirtyDates)
+                .where(and(...dirtyConditions)),
         ])
-        const preferenceUpdatedAt = saved[0]?.updatedAt
-        const staleDates = new Set(
-            rows
+        const resolutionVersion = saved[0]?.metricResolutionVersion ?? 1
+        const timezone = saved[0]?.timezone ?? 'UTC'
+        const runByDate = new Map(runs.map(run => [run.date, run]))
+        const requestedDates =
+            range.from && range.to
+                ? datesThrough(range.from, range.to)
+                : [...new Set([...rows.map(row => row.date), ...runs.map(run => run.date)])]
+        const staleDates = new Set([
+            ...dirty.map(item => item.date),
+            ...requestedDates.filter(date => {
+                const run = runByDate.get(date)
+                if (!run) return false
+                return (
+                    run.status !== 'complete' ||
+                    run.derivationVersion !== EFFECTIVE_DAILY_DERIVATION_VERSION ||
+                    run.resolutionVersion !== resolutionVersion ||
+                    run.timezone !== timezone
+                )
+            }),
+            ...rows
                 .filter(
                     row =>
                         row.derivationVersion !== EFFECTIVE_DAILY_DERIVATION_VERSION ||
-                        Boolean(preferenceUpdatedAt && row.updatedAt < preferenceUpdatedAt),
+                        row.resolutionVersion !== resolutionVersion ||
+                        row.timezone !== timezone,
                 )
                 .map(row => row.date),
-        )
-        if (staleDates.size || !rows.length) {
-            const observationConditions = [isNull(observations.deletedAt)]
-            if (range.from)
-                observationConditions.push(
-                    gte(observations.observedAt, new Date(`${range.from}T00:00:00.000Z`)),
-                )
-            if (range.to)
-                observationConditions.push(
-                    lte(observations.observedAt, new Date(`${range.to}T23:59:59.999Z`)),
-                )
-            const timestamps = await this.database
-                .select({ observedAt: observations.observedAt })
-                .from(observations)
-                .where(and(...observationConditions))
-            for (const item of timestamps)
-                staleDates.add(item.observedAt.toISOString().slice(0, 10))
-        }
+        ])
+        const missingDates = requestedDates.filter(date => !runByDate.has(date))
+        if (missingDates.length && range.from && range.to) {
+            const bounds = {
+                from: localDayRange(range.from, timezone).from,
+                to: localDayRange(range.to, timezone).to,
+            }
+            const [observationDates, mealDates] = await Promise.all([
+                this.database
+                    .select({ at: observations.observedAt })
+                    .from(observations)
+                    .where(
+                        and(
+                            isNull(observations.deletedAt),
+                            gte(observations.observedAt, bounds.from),
+                            lt(observations.observedAt, bounds.to),
+                        ),
+                    ),
+                this.database
+                    .select({ at: meals.eatenAt })
+                    .from(meals)
+                    .where(
+                        and(
+                            isNull(meals.deletedAt),
+                            gte(meals.eatenAt, bounds.from),
+                            lt(meals.eatenAt, bounds.to),
+                        ),
+                    ),
+            ])
+            const inputDates = new Set([
+                ...rows.map(row => row.date),
+                ...[...observationDates, ...mealDates].map(item =>
+                    dateKeyInTimezone(item.at, timezone),
+                ),
+            ])
+            const emptyDates = missingDates.filter(date => !inputDates.has(date))
+            for (const date of missingDates.filter(date => inputDates.has(date)))
+                staleDates.add(date)
+            if (emptyDates.length)
+                await this.database
+                    .insert(dailyProjectionRuns)
+                    .values(
+                        emptyDates.map(date => ({
+                            userId: 'owner',
+                            date,
+                            derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
+                            resolutionVersion,
+                            timezone,
+                            status: 'complete',
+                        })),
+                    )
+                    .onConflictDoNothing()
+        } else for (const date of missingDates) staleDates.add(date)
         if (!staleDates.size) return rows
         for (const date of staleDates) await rebuildEffectiveDailyMetric(this.database, date)
         return query()
@@ -153,7 +237,7 @@ export class PostgresDataRepository implements DataRepository {
     private observationQuery(range: RecordRange = {}) {
         const conditions = [isNull(observations.deletedAt)]
         if (range.from) conditions.push(gte(observations.observedAt, new Date(range.from)))
-        if (range.to) conditions.push(lte(observations.observedAt, new Date(range.to)))
+        if (range.to) conditions.push(lt(observations.observedAt, new Date(range.to)))
         return this.database
             .select()
             .from(observations)
@@ -166,22 +250,7 @@ export class PostgresDataRepository implements DataRepository {
     }
 
     async listObservations(range: RecordRange = {}) {
-        const records = await this.observationQuery(range)
-        const [saved] = await this.database
-            .select({ metricPreferences: preferences.metricPreferences })
-            .from(preferences)
-            .where(eq(preferences.id, 'owner'))
-        const normalized = records.map(record => ({
-            ...record,
-            observedAt: record.observedAt.toISOString(),
-            endedAt: record.endedAt?.toISOString() ?? null,
-            metadata: record.metadata as Record<string, unknown>,
-            version: Number(record.version),
-        })) as Observation[]
-        return effectiveMetricSeries(
-            normalized,
-            (saved?.metricPreferences ?? undefined) as MetricPreferences | undefined,
-        )
+        return getEffectiveMetricSeries(this.database, range)
     }
 
     async createObservation(input: {
@@ -207,7 +276,10 @@ export class PostgresDataRepository implements DataRepository {
             .onConflictDoNothing({ target: observations.id })
             .returning()
         if (record) {
-            await rebuildEffectiveDailyMetric(this.database, record.observedAt.toISOString().slice(0, 10))
+            await rebuildEffectiveDailyMetric(
+                this.database,
+                await this.projectionDate(record.observedAt),
+            )
             return record
         }
         const [existing] = await this.database
@@ -236,7 +308,7 @@ export class PostgresDataRepository implements DataRepository {
         if (record)
             await rebuildEffectiveDailyMetric(
                 this.database,
-                record.observedAt.toISOString().slice(0, 10),
+                await this.projectionDate(record.observedAt),
             )
         return record ?? null
     }
@@ -250,7 +322,7 @@ export class PostgresDataRepository implements DataRepository {
         if (removed[0])
             await rebuildEffectiveDailyMetric(
                 this.database,
-                removed[0].observedAt.toISOString().slice(0, 10),
+                await this.projectionDate(removed[0].observedAt),
             )
         return removed.length > 0
     }
@@ -258,7 +330,7 @@ export class PostgresDataRepository implements DataRepository {
     listMeals(range: RecordRange = {}) {
         const conditions = [isNull(meals.deletedAt)]
         if (range.from) conditions.push(gte(meals.eatenAt, new Date(range.from)))
-        if (range.to) conditions.push(lte(meals.eatenAt, new Date(range.to)))
+        if (range.to) conditions.push(lt(meals.eatenAt, new Date(range.to)))
         return this.database
             .select()
             .from(meals)
@@ -296,6 +368,10 @@ export class PostgresDataRepository implements DataRepository {
                     .set({ lastUsedAt: new Date(input.eatenAt) })
                     .where(eq(foods.id, input.foodId))
             }
+            await rebuildEffectiveDailyMetric(
+                this.database,
+                await this.projectionDate(record.eatenAt),
+            )
             return record
         }
         const [existing] = await this.database.select().from(meals).where(eq(meals.id, input.id!))
@@ -314,6 +390,10 @@ export class PostgresDataRepository implements DataRepository {
             version: number
         },
     ) {
+        const [before] = await this.database
+            .select({ eatenAt: meals.eatenAt })
+            .from(meals)
+            .where(eq(meals.id, id))
         const [record] = await this.database
             .update(meals)
             .set({
@@ -328,6 +408,13 @@ export class PostgresDataRepository implements DataRepository {
             })
             .where(and(eq(meals.id, id), eq(meals.version, input.version), isNull(meals.deletedAt)))
             .returning()
+        if (record) {
+            const dates = new Set([
+                await this.projectionDate(record.eatenAt),
+                ...(before ? [await this.projectionDate(before.eatenAt)] : []),
+            ])
+            for (const date of dates) await rebuildEffectiveDailyMetric(this.database, date)
+        }
         return record ?? null
     }
 
@@ -336,7 +423,12 @@ export class PostgresDataRepository implements DataRepository {
             .update(meals)
             .set({ deletedAt: new Date(), updatedAt: new Date() })
             .where(and(eq(meals.id, id), isNull(meals.deletedAt)))
-            .returning({ id: meals.id })
+            .returning({ id: meals.id, eatenAt: meals.eatenAt })
+        if (removed[0])
+            await rebuildEffectiveDailyMetric(
+                this.database,
+                await this.projectionDate(removed[0].eatenAt),
+            )
         return removed.length > 0
     }
 
@@ -360,25 +452,28 @@ export class PostgresDataRepository implements DataRepository {
         mcpEnabled?: boolean
         experience?: Record<string, unknown>
     }) {
-        const current = await this.getPreferences()
+        const current = (await this.getPreferences()) as typeof preferences.$inferSelect
+        const resolutionChanged = Boolean(input.metricPreferences || input.timezone)
         const [record] = await this.database
             .insert(preferences)
-            .values({ id: 'owner', ...input })
+            .values({
+                id: 'owner',
+                ...input,
+                metricResolutionVersion: resolutionChanged
+                    ? current.metricResolutionVersion + 1
+                    : current.metricResolutionVersion,
+            })
             .onConflictDoUpdate({
                 target: preferences.id,
-                set: { ...input, updatedAt: new Date() },
+                set: {
+                    ...input,
+                    metricResolutionVersion: resolutionChanged
+                        ? current.metricResolutionVersion + 1
+                        : current.metricResolutionVersion,
+                    updatedAt: new Date(),
+                },
             })
             .returning()
-        if (input.metricPreferences) {
-            const timestamps = await this.database
-                .select({ observedAt: observations.observedAt })
-                .from(observations)
-                .where(isNull(observations.deletedAt))
-            const dates = new Set(
-                timestamps.map(item => item.observedAt.toISOString().slice(0, 10)),
-            )
-            for (const date of dates) await rebuildEffectiveDailyMetric(this.database, date)
-        }
         return record ?? current
     }
 

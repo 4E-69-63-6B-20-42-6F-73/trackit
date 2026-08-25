@@ -27,6 +27,7 @@ services:
             retries: 10
         volumes:
             - trackit-backups:/backups
+            - trackit-assets:/app/dist
 
     db:
         image: postgres:17-alpine
@@ -46,3 +47,4 @@ services:
 volumes:
     trackit-data:
     trackit-backups:
+    trackit-assets:

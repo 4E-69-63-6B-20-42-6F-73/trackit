@@ -16,7 +16,8 @@ import {
 } from '../db/schema.js'
 import { deriveRecord } from '../health-records/derive.js'
 import { projectHealthRecordToJournal } from '../health-records/journal.js'
-import { rebuildEffectiveDailyMetric } from '../data/daily-projection.js'
+import { markProjectionDatesDirty } from '../data/projection-state.js'
+import { nextDate } from '../data/timezone.js'
 import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -670,7 +671,7 @@ export class DeviceService {
                 }
             }
 
-            for (const date of affectedDates) await this.rebuildDailyDate(transaction, date)
+            for (const date of affectedDates) await this.markDailyDateDirty(transaction, date)
             await transaction.insert(deviceUploadBatches).values({
                 deviceId,
                 idempotencyKey,
@@ -788,7 +789,7 @@ export class DeviceService {
                             },
                         })
             }
-            for (const date of dates) await this.rebuildDailyDate(transaction, date)
+            for (const date of dates) await this.markDailyDateDirty(transaction, date)
             return { records: records.length }
         })
     }
@@ -798,8 +799,14 @@ export class DeviceService {
         return instant.toISOString().slice(0, 10)
     }
 
-    private async rebuildDailyDate(transaction: Transaction, date: string) {
-        await rebuildEffectiveDailyMetric(transaction, date)
+    private async markDailyDateDirty(transaction: Transaction, date: string) {
+        const previous = new Date(`${date}T00:00:00.000Z`)
+        previous.setUTCDate(previous.getUTCDate() - 1)
+        await markProjectionDatesDirty(transaction, [
+            previous.toISOString().slice(0, 10),
+            date,
+            nextDate(date),
+        ])
     }
 
     async updateCursor(

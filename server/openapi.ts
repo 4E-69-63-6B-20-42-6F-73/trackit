@@ -32,13 +32,23 @@ export const openApiContract = {
             delete: { responses: { '204': { description: 'Deleted' } } },
         },
         '/api/observations': {
-            get: { responses: { '200': { description: 'Observations' } } },
+            get: {
+                description:
+                    'Bounded effective metric series after source resolution and derived metric calculation',
+                responses: { '200': { description: 'Effective observations' } },
+            },
             post: { responses: { '201': { description: 'Created' } } },
         },
         '/api/daily-metrics': {
             get: {
+                description:
+                    'Requires inclusive owner-local from/to dates with a maximum 366-day window',
                 responses: {
-                    '200': { description: 'Query-optimized UTC daily metric aggregates' },
+                    '200': {
+                        description:
+                            'Versioned effective daily metric projections in the owner timezone',
+                    },
+                    '400': { description: 'Missing, reversed, or oversized date range' },
                 },
             },
         },
@@ -70,6 +80,16 @@ export const openApiContract = {
         '/api/preferences': {
             get: { responses: { '200': { description: 'Preferences' } } },
             patch: { responses: { '200': { description: 'Updated' } } },
+        },
+        '/api/metric-sources': {
+            get: { responses: { '200': { description: 'Distinct metric source summaries' } } },
+        },
+        '/api/goals/evaluations': {
+            get: {
+                responses: {
+                    '200': { description: 'Server-evaluated goals over effective observations' },
+                },
+            },
         },
         '/api/foods/import': {
             post: { responses: { '200': { description: 'Per-row food import result' } } },

@@ -1,4 +1,4 @@
-import type { Goal } from '../domain/goals'
+import type { Goal, GoalEvaluation } from '../domain/goals'
 import { authRequest } from './authApi'
 
 export type GoalRecord = Goal
@@ -6,6 +6,12 @@ export async function listGoals(signal?: AbortSignal): Promise<GoalRecord[]> {
     const response = await authRequest('/api/goals', { signal })
     if (!response.ok) throw new Error('Goals unavailable')
     return ((await response.json()) as { data: GoalRecord[] }).data
+}
+export async function listGoalEvaluations(signal?: AbortSignal, at?: string) {
+    const query = at ? `?at=${encodeURIComponent(at)}` : ''
+    const response = await authRequest(`/api/goals/evaluations${query}`, { signal })
+    if (!response.ok) throw new Error('Goal evaluations unavailable')
+    return ((await response.json()) as { data: Record<string, GoalEvaluation> }).data
 }
 export async function createGoal(input: Omit<GoalRecord, 'id'>) {
     const response = await authRequest('/api/goals', {

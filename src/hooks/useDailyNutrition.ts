@@ -9,6 +9,7 @@ export type DailyNutritionState = {
     loading: boolean
     unavailable: boolean
     proteinGoal: number | null
+    hasProteinGoal: boolean
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
 }
 
@@ -20,6 +21,7 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
         loading: true,
         unavailable: false,
         proteinGoal: null,
+        hasProteinGoal: false,
         nutritionQuality: 'complete',
     })
 
@@ -46,15 +48,20 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                         (!goal.schedule.weekdays?.length ||
                             goal.schedule.weekdays.includes(weekday)),
                 )
+                const cumulativeProteinTarget =
+                    proteinGoal?.aggregation === 'total' &&
+                    proteinGoal.period.type === 'day' &&
+                    proteinGoal.comparator === 'gte' &&
+                    'value' in proteinGoal.target
+                        ? proteinGoal.target.value
+                        : null
                 setState({
                     nutrients,
                     mealCount: meals.length,
                     loading: false,
                     unavailable: false,
-                    proteinGoal:
-                        proteinGoal && 'value' in proteinGoal.target
-                            ? proteinGoal.target.value
-                            : null,
+                    proteinGoal: cumulativeProteinTarget,
+                    hasProteinGoal: Boolean(proteinGoal),
                     nutritionQuality: meals.some(meal => meal.nutritionQuality === 'incomplete')
                         ? 'incomplete'
                         : meals.some(meal => meal.nutritionQuality === 'estimated')
@@ -70,6 +77,7 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                     loading: false,
                     unavailable: true,
                     proteinGoal: null,
+                    hasProteinGoal: false,
                     nutritionQuality: 'complete',
                 })
             })

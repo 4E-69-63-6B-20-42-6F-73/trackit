@@ -1,4 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { localDayRange } from '../data/timezone.js'
 import { z } from 'zod'
 import type { DataRepository } from '../data/types.js'
 import { PostgresDataRepository } from '../data/postgres-repository.js'
@@ -102,6 +103,16 @@ export function createTrackItMcpServer(
 ) {
     const server = new McpServer({ name: 'TrackIt', version: '0.1.0' })
     const scoped = (scope: string) => client.scopes.includes(scope)
+    const boundedRange = (days = 365) => {
+        const fallback = new Date()
+        fallback.setUTCDate(fallback.getUTCDate() - days)
+        return {
+            from: (client.dateFrom ?? fallback).toISOString(),
+            to: client.dateTo
+                ? new Date(client.dateTo.getTime() + 1).toISOString()
+                : new Date().toISOString(),
+        }
+    }
     const ownerTimezone = async () => {
         const preference = (await data.getPreferences()) as { timezone?: string }
         return preference.timezone || 'UTC'
@@ -113,7 +124,10 @@ export function createTrackItMcpServer(
         { description: 'Metrics available within this client grant', mimeType: 'application/json' },
         async () => {
             const records = scoped('observations')
-                ? filterDates(client, (await data.listObservations()) as DatedRecord[])
+                ? filterDates(
+                      client,
+                      (await data.listObservations(boundedRange())) as DatedRecord[],
+                  )
                 : []
             const metrics = [...new Set(records.map(record => String(record.metric)))]
             return {
@@ -176,15 +190,23 @@ export function createTrackItMcpServer(
                 day: '2-digit',
             })
             const day = dateFormatter.format(new Date())
+            const dayRange = localDayRange(day, timezone)
+            const boundedDay = {
+                from: new Date(
+                    Math.max(dayRange.from.getTime(), client.dateFrom?.getTime() ?? -Infinity),
+                ).toISOString(),
+                to: new Date(
+                    Math.min(
+                        dayRange.to.getTime(),
+                        client.dateTo ? client.dateTo.getTime() + 1 : Infinity,
+                    ),
+                ).toISOString(),
+            }
             const observations = scoped('observations')
-                ? filterDates(client, (await data.listObservations()) as DatedRecord[]).filter(
-                      record => dateFormatter.format(new Date(record.observedAt!)) === day,
-                  )
+                ? filterDates(client, (await data.listObservations(boundedDay)) as DatedRecord[])
                 : []
             const meals = scoped('meals')
-                ? filterDates(client, (await data.listMeals()) as DatedRecord[]).filter(
-                      record => dateFormatter.format(new Date(record.eatenAt!)) === day,
-                  )
+                ? filterDates(client, (await data.listMeals(boundedDay)) as DatedRecord[])
                 : []
             return {
                 contents: [
@@ -232,8 +254,13 @@ export function createTrackItMcpServer(
         },
         async ({ metric }) => {
             if (!scoped('observations')) return denied('Scope observations is required.')
-            let records = filterDates(client, (await data.listObservations()) as DatedRecord[])
-            if (metric) records = records.filter(record => record.metric === metric)
+            const records = filterDates(
+                client,
+                (await data.listObservations({
+                    ...boundedRange(),
+                    metrics: metric ? [metric] : undefined,
+                })) as DatedRecord[],
+            )
             return textResult({
                 records: records.slice(0, 500),
                 metadata: metadata(client, records, await ownerTimezone()),
@@ -249,7 +276,10 @@ export function createTrackItMcpServer(
         },
         async ({ limit }) => {
             if (!scoped('meals')) return denied('Scope meals is required.')
-            const records = filterDates(client, (await data.listMeals()) as DatedRecord[])
+            const records = filterDates(
+                client,
+                (await data.listMeals(boundedRange())) as DatedRecord[],
+            )
             return textResult({
                 records: records.slice(0, limit),
                 metadata: metadata(client, records, await ownerTimezone()),
@@ -265,7 +295,10 @@ export function createTrackItMcpServer(
         },
         async () => {
             if (!scoped('meals')) return denied('Scope meals is required.')
-            const records = filterDates(client, (await data.listMeals()) as DatedRecord[])
+            const records = filterDates(
+                client,
+                (await data.listMeals(boundedRange())) as DatedRecord[],
+            )
             const totals = records.reduce<Record<string, number>>((sum, record) => {
                 const nutrients = (record.nutrientSnapshot ?? {}) as Record<string, number>
                 for (const [key, value] of Object.entries(nutrients))
@@ -288,7 +321,13 @@ export function createTrackItMcpServer(
         },
         async ({ leftMetric, rightMetric }) => {
             if (!scoped('observations')) return denied('Scope observations is required.')
-            const records = filterDates(client, (await data.listObservations()) as DatedRecord[])
+            const records = filterDates(
+                client,
+                (await data.listObservations({
+                    ...boundedRange(),
+                    metrics: [leftMetric, rightMetric],
+                })) as DatedRecord[],
+            )
             const left = records.filter(record => record.metric === leftMetric)
             const right = records.filter(record => record.metric === rightMetric)
             return textResult({
