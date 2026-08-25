@@ -137,7 +137,7 @@ describe('metric source summaries', () => {
         const repository = new PostgresDataRepository(database as never)
         const records = (await repository.listObservations({
             from: '2026-08-25T00:00:00.000Z',
-            to: '2026-08-25T23:59:59.999Z',
+            to: '2026-08-26T00:00:00.000Z',
             metrics: ['bmi', 'calorie_balance'],
         })) as Array<{ metric: string; canonicalValue: number }>
 
@@ -210,6 +210,36 @@ describe('metric source summaries', () => {
         )
         const [second] = await database.select().from(schema.dailyProjectionRuns)
         expect(second.completedAt.getTime()).toBe(first.completedAt.getTime())
+        await client.close()
+    })
+
+    it('queues historical projection backfill while rebuilding the active day', async () => {
+        const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values(
+            ['2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'].map(date => ({
+                metric: 'steps',
+                canonicalValue: 100,
+                canonicalUnit: 'count',
+                originalValue: 100,
+                originalUnit: 'count',
+                observedAt: new Date(`${date}T12:00:00.000Z`),
+            })),
+        )
+        const repository = new PostgresDataRepository(database as never)
+
+        const rows = await repository.listDailyMetrics({
+            from: '2026-08-22',
+            to: '2026-08-25',
+        })
+
+        expect(rows).toEqual([
+            expect.objectContaining({ date: '2026-08-25', metric: 'steps', value: 100 }),
+        ])
+        expect(
+            (await database.select().from(schema.projectionDirtyDates))
+                .map(item => item.date)
+                .sort(),
+        ).toEqual(['2026-08-22', '2026-08-23', '2026-08-24'])
         await client.close()
     })
 })

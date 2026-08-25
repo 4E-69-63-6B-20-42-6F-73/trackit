@@ -334,6 +334,11 @@ describe('Android device pairing and upload', () => {
                 observation => observation.sourceRecordId === source.id,
             ),
         ).toHaveLength(0)
+        expect(
+            (await database.select().from(schema.projectionDirtyDates)).some(date =>
+                date.date.startsWith('1970-'),
+            ),
+        ).toBe(false)
 
         await service.revoke(requested!.deviceId)
         expect(await authenticate(requested?.credential)).toBeNull()

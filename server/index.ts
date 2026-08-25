@@ -47,9 +47,15 @@ const app = await createApp(new PostgresJournalRepository(db), {
 const webRoot = resolve('dist')
 
 if (existsSync(webRoot)) {
-    await app.register(staticFiles, { root: webRoot })
+    await app.register(staticFiles, {
+        root: webRoot,
+        setHeaders(response, path) {
+            if (path.includes(`${resolve('dist', 'assets')}`))
+                response.header('Cache-Control', 'public, max-age=31536000, immutable')
+        },
+    })
     app.setNotFoundHandler((request, reply) => {
-        if (request.url.startsWith('/api/')) {
+        if (request.url.startsWith('/api/') || request.url.startsWith('/assets/')) {
             return reply.code(404).send({ error: 'not_found' })
         }
         return reply.sendFile('index.html')

@@ -27,7 +27,7 @@ import {
 import { useServerData } from '../hooks/useServerData'
 import { updatePreferences } from '../lib/preferencesApi'
 import { listMetricSources, type MetricSourceSummary } from '../lib/observationApi'
-import type { MetricSourceDescriptor } from '../domain/effectiveMetrics'
+import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
 import type { DeduplicationPolicy } from '../domain/metrics'
 
 export function Metrics() {
@@ -269,6 +269,7 @@ export function Metrics() {
                                 )
                                 if (!source) return null
                                 const included = !draftDisabledSources.includes(key)
+                                const sourceName = metricSourceDisplayName(source.provider)
                                 return (
                                     <div className="metric-source-row" key={key}>
                                         <Text size="sm" c="dimmed" aria-hidden="true">
@@ -276,7 +277,7 @@ export function Metrics() {
                                         </Text>
                                         <div>
                                             <Text size="sm" fw={600}>
-                                                {source.provider}
+                                                {sourceName}
                                             </Text>
                                             <Text size="xs" c="dimmed">
                                                 {source.connector
@@ -288,7 +289,7 @@ export function Metrics() {
                                         <Switch
                                             size="sm"
                                             checked={included}
-                                            aria-label={`Include ${source.provider} in ${editing.name}`}
+                                            aria-label={`Include ${sourceName} in ${editing.name}`}
                                             onChange={event => {
                                                 const enabled = event.currentTarget.checked
                                                 setDraftDisabledSources(current =>
@@ -307,7 +308,7 @@ export function Metrics() {
                                                     index === 0 ||
                                                     saving
                                                 }
-                                                aria-label={`Move ${source.provider} up`}
+                                                aria-label={`Move ${sourceName} up`}
                                                 onClick={() => moveSource(index, -1)}
                                             >
                                                 <IconArrowUp size={16} />
@@ -320,7 +321,7 @@ export function Metrics() {
                                                     index === draftSourcePriority.length - 1 ||
                                                     saving
                                                 }
-                                                aria-label={`Move ${source.provider} down`}
+                                                aria-label={`Move ${sourceName} down`}
                                                 onClick={() => moveSource(index, 1)}
                                             >
                                                 <IconArrowDown size={16} />

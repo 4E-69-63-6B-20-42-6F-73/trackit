@@ -5,9 +5,7 @@ import { listObservations } from '../lib/observationApi'
 import { listGoalEvaluations } from '../lib/goalApi'
 import type { GoalEvaluation } from '../domain/goals'
 import { useServerData } from './useServerData'
-
-const dateKey = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+import { calendarDateKey, calendarDayRange } from '../domain/calendar'
 
 const asObservation = (row: DailyMetric): Observation => ({
     id: `daily:${row.date}:${row.metric}`,
@@ -33,25 +31,25 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
     const [goalEvaluations, setGoalEvaluations] = useState<Record<string, GoalEvaluation>>({})
     const [loading, setLoading] = useState(true)
     const [unavailable, setUnavailable] = useState(false)
-    const selectedKey = dateKey(selectedDate)
+    const timezone = preferences?.timezone ?? 'UTC'
+    const selectedKey = calendarDateKey(selectedDate, timezone)
     const load = useCallback(
         (signal: AbortSignal) => {
             const fromDate = new Date(selectedDate)
             fromDate.setDate(fromDate.getDate() - 29)
-            const dayStart = new Date(selectedDate)
-            dayStart.setHours(0, 0, 0, 0)
-            const dayEnd = new Date(selectedDate)
-            dayEnd.setHours(0, 0, 0, 0)
-            dayEnd.setDate(dayEnd.getDate() + 1)
+            const day = calendarDayRange(selectedDate, timezone)
             queueMicrotask(() => {
                 if (!signal.aborted) setLoading(true)
             })
             return Promise.all([
-                listDailyMetrics({ from: dateKey(fromDate), to: selectedKey }, signal),
+                listDailyMetrics(
+                    { from: calendarDateKey(fromDate, timezone), to: selectedKey },
+                    signal,
+                ),
                 listObservations(
                     {
-                        from: dayStart.toISOString(),
-                        to: dayEnd.toISOString(),
+                        from: day.from.toISOString(),
+                        to: day.to.toISOString(),
                         metrics: [
                             'steps',
                             'water',
@@ -79,7 +77,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                     if (!signal.aborted) setLoading(false)
                 })
         },
-        [selectedDate, selectedKey],
+        [selectedDate, selectedKey, timezone],
     )
 
     useEffect(() => {
@@ -146,7 +144,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         const sleepRows = Array.from({ length: 7 }, (_, offset) => {
             const date = new Date(selectedDate)
             date.setDate(date.getDate() - 6 + offset)
-            const key = dateKey(date)
+            const key = calendarDateKey(date, timezone)
             return { key, row: sleepByDate.get(key) }
         })
         const effectiveTotal = (metric: string) => {
@@ -192,6 +190,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         selectedKey,
         sharedLoading,
         sharedUnavailable,
+        timezone,
         unavailable,
     ])
 }

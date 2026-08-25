@@ -21,7 +21,15 @@ export async function markProjectionDatesDirty(
     database: Database | Transaction,
     dates: Iterable<string>,
 ) {
-    for (const date of new Set(dates)) await markProjectionDirty(database, date)
+    const uniqueDates = [...new Set(dates)]
+    if (!uniqueDates.length) return
+    await database
+        .insert(projectionDirtyDates)
+        .values(uniqueDates.map(date => ({ userId: 'owner', date })))
+        .onConflictDoUpdate({
+            target: [projectionDirtyDates.userId, projectionDirtyDates.date],
+            set: { createdAt: new Date() },
+        })
 }
 
 export class ProjectionWorker {

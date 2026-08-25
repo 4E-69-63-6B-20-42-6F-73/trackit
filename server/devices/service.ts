@@ -497,23 +497,6 @@ export class DeviceService {
                 const provider = input.dataOrigin ?? input.provider
                 const startTime = new Date(input.startTime)
                 const endTime = input.endTime ? new Date(input.endTime) : null
-                const [previous] = await transaction
-                    .select()
-                    .from(healthRecords)
-                    .where(
-                        and(
-                            eq(healthRecords.userId, 'owner'),
-                            eq(healthRecords.connector, connector),
-                            eq(healthRecords.provider, provider),
-                            eq(healthRecords.externalId, input.externalId),
-                        ),
-                    )
-                    .limit(1)
-
-                if (previous)
-                    affectedDates.add(
-                        this.metricDate(previous.recordType, previous.startTime, previous.endTime),
-                    )
                 const deletedAt = input.deleted ? now : null
                 await transaction
                     .insert(healthRecords)
@@ -574,9 +557,12 @@ export class DeviceService {
                     .limit(1)
                 if (!stored || stored.externalVersion !== input.externalVersion) continue
 
-                affectedDates.add(
-                    this.metricDate(stored.recordType, stored.startTime, stored.endTime),
-                )
+                const previousProjections = await transaction
+                    .select({ observedAt: observations.observedAt })
+                    .from(observations)
+                    .where(eq(observations.sourceRecordId, stored.id))
+                for (const projection of previousProjections)
+                    affectedDates.add(projection.observedAt.toISOString().slice(0, 10))
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
@@ -598,6 +584,9 @@ export class DeviceService {
                         startTime: stored.startTime,
                         endTime: stored.endTime,
                     })
+                    for (const projection of projections)
+                        if (projection.observedAt)
+                            affectedDates.add(projection.observedAt.toISOString().slice(0, 10))
                     if (projections.length)
                         await transaction.insert(observations).values(
                             projections.map(projection => ({
@@ -694,7 +683,12 @@ export class DeviceService {
                 .where(isNull(healthRecords.deletedAt))
             const dates = new Set<string>()
             for (const stored of records) {
-                dates.add(this.metricDate(stored.recordType, stored.startTime, stored.endTime))
+                const previousProjections = await transaction
+                    .select({ observedAt: observations.observedAt })
+                    .from(observations)
+                    .where(eq(observations.sourceRecordId, stored.id))
+                for (const projection of previousProjections)
+                    dates.add(projection.observedAt.toISOString().slice(0, 10))
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
@@ -713,6 +707,9 @@ export class DeviceService {
                     payload: stored.payload as Record<string, unknown>,
                     lastModifiedTime: stored.lastModifiedTime?.toISOString(),
                 })
+                for (const projection of projections)
+                    if (projection.observedAt)
+                        dates.add(projection.observedAt.toISOString().slice(0, 10))
                 if (projections.length)
                     await transaction.insert(observations).values(
                         projections.map(projection => ({
@@ -792,11 +789,6 @@ export class DeviceService {
             for (const date of dates) await this.markDailyDateDirty(transaction, date)
             return { records: records.length }
         })
-    }
-
-    private metricDate(recordType: string, startTime: Date, endTime: Date | null) {
-        const instant = recordType === 'SleepSessionRecord' && endTime ? endTime : startTime
-        return instant.toISOString().slice(0, 10)
     }
 
     private async markDailyDateDirty(transaction: Transaction, date: string) {

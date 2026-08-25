@@ -101,7 +101,7 @@ export async function getEffectiveMetricSeries(
         return (
             (!requestedMetrics || requestedMetrics.has(record.metric)) &&
             (!range.from || observedAt >= new Date(range.from)) &&
-            (!range.to || observedAt <= new Date(range.to))
+            (!range.to || observedAt < new Date(range.to))
         )
     })
 }

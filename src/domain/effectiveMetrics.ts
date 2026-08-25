@@ -10,6 +10,14 @@ export type MetricSourceDescriptor = {
     connector?: string
 }
 
+export function metricSourceDisplayName(provider: string) {
+    if (provider === 'com.fitbit.FitbitMobile') return 'Fitbit'
+    if (provider === 'com.google.android.apps.fitness') return 'Google Fit'
+    if (provider === 'android') return 'Android system'
+    if (provider.startsWith('com.android.healthconnect.phone.')) return 'On-device health data'
+    return provider
+}
+
 export function observationSource(record: Observation): MetricSourceDescriptor {
     const provider =
         record.provider ??

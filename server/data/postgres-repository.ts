@@ -25,6 +25,7 @@ import {
 } from './daily-projection.js'
 import { dateKeyInTimezone, datesThrough, localDayRange } from './timezone.js'
 import { getEffectiveMetricSeries } from './effective-series.js'
+import { markProjectionDatesDirty } from './projection-state.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -159,7 +160,9 @@ export class PostgresDataRepository implements DataRepository {
             }
             const [observationDates, mealDates] = await Promise.all([
                 this.database
-                    .select({ at: observations.observedAt })
+                    .selectDistinct({
+                        date: sql<string>`to_char(${observations.observedAt} at time zone ${timezone}, 'YYYY-MM-DD')`,
+                    })
                     .from(observations)
                     .where(
                         and(
@@ -169,7 +172,9 @@ export class PostgresDataRepository implements DataRepository {
                         ),
                     ),
                 this.database
-                    .select({ at: meals.eatenAt })
+                    .selectDistinct({
+                        date: sql<string>`to_char(${meals.eatenAt} at time zone ${timezone}, 'YYYY-MM-DD')`,
+                    })
                     .from(meals)
                     .where(
                         and(
@@ -181,9 +186,8 @@ export class PostgresDataRepository implements DataRepository {
             ])
             const inputDates = new Set([
                 ...rows.map(row => row.date),
-                ...[...observationDates, ...mealDates].map(item =>
-                    dateKeyInTimezone(item.at, timezone),
-                ),
+                ...observationDates.map(item => item.date),
+                ...mealDates.map(item => item.date),
             ])
             const emptyDates = missingDates.filter(date => !inputDates.has(date))
             for (const date of missingDates.filter(date => inputDates.has(date)))
@@ -204,7 +208,11 @@ export class PostgresDataRepository implements DataRepository {
                     .onConflictDoNothing()
         } else for (const date of missingDates) staleDates.add(date)
         if (!staleDates.size) return rows
-        for (const date of staleDates) await rebuildEffectiveDailyMetric(this.database, date)
+        await markProjectionDatesDirty(this.database, staleDates)
+        // Keep the active day accurate without making a read synchronously backfill
+        // every historical date. The projection worker drains the remaining dates.
+        const activeDate = range.to && staleDates.has(range.to) ? range.to : null
+        if (activeDate) await rebuildEffectiveDailyMetric(this.database, activeDate)
         return query()
     }
 

@@ -1,7 +1,7 @@
 # TrackIt final system review
 
 Review date: 2026-08-25  
-Status: implementation-complete architecture review; remediation backlog proposed  
+Status: remediation implemented; production validation in progress
 Scope: web application, API, PostgreSQL model, effective metric pipeline, Android ingestion boundary, deployment, operations, developer workflow, accessibility, and core user journeys
 
 ## Executive assessment
@@ -23,6 +23,20 @@ The system is suitable for continued alpha use, but it should not be called oper
 | P1-08 materialization state | Completed and dirty projection tables distinguish empty, stale, partial, and pending dates.                                                                                                                                                     |
 | P1-09 ingestion latency     | Device uploads commit raw data plus coalesced dirty dates; a durable worker performs projection rebuilding afterward.                                                                                                                           |
 | P1-10 mobile hierarchy      | Existing goals precede creation on mobile, narrow metric cards become one column, reflection actions reflow, and navigation uses safe-area padding.                                                                                             |
+
+### Production validation — 2026-08-25
+
+A read-only investigation of the live VM, application container, and PostgreSQL database found:
+
+- Health and database-backed readiness were healthy. The application used about 56 MiB and PostgreSQL about 139 MiB at rest.
+- The database contained roughly 216,000 canonical Health Connect records and 690,000 projected observations. Exact external-identity duplicate checks returned zero duplicate groups.
+- The configured Steps policy included only Google Fit. Effective-series and daily-projection totals agreed: 4,816 for 25 August and 13,531 for 24 August. Fitbit was excluded and reported 8,330 raw steps on 24 August. The reported “14,000” was therefore the selected provider's total, not a sum across enabled and disabled providers.
+- A 30-day daily-metrics request started a synchronous historical materialization backfill and did not finish before the application restarted. Reads now return existing history, rebuild at most the active day inline, and queue historical dates for the projection worker.
+- Input-date discovery previously transferred every matching observation timestamp into Node.js. It now asks PostgreSQL only for distinct owner-local dates.
+- 6,579 Health Connect envelopes legitimately used an epoch placeholder while their projected observations had real sample timestamps. Invalidation incorrectly used the envelope timestamp, creating empty 1969/1970 materialization markers. Invalidation now derives dates from affected projected observations.
+- Missing hashed assets were rewritten to `index.html` with status 200. Asset misses now return 404 so guarded client recovery can run, and content-addressed assets receive immutable cache headers.
+- Production preferences use `UTC`, while the browser requested Europe/Amsterdam-style day bounds. Today now derives detail boundaries from the saved preference timezone so details and projections use the same calendar day. The owner should explicitly select `Europe/Amsterdam` if that is the intended product timezone.
+- The applied migration count is correct: 12 journal rows represent migrations `0000` through `0011`.
 
 ### Scorecard
 
@@ -52,9 +66,7 @@ This review used:
 - component, domain, API, integration, security, accessibility, performance, and Playwright test structure;
 - current desktop and mobile review screenshots in `docs/ui-screenshots`.
 
-The production build, schema check, lint, and unit/integration suite passed immediately before this review. The focused metric-flow regression suite also passed. `docker compose config --quiet` succeeds. A live production deployment, reverse proxy, database execution plan, restore into an independent host, Android device, and screen reader were not available in this review, so those are explicitly retained as operational acceptance work rather than assumed complete.
-
-One current release gate is demonstrably red: `npm run format:check` reports 47 files. Because `npm run check` starts with that command, contributors and CI cannot currently obtain a clean full check from the working tree.
+The production build, schema check, lint, and unit/integration suite passed immediately before this review. The focused metric-flow regression suite also passed. `docker compose config --quiet` succeeds. A live production VM, reverse proxy, application container, and PostgreSQL database were subsequently inspected as summarized above. Restore into an independent host, a live Android upload trace, and manual screen-reader validation remain outstanding operational acceptance work.
 
 ## Target architecture and current flow
 
