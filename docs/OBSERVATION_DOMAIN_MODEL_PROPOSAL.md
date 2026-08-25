@@ -1,20 +1,30 @@
 # TrackIt observation-centered domain model proposal
 
-Status: accepted direction; Phase 1 derived-observation cache foundation implemented  
+Status: implemented; final verification in progress  
 Review date: 2026-08-25
 
 ### Implementation checkpoint — 2026-08-25
 
-The first vertical slice is now implemented:
+The observation-centered cutover is now implemented:
 
 - Effective base-series resolution is a distinct domain operation from derivation.
 - System-derived observations are materialized in a rebuildable cache, separate from authoritative base observations.
 - Every cached derived observation records its algorithm version, source-resolution version, timezone, deterministic input fingerprint, and ordered input lineage.
 - Daily projection rebuilds replace derived cache rows atomically, including explicit empty-day materialization through `daily_projection_runs`.
 - Bounded derived-only reads use the cache only when every covered local date has a current, complete, non-dirty materialization. Cache misses and invalid versions fall back to calculation from effective base observations.
-- Retention and owner deletion remove applicable derived materializations without deleting or mutating raw source records.
+- Retention and owner deletion remove applicable derived materializations without confusing projections with authoritative facts.
+- `observations` supports numeric, text, boolean, category, event, and compound values with explicit origin, state, effective time, recorded time, definition version, attributes, and provenance.
+- `observation_relations` owns compound membership. Meals and Health Connect sessions are root observations whose numeric components remain queryable.
+- Meals are written atomically as observation graphs. The `/api/meals` surface is a journey-oriented projection/command adapter, not a parallel entity store.
+- Journal is a read-only projection over meaningful root observations. There are no Journal mutation routes or writable Journal repository methods.
+- Per-metric `showInJournal` preferences configure that projection from the Metrics Center. Explicit opt-in can surface a normally quiet metric; opt-out hides it without altering its observation history.
+- Migration `0013` deterministically converts legacy meals, nutrient snapshots, meal-item snapshots, standalone Journal facts, linked measurement presentation, and Health Connect roots. Migration `0014` validates the conversion and retires the legacy tables.
+- Effective-series resolution is the default observation query used by Goals, Trends, Today detail reads, MCP measurement reads, daily materialization, and system derivations.
+- Nutrition and Journal retain familiar meal/timeline view models, but both are produced from observation graphs.
+- Export schema version 2 emits observations and source/projection data without duplicate Meal or Journal truth collections.
+- The shared metric catalog now owns canonical units and daily aggregation semantics for both UI and server ingestion. Health Connect height and hydration normalize to `cm` and `ml`/`water` before entering the graph.
 
-Still pending are the broader schema generalization for non-numeric and compound observations, migration of meals into observations, and replacement of persisted Journal entries with a projection. Those remain later phases so that their one-time content migrations can be validated independently.
+The historical catalog and phased proposal below are retained as decision context. Where it describes legacy behavior or future phases, this checkpoint and the implementation-state matrix in section 20 are authoritative.
 
 ## 1. Decision summary
 
@@ -713,3 +723,48 @@ External provider --> source record --> normalization --> base observation(s)
 ```
 
 This model preserves the familiar TrackIt experience while removing Journal and Meal as competing stores of truth. Users see meals, sleep, symptoms, measurements, and notes; the system sees one inspectable graph of observations.
+
+## 20. Implemented architecture and verification map
+
+| Requirement                  | Authoritative implementation                                                                                                                        | Verification evidence                                           |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| Generalized facts            | `observations` typed columns and `src/domain/observations.ts`                                                                                       | schema build and migration tests                                |
+| Compound events              | `observation_relations`; atomic meal and Health Connect graph writers                                                                               | transactional-write, repository, and device tests               |
+| Derived cache and lineage    | `derived_observations`, `derived_observation_inputs`, daily materialization contract                                                                | derived-cache and repository tests                              |
+| Effective source resolution  | `getEffectiveMetricSeries` and `effectiveBaseMetricSeries`                                                                                          | source-policy, disabled-source, daily projection, and API tests |
+| Read-only Journal            | `PostgresJournalRepository.list`; GET-only `/api/journal`                                                                                           | app route and Journal projection tests                          |
+| Observation-native nutrition | meal roots and nutrient components; meal view adapter over roots                                                                                    | repository, lifecycle, migration, and nutrition tests           |
+| Shared definitions           | `src/domain/metricCatalog.ts`; server registry is a compatibility adapter                                                                           | catalog, aggregation, and Health Connect derivation tests       |
+| Legacy retirement            | migrations `0013` and `0014`; no legacy tables in current Drizzle schema                                                                            | fresh-schema and upgrade migration tests                        |
+| Consumer consistency         | effective observations for Today details, Goals, Trends, MCP measurements, and daily projection; observation projections for Journal and meal views | app, goal, repository, MCP, UI, and E2E suites                  |
+| Portable data                | export schema version 2 contains observations without duplicate Journal/Meal truth                                                                  | export tests                                                    |
+
+### Authoritative write flow
+
+```text
+Manual metric/note -> observation command -> observation
+Meal command       -> atomic root + nutrient components + relations
+Health Connect     -> source record -> normalized root + components + relations
+Source update      -> replace normalized graph for that external identity
+```
+
+Journal never receives a write. UI actions shown from Journal correct or remove the underlying observation. Foods and recipes remain definitions; logged consumption is an observation graph.
+
+### Authoritative read flow
+
+```text
+raw numeric observations
+        -> exact external identity handling
+        -> provider-aware source policy
+        -> effective base series
+        -> cached derived observations with lineage
+        -> daily projections / Goals / Trends / Today / MCP
+
+root observation graphs -> Journal and meal-oriented projections
+```
+
+`GET /api/observations` is bounded and effective by default. Raw observations are reserved for internal export and inspection. All time ranges use inclusive `from` and exclusive `to`; daily caches use the owner's timezone and record explicit complete/dirty materialization state, including empty days.
+
+### Migration safety
+
+Migration `0013` preserves legacy IDs where possible and uses deterministic IDs for nutrient components. Before `0014` removes legacy storage, it checks meal roots, nutrient component counts, meal-item snapshot counts, standalone Journal facts, linked facts, and Health Connect roots. The migration is intentionally one-way; deployment must take a database backup before applying it.

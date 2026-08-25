@@ -229,40 +229,6 @@ export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPr
     )
 }
 
-export function mealMetricObservations(
-    meals: Array<{
-        id: string
-        eatenAt: string
-        nutrientSnapshot: Record<string, number | undefined>
-        version: number
-    }>,
-) {
-    const units: Record<string, string> = { calories: 'kcal', sodium: 'mg', potassium: 'mg' }
-    return meals.flatMap(meal =>
-        Object.entries(meal.nutrientSnapshot).flatMap(([metric, value]): Observation[] =>
-            value === undefined
-                ? []
-                : [
-                      {
-                          id: `meal:${meal.id}:${metric}`,
-                          metric,
-                          canonicalValue: value,
-                          canonicalUnit: units[metric] ?? 'g',
-                          originalValue: value,
-                          originalUnit: units[metric] ?? 'g',
-                          observedAt: meal.eatenAt,
-                          externalId: `${meal.id}:${metric}`,
-                          provider: 'Nutrition',
-                          connector: null,
-                          metadata: { recordType: 'meal_nutrient', mealId: meal.id },
-                          excluded: false,
-                          version: meal.version,
-                      },
-                  ],
-        ),
-    )
-}
-
 export function sourcesByMetric(records: Observation[]) {
     const result: Record<string, MetricSourceDescriptor[]> = {}
     for (const record of removeExactDuplicates(records)) {

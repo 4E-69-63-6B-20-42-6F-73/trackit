@@ -1,13 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
-import type {
-    CreateJournalEntry,
-    JournalEntry,
-    JournalListQuery,
-    JournalRepository,
-    UpdateJournalEntry,
-} from './journal/types.js'
+import type { JournalEntry, JournalListQuery, JournalRepository } from './journal/types.js'
 
 class MemoryJournalRepository implements JournalRepository {
     entries: JournalEntry[] = []
@@ -16,41 +10,6 @@ class MemoryJournalRepository implements JournalRepository {
     async list(query?: JournalListQuery) {
         this.lastListQuery = query
         return this.entries
-    }
-
-    async create(input: CreateJournalEntry) {
-        const now = new Date().toISOString()
-        const entry: JournalEntry = {
-            ...input,
-            id: input.id ?? randomUUID(),
-            version: 1,
-            createdAt: now,
-            updatedAt: now,
-        }
-        const existing = this.entries.findIndex(item => item.id === entry.id)
-        if (existing >= 0) this.entries[existing] = entry
-        else this.entries.unshift(entry)
-        return entry
-    }
-
-    async remove(id: string) {
-        const before = this.entries.length
-        this.entries = this.entries.filter(entry => entry.id !== id)
-        return this.entries.length !== before
-    }
-
-    async update(id: string, input: UpdateJournalEntry) {
-        const index = this.entries.findIndex(
-            entry => entry.id === id && entry.version === input.version,
-        )
-        if (index < 0) return null
-        this.entries[index] = {
-            ...this.entries[index],
-            ...input,
-            version: input.version + 1,
-            updatedAt: new Date().toISOString(),
-        }
-        return this.entries[index]
     }
 
     async ready() {
@@ -149,9 +108,15 @@ describe('journal API', () => {
             observedAt: new Date().toISOString(),
         }
 
-        expect((await app.inject({ method: 'POST', url: '/api/journal', payload })).statusCode).toBe(404)
-        expect((await app.inject({ method: 'PATCH', url: `/api/journal/${id}`, payload })).statusCode).toBe(404)
-        expect((await app.inject({ method: 'DELETE', url: `/api/journal/${id}` })).statusCode).toBe(404)
+        expect(
+            (await app.inject({ method: 'POST', url: '/api/journal', payload })).statusCode,
+        ).toBe(404)
+        expect(
+            (await app.inject({ method: 'PATCH', url: `/api/journal/${id}`, payload })).statusCode,
+        ).toBe(404)
+        expect((await app.inject({ method: 'DELETE', url: `/api/journal/${id}` })).statusCode).toBe(
+            404,
+        )
         expect((await app.inject({ method: 'GET', url: '/api/journal' })).statusCode).toBe(200)
         await app.close()
     })
@@ -204,7 +169,10 @@ describe('journal API', () => {
             authenticate: async () => null,
         }
         const data = {
-            createObservation: async (input: unknown) => ({ id: randomUUID(), ...(input as object) }),
+            createObservation: async (input: unknown) => ({
+                id: randomUUID(),
+                ...(input as object),
+            }),
         }
         const app = await createApp(new MemoryJournalRepository(), {
             auth: auth as never,
@@ -274,7 +242,11 @@ describe('journal API', () => {
                     method: 'POST',
                     url: '/api/observations',
                     headers: { cookie: 'trackit_session=session' },
-                    payload: { metric: 'check_in', valueType: 'event', observedAt: payload.observedAt },
+                    payload: {
+                        metric: 'check_in',
+                        valueType: 'event',
+                        observedAt: payload.observedAt,
+                    },
                 })
             ).statusCode,
         ).toBe(403)
@@ -287,7 +259,11 @@ describe('journal API', () => {
                         cookie: 'trackit_session=session; trackit_csrf=token',
                         'x-csrf-token': 'token',
                     },
-                    payload: { metric: 'check_in', valueType: 'event', observedAt: payload.observedAt },
+                    payload: {
+                        metric: 'check_in',
+                        valueType: 'event',
+                        observedAt: payload.observedAt,
+                    },
                 })
             ).statusCode,
         ).toBe(201)

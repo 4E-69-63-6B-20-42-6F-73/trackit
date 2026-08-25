@@ -8,7 +8,6 @@ import {
     deviceRequestNonces,
     deviceUploadBatches,
     healthRecords,
-    journalEntries,
     observationRelations,
     observations,
     pairingCodes,
@@ -25,7 +24,6 @@ type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const deletionTombstoneVersion = Number.MAX_SAFE_INTEGER
-const writeLegacyJournal: boolean = false
 
 async function insertHealthObservationGraph(
     transaction: Transaction,
@@ -89,6 +87,7 @@ async function insertHealthObservationGraph(
             externalId: record.externalId,
             attributes: {
                 journalDetail: journal?.detail ?? '',
+                primaryMetric: projections[0]?.metric,
                 sourceLabel: record.dataOrigin
                     ? `Health Connect · ${record.dataOrigin}`
                     : 'Health Connect',
@@ -648,7 +647,10 @@ export class DeviceService {
                 if (!stored || stored.externalVersion !== input.externalVersion) continue
 
                 const previousProjections = await transaction
-                    .select({ observedAt: observations.observedAt })
+                    .select({
+                        observedAt: observations.observedAt,
+                        sourceId: observations.sourceId,
+                    })
                     .from(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
                 for (const projection of previousProjections)
@@ -671,6 +673,7 @@ export class DeviceService {
                     for (const projection of projections)
                         if (projection.observedAt)
                             affectedDates.add(projection.observedAt.toISOString().slice(0, 10))
+                    /* Legacy journal persistence retired; Journal is projected from the graph.
                     const journal = projectHealthRecordToJournal(
                         {
                             ...input,
@@ -681,9 +684,9 @@ export class DeviceService {
                         },
                         projections,
                     )
-                    if (writeLegacyJournal && journal)
+                    if (retiredTimelineWrite && journal)
                         await transaction
-                            .insert(journalEntries)
+                            .insert(retiredTimelineTable)
                             .values({
                                 id: stored.id,
                                 ...journal,
@@ -700,7 +703,7 @@ export class DeviceService {
                                 entityId: stored.id,
                             })
                             .onConflictDoUpdate({
-                                target: journalEntries.id,
+                                target: retiredTimelineTable.id,
                                 set: {
                                     ...journal,
                                     sourceId: deviceId,
@@ -715,6 +718,7 @@ export class DeviceService {
                                     updatedAt: now,
                                 },
                             })
+                    */
                 }
             }
 
@@ -737,7 +741,10 @@ export class DeviceService {
             const dates = new Set<string>()
             for (const stored of records) {
                 const previousProjections = await transaction
-                    .select({ observedAt: observations.observedAt })
+                    .select({
+                        observedAt: observations.observedAt,
+                        sourceId: observations.sourceId,
+                    })
                     .from(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
                 for (const projection of previousProjections)
@@ -745,24 +752,30 @@ export class DeviceService {
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
-                const projections = await insertHealthObservationGraph(transaction, {
-                    id: stored.id,
-                    userId: stored.userId,
-                    provider: stored.provider,
-                    recordType: stored.recordType,
-                    externalId: stored.externalId,
-                    externalVersion: stored.externalVersion,
-                    startTime: stored.startTime,
-                    endTime: stored.endTime,
-                    dataOrigin: stored.dataOrigin ?? undefined,
-                    recordingMethod: stored.recordingMethod ?? undefined,
-                    device: stored.device as Record<string, unknown>,
-                    payload: stored.payload as Record<string, unknown>,
-                    lastModifiedTime: stored.lastModifiedTime?.toISOString(),
-                })
+                const projections = await insertHealthObservationGraph(
+                    transaction,
+                    {
+                        id: stored.id,
+                        userId: stored.userId,
+                        provider: stored.provider,
+                        recordType: stored.recordType,
+                        externalId: stored.externalId,
+                        externalVersion: stored.externalVersion,
+                        startTime: stored.startTime,
+                        endTime: stored.endTime,
+                        dataOrigin: stored.dataOrigin ?? undefined,
+                        recordingMethod: stored.recordingMethod ?? undefined,
+                        device: stored.device as Record<string, unknown>,
+                        payload: stored.payload as Record<string, unknown>,
+                        lastModifiedTime: stored.lastModifiedTime?.toISOString(),
+                    },
+                    previousProjections.find(projection => projection.sourceId)?.sourceId ??
+                        undefined,
+                )
                 for (const projection of projections)
                     if (projection.observedAt)
                         dates.add(projection.observedAt.toISOString().slice(0, 10))
+                /* Legacy duplicate projection writes retired.
                 if (false && projections.length)
                     await transaction.insert(observations).values(
                         projections.map(projection => ({
@@ -806,9 +819,9 @@ export class DeviceService {
                     },
                     projections,
                 )
-                if (writeLegacyJournal && journal)
+                if (retiredTimelineWrite && journal)
                     await transaction
-                        .insert(journalEntries)
+                        .insert(retiredTimelineTable)
                         .values({
                             id: stored.id,
                             ...journal,
@@ -824,7 +837,7 @@ export class DeviceService {
                             entityId: stored.id,
                         })
                         .onConflictDoUpdate({
-                            target: journalEntries.id,
+                            target: retiredTimelineTable.id,
                             set: {
                                 ...journal,
                                 sourceLabel: stored.dataOrigin
@@ -838,6 +851,7 @@ export class DeviceService {
                                 updatedAt: new Date(),
                             },
                         })
+                */
             }
             for (const date of dates) await this.markDailyDateDirty(transaction, date)
             return { records: records.length }

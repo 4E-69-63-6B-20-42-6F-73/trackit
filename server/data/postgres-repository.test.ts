@@ -137,13 +137,15 @@ describe('metric source summaries', () => {
                 observedAt: new Date('2026-08-25T18:00:00Z'),
             },
         ])
-        await database.insert(schema.meals).values({
+        const repository = new PostgresDataRepository(database as never)
+        await repository.createMeal({
             name: 'Daily intake',
             mealType: 'Dinner',
-            eatenAt: new Date('2026-08-25T19:00:00Z'),
-            nutrientSnapshot: { calories: 2200 },
+            eatenAt: '2026-08-25T19:00:00Z',
+            nutrients: { calories: 2200 },
+            favorite: false,
+            nutritionQuality: 'complete',
         })
-        const repository = new PostgresDataRepository(database as never)
         const records = (await repository.listObservations({
             from: '2026-08-25T00:00:00.000Z',
             to: '2026-08-26T00:00:00.000Z',

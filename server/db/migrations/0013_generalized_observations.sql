@@ -56,12 +56,27 @@ SELECT
         'mealType', m."meal_type",
         'nutrientSnapshot', m."nutrient_snapshot",
         'nutritionQuality', m."nutrition_quality",
-        'favorite', m."favorite"
+        'favorite', m."favorite",
+        'primaryMetric', 'calories'
     ),
     jsonb_build_object('legacyEntity', 'meal', 'legacyId', m."id"),
     m."version", m."created_at", m."updated_at", m."deleted_at"
 FROM "meals" m
 ON CONFLICT ("id") DO NOTHING;--> statement-breakpoint
+UPDATE "observations" root SET "attributes" = root."attributes" || jsonb_build_object(
+    'items', COALESCE((
+        SELECT jsonb_agg(jsonb_build_object(
+            'legacyId', item."id",
+            'foodId', item."food_id",
+            'name', item."name_snapshot",
+            'grams', item."grams",
+            'nutrients', item."nutrient_snapshot"
+        ) ORDER BY item."id")
+        FROM "meal_items" item
+        WHERE item."meal_id" = root."id"
+    ), '[]'::jsonb)
+)
+WHERE root."definition_id" = 'meal';--> statement-breakpoint
 INSERT INTO "observations" (
     "id", "definition_id", "definition_version", "value_type", "origin", "state",
     "metric", "canonical_value", "canonical_unit", "original_value", "original_unit",
@@ -129,7 +144,19 @@ SELECT
     jsonb_build_object(
         'journalDetail', j."detail",
         'sourceLabel', j."source_label",
-        'recordType', h."record_type"
+        'recordType', h."record_type",
+        'primaryMetric', CASE h."record_type"
+            WHEN 'SleepSessionRecord' THEN 'sleep'
+            WHEN 'WeightRecord' THEN 'weight'
+            WHEN 'ExerciseSessionRecord' THEN 'exercise'
+            WHEN 'BloodPressureRecord' THEN 'blood_pressure_systolic'
+            WHEN 'BodyFatRecord' THEN 'body_fat'
+            WHEN 'HeightRecord' THEN 'height'
+            WHEN 'Vo2MaxRecord' THEN 'vo2_max'
+            WHEN 'HydrationRecord' THEN 'water'
+            WHEN 'LeanBodyMassRecord' THEN 'lean_body_mass'
+            ELSE NULL
+        END
     ),
     jsonb_build_object(
         'connector', h."connector",

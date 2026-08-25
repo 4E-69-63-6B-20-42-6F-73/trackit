@@ -121,9 +121,8 @@ describe('database migration', () => {
         )
         expect(result.rows.map(row => row.table_name)).toEqual(
             expect.arrayContaining([
-                'journal_entries',
-                'meals',
                 'observations',
+                'observation_relations',
                 'derived_observations',
                 'derived_observation_inputs',
                 'owners',
@@ -136,7 +135,6 @@ describe('database migration', () => {
                 'foods',
                 'recipes',
                 'recipe_items',
-                'meal_items',
                 'goals',
                 'saved_trend_views',
                 'mcp_clients',
@@ -160,7 +158,7 @@ describe('database migration', () => {
         const files = await migrationFiles()
         await applyTestMigrations(
             database,
-            files.filter(file => file < '0014_'),
+            files.filter(file => file < '0013_'),
         )
         await database.exec(`
             insert into foods (id, name, calories_per_100g)
@@ -180,7 +178,7 @@ describe('database migration', () => {
         `)
         await applyTestMigrations(
             database,
-            files.filter(file => file >= '0014_'),
+            files.filter(file => file >= '0013_'),
         )
         await database.exec(`
             insert into observations (
@@ -192,14 +190,20 @@ describe('database migration', () => {
             `select version::text as version from observations where version = 1787238227225`,
         )
         expect(sourceVersions.rows).toEqual([{ version: '1787238227225' }])
-        const result = await database.query<{ name: string; nutrition_quality: string }>(
-            `select name, nutrition_quality from foods where name = 'Upgrade oats'
-             union all
-             select name, nutrition_quality from meals where name = 'Upgrade breakfast'`,
+        const foodResult = await database.query<{ name: string; nutrition_quality: string }>(
+            `select name, nutrition_quality from foods where name = 'Upgrade oats'`,
         )
-        expect(result.rows).toEqual([
-            { name: 'Upgrade oats', nutrition_quality: 'complete' },
-            { name: 'Upgrade breakfast', nutrition_quality: 'complete' },
+        expect(foodResult.rows).toEqual([{ name: 'Upgrade oats', nutrition_quality: 'complete' }])
+        const migratedMeal = await database.query<{
+            title: string
+            definition_id: string
+            value_type: string
+        }>(`
+            select title, definition_id, value_type from observations
+            where id = '00000000-0000-4000-8000-000000000002'
+        `)
+        expect(migratedMeal.rows).toEqual([
+            { title: 'Upgrade breakfast', definition_id: 'meal', value_type: 'compound' },
         ])
         const recipes = await database.query<{ name: string; version: number }>(
             `select name, version from recipes where name = 'Upgrade porridge'`,

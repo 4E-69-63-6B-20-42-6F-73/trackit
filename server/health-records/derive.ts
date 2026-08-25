@@ -170,7 +170,16 @@ export function deriveRecord(record: CanonicalHealthRecord): DerivedObservation[
             case 'BodyFatRecord':
                 return scalar(record.payload, 'percentage', 'body_fat', '%')
             case 'HeightRecord':
-                return scalar(record.payload, 'meters', 'height', 'm')
+                return finite(record.payload.meters) === undefined
+                    ? []
+                    : [
+                          observation(
+                              'height',
+                              finite(record.payload.meters)! * 100,
+                              'cm',
+                              'height_projection',
+                          ),
+                      ]
             case 'DistanceRecord':
                 return scalar(record.payload, 'meters', 'distance', 'm')
             case 'ActiveCaloriesBurnedRecord':
@@ -178,7 +187,16 @@ export function deriveRecord(record: CanonicalHealthRecord): DerivedObservation[
             case 'TotalCaloriesBurnedRecord':
                 return scalar(record.payload, 'kilocalories', 'total_calories', 'kcal')
             case 'HydrationRecord':
-                return scalar(record.payload, 'liters', 'hydration', 'L')
+                return finite(record.payload.liters) === undefined
+                    ? []
+                    : [
+                          observation(
+                              'water',
+                              finite(record.payload.liters)! * 1000,
+                              'ml',
+                              'water_projection',
+                          ),
+                      ]
             case 'LeanBodyMassRecord':
                 return scalar(record.payload, 'kilograms', 'lean_body_mass', 'kg')
             case 'BasalMetabolicRateRecord':

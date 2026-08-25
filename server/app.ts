@@ -10,7 +10,6 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simp
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { AuthService } from './auth/service.js'
 import type { DataRepository } from './data/types.js'
-import { PostgresDataRepository } from './data/postgres-repository.js'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from './db/schema.js'
 import {
@@ -29,7 +28,6 @@ import {
     savedTrendViewInputSchema,
 } from './data/types.js'
 import type { JournalRepository } from './journal/types.js'
-import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { openApiContract } from './openapi.js'
 import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
@@ -380,7 +378,7 @@ export async function createApp(
     }
 
     if (options?.dataRepository) {
-        const exports = new ExportService(options.dataRepository, repository)
+        const exports = new ExportService(options.dataRepository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
             const format = request.query.format === 'csv' ? 'csv' : 'json'
             await options.auth?.recordAudit('data.exported', 'format', format)

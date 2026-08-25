@@ -5,21 +5,12 @@ import {
     bigint,
     index,
     jsonb,
-    pgEnum,
     pgTable,
     text,
     timestamp,
     uniqueIndex,
     uuid,
 } from 'drizzle-orm/pg-core'
-
-export const journalCategory = pgEnum('journal_category', [
-    'Meals',
-    'Activity',
-    'Sleep',
-    'Measurements',
-    'Check-ins',
-])
 
 export const sources = pgTable('sources', {
     id: uuid('id').primaryKey().defaultRandom(),
@@ -28,32 +19,6 @@ export const sources = pgTable('sources', {
     externalOrigin: text('external_origin'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
-
-export const journalEntries = pgTable(
-    'journal_entries',
-    {
-        id: uuid('id').primaryKey().defaultRandom(),
-        category: journalCategory('category').notNull(),
-        title: text('title').notNull(),
-        detail: text('detail').notNull().default(''),
-        sourceId: uuid('source_id').references(() => sources.id),
-        sourceLabel: text('source_label').notNull(),
-        observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
-        externalId: text('external_id'),
-        entityType: text('entity_type'),
-        entityId: uuid('entity_id'),
-        version: integer('version').notNull().default(1),
-        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-        deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    },
-    table => [
-        uniqueIndex('journal_external_source_idx').on(table.sourceId, table.externalId),
-        index('journal_observed_at_idx').on(table.observedAt),
-        index('journal_category_observed_idx').on(table.category, table.observedAt),
-        index('journal_entity_idx').on(table.entityType, table.entityId),
-    ],
-)
 
 export const healthRecords = pgTable(
     'health_records',
@@ -262,25 +227,6 @@ export const projectionDirtyDates = pgTable(
     table => [uniqueIndex('projection_dirty_date_identity_idx').on(table.userId, table.date)],
 )
 
-export const meals = pgTable(
-    'meals',
-    {
-        id: uuid('id').primaryKey().defaultRandom(),
-        name: text('name').notNull(),
-        mealType: text('meal_type').notNull(),
-        eatenAt: timestamp('eaten_at', { withTimezone: true }).notNull(),
-        nutrientSnapshot: jsonb('nutrient_snapshot').notNull().default({}),
-        nutritionQuality: text('nutrition_quality').notNull().default('complete'),
-        favorite: boolean('favorite').notNull().default(false),
-        sourceId: uuid('source_id').references(() => sources.id),
-        version: integer('version').notNull().default(1),
-        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-        updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-        deletedAt: timestamp('deleted_at', { withTimezone: true }),
-    },
-    table => [index('meal_eaten_at_idx').on(table.eatenAt)],
-)
-
 export const foods = pgTable('foods', {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
@@ -326,17 +272,6 @@ export const recipeItems = pgTable('recipe_items', {
         .notNull()
         .references(() => foods.id),
     grams: doublePrecision('grams').notNull(),
-})
-
-export const mealItems = pgTable('meal_items', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    mealId: uuid('meal_id')
-        .notNull()
-        .references(() => meals.id, { onDelete: 'cascade' }),
-    foodId: uuid('food_id').references(() => foods.id),
-    nameSnapshot: text('name_snapshot').notNull(),
-    grams: doublePrecision('grams').notNull(),
-    nutrientSnapshot: jsonb('nutrient_snapshot').notNull(),
 })
 
 export const preferences = pgTable('preferences', {

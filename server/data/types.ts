@@ -89,6 +89,7 @@ export const preferencesInputSchema = z.object({
             z.object({
                 displayUnit: z.string().trim().min(1).max(20),
                 precision: z.number().int().min(0).max(6).optional(),
+                showInJournal: z.boolean().optional(),
                 deduplication: z
                     .object({
                         policy: z.enum(['keep_all', 'prefer_priority', 'metric_merge']),

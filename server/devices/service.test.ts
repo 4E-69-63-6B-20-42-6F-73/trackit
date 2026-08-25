@@ -304,11 +304,11 @@ describe('Android device pairing and upload', () => {
             value: 90,
             unit: 'bpm',
         })
-        expect(
-            (await database.select().from(schema.journalEntries)).filter(
-                entry => entry.entityType === 'health_record' && entry.entityId === source.id,
-            ),
-        ).toHaveLength(0)
+        expect(projections.find(item => item.id === source.id)).toMatchObject({
+            definitionId: 'HeartRateRecord',
+            valueType: 'compound',
+            metric: 'health_record',
+        })
         expect(await service.rebuildHealthRecordObservations()).toEqual({ records: 1 })
         expect(await service.rebuildHealthRecordObservations()).toEqual({ records: 1 })
         expect(

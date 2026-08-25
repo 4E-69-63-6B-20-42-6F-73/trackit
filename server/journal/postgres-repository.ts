@@ -1,7 +1,8 @@
 import { and, desc, eq, gte, isNull, lt, notExists, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { observationRelations, observations } from '../db/schema.js'
+import { observationRelations, observations, preferences } from '../db/schema.js'
+import { metricDefinition } from '../../src/domain/metricCatalog.js'
 import type { JournalEntry, JournalListQuery, JournalRepository } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -22,6 +23,17 @@ const sourceLabel = (row: typeof observations.$inferSelect) => {
 
 const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
+    const primaryMetric =
+        typeof attributes.primaryMetric === 'string' ? attributes.primaryMetric : row.metric
+    const metricCategory = metricDefinition(primaryMetric)?.category
+    const projectedCategory =
+        metricCategory === 'Activity'
+            ? 'Activity'
+            : metricCategory === 'Sleep'
+              ? 'Sleep'
+              : metricCategory === 'Nutrition'
+                ? 'Meals'
+                : 'Measurements'
     const detail =
         typeof attributes.journalDetail === 'string'
             ? attributes.journalDetail
@@ -31,7 +43,7 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
                   : ''))
     return {
         id: row.id,
-        category: (row.category ?? 'Check-ins') as JournalEntry['category'],
+        category: (row.category ?? projectedCategory) as JournalEntry['category'],
         title: row.title ?? row.metric.replaceAll('_', ' '),
         detail,
         source: sourceLabel(row),
@@ -58,9 +70,20 @@ export class PostgresJournalRepository implements JournalRepository {
                     eq(observationRelations.kind, 'component'),
                 ),
             )
+        const preference = sql<string | null>`(
+            SELECT ${preferences.metricPreferences}
+                -> COALESCE(${observations.attributes}->>'primaryMetric', ${observations.metric})
+                ->> 'showInJournal'
+            FROM ${preferences}
+            WHERE ${preferences.id} = 'owner'
+        )`
+        const visible = sql`(
+            (${observations.category} IS NOT NULL AND COALESCE(${preference}, 'true') <> 'false')
+            OR ${preference} = 'true'
+        )`
         const conditions = [
             isNull(observations.deletedAt),
-            sql`${observations.category} is not null`,
+            visible,
             notExists(component),
             ...(filters.from ? [gte(observations.observedAt, new Date(filters.from))] : []),
             ...(filters.to ? [lt(observations.observedAt, new Date(filters.to))] : []),

@@ -6,24 +6,21 @@ describe('portable export', () => {
         const data = {
             listSources: async () => [{ id: 'source', name: 'Health Connect' }],
             listObservations: async () => [{ id: 'observation' }],
-            listMeals: async () => [{ id: 'meal', nutrientSnapshot: { protein: 20 } }],
+            listRawObservations: async () => [{ id: 'observation' }],
             getPreferences: async () => ({ timezone: 'Europe/Amsterdam' }),
             listFoods: async () => [{ id: 'food' }],
             listRecipes: async () => [{ id: 'recipe' }],
             listGoals: async () => [{ id: 'goal' }],
             listSavedTrendViews: async () => [{ id: 'view' }],
         }
-        const journal = { list: async () => [{ id: 'journal' }] }
-        const service = new ExportService(data as never, journal as never)
+        const service = new ExportService(data as never)
         const snapshot = await service.snapshot()
 
         expect(snapshot).toMatchObject({
             schema: 'net.trackit.export',
-            version: 1,
+            version: 2,
             data: {
-                journal: [{ id: 'journal' }],
                 observations: [{ id: 'observation' }],
-                meals: [{ id: 'meal', nutrientSnapshot: { protein: 20 } }],
                 sources: [{ id: 'source', name: 'Health Connect' }],
             },
         })

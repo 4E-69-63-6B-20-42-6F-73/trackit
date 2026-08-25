@@ -1,12 +1,7 @@
 import { performance } from 'node:perf_hooks'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
-import type {
-    CreateJournalEntry,
-    JournalEntry,
-    JournalRepository,
-    UpdateJournalEntry,
-} from './journal/types.js'
+import type { JournalEntry, JournalRepository } from './journal/types.js'
 import type { DataRepository, RecordRange } from './data/types.js'
 
 class FiveYearJournal implements JournalRepository {
@@ -29,18 +24,6 @@ class FiveYearJournal implements JournalRepository {
 
     async list(): Promise<JournalEntry[]> {
         return this.entries
-    }
-
-    async create(_input: CreateJournalEntry): Promise<JournalEntry> {
-        throw new Error('not used')
-    }
-
-    async update(_id: string, _input: UpdateJournalEntry): Promise<JournalEntry | null> {
-        return null
-    }
-
-    async remove(_id: string): Promise<boolean> {
-        return false
     }
 
     async ready(): Promise<boolean> {

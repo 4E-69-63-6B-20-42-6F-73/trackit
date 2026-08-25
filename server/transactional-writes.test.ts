@@ -1,12 +1,10 @@
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { describe, expect, it } from 'vitest'
-import { createApp } from './app.js'
 import { DataLifecycleService } from './data-lifecycle/service.js'
 import { PostgresDataRepository } from './data/postgres-repository.js'
 import * as schema from './db/schema.js'
 import { applyTestMigrations } from './db/test-migrations.js'
-import { PostgresJournalRepository } from './journal/postgres-repository.js'
 
 const failInsert = (table: string, action?: string) => `
     CREATE FUNCTION fail_${table}_insert() RETURNS trigger AS $$
@@ -19,29 +17,25 @@ const failInsert = (table: string, action?: string) => `
     FOR EACH ROW EXECUTE FUNCTION fail_${table}_insert();
 `
 
-describe('transactional linked writes', () => {
-    it('rolls back a meal when its linked journal insert fails', async () => {
+describe('transactional observation writes', () => {
+    it('rolls back a compound meal when a component relationship insert fails', async () => {
         const client = new PGlite()
         await applyTestMigrations(client)
-        await client.exec(failInsert('journal_entries'))
+        await client.exec(failInsert('observation_relations'))
         const database = drizzle(client, { schema })
-        const app = await createApp(new PostgresJournalRepository(database as never), {
-            dataRepository: new PostgresDataRepository(database as never),
-            database: database as never,
-        })
-        const response = await app.inject({
-            method: 'POST',
-            url: '/api/meals',
-            payload: {
+        const repository = new PostgresDataRepository(database as never)
+
+        await expect(
+            repository.createMeal({
                 name: 'Rollback meal',
                 mealType: 'Lunch',
                 eatenAt: '2026-08-21T12:00:00Z',
                 nutrients: { calories: 400 },
-            },
-        })
-        expect(response.statusCode).toBe(500)
-        expect(await database.select().from(schema.meals)).toHaveLength(0)
-        await app.close()
+                favorite: false,
+                nutritionQuality: 'complete',
+            }),
+        ).rejects.toThrow('Failed query')
+        expect(await database.select().from(schema.observations)).toHaveLength(0)
         await client.close()
     })
 
@@ -49,16 +43,19 @@ describe('transactional linked writes', () => {
         const client = new PGlite()
         await applyTestMigrations(client)
         const database = drizzle(client, { schema })
-        await database.insert(schema.meals).values({
-            name: 'Retained after failure',
-            mealType: 'Lunch',
-            eatenAt: new Date('2020-01-01T12:00:00Z'),
+        await database.insert(schema.observations).values({
+            definitionId: 'meal',
+            valueType: 'compound',
+            metric: 'meal',
+            title: 'Retained after failure',
+            category: 'Meals',
+            observedAt: new Date('2020-01-01T12:00:00Z'),
         })
         const lifecycle = new DataLifecycleService(database as never)
         await lifecycle.setRetentionRule('meals', 1, true)
         await client.exec(failInsert('audit_events', 'retention.applied'))
         await expect(lifecycle.applyRetention()).rejects.toThrow()
-        expect(await database.select().from(schema.meals)).toHaveLength(1)
+        expect(await database.select().from(schema.observations)).toHaveLength(1)
         await client.close()
     })
 })

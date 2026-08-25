@@ -5,7 +5,6 @@ import {
     dailyProjectionRuns,
     derivedObservationInputs,
     derivedObservations,
-    meals,
     observations,
     preferences,
     projectionDirtyDates,
@@ -13,7 +12,6 @@ import {
 import {
     effectiveBaseMetricSeries,
     effectiveMetricSeries,
-    mealMetricObservations,
 } from '../../src/domain/effectiveMetrics.js'
 import type { Observation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
@@ -139,7 +137,6 @@ async function loadEffectiveMetricSeries(
         isNotNull(observations.originalValue),
         isNotNull(observations.originalUnit),
     ]
-    const mealConditions = [isNull(meals.deletedAt)]
     const requestedMetrics = range.metrics?.length ? new Set(range.metrics) : null
     const [saved] = await database
         .select({
@@ -172,17 +169,12 @@ async function loadEffectiveMetricSeries(
     if (range.from) {
         const from = new Date(range.from)
         observationConditions.push(gte(observations.observedAt, from))
-        mealConditions.push(gte(meals.eatenAt, from))
     }
     if (range.to) {
         const to = new Date(range.to)
         observationConditions.push(lt(observations.observedAt, to))
-        mealConditions.push(lt(meals.eatenAt, to))
     }
     const needsHeight = !expandedMetrics || expandedMetrics.has('bmi')
-    const needsMeals =
-        !expandedMetrics ||
-        [...expandedMetrics].some(metric => metricDefinition(metric)?.source === 'meal')
     const priorHeightQuery =
         range.from && needsHeight
             ? database
@@ -198,17 +190,11 @@ async function loadEffectiveMetricSeries(
                   .orderBy(desc(observations.observedAt))
                   .limit(100)
             : Promise.resolve([])
-    const [records, mealRecords, priorHeights] = await Promise.all([
+    const [records, priorHeights] = await Promise.all([
         database
             .select()
             .from(observations)
             .where(and(...observationConditions)),
-        needsMeals
-            ? database
-                  .select()
-                  .from(meals)
-                  .where(and(...mealConditions))
-            : Promise.resolve([]),
         priorHeightQuery,
     ])
     const normalize = (record: (typeof records)[number]): Observation => ({
@@ -222,27 +208,7 @@ async function loadEffectiveMetricSeries(
         metadata: record.metadata as Record<string, unknown>,
         version: Number(record.version),
     })
-    const normalizedRecords = records.map(normalize)
-    const observationBackedMealIds = new Set(
-        normalizedRecords.flatMap(record => {
-            const legacyMealId = record.metadata?.legacyMealId
-            return typeof legacyMealId === 'string' ? [legacyMealId] : []
-        }),
-    )
-    const candidates = [
-        ...priorHeights.map(normalize),
-        ...normalizedRecords,
-        ...mealMetricObservations(
-            mealRecords
-                .filter(meal => !observationBackedMealIds.has(meal.id))
-                .map(meal => ({
-                    id: meal.id,
-                    eatenAt: meal.eatenAt.toISOString(),
-                    nutrientSnapshot: meal.nutrientSnapshot as Record<string, number | undefined>,
-                    version: meal.version,
-                })),
-        ),
-    ]
+    const candidates = [...priorHeights.map(normalize), ...records.map(normalize)]
     const metricPreferences = (saved?.metricPreferences ?? undefined) as
         MetricPreferences | undefined
     const effective = includeDerived
