@@ -1,5 +1,74 @@
 import type { CanonicalHealthRecord, DerivedObservation, JsonObject } from './types.js'
 
+const healthConnectExerciseTypes: Record<number, string> = {
+    0: 'other_workout',
+    2: 'badminton',
+    4: 'baseball',
+    5: 'basketball',
+    8: 'biking',
+    9: 'biking_stationary',
+    10: 'boot_camp',
+    11: 'boxing',
+    13: 'calisthenics',
+    14: 'cricket',
+    16: 'dancing',
+    25: 'elliptical',
+    26: 'exercise_class',
+    27: 'fencing',
+    28: 'football_american',
+    29: 'football_australian',
+    31: 'frisbee_disc',
+    32: 'golf',
+    33: 'guided_breathing',
+    34: 'gymnastics',
+    35: 'handball',
+    36: 'high_intensity_interval_training',
+    37: 'hiking',
+    38: 'ice_hockey',
+    39: 'ice_skating',
+    44: 'martial_arts',
+    46: 'paddling',
+    47: 'paragliding',
+    48: 'pilates',
+    50: 'racquetball',
+    51: 'rock_climbing',
+    52: 'roller_hockey',
+    53: 'rowing',
+    54: 'rowing_machine',
+    55: 'rugby',
+    56: 'running',
+    57: 'running_treadmill',
+    58: 'sailing',
+    59: 'scuba_diving',
+    60: 'skating',
+    61: 'skiing',
+    62: 'snowboarding',
+    63: 'snowshoeing',
+    64: 'soccer',
+    65: 'softball',
+    66: 'squash',
+    68: 'stair_climbing',
+    69: 'stair_climbing_machine',
+    70: 'strength_training',
+    71: 'stretching',
+    72: 'surfing',
+    73: 'swimming_open_water',
+    74: 'swimming_pool',
+    75: 'table_tennis',
+    76: 'tennis',
+    78: 'volleyball',
+    79: 'walking',
+    80: 'water_polo',
+    81: 'weightlifting',
+    82: 'wheelchair',
+    83: 'yoga',
+}
+
+const healthConnectExerciseType = (value: unknown) =>
+    typeof value === 'number' && Number.isInteger(value)
+        ? healthConnectExerciseTypes[value]
+        : undefined
+
 const hours = (start: Date, end: Date) => Math.max(0, end.getTime() - start.getTime()) / 3_600_000
 const minutes = (start: Date, end: Date) => Math.max(0, end.getTime() - start.getTime()) / 60_000
 const finite = (value: unknown): number | undefined =>
@@ -19,12 +88,10 @@ const observation = (
     derivation: string,
     kind: DerivedObservation['kind'] = 'raw_metric',
 ): DerivedObservation => ({ metric, value, unit, kind, derivation, derivationVersion: 1 })
-
 function scalar(payload: JsonObject, key: string, metric: string, unit: string) {
     const value = finite(payload[key])
     return value === undefined ? [] : [observation(metric, value, unit, `${metric}_projection`)]
 }
-
 function deriveSleep(record: CanonicalHealthRecord): DerivedObservation[] {
     if (!record.endTime) return []
     const result = [
@@ -72,7 +139,6 @@ function deriveSleep(record: CanonicalHealthRecord): DerivedObservation[] {
         )
     return result.map(item => ({ ...item, observedAt: record.endTime!, endedAt: record.endTime }))
 }
-
 function deriveHeartRate(record: CanonicalHealthRecord): DerivedObservation[] {
     const samples = (Array.isArray(record.payload.samples) ? record.payload.samples : [])
         .map(sample =>
@@ -110,7 +176,21 @@ function deriveHeartRate(record: CanonicalHealthRecord): DerivedObservation[] {
         ),
     ]
 }
-
+function deriveExercise(record: CanonicalHealthRecord): DerivedObservation[] {
+    if (!record.endTime) return []
+    const exerciseType = healthConnectExerciseType(record.payload.exerciseType)
+    return [
+        {
+            ...observation(
+                'exercise',
+                minutes(record.startTime, record.endTime),
+                'minutes',
+                'exercise_summary',
+            ),
+            ...(exerciseType ? { exerciseType } : {}),
+        },
+    ]
+}
 function deriveBloodPressure(record: CanonicalHealthRecord) {
     const systolic = finite(record.payload.systolic)
     const diastolic = finite(record.payload.diastolic)
@@ -134,7 +214,6 @@ function deriveBloodPressure(record: CanonicalHealthRecord) {
         ),
     ]
 }
-
 export function deriveRecord(record: CanonicalHealthRecord): DerivedObservation[] {
     const derived = (() => {
         switch (record.recordType) {
@@ -149,16 +228,7 @@ export function deriveRecord(record: CanonicalHealthRecord): DerivedObservation[
             case 'RestingHeartRateRecord':
                 return scalar(record.payload, 'bpm', 'resting_heart_rate', 'bpm')
             case 'ExerciseSessionRecord':
-                return record.endTime
-                    ? [
-                          observation(
-                              'exercise',
-                              minutes(record.startTime, record.endTime),
-                              'minutes',
-                              'exercise_summary',
-                          ),
-                      ]
-                    : []
+                return deriveExercise(record)
             case 'BloodPressureRecord':
                 return deriveBloodPressure(record)
             case 'HeartRateVariabilityRmssdRecord':
