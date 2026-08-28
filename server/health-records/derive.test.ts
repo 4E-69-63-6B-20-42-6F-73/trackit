@@ -77,4 +77,13 @@ describe('Health Connect record derivation', () => {
             { metric: 'exercise', value: 480, unit: 'minutes' },
         ])
     })
+
+    it('normalizes height and hydration into the shared canonical metric units', () => {
+        expect(deriveRecord(record('HeightRecord', { meters: 1.82 }))).toMatchObject([
+            { metric: 'height', value: 182, unit: 'cm' },
+        ])
+        expect(deriveRecord(record('HydrationRecord', { liters: 0.75 }))).toMatchObject([
+            { metric: 'water', value: 750, unit: 'ml' },
+        ])
+    })
 })

@@ -10,7 +10,8 @@ import {
 import { aggregateDailyObservations, type Observation } from '../../src/domain/health.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
 import { localDayRange } from './timezone.js'
-import { getEffectiveMetricSeries } from './effective-series.js'
+import { getEffectiveBaseMetricSeries } from './effective-series.js'
+import { replaceDerivedObservationCache } from './derived-observation-cache.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
@@ -27,10 +28,25 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
         .where(eq(preferences.id, 'owner'))
     const timezone = saved?.timezone ?? 'UTC'
     const { from, to } = localDayRange(date, timezone)
-    const effective = await getEffectiveMetricSeries(database, {
+    const derivationInputs = await getEffectiveBaseMetricSeries(database, {
         from: from.toISOString(),
         to: to.toISOString(),
     })
+    const base = derivationInputs.filter(record => {
+        const observedAt = new Date(record.observedAt)
+        return observedAt >= from && observedAt < to
+    })
+    const resolutionVersion = saved?.metricResolutionVersion ?? 1
+    const derived = await replaceDerivedObservationCache(database, {
+        userId: 'owner',
+        date,
+        timezone,
+        resolutionVersion,
+        inputs: derivationInputs,
+    })
+    const effective = [...base, ...derived].sort((left, right) =>
+        left.observedAt.localeCompare(right.observedAt),
+    )
 
     await database
         .delete(dailyMetrics)
@@ -49,7 +65,7 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
             value,
             unit: definition.canonicalUnit,
             derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
-            resolutionVersion: saved?.metricResolutionVersion ?? 1,
+            resolutionVersion,
             timezone,
         })
     }
@@ -59,7 +75,7 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
             userId: 'owner',
             date,
             derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
-            resolutionVersion: saved?.metricResolutionVersion ?? 1,
+            resolutionVersion,
             timezone,
             status: 'complete',
         })

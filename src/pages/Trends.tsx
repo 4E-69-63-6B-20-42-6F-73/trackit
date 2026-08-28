@@ -512,7 +512,7 @@ export function Trends() {
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
                             valueLabel={
                                 metric && displayUnit
-                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit).label})`
+                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit, metric).label})`
                                     : undefined
                             }
                             formatValue={value => formatDisplayValue(value, { withUnit: false })}

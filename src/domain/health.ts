@@ -1,3 +1,5 @@
+import { metricDefinition } from './metricCatalog.js'
+
 export type Observation = {
     id: string
     metric: string
@@ -25,30 +27,20 @@ export type DailyPoint = {
 }
 export type TrendGranularity = 'daily' | 'weekly'
 
-const additiveMetrics = new Set([
-    'steps',
-    'sleep',
-    'exercise',
-    'water',
-    'calories',
-    'active_calories',
-    'calorie_balance',
-    'protein',
-    'carbs',
-    'fat',
-    'fiber',
-    'sugar',
-    'saturatedFat',
-    'sodium',
-    'potassium',
-])
-
 export function aggregateDailyObservations(records: Observation[]) {
     if (!records.length) return null
-    return additiveMetrics.has(records[0].metric)
-        ? records.reduce((sum, record) => sum + record.canonicalValue, 0)
-        : [...records].sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0]
-              .canonicalValue
+    const aggregation = metricDefinition(records[0].metric)?.dailyAggregation ?? 'latest'
+    const values = records.map(record => record.canonicalValue).sort((left, right) => left - right)
+    if (aggregation === 'sum') return values.reduce((sum, value) => sum + value, 0)
+    if (aggregation === 'average')
+        return values.reduce((sum, value) => sum + value, 0) / values.length
+    if (aggregation === 'median') {
+        const middle = Math.floor(values.length / 2)
+        return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2
+    }
+    if (aggregation === 'max') return Math.max(...values)
+    return [...records].sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0]
+        .canonicalValue
 }
 
 export function displayValue(value: number, canonicalUnit: string, displayUnit: string) {
@@ -85,7 +77,8 @@ export function dailySeries(
         const ordered = [...records].sort((left, right) =>
             right.observedAt.localeCompare(left.observedAt),
         )
-        const additive = records.length > 0 && additiveMetrics.has(records[0].metric)
+        const additive =
+            records.length > 0 && metricDefinition(records[0].metric)?.dailyAggregation === 'sum'
         return {
             date: key,
             value: aggregateDailyObservations(records),
@@ -103,7 +96,9 @@ export function weeklySeries(
     timezone = 'UTC',
 ): DailyPoint[] {
     const daily = dailySeries(observations, start, days, timezone)
-    const additive = observations.some(record => additiveMetrics.has(record.metric))
+    const additive = observations.some(
+        record => metricDefinition(record.metric)?.dailyAggregation === 'sum',
+    )
     const weeks: DailyPoint[] = []
     for (let offset = 0; offset < daily.length; offset += 7) {
         const period = daily.slice(offset, offset + 7)

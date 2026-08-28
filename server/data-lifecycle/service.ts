@@ -1,4 +1,5 @@
-import { and, count, desc, eq, inArray, lt, max, min } from 'drizzle-orm'
+import { and, count, desc, eq, inArray, lt, max, min, notInArray } from 'drizzle-orm'
+import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -9,15 +10,13 @@ import {
     deviceUploadBatches,
     dailyMetrics,
     dailyProjectionRuns,
+    derivedObservations,
     foods,
     goals,
     healthRecords,
-    journalEntries,
     mcpClients,
     mcpActionReceipts,
     mcpConfirmations,
-    mealItems,
-    meals,
     observations,
     owners,
     pairingCodes,
@@ -36,35 +35,29 @@ import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone } from '../data/timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+type Category = 'observations' | 'meals' | 'journal'
+
+const categoryCondition = (category: Category): SQL =>
+    category === 'meals'
+        ? eq(observations.category, 'Meals')
+        : category === 'journal'
+          ? inArray(observations.definitionId, ['check_in', 'journal_event'])
+          : notInArray(observations.definitionId, ['meal', 'check_in', 'journal_event'])
 
 export class DataLifecycleService {
     private retentionTimer?: ReturnType<typeof setInterval>
 
     constructor(private readonly database: Database) {}
 
-    async categorySummary(category: 'observations' | 'meals' | 'journal') {
-        const aggregate = async (
-            table: typeof observations | typeof meals | typeof journalEntries,
-            column:
-                | typeof observations.observedAt
-                | typeof meals.eatenAt
-                | typeof journalEntries.observedAt,
-        ) => {
-            const [result] = await this.database
-                .select({ count: count(), oldest: min(column), newest: max(column) })
-                .from(table)
-            return {
-                count: result.count,
-                oldest: result.oldest?.toISOString() ?? null,
-                newest: result.newest?.toISOString() ?? null,
-            }
-        }
-        const summary =
-            category === 'observations'
-                ? await aggregate(observations, observations.observedAt)
-                : category === 'meals'
-                  ? await aggregate(meals, meals.eatenAt)
-                  : await aggregate(journalEntries, journalEntries.observedAt)
+    async categorySummary(category: Category) {
+        const [result] = await this.database
+            .select({
+                count: count(),
+                oldest: min(observations.observedAt),
+                newest: max(observations.observedAt),
+            })
+            .from(observations)
+            .where(categoryCondition(category))
         const [lastRun] = await this.database
             .select({ createdAt: auditEvents.createdAt })
             .from(auditEvents)
@@ -76,15 +69,20 @@ export class DataLifecycleService {
             )
             .orderBy(desc(auditEvents.createdAt))
             .limit(1)
-        return { ...summary, lastRetentionRun: lastRun?.createdAt.toISOString() ?? null }
+        return {
+            count: result.count,
+            oldest: result.oldest?.toISOString() ?? null,
+            newest: result.newest?.toISOString() ?? null,
+            lastRetentionRun: lastRun?.createdAt.toISOString() ?? null,
+        }
     }
 
     start(intervalHours = 24) {
         if (this.retentionTimer) return
         const run = () => {
-            void this.applyRetention().catch(error => {
-                console.error({ error }, 'Scheduled retention failed')
-            })
+            void this.applyRetention().catch(error =>
+                console.error({ error }, 'Scheduled retention failed'),
+            )
         }
         run()
         this.retentionTimer = setInterval(run, intervalHours * 60 * 60 * 1000)
@@ -119,87 +117,45 @@ export class DataLifecycleService {
         return rule
     }
 
+    private async removeObservationCategory(
+        transaction: Parameters<Parameters<Database['transaction']>[0]>[0],
+        category: Category,
+        cutoff?: Date,
+    ) {
+        const conditions = [categoryCondition(category)]
+        if (cutoff) conditions.push(lt(observations.observedAt, cutoff))
+        const linked = await transaction
+            .select({ id: observations.id, observedAt: observations.observedAt })
+            .from(observations)
+            .where(and(...conditions))
+        if (!linked.length) return
+        const [saved] = await transaction
+            .select({ timezone: preferences.timezone })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+        await transaction.delete(observations).where(
+            inArray(
+                observations.id,
+                linked.map(item => item.id),
+            ),
+        )
+        await markProjectionDatesDirty(
+            transaction,
+            linked.map(item => dateKeyInTimezone(item.observedAt, saved?.timezone ?? 'UTC')),
+        )
+    }
+
     async applyRetention() {
         const rules = await this.listRetentionRules()
         for (const rule of rules.filter(item => item.enabled)) {
-            const cutoff = new Date(Date.now() - rule.days * 24 * 60 * 60 * 1000)
+            if (!['observations', 'meals', 'journal'].includes(rule.category)) continue
+            const cutoff = new Date(Date.now() - rule.days * 86_400_000)
             await this.database.transaction(async transaction => {
-                if (rule.category === 'observations') {
-                    const sourceRecords = await transaction
-                        .select({ id: healthRecords.id })
-                        .from(healthRecords)
-                        .where(lt(healthRecords.startTime, cutoff))
-                    const linked = await transaction
-                        .select({ id: observations.id, observedAt: observations.observedAt })
-                        .from(observations)
-                        .where(lt(observations.observedAt, cutoff))
-                    if (sourceRecords.length)
-                        await transaction.delete(journalEntries).where(
-                            and(
-                                eq(journalEntries.entityType, 'health_record'),
-                                inArray(
-                                    journalEntries.entityId,
-                                    sourceRecords.map(record => record.id),
-                                ),
-                            ),
-                        )
-                    if (linked.length)
-                        await transaction.delete(journalEntries).where(
-                            and(
-                                eq(journalEntries.entityType, 'observation'),
-                                inArray(
-                                    journalEntries.entityId,
-                                    linked.map(record => record.id),
-                                ),
-                            ),
-                        )
+                await this.removeObservationCategory(transaction, rule.category as Category, cutoff)
+                if (rule.category === 'observations')
                     await transaction
                         .delete(healthRecords)
                         .where(lt(healthRecords.startTime, cutoff))
-                    await transaction
-                        .delete(observations)
-                        .where(lt(observations.observedAt, cutoff))
-                    const [saved] = await transaction
-                        .select({ timezone: preferences.timezone })
-                        .from(preferences)
-                        .where(eq(preferences.id, 'owner'))
-                    await markProjectionDatesDirty(
-                        transaction,
-                        linked.map(item =>
-                            dateKeyInTimezone(item.observedAt, saved?.timezone ?? 'UTC'),
-                        ),
-                    )
-                } else if (rule.category === 'meals') {
-                    const linked = await transaction
-                        .select({ id: meals.id, eatenAt: meals.eatenAt })
-                        .from(meals)
-                        .where(lt(meals.eatenAt, cutoff))
-                    if (linked.length)
-                        await transaction.delete(journalEntries).where(
-                            and(
-                                eq(journalEntries.entityType, 'meal'),
-                                inArray(
-                                    journalEntries.entityId,
-                                    linked.map(record => record.id),
-                                ),
-                            ),
-                        )
-                    await transaction.delete(meals).where(lt(meals.eatenAt, cutoff))
-                    const [saved] = await transaction
-                        .select({ timezone: preferences.timezone })
-                        .from(preferences)
-                        .where(eq(preferences.id, 'owner'))
-                    await markProjectionDatesDirty(
-                        transaction,
-                        linked.map(item =>
-                            dateKeyInTimezone(item.eatenAt, saved?.timezone ?? 'UTC'),
-                        ),
-                    )
-                } else if (rule.category === 'journal') {
-                    await transaction
-                        .delete(journalEntries)
-                        .where(lt(journalEntries.observedAt, cutoff))
-                }
                 await transaction.insert(auditEvents).values({
                     actor: 'system',
                     action: 'retention.applied',
@@ -211,55 +167,19 @@ export class DataLifecycleService {
         }
     }
 
-    async deleteCategory(category: 'observations' | 'meals' | 'journal') {
+    async deleteCategory(category: Category) {
         await this.database.transaction(async transaction => {
+            await this.removeObservationCategory(transaction, category)
             if (category === 'observations') {
-                await transaction
-                    .delete(journalEntries)
-                    .where(eq(journalEntries.entityType, 'health_record'))
-                const linked = await transaction.select({ id: observations.id }).from(observations)
-                if (linked.length) {
-                    await transaction.delete(journalEntries).where(
-                        and(
-                            eq(journalEntries.entityType, 'observation'),
-                            inArray(
-                                journalEntries.entityId,
-                                linked.map(record => record.id),
-                            ),
-                        ),
-                    )
-                }
-                await transaction.delete(observations)
                 await transaction.delete(healthRecords)
+                await transaction.delete(derivedObservations)
                 await transaction.delete(dailyMetrics)
                 await transaction.delete(dailyProjectionRuns)
             }
-            if (category === 'meals') {
-                const linked = await transaction
-                    .select({ id: meals.id, eatenAt: meals.eatenAt })
-                    .from(meals)
-                if (linked.length) {
-                    await transaction.delete(journalEntries).where(
-                        and(
-                            eq(journalEntries.entityType, 'meal'),
-                            inArray(
-                                journalEntries.entityId,
-                                linked.map(record => record.id),
-                            ),
-                        ),
-                    )
-                }
-                await transaction.delete(meals)
-                const [saved] = await transaction
-                    .select({ timezone: preferences.timezone })
-                    .from(preferences)
-                    .where(eq(preferences.id, 'owner'))
-                await markProjectionDatesDirty(
-                    transaction,
-                    linked.map(item => dateKeyInTimezone(item.eatenAt, saved?.timezone ?? 'UTC')),
-                )
-            }
-            if (category === 'journal') await transaction.delete(journalEntries)
+            if (category === 'meals')
+                await transaction
+                    .delete(derivedObservations)
+                    .where(eq(derivedObservations.metric, 'calorie_balance'))
             await transaction.insert(auditEvents).values({
                 actor: 'owner',
                 action: 'data.category.deleted',
@@ -275,17 +195,15 @@ export class DataLifecycleService {
             await transaction.delete(deviceUploadBatches)
             await transaction.delete(devices)
             await transaction.delete(pairingCodes)
-            await transaction.delete(mealItems)
-            await transaction.delete(meals)
             await transaction.delete(recipeItems)
             await transaction.delete(recipes)
             await transaction.delete(foods)
             await transaction.delete(observations)
             await transaction.delete(healthRecords)
+            await transaction.delete(derivedObservations)
             await transaction.delete(dailyMetrics)
             await transaction.delete(dailyProjectionRuns)
             await transaction.delete(projectionDirtyDates)
-            await transaction.delete(journalEntries)
             await transaction.delete(goals)
             await transaction.delete(savedTrendViews)
             await transaction.delete(mcpActionReceipts)

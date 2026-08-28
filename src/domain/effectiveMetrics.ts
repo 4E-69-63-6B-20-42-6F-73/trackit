@@ -195,18 +195,22 @@ export function deriveMetrics(records: Observation[]) {
         bucket[record.metric === 'calories' ? 'intake' : 'burned'].push(record)
         byDay.set(day, bucket)
     }
-    for (const [day, bucket] of byDay) {
+    for (const bucket of byDay.values()) {
         if (!bucket.intake.length || !bucket.burned.length) continue
         const inputs = [...bucket.intake, ...bucket.burned]
         const value =
             bucket.intake.reduce((sum, item) => sum + item.canonicalValue, 0) -
             bucket.burned.reduce((sum, item) => sum + item.canonicalValue, 0)
-        derived.push(derivedObservation('calorie_balance', value, `${day}T23:59:59.999Z`, inputs))
+        const observedAt = inputs.reduce(
+            (latest, input) => (input.observedAt > latest ? input.observedAt : latest),
+            inputs[0].observedAt,
+        )
+        derived.push(derivedObservation('calorie_balance', value, observedAt, inputs))
     }
     return derived
 }
 
-export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
+export function effectiveBaseMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
     const base = resolveOverlaps(
         removeExactDuplicates(raw.filter(record => !record.excluded)),
         preferences,
@@ -215,42 +219,13 @@ export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPr
         metricCatalog.filter(metric => metric.derived).map(metric => metric.id),
     )
     const normalized = base.filter(record => !derivedIds.has(record.metric))
-    return [...normalized, ...deriveMetrics(normalized)].sort((a, b) =>
-        a.observedAt.localeCompare(b.observedAt),
-    )
+    return normalized.sort((a, b) => a.observedAt.localeCompare(b.observedAt))
 }
 
-export function mealMetricObservations(
-    meals: Array<{
-        id: string
-        eatenAt: string
-        nutrientSnapshot: Record<string, number | undefined>
-        version: number
-    }>,
-) {
-    const units: Record<string, string> = { calories: 'kcal', sodium: 'mg', potassium: 'mg' }
-    return meals.flatMap(meal =>
-        Object.entries(meal.nutrientSnapshot).flatMap(([metric, value]): Observation[] =>
-            value === undefined
-                ? []
-                : [
-                      {
-                          id: `meal:${meal.id}:${metric}`,
-                          metric,
-                          canonicalValue: value,
-                          canonicalUnit: units[metric] ?? 'g',
-                          originalValue: value,
-                          originalUnit: units[metric] ?? 'g',
-                          observedAt: meal.eatenAt,
-                          externalId: `${meal.id}:${metric}`,
-                          provider: 'Nutrition',
-                          connector: null,
-                          metadata: { recordType: 'meal_nutrient', mealId: meal.id },
-                          excluded: false,
-                          version: meal.version,
-                      },
-                  ],
-        ),
+export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
+    const normalized = effectiveBaseMetricSeries(raw, preferences)
+    return [...normalized, ...deriveMetrics(normalized)].sort((a, b) =>
+        a.observedAt.localeCompare(b.observedAt),
     )
 }
 

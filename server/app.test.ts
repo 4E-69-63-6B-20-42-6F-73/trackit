@@ -1,13 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
-import type {
-    CreateJournalEntry,
-    JournalEntry,
-    JournalListQuery,
-    JournalRepository,
-    UpdateJournalEntry,
-} from './journal/types.js'
+import type { JournalEntry, JournalListQuery, JournalRepository } from './journal/types.js'
 
 class MemoryJournalRepository implements JournalRepository {
     entries: JournalEntry[] = []
@@ -16,41 +10,6 @@ class MemoryJournalRepository implements JournalRepository {
     async list(query?: JournalListQuery) {
         this.lastListQuery = query
         return this.entries
-    }
-
-    async create(input: CreateJournalEntry) {
-        const now = new Date().toISOString()
-        const entry: JournalEntry = {
-            ...input,
-            id: input.id ?? randomUUID(),
-            version: 1,
-            createdAt: now,
-            updatedAt: now,
-        }
-        const existing = this.entries.findIndex(item => item.id === entry.id)
-        if (existing >= 0) this.entries[existing] = entry
-        else this.entries.unshift(entry)
-        return entry
-    }
-
-    async remove(id: string) {
-        const before = this.entries.length
-        this.entries = this.entries.filter(entry => entry.id !== id)
-        return this.entries.length !== before
-    }
-
-    async update(id: string, input: UpdateJournalEntry) {
-        const index = this.entries.findIndex(
-            entry => entry.id === id && entry.version === input.version,
-        )
-        if (index < 0) return null
-        this.entries[index] = {
-            ...this.entries[index],
-            ...input,
-            version: input.version + 1,
-            updatedAt: new Date().toISOString(),
-        }
-        return this.entries[index]
     }
 
     async ready() {
@@ -136,7 +95,7 @@ describe('journal API', () => {
         await app.close()
     })
 
-    it('creates, lists, idempotently updates, and deletes a record', async () => {
+    it('keeps Journal read-only', async () => {
         const repository = new MemoryJournalRepository()
         const app = await createApp(repository)
         const id = randomUUID()
@@ -151,37 +110,14 @@ describe('journal API', () => {
 
         expect(
             (await app.inject({ method: 'POST', url: '/api/journal', payload })).statusCode,
-        ).toBe(201)
+        ).toBe(404)
         expect(
-            (await app.inject({ method: 'POST', url: '/api/journal', payload })).statusCode,
-        ).toBe(201)
-
-        const listed = await app.inject({ method: 'GET', url: '/api/journal' })
-        expect(listed.json().data).toHaveLength(1)
-
-        const updated = await app.inject({
-            method: 'PATCH',
-            url: `/api/journal/${id}`,
-            payload: { detail: 'Tomato soup', version: 1 },
-        })
-        expect(updated.statusCode).toBe(200)
-        expect(updated.json().data).toMatchObject({ detail: 'Tomato soup', version: 2 })
-        expect(
-            (
-                await app.inject({
-                    method: 'PATCH',
-                    url: `/api/journal/${id}`,
-                    payload: { detail: 'Stale update', version: 1 },
-                })
-            ).statusCode,
-        ).toBe(409)
-
-        expect((await app.inject({ method: 'DELETE', url: `/api/journal/${id}` })).statusCode).toBe(
-            204,
-        )
+            (await app.inject({ method: 'PATCH', url: `/api/journal/${id}`, payload })).statusCode,
+        ).toBe(404)
         expect((await app.inject({ method: 'DELETE', url: `/api/journal/${id}` })).statusCode).toBe(
             404,
         )
+        expect((await app.inject({ method: 'GET', url: '/api/journal' })).statusCode).toBe(200)
         await app.close()
     })
 
@@ -192,12 +128,12 @@ describe('journal API', () => {
             url: '/api/journal',
             payload: { title: '' },
         })
-        expect(response.statusCode).toBe(400)
+        expect(response.statusCode).toBe(404)
         expect(response.body).not.toContain('health payload')
         await app.close()
     })
 
-    it('links API meals to the journal and removes paired data with the journal entry', async () => {
+    it('creates an observation-native meal without dual-writing a Journal entity', async () => {
         const repository = new MemoryJournalRepository()
         const mealId = randomUUID()
         const removedMeals: string[] = []
@@ -222,17 +158,8 @@ describe('journal API', () => {
             },
         })
         expect(created.statusCode).toBe(201)
-        expect(repository.entries).toContainEqual(
-            expect.objectContaining({
-                entityId: mealId,
-                entityType: 'meal',
-                title: 'Lentil bowl',
-                source: 'You',
-            }),
-        )
-        const linkedJournalId = repository.entries.find(entry => entry.entityId === mealId)!.id
-        await app.inject({ method: 'DELETE', url: `/api/journal/${linkedJournalId}` })
-        expect(removedMeals).toEqual([mealId])
+        expect(repository.entries).toEqual([])
+        expect(removedMeals).toEqual([])
         await app.close()
     })
 
@@ -241,7 +168,16 @@ describe('journal API', () => {
             configured: async () => true,
             authenticate: async () => null,
         }
-        const app = await createApp(new MemoryJournalRepository(), { auth: auth as never })
+        const data = {
+            createObservation: async (input: unknown) => ({
+                id: randomUUID(),
+                ...(input as object),
+            }),
+        }
+        const app = await createApp(new MemoryJournalRepository(), {
+            auth: auth as never,
+            dataRepository: data as never,
+        })
         const protectedResponse = await app.inject({ method: 'GET', url: '/api/journal' })
         const healthResponse = await app.inject({ method: 'GET', url: '/api/health' })
 
@@ -304,9 +240,13 @@ describe('journal API', () => {
             (
                 await app.inject({
                     method: 'POST',
-                    url: '/api/journal',
+                    url: '/api/observations',
                     headers: { cookie: 'trackit_session=session' },
-                    payload,
+                    payload: {
+                        metric: 'check_in',
+                        valueType: 'event',
+                        observedAt: payload.observedAt,
+                    },
                 })
             ).statusCode,
         ).toBe(403)
@@ -314,12 +254,16 @@ describe('journal API', () => {
             (
                 await app.inject({
                     method: 'POST',
-                    url: '/api/journal',
+                    url: '/api/observations',
                     headers: {
                         cookie: 'trackit_session=session; trackit_csrf=token',
                         'x-csrf-token': 'token',
                     },
-                    payload,
+                    payload: {
+                        metric: 'check_in',
+                        valueType: 'event',
+                        observedAt: payload.observedAt,
+                    },
                 })
             ).statusCode,
         ).toBe(201)

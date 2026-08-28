@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
+import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
@@ -8,8 +9,8 @@ import {
     dailyMetrics,
     dailyProjectionRuns,
     goals,
-    meals,
     observations,
+    observationRelations,
     preferences,
     projectionDirtyDates,
     sources,
@@ -28,6 +29,35 @@ import { getEffectiveMetricSeries } from './effective-series.js'
 import { markProjectionDatesDirty } from './projection-state.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+
+type MealAttributes = {
+    mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
+    nutrientSnapshot: Record<string, number>
+    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+    favorite: boolean
+    primaryMetric: 'calories'
+}
+
+const mealFromObservation = (record: typeof observations.$inferSelect) => {
+    const attributes = record.attributes as Partial<MealAttributes>
+    return {
+        id: record.id,
+        name: record.title ?? 'Meal',
+        mealType: attributes.mealType ?? 'Snack',
+        eatenAt: record.observedAt,
+        nutrientSnapshot: attributes.nutrientSnapshot ?? {},
+        nutritionQuality: attributes.nutritionQuality ?? 'complete',
+        favorite: attributes.favorite ?? false,
+        sourceId: record.sourceId,
+        version: Number(record.version),
+        createdAt: record.createdAt,
+        updatedAt: record.updatedAt,
+        deletedAt: record.deletedAt,
+    }
+}
+
+const nutrientUnit = (metric: string) =>
+    metric === 'calories' ? 'kcal' : ['sodium', 'potassium'].includes(metric) ? 'mg' : 'g'
 
 const normalizeFoodSearch = (value: string) =>
     value
@@ -158,36 +188,21 @@ export class PostgresDataRepository implements DataRepository {
                 from: localDayRange(range.from, timezone).from,
                 to: localDayRange(range.to, timezone).to,
             }
-            const [observationDates, mealDates] = await Promise.all([
-                this.database
-                    .selectDistinct({
-                        date: sql<string>`to_char(${observations.observedAt} at time zone ${timezone}, 'YYYY-MM-DD')`,
-                    })
-                    .from(observations)
-                    .where(
-                        and(
-                            isNull(observations.deletedAt),
-                            gte(observations.observedAt, bounds.from),
-                            lt(observations.observedAt, bounds.to),
-                        ),
+            const observationDates = await this.database
+                .selectDistinct({
+                    date: sql<string>`to_char(${observations.observedAt} at time zone ${timezone}, 'YYYY-MM-DD')`,
+                })
+                .from(observations)
+                .where(
+                    and(
+                        isNull(observations.deletedAt),
+                        gte(observations.observedAt, bounds.from),
+                        lt(observations.observedAt, bounds.to),
                     ),
-                this.database
-                    .selectDistinct({
-                        date: sql<string>`to_char(${meals.eatenAt} at time zone ${timezone}, 'YYYY-MM-DD')`,
-                    })
-                    .from(meals)
-                    .where(
-                        and(
-                            isNull(meals.deletedAt),
-                            gte(meals.eatenAt, bounds.from),
-                            lt(meals.eatenAt, bounds.to),
-                        ),
-                    ),
-            ])
+                )
             const inputDates = new Set([
                 ...rows.map(row => row.date),
                 ...observationDates.map(item => item.date),
-                ...mealDates.map(item => item.date),
             ])
             const emptyDates = missingDates.filter(date => !inputDates.has(date))
             for (const date of missingDates.filter(date => inputDates.has(date)))
@@ -264,8 +279,15 @@ export class PostgresDataRepository implements DataRepository {
     async createObservation(input: {
         id?: string
         metric: string
-        value: number
-        unit: string
+        valueType?: 'number' | 'text' | 'boolean' | 'category' | 'event'
+        value?: number
+        unit?: string
+        textValue?: string
+        booleanValue?: boolean
+        categoryValue?: string
+        title?: string
+        category?: 'Meals' | 'Activity' | 'Sleep' | 'Measurements' | 'Check-ins'
+        attributes?: Record<string, unknown>
         observedAt: string
         source: string
     }) {
@@ -273,13 +295,22 @@ export class PostgresDataRepository implements DataRepository {
             .insert(observations)
             .values({
                 id: input.id,
+                definitionId: input.metric,
+                valueType: input.valueType ?? 'number',
+                origin: 'manual',
                 metric: input.metric,
                 canonicalValue: input.value,
                 canonicalUnit: input.unit,
                 originalValue: input.value,
                 originalUnit: input.unit,
+                textValue: input.textValue,
+                booleanValue: input.booleanValue,
+                categoryValue: input.categoryValue,
+                title: input.title,
+                category: input.category,
                 observedAt: new Date(input.observedAt),
                 metadata: { source: input.source },
+                attributes: input.attributes ?? {},
             })
             .onConflictDoNothing({ target: observations.id })
             .returning()
@@ -297,11 +328,45 @@ export class PostgresDataRepository implements DataRepository {
         return existing
     }
 
-    async updateObservation(id: string, input: { excluded: boolean; version: number }) {
+    async updateObservation(
+        id: string,
+        input: {
+            excluded?: boolean
+            title?: string
+            textValue?: string
+            detail?: string
+            observedAt?: string
+            version: number
+        },
+    ) {
+        const [before] = await this.database
+            .select({
+                observedAt: observations.observedAt,
+                valueType: observations.valueType,
+                attributes: observations.attributes,
+            })
+            .from(observations)
+            .where(eq(observations.id, id))
         const [record] = await this.database
             .update(observations)
             .set({
                 excluded: input.excluded,
+                state:
+                    input.excluded === undefined
+                        ? undefined
+                        : input.excluded
+                          ? 'excluded'
+                          : 'active',
+                title: input.title,
+                textValue: input.textValue,
+                attributes:
+                    input.detail === undefined
+                        ? undefined
+                        : {
+                              ...(before?.attributes as Record<string, unknown> | undefined),
+                              journalDetail: input.detail,
+                          },
+                observedAt: input.observedAt ? new Date(input.observedAt) : undefined,
                 version: input.version + 1,
                 updatedAt: new Date(),
             })
@@ -313,11 +378,17 @@ export class PostgresDataRepository implements DataRepository {
                 ),
             )
             .returning()
-        if (record)
+        if (record && record.valueType === 'number') {
             await rebuildEffectiveDailyMetric(
                 this.database,
                 await this.projectionDate(record.observedAt),
             )
+            if (before && before.observedAt.getTime() !== record.observedAt.getTime())
+                await rebuildEffectiveDailyMetric(
+                    this.database,
+                    await this.projectionDate(before.observedAt),
+                )
+        }
         return record ?? null
     }
 
@@ -335,15 +406,20 @@ export class PostgresDataRepository implements DataRepository {
         return removed.length > 0
     }
 
-    listMeals(range: RecordRange = {}) {
-        const conditions = [isNull(meals.deletedAt)]
-        if (range.from) conditions.push(gte(meals.eatenAt, new Date(range.from)))
-        if (range.to) conditions.push(lt(meals.eatenAt, new Date(range.to)))
-        return this.database
+    async listMeals(range: RecordRange = {}) {
+        const conditions = [
+            isNull(observations.deletedAt),
+            eq(observations.definitionId, 'meal'),
+            eq(observations.valueType, 'compound'),
+        ]
+        if (range.from) conditions.push(gte(observations.observedAt, new Date(range.from)))
+        if (range.to) conditions.push(lt(observations.observedAt, new Date(range.to)))
+        const records = await this.database
             .select()
-            .from(meals)
+            .from(observations)
             .where(and(...conditions))
-            .orderBy(desc(meals.eatenAt))
+            .orderBy(desc(observations.observedAt))
+        return records.map(mealFromObservation)
     }
 
     async createMeal(input: {
@@ -356,34 +432,83 @@ export class PostgresDataRepository implements DataRepository {
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
         foodId?: string
     }) {
-        const [record] = await this.database
-            .insert(meals)
-            .values({
-                id: input.id,
-                name: input.name,
+        const projectionDate = await this.projectionDate(new Date(input.eatenAt))
+        return this.database.transaction(async transaction => {
+            const attributes: MealAttributes = {
                 mealType: input.mealType,
-                eatenAt: new Date(input.eatenAt),
                 nutrientSnapshot: input.nutrients,
                 favorite: input.favorite,
                 nutritionQuality: input.nutritionQuality,
-            })
-            .onConflictDoNothing({ target: meals.id })
-            .returning()
-        if (record) {
-            if (input.foodId) {
-                await this.database
-                    .update(foods)
-                    .set({ lastUsedAt: new Date(input.eatenAt) })
-                    .where(eq(foods.id, input.foodId))
+                primaryMetric: 'calories',
             }
-            await rebuildEffectiveDailyMetric(
-                this.database,
-                await this.projectionDate(record.eatenAt),
-            )
-            return record
-        }
-        const [existing] = await this.database.select().from(meals).where(eq(meals.id, input.id!))
-        return existing
+            const [root] = await transaction
+                .insert(observations)
+                .values({
+                    id: input.id,
+                    definitionId: 'meal',
+                    valueType: 'compound',
+                    origin: 'manual',
+                    metric: 'meal',
+                    title: input.name,
+                    category: 'Meals',
+                    observedAt: new Date(input.eatenAt),
+                    attributes,
+                    metadata: { foodId: input.foodId },
+                })
+                .onConflictDoNothing({ target: observations.id })
+                .returning()
+            if (root) {
+                const components = Object.entries(input.nutrients).map(
+                    ([metric, value], ordinal) => ({
+                        id: randomUUID(),
+                        metric,
+                        value,
+                        unit: nutrientUnit(metric),
+                        ordinal,
+                    }),
+                )
+                if (components.length) {
+                    await transaction.insert(observations).values(
+                        components.map(component => ({
+                            id: component.id,
+                            definitionId: component.metric,
+                            valueType: 'number',
+                            origin: 'manual',
+                            metric: component.metric,
+                            canonicalValue: component.value,
+                            canonicalUnit: component.unit,
+                            originalValue: component.value,
+                            originalUnit: component.unit,
+                            category: 'Meals',
+                            observedAt: new Date(input.eatenAt),
+                            attributes: { nutritionQuality: input.nutritionQuality },
+                        })),
+                    )
+                    await transaction.insert(observationRelations).values(
+                        components.map(component => ({
+                            parentObservationId: root.id,
+                            childObservationId: component.id,
+                            kind: 'component',
+                            role: component.metric,
+                            ordinal: component.ordinal,
+                        })),
+                    )
+                }
+                if (input.foodId) {
+                    await transaction
+                        .update(foods)
+                        .set({ lastUsedAt: new Date(input.eatenAt) })
+                        .where(eq(foods.id, input.foodId))
+                }
+                await rebuildEffectiveDailyMetric(transaction, projectionDate)
+                return mealFromObservation(root)
+            }
+            const [existing] = await transaction
+                .select()
+                .from(observations)
+                .where(eq(observations.id, input.id!))
+            return existing ? mealFromObservation(existing) : undefined
+        })
     }
 
     async updateMeal(
@@ -398,46 +523,156 @@ export class PostgresDataRepository implements DataRepository {
             version: number
         },
     ) {
-        const [before] = await this.database
-            .select({ eatenAt: meals.eatenAt })
-            .from(meals)
-            .where(eq(meals.id, id))
-        const [record] = await this.database
-            .update(meals)
-            .set({
-                name: input.name,
-                mealType: input.mealType,
-                eatenAt: input.eatenAt ? new Date(input.eatenAt) : undefined,
-                nutrientSnapshot: input.nutrients,
-                favorite: input.favorite,
-                nutritionQuality: input.nutritionQuality,
-                version: input.version + 1,
-                updatedAt: new Date(),
-            })
-            .where(and(eq(meals.id, id), eq(meals.version, input.version), isNull(meals.deletedAt)))
-            .returning()
-        if (record) {
-            const dates = new Set([
-                await this.projectionDate(record.eatenAt),
-                ...(before ? [await this.projectionDate(before.eatenAt)] : []),
-            ])
-            for (const date of dates) await rebuildEffectiveDailyMetric(this.database, date)
-        }
-        return record ?? null
+        const [saved] = await this.database
+            .select({ timezone: preferences.timezone })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+        const timezone = saved?.timezone ?? 'UTC'
+        return this.database.transaction(async transaction => {
+            const [before] = await transaction
+                .select()
+                .from(observations)
+                .where(eq(observations.id, id))
+            if (!before) return null
+            const previous = before.attributes as Partial<MealAttributes>
+            const attributes: MealAttributes = {
+                mealType: input.mealType ?? previous.mealType ?? 'Snack',
+                nutrientSnapshot: input.nutrients ?? previous.nutrientSnapshot ?? {},
+                favorite: input.favorite ?? previous.favorite ?? false,
+                nutritionQuality: input.nutritionQuality ?? previous.nutritionQuality ?? 'complete',
+                primaryMetric: 'calories',
+            }
+            const [record] = await transaction
+                .update(observations)
+                .set({
+                    title: input.name,
+                    observedAt: input.eatenAt ? new Date(input.eatenAt) : undefined,
+                    attributes,
+                    version: input.version + 1,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    and(
+                        eq(observations.id, id),
+                        eq(observations.version, input.version),
+                        isNull(observations.deletedAt),
+                    ),
+                )
+                .returning()
+            if (record) {
+                if (input.nutrients) {
+                    const existingComponents = await transaction
+                        .select({ id: observationRelations.childObservationId })
+                        .from(observationRelations)
+                        .where(
+                            and(
+                                eq(observationRelations.parentObservationId, id),
+                                eq(observationRelations.kind, 'component'),
+                            ),
+                        )
+                    if (existingComponents.length)
+                        await transaction.delete(observations).where(
+                            inArray(
+                                observations.id,
+                                existingComponents.map(item => item.id),
+                            ),
+                        )
+                    const components = Object.entries(input.nutrients).map(
+                        ([metric, value], ordinal) => ({
+                            id: randomUUID(),
+                            metric,
+                            value,
+                            unit: nutrientUnit(metric),
+                            ordinal,
+                        }),
+                    )
+                    if (components.length) {
+                        await transaction.insert(observations).values(
+                            components.map(component => ({
+                                id: component.id,
+                                definitionId: component.metric,
+                                valueType: 'number',
+                                origin: 'manual',
+                                metric: component.metric,
+                                canonicalValue: component.value,
+                                canonicalUnit: component.unit,
+                                originalValue: component.value,
+                                originalUnit: component.unit,
+                                category: 'Meals',
+                                observedAt: record.observedAt,
+                                attributes: { nutritionQuality: attributes.nutritionQuality },
+                            })),
+                        )
+                        await transaction.insert(observationRelations).values(
+                            components.map(component => ({
+                                parentObservationId: id,
+                                childObservationId: component.id,
+                                kind: 'component',
+                                role: component.metric,
+                                ordinal: component.ordinal,
+                            })),
+                        )
+                    }
+                } else if (input.eatenAt) {
+                    const components = await transaction
+                        .select({ id: observationRelations.childObservationId })
+                        .from(observationRelations)
+                        .where(eq(observationRelations.parentObservationId, id))
+                    if (components.length)
+                        await transaction
+                            .update(observations)
+                            .set({ observedAt: record.observedAt, updatedAt: new Date() })
+                            .where(
+                                inArray(
+                                    observations.id,
+                                    components.map(item => item.id),
+                                ),
+                            )
+                }
+                const dates = new Set([
+                    dateKeyInTimezone(record.observedAt, timezone),
+                    dateKeyInTimezone(before.observedAt, timezone),
+                ])
+                for (const date of dates) await rebuildEffectiveDailyMetric(transaction, date)
+            }
+            return record ? mealFromObservation(record) : null
+        })
     }
 
     async removeMeal(id: string) {
-        const removed = await this.database
-            .update(meals)
-            .set({ deletedAt: new Date(), updatedAt: new Date() })
-            .where(and(eq(meals.id, id), isNull(meals.deletedAt)))
-            .returning({ id: meals.id, eatenAt: meals.eatenAt })
-        if (removed[0])
-            await rebuildEffectiveDailyMetric(
-                this.database,
-                await this.projectionDate(removed[0].eatenAt),
-            )
-        return removed.length > 0
+        const [saved] = await this.database
+            .select({ timezone: preferences.timezone })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+        const timezone = saved?.timezone ?? 'UTC'
+        return this.database.transaction(async transaction => {
+            const [root] = await transaction
+                .update(observations)
+                .set({ state: 'deleted', deletedAt: new Date(), updatedAt: new Date() })
+                .where(and(eq(observations.id, id), isNull(observations.deletedAt)))
+                .returning({ id: observations.id, eatenAt: observations.observedAt })
+            if (root) {
+                const components = await transaction
+                    .select({ id: observationRelations.childObservationId })
+                    .from(observationRelations)
+                    .where(eq(observationRelations.parentObservationId, id))
+                if (components.length)
+                    await transaction
+                        .update(observations)
+                        .set({ state: 'deleted', deletedAt: new Date(), updatedAt: new Date() })
+                        .where(
+                            inArray(
+                                observations.id,
+                                components.map(item => item.id),
+                            ),
+                        )
+                await rebuildEffectiveDailyMetric(
+                    transaction,
+                    dateKeyInTimezone(root.eatenAt, timezone),
+                )
+            }
+            return Boolean(root)
+        })
     }
 
     async getPreferences() {
@@ -461,7 +696,22 @@ export class PostgresDataRepository implements DataRepository {
         experience?: Record<string, unknown>
     }) {
         const current = (await this.getPreferences()) as typeof preferences.$inferSelect
-        const resolutionChanged = Boolean(input.metricPreferences || input.timezone)
+        const resolutionSettings = (value: MetricPreferences | null | undefined) =>
+            Object.fromEntries(
+                Object.entries(value ?? {})
+                    .filter(([, preference]) => preference.deduplication)
+                    .sort(([left], [right]) => left.localeCompare(right))
+                    .map(([metric, preference]) => [metric, preference.deduplication]),
+            )
+        const resolutionChanged =
+            (input.timezone !== undefined && input.timezone !== current.timezone) ||
+            (input.metricPreferences !== undefined &&
+                JSON.stringify(resolutionSettings(input.metricPreferences)) !==
+                    JSON.stringify(
+                        resolutionSettings(
+                            current.metricPreferences as MetricPreferences | null | undefined,
+                        ),
+                    ))
         const [record] = await this.database
             .insert(preferences)
             .values({

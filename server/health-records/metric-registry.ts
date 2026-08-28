@@ -1,195 +1,28 @@
-export type Aggregation = 'sum' | 'latest' | 'average' | 'median' | 'max'
+import {
+    metricDefinition as catalogMetricDefinition,
+    type DailyMetricAggregation,
+} from '../../src/domain/metricCatalog.js'
 
-export type MetricDefinition = {
-    key: string
-    label: string
-    category: 'activity' | 'body' | 'cardiovascular' | 'recovery' | 'sleep'
-    canonicalUnit: string
-    aggregation: Aggregation
-    displayPrecision: number
-}
-
-const definitions: MetricDefinition[] = [
-    {
-        key: 'steps',
-        label: 'Steps',
-        category: 'activity',
-        canonicalUnit: 'count',
-        aggregation: 'sum',
-        displayPrecision: 0,
-    },
-    {
-        key: 'distance',
-        label: 'Distance',
-        category: 'activity',
-        canonicalUnit: 'm',
-        aggregation: 'sum',
-        displayPrecision: 0,
-    },
-    {
-        key: 'active_calories',
-        label: 'Active calories',
-        category: 'activity',
-        canonicalUnit: 'kcal',
-        aggregation: 'sum',
-        displayPrecision: 0,
-    },
-    {
-        key: 'total_calories',
-        label: 'Total calories',
-        category: 'activity',
-        canonicalUnit: 'kcal',
-        aggregation: 'sum',
-        displayPrecision: 0,
-    },
-    {
-        key: 'exercise',
-        label: 'Exercise',
-        category: 'activity',
-        canonicalUnit: 'minutes',
-        aggregation: 'sum',
-        displayPrecision: 0,
-    },
-    {
-        key: 'weight',
-        label: 'Weight',
-        category: 'body',
-        canonicalUnit: 'kg',
-        aggregation: 'latest',
-        displayPrecision: 1,
-    },
-    {
-        key: 'height',
-        label: 'Height',
-        category: 'body',
-        canonicalUnit: 'm',
-        aggregation: 'latest',
-        displayPrecision: 2,
-    },
-    {
-        key: 'body_fat',
-        label: 'Body fat',
-        category: 'body',
-        canonicalUnit: '%',
-        aggregation: 'latest',
-        displayPrecision: 1,
-    },
-    {
-        key: 'heart_rate',
-        label: 'Heart rate',
-        category: 'cardiovascular',
-        canonicalUnit: 'bpm',
-        aggregation: 'average',
-        displayPrecision: 0,
-    },
-    {
-        key: 'resting_heart_rate',
-        label: 'Resting heart rate',
-        category: 'cardiovascular',
-        canonicalUnit: 'bpm',
-        aggregation: 'median',
-        displayPrecision: 0,
-    },
-    {
-        key: 'blood_pressure_systolic',
-        label: 'Systolic pressure',
-        category: 'cardiovascular',
-        canonicalUnit: 'mmHg',
-        aggregation: 'average',
-        displayPrecision: 0,
-    },
-    {
-        key: 'blood_pressure_diastolic',
-        label: 'Diastolic pressure',
-        category: 'cardiovascular',
-        canonicalUnit: 'mmHg',
-        aggregation: 'average',
-        displayPrecision: 0,
-    },
-    {
-        key: 'hrv_rmssd',
-        label: 'HRV (RMSSD)',
-        category: 'recovery',
-        canonicalUnit: 'ms',
-        aggregation: 'median',
-        displayPrecision: 0,
-    },
-    {
-        key: 'oxygen_saturation',
-        label: 'Oxygen saturation',
-        category: 'recovery',
-        canonicalUnit: '%',
-        aggregation: 'median',
-        displayPrecision: 1,
-    },
-    {
-        key: 'respiratory_rate',
-        label: 'Respiratory rate',
-        category: 'recovery',
-        canonicalUnit: 'breaths/min',
-        aggregation: 'median',
-        displayPrecision: 1,
-    },
-    {
-        key: 'sleep',
-        label: 'Sleep duration',
-        category: 'sleep',
-        canonicalUnit: 'hours',
-        aggregation: 'sum',
-        displayPrecision: 2,
-    },
-    {
-        key: 'sleep_deep',
-        label: 'Deep sleep',
-        category: 'sleep',
-        canonicalUnit: 'hours',
-        aggregation: 'sum',
-        displayPrecision: 2,
-    },
-    {
-        key: 'sleep_rem',
-        label: 'REM sleep',
-        category: 'sleep',
-        canonicalUnit: 'hours',
-        aggregation: 'sum',
-        displayPrecision: 2,
-    },
-    {
-        key: 'sleep_light',
-        label: 'Light sleep',
-        category: 'sleep',
-        canonicalUnit: 'hours',
-        aggregation: 'sum',
-        displayPrecision: 2,
-    },
-    {
-        key: 'sleep_awake',
-        label: 'Awake time',
-        category: 'sleep',
-        canonicalUnit: 'hours',
-        aggregation: 'sum',
-        displayPrecision: 2,
-    },
-]
-
-export const metricRegistry = new Map(definitions.map(definition => [definition.key, definition]))
-
+// Compatibility adapter for server-side aggregation callers. Metric metadata
+// remains authoritative in the shared catalog used by ingestion and the UI.
 export function metricDefinition(key: string) {
-    return metricRegistry.get(key)
+    const definition = catalogMetricDefinition(key)
+    return definition ? { ...definition, aggregation: definition.dailyAggregation } : undefined
 }
 
 export function aggregateMetric(
-    aggregation: Aggregation,
+    aggregation: DailyMetricAggregation,
     values: { value: number; observedAt: Date }[],
 ) {
     if (!values.length) return undefined
-    const numbers = values.map(row => row.value).sort((a, b) => a - b)
+    const numbers = values.map(row => row.value).sort((left, right) => left - right)
     switch (aggregation) {
         case 'sum':
             return numbers.reduce((sum, value) => sum + value, 0)
         case 'latest':
-            return [...values].sort((a, b) => b.observedAt.getTime() - a.observedAt.getTime())[0]
-                .value
+            return [...values].sort(
+                (left, right) => right.observedAt.getTime() - left.observedAt.getTime(),
+            )[0].value
         case 'median': {
             const middle = Math.floor(numbers.length / 2)
             return numbers.length % 2

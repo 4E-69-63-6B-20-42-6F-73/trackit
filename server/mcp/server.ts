@@ -4,7 +4,6 @@ import { z } from 'zod'
 import type { DataRepository } from '../data/types.js'
 import { PostgresDataRepository } from '../data/postgres-repository.js'
 import type { JournalRepository } from '../journal/types.js'
-import { PostgresJournalRepository } from '../journal/postgres-repository.js'
 import type { McpAccessService, McpClient } from './service.js'
 
 type DatedRecord = Record<string, unknown> & { observedAt?: Date | string; eatenAt?: Date | string }
@@ -605,17 +604,7 @@ export function createTrackItMcpServer(
                             nutritionQuality: food.nutritionQuality,
                             foodId: food.id,
                         })) as { id: string }
-                        const transactionalJournal = new PostgresJournalRepository(transaction)
-                        const journalEntry = await transactionalJournal.create({
-                            category: 'Meals',
-                            title: food.name,
-                            detail: `${input.grams} g added by an authorized assistant`,
-                            source: `MCP: ${client.name}`,
-                            observedAt: input.eatenAt,
-                            entityType: 'meal',
-                            entityId: meal.id,
-                        })
-                        return { meal, journalEntryId: journalEntry.id }
+                        return { meal, journalEntryId: meal.id }
                     },
                 )
             } catch (error) {
@@ -654,24 +643,21 @@ export function createTrackItMcpServer(
                 input.idempotencyKey,
                 async transaction => {
                     const transactionalData = new PostgresDataRepository(transaction)
-                    const transactionalJournal = new PostgresJournalRepository(transaction)
                     const observation = await transactionalData.createObservation({
                         metric: input.metric,
+                        valueType: 'number',
                         value: input.value,
                         unit: input.unit,
                         observedAt: input.observedAt,
                         source: `MCP: ${client.name}`,
-                    })
-                    const journalEntry = await transactionalJournal.create({
-                        category: 'Measurements',
                         title: input.metric,
-                        detail: `${input.value} ${input.unit}`,
-                        source: `MCP: ${client.name}`,
-                        observedAt: input.observedAt,
-                        entityType: 'observation',
-                        entityId: observation.id,
+                        category: 'Measurements',
+                        attributes: {
+                            journalDetail: `${input.value} ${input.unit}`,
+                            sourceLabel: `MCP: ${client.name}`,
+                        },
                     })
-                    return { observation, journalEntryId: journalEntry.id }
+                    return { observation, journalEntryId: observation.id }
                 },
             )
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
@@ -701,12 +687,18 @@ export function createTrackItMcpServer(
                 'log_checkin',
                 input.idempotencyKey,
                 transaction =>
-                    new PostgresJournalRepository(transaction).create({
-                        category: 'Check-ins',
+                    new PostgresDataRepository(transaction).createObservation({
+                        metric: 'check_in',
+                        valueType: input.detail ? 'text' : 'event',
+                        textValue: input.detail || undefined,
                         title: input.title,
-                        detail: input.detail,
-                        source: `MCP: ${client.name}`,
+                        category: 'Check-ins',
                         observedAt: input.observedAt,
+                        source: `MCP: ${client.name}`,
+                        attributes: {
+                            journalDetail: input.detail,
+                            sourceLabel: `MCP: ${client.name}`,
+                        },
                     }),
             )
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
@@ -760,7 +752,7 @@ export function createTrackItMcpServer(
                 id,
             )
             if (!confirmed) return denied('A valid confirmation for this exact record is required.')
-            return textResult({ deleted: await journal.remove(id), id })
+            return textResult({ deleted: await data.removeObservation(id), id })
         },
     )
 

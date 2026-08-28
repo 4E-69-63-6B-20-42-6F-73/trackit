@@ -5,6 +5,7 @@ export type DerivedMetricDefinition = {
     calculation: 'bmi' | 'calorie_balance'
 }
 export type MetricAggregation = 'latest' | 'sum' | 'average' | 'min' | 'max'
+export type DailyMetricAggregation = 'sum' | 'latest' | 'average' | 'median' | 'max'
 export type MetricComparison = 'gte' | 'lte' | 'between'
 export type GoalAggregation = 'latest' | 'average' | 'total'
 export type GoalPeriodType = 'day' | 'week' | 'rolling'
@@ -29,6 +30,8 @@ export type MetricDefinition = {
     metricUnit: string
     imperialUnit: string
     precision: number
+    dailyAggregation: DailyMetricAggregation
+    journalDefaultVisible?: boolean
     manuallyLoggable: boolean
     aggregations: readonly MetricAggregation[]
     comparisons: readonly MetricComparison[]
@@ -44,6 +47,7 @@ export type MetricDefinition = {
 type DefinitionInput = Omit<MetricDefinition, 'value' | 'label' | 'unit' | 'group'>
 const define = (d: DefinitionInput): MetricDefinition => ({
     ...d,
+    journalDefaultVisible: d.journalDefaultVisible ?? false,
     value: d.id,
     label: d.name,
     unit: d.canonicalUnit,
@@ -67,6 +71,7 @@ const shared = (
     unit: string,
     source: MetricSource,
     precision = 0,
+    dailyAggregation: DailyMetricAggregation = source === 'meal' ? 'sum' : 'latest',
 ) =>
     define({
         id,
@@ -77,6 +82,7 @@ const shared = (
         metricUnit: unit,
         imperialUnit: unit,
         precision,
+        dailyAggregation,
         manuallyLoggable: source === 'manual',
         source,
         comparisons,
@@ -85,17 +91,19 @@ const shared = (
 
 export const metricCatalog: MetricDefinition[] = [
     {
-        ...shared('steps', 'Steps', 'Activity', 'count', 'observation'),
+        ...shared('steps', 'Steps', 'Activity', 'count', 'observation', 0, 'sum'),
         goalCapabilities: additiveGoals,
         goalDefaults: { aggregation: 'total', period: 'day', comparator: 'gte', target: 10_000 },
     },
     {
-        ...shared('exercise', 'Exercise minutes', 'Activity', 'minutes', 'observation'),
+        ...shared('exercise', 'Exercise minutes', 'Activity', 'minutes', 'observation', 0, 'sum'),
+        journalDefaultVisible: true,
         goalCapabilities: additiveGoals,
         goalDefaults: { aggregation: 'total', period: 'week', comparator: 'gte', target: 150 },
     },
     {
-        ...shared('sleep', 'Sleep duration', 'Sleep', 'hours', 'observation'),
+        ...shared('sleep', 'Sleep duration', 'Sleep', 'hours', 'observation', 2, 'sum'),
+        journalDefaultVisible: true,
         goalCapabilities: {
             ...additiveGoals,
             aggregations: { total: ['week', 'rolling'], average: ['week', 'rolling'] },
@@ -109,12 +117,20 @@ export const metricCatalog: MetricDefinition[] = [
         },
     },
     {
-        ...shared('heart_rate', 'Heart rate', 'Health', 'bpm', 'observation'),
+        ...shared('heart_rate', 'Heart rate', 'Health', 'bpm', 'observation', 0, 'average'),
         goalCapabilities: measuredGoals,
         goalDefaults: { aggregation: 'latest', period: 'day', comparator: 'lte', target: 80 },
     },
     {
-        ...shared('resting_heart_rate', 'Resting heart rate', 'Health', 'bpm', 'observation'),
+        ...shared(
+            'resting_heart_rate',
+            'Resting heart rate',
+            'Health',
+            'bpm',
+            'observation',
+            0,
+            'median',
+        ),
         goalCapabilities: measuredGoals,
         goalDefaults: { aggregation: 'latest', period: 'day', comparator: 'lte', target: 60 },
     },
@@ -127,6 +143,8 @@ export const metricCatalog: MetricDefinition[] = [
         metricUnit: 'cm',
         imperialUnit: 'in',
         precision: 1,
+        dailyAggregation: 'latest',
+        journalDefaultVisible: true,
         manuallyLoggable: true,
         source: 'observation',
         comparisons,
@@ -142,6 +160,8 @@ export const metricCatalog: MetricDefinition[] = [
         metricUnit: 'kg',
         imperialUnit: 'lb',
         precision: 1,
+        dailyAggregation: 'latest',
+        journalDefaultVisible: true,
         manuallyLoggable: true,
         source: 'observation',
         comparisons,
@@ -164,6 +184,8 @@ export const metricCatalog: MetricDefinition[] = [
         metricUnit: 'ml',
         imperialUnit: 'fl oz',
         precision: 0,
+        dailyAggregation: 'sum',
+        journalDefaultVisible: true,
         manuallyLoggable: true,
         source: 'manual',
         comparisons,
@@ -173,14 +195,24 @@ export const metricCatalog: MetricDefinition[] = [
     }),
     {
         ...shared('energy', 'Energy', 'Wellbeing', 'score', 'manual'),
+        journalDefaultVisible: true,
         goalCapabilities: measuredGoals,
     },
     {
         ...shared('calories', 'Calories', 'Nutrition', 'kcal', 'meal'),
+        journalDefaultVisible: true,
         goalCapabilities: additiveGoals,
     },
     {
-        ...shared('active_calories', 'Calories burned', 'Activity', 'kcal', 'observation'),
+        ...shared(
+            'active_calories',
+            'Calories burned',
+            'Activity',
+            'kcal',
+            'observation',
+            0,
+            'sum',
+        ),
         goalCapabilities: additiveGoals,
     },
     define({
@@ -192,6 +224,7 @@ export const metricCatalog: MetricDefinition[] = [
         metricUnit: 'kg/m²',
         imperialUnit: 'kg/m²',
         precision: 1,
+        dailyAggregation: 'latest',
         manuallyLoggable: false,
         source: 'derived',
         comparisons,
@@ -208,6 +241,7 @@ export const metricCatalog: MetricDefinition[] = [
         metricUnit: 'kcal',
         imperialUnit: 'kcal',
         precision: 0,
+        dailyAggregation: 'sum',
         manuallyLoggable: false,
         source: 'derived',
         comparisons,
@@ -238,6 +272,53 @@ export const metricCatalog: MetricDefinition[] = [
         ...shared('potassium', 'Potassium', 'Nutrition', 'mg', 'meal'),
         goalCapabilities: additiveGoals,
     },
+    shared('distance', 'Distance', 'Activity', 'm', 'observation', 0, 'sum'),
+    shared('total_calories', 'Total calories burned', 'Activity', 'kcal', 'observation', 0, 'sum'),
+    shared('body_fat', 'Body fat', 'Body', '%', 'observation', 1),
+    shared('lean_body_mass', 'Lean body mass', 'Body', 'kg', 'observation', 1),
+    shared(
+        'blood_pressure_systolic',
+        'Systolic pressure',
+        'Health',
+        'mmHg',
+        'observation',
+        0,
+        'average',
+    ),
+    shared(
+        'blood_pressure_diastolic',
+        'Diastolic pressure',
+        'Health',
+        'mmHg',
+        'observation',
+        0,
+        'average',
+    ),
+    shared('hrv_rmssd', 'HRV (RMSSD)', 'Health', 'ms', 'observation', 0, 'median'),
+    shared('oxygen_saturation', 'Oxygen saturation', 'Health', '%', 'observation', 1, 'median'),
+    shared(
+        'respiratory_rate',
+        'Respiratory rate',
+        'Health',
+        'breaths/min',
+        'observation',
+        1,
+        'median',
+    ),
+    shared('sleep_deep', 'Deep sleep', 'Sleep', 'hours', 'observation', 2, 'sum'),
+    shared('sleep_rem', 'REM sleep', 'Sleep', 'hours', 'observation', 2, 'sum'),
+    shared('sleep_light', 'Light sleep', 'Sleep', 'hours', 'observation', 2, 'sum'),
+    shared('sleep_awake', 'Awake time', 'Sleep', 'hours', 'observation', 2, 'sum'),
+    shared('sleep_efficiency', 'Sleep efficiency', 'Sleep', '%', 'derived', 1),
+    shared('heart_rate_min', 'Minimum heart rate', 'Health', 'bpm', 'derived'),
+    shared('heart_rate_max', 'Maximum heart rate', 'Health', 'bpm', 'derived', 0, 'max'),
+    shared('heart_rate_median', 'Median heart rate', 'Health', 'bpm', 'derived', 0, 'median'),
+    shared('heart_rate_p95', '95th percentile heart rate', 'Health', 'bpm', 'derived'),
+    shared('heart_rate_sample_count', 'Heart rate samples', 'Health', 'count', 'derived', 0, 'sum'),
+    shared('pulse_pressure', 'Pulse pressure', 'Health', 'mmHg', 'derived', 0, 'average'),
+    shared('map_estimate', 'Mean arterial pressure', 'Health', 'mmHg', 'derived', 0, 'average'),
+    shared('basal_metabolic_rate', 'Basal metabolic rate', 'Health', 'kcal/day', 'observation'),
+    shared('vo2_max', 'VO₂ max', 'Health', 'mL/kg/min', 'observation', 1),
 ]
 const registry = new Map(metricCatalog.map(definition => [definition.id, definition]))
 export const metricDefinition = (metric: string | null) =>

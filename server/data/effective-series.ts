@@ -1,23 +1,161 @@
-import { and, desc, eq, gte, inArray, isNull, lt } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { meals, observations, preferences } from '../db/schema.js'
-import { effectiveMetricSeries, mealMetricObservations } from '../../src/domain/effectiveMetrics.js'
+import {
+    dailyProjectionRuns,
+    derivedObservationInputs,
+    derivedObservations,
+    observations,
+    preferences,
+    projectionDirtyDates,
+} from '../db/schema.js'
+import {
+    effectiveBaseMetricSeries,
+    effectiveMetricSeries,
+} from '../../src/domain/effectiveMetrics.js'
 import type { Observation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
 import type { RecordRange } from './types.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
+import { DERIVED_OBSERVATION_CACHE_VERSION } from './derived-observation-cache.js'
+import { dateKeyInTimezone, datesThrough } from './timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 
-export async function getEffectiveMetricSeries(
+async function cachedDerivedSeries(
+    database: Database | Transaction,
+    range: RecordRange,
+    requestedMetrics: Set<string> | null,
+    resolutionVersion: number,
+    timezone: string,
+): Promise<Observation[] | null> {
+    if (
+        !requestedMetrics?.size ||
+        !range.from ||
+        !range.to ||
+        [...requestedMetrics].some(metric => !metricDefinition(metric)?.derived)
+    )
+        return null
+    const from = new Date(range.from)
+    const to = new Date(range.to)
+    if (!(from < to)) return []
+    const finalInstant = new Date(to.getTime() - 1)
+    const dates = datesThrough(
+        dateKeyInTimezone(from, timezone),
+        dateKeyInTimezone(finalInstant, timezone),
+    )
+    const [runs, dirty] = await Promise.all([
+        database
+            .select()
+            .from(dailyProjectionRuns)
+            .where(
+                and(
+                    eq(dailyProjectionRuns.userId, 'owner'),
+                    inArray(dailyProjectionRuns.date, dates),
+                    eq(dailyProjectionRuns.derivationVersion, 2),
+                    eq(dailyProjectionRuns.resolutionVersion, resolutionVersion),
+                    eq(dailyProjectionRuns.timezone, timezone),
+                    eq(dailyProjectionRuns.status, 'complete'),
+                ),
+            ),
+        database
+            .select({ date: projectionDirtyDates.date })
+            .from(projectionDirtyDates)
+            .where(
+                and(
+                    eq(projectionDirtyDates.userId, 'owner'),
+                    inArray(projectionDirtyDates.date, dates),
+                ),
+            ),
+    ])
+    if (dirty.length || new Set(runs.map(run => run.date)).size !== dates.length) return null
+    const cached = await database
+        .select()
+        .from(derivedObservations)
+        .where(
+            and(
+                eq(derivedObservations.userId, 'owner'),
+                inArray(derivedObservations.date, dates),
+                inArray(derivedObservations.metric, [...requestedMetrics]),
+                eq(derivedObservations.derivationVersion, DERIVED_OBSERVATION_CACHE_VERSION),
+                eq(derivedObservations.resolutionVersion, resolutionVersion),
+                eq(derivedObservations.timezone, timezone),
+            ),
+        )
+    const lineage = cached.length
+        ? await database
+              .select()
+              .from(derivedObservationInputs)
+              .where(
+                  inArray(
+                      derivedObservationInputs.derivedObservationId,
+                      cached.map(row => row.id),
+                  ),
+              )
+        : []
+    const lineageByDerived = new Map<string, string[]>()
+    for (const input of lineage)
+        lineageByDerived.set(input.derivedObservationId, [
+            ...(lineageByDerived.get(input.derivedObservationId) ?? []),
+            input.inputObservationId,
+        ])
+    return cached
+        .map((row): Observation => ({
+            id: row.id,
+            metric: row.metric,
+            canonicalValue: row.canonicalValue,
+            canonicalUnit: row.canonicalUnit,
+            originalValue: row.canonicalValue,
+            originalUnit: row.canonicalUnit,
+            observedAt: row.observedAt.toISOString(),
+            endedAt: row.endedAt?.toISOString() ?? null,
+            provider: 'TrackIt',
+            connector: null,
+            metadata: {
+                derived: true,
+                cached: true,
+                inputRecordIds: lineageByDerived.get(row.id) ?? [],
+                inputFingerprint: row.inputFingerprint,
+            },
+            excluded: false,
+            version: row.derivationVersion,
+        }))
+        .filter(row => new Date(row.observedAt) >= from && new Date(row.observedAt) < to)
+}
+
+async function loadEffectiveMetricSeries(
     database: Database | Transaction,
     range: RecordRange = {},
+    includeDerived = true,
 ) {
-    const observationConditions = [isNull(observations.deletedAt)]
-    const mealConditions = [isNull(meals.deletedAt)]
+    const observationConditions = [
+        isNull(observations.deletedAt),
+        eq(observations.valueType, 'number'),
+        isNotNull(observations.canonicalValue),
+        isNotNull(observations.canonicalUnit),
+        isNotNull(observations.originalValue),
+        isNotNull(observations.originalUnit),
+    ]
     const requestedMetrics = range.metrics?.length ? new Set(range.metrics) : null
+    const [saved] = await database
+        .select({
+            metricPreferences: preferences.metricPreferences,
+            metricResolutionVersion: preferences.metricResolutionVersion,
+            timezone: preferences.timezone,
+        })
+        .from(preferences)
+        .where(eq(preferences.id, 'owner'))
+    if (includeDerived) {
+        const cached = await cachedDerivedSeries(
+            database,
+            range,
+            requestedMetrics,
+            saved?.metricResolutionVersion ?? 1,
+            saved?.timezone ?? 'UTC',
+        )
+        if (cached) return cached
+    }
     const expandedMetrics = requestedMetrics
         ? new Set(
               [...requestedMetrics].flatMap(metric => [
@@ -31,17 +169,12 @@ export async function getEffectiveMetricSeries(
     if (range.from) {
         const from = new Date(range.from)
         observationConditions.push(gte(observations.observedAt, from))
-        mealConditions.push(gte(meals.eatenAt, from))
     }
     if (range.to) {
         const to = new Date(range.to)
         observationConditions.push(lt(observations.observedAt, to))
-        mealConditions.push(lt(meals.eatenAt, to))
     }
     const needsHeight = !expandedMetrics || expandedMetrics.has('bmi')
-    const needsMeals =
-        !expandedMetrics ||
-        [...expandedMetrics].some(metric => metricDefinition(metric)?.source === 'meal')
     const priorHeightQuery =
         range.from && needsHeight
             ? database
@@ -57,51 +190,51 @@ export async function getEffectiveMetricSeries(
                   .orderBy(desc(observations.observedAt))
                   .limit(100)
             : Promise.resolve([])
-    const [records, mealRecords, priorHeights, saved] = await Promise.all([
+    const [records, priorHeights] = await Promise.all([
         database
             .select()
             .from(observations)
             .where(and(...observationConditions)),
-        needsMeals
-            ? database
-                  .select()
-                  .from(meals)
-                  .where(and(...mealConditions))
-            : Promise.resolve([]),
         priorHeightQuery,
-        database
-            .select({ metricPreferences: preferences.metricPreferences })
-            .from(preferences)
-            .where(eq(preferences.id, 'owner')),
     ])
     const normalize = (record: (typeof records)[number]): Observation => ({
         ...record,
+        canonicalValue: record.canonicalValue!,
+        canonicalUnit: record.canonicalUnit!,
+        originalValue: record.originalValue!,
+        originalUnit: record.originalUnit!,
         observedAt: record.observedAt.toISOString(),
         endedAt: record.endedAt?.toISOString() ?? null,
         metadata: record.metadata as Record<string, unknown>,
         version: Number(record.version),
     })
-    const effective = effectiveMetricSeries(
-        [
-            ...priorHeights.map(normalize),
-            ...records.map(normalize),
-            ...mealMetricObservations(
-                mealRecords.map(meal => ({
-                    id: meal.id,
-                    eatenAt: meal.eatenAt.toISOString(),
-                    nutrientSnapshot: meal.nutrientSnapshot as Record<string, number | undefined>,
-                    version: meal.version,
-                })),
-            ),
-        ],
-        (saved[0]?.metricPreferences ?? undefined) as MetricPreferences | undefined,
-    )
+    const candidates = [...priorHeights.map(normalize), ...records.map(normalize)]
+    const metricPreferences = (saved?.metricPreferences ?? undefined) as
+        MetricPreferences | undefined
+    const effective = includeDerived
+        ? effectiveMetricSeries(candidates, metricPreferences)
+        : effectiveBaseMetricSeries(candidates, metricPreferences)
     return effective.filter(record => {
         const observedAt = new Date(record.observedAt)
         return (
-            (!requestedMetrics || requestedMetrics.has(record.metric)) &&
-            (!range.from || observedAt >= new Date(range.from)) &&
-            (!range.to || observedAt < new Date(range.to))
+            (!includeDerived && record.metric === 'height') ||
+            ((!requestedMetrics || requestedMetrics.has(record.metric)) &&
+                (!range.from || observedAt >= new Date(range.from)) &&
+                (!range.to || observedAt < new Date(range.to)))
         )
     })
+}
+
+export function getEffectiveMetricSeries(
+    database: Database | Transaction,
+    range: RecordRange = {},
+) {
+    return loadEffectiveMetricSeries(database, range, true)
+}
+
+export function getEffectiveBaseMetricSeries(
+    database: Database | Transaction,
+    range: RecordRange = {},
+) {
+    return loadEffectiveMetricSeries(database, range, false)
 }

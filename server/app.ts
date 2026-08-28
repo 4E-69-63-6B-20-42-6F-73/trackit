@@ -10,7 +10,6 @@ import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simp
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import type { AuthService } from './auth/service.js'
 import type { DataRepository } from './data/types.js'
-import { PostgresDataRepository } from './data/postgres-repository.js'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from './db/schema.js'
 import {
@@ -29,8 +28,6 @@ import {
     savedTrendViewInputSchema,
 } from './data/types.js'
 import type { JournalRepository } from './journal/types.js'
-import { PostgresJournalRepository } from './journal/postgres-repository.js'
-import { createJournalEntrySchema, updateJournalEntrySchema } from './journal/types.js'
 import { openApiContract } from './openapi.js'
 import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
@@ -381,7 +378,7 @@ export async function createApp(
     }
 
     if (options?.dataRepository) {
-        const exports = new ExportService(options.dataRepository, repository)
+        const exports = new ExportService(options.dataRepository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
             const format = request.query.format === 'csv' ? 'csv' : 'json'
             await options.auth?.recordAudit('data.exported', 'format', format)
@@ -791,50 +788,6 @@ export async function createApp(
             return { data: await repository.list(query.data) }
         },
     )
-    app.post('/api/journal', async (request, reply) => {
-        const result = createJournalEntrySchema.safeParse(request.body)
-        if (!result.success) {
-            return badRequest(request, reply, { validation: result.error, includeIssues: true })
-        }
-        const record = await repository.create(result.data)
-        return reply.code(201).send({ data: record })
-    })
-    app.delete<{ Params: { id: string } }>('/api/journal/:id', async (request, reply) => {
-        const removeLinked = async (
-            journalRepository: JournalRepository,
-            dataRepository?: DataRepository,
-        ) => {
-            const target = (await journalRepository.list()).find(
-                record => record.id === request.params.id,
-            )
-            if (!target) return false
-            if (!(await journalRepository.remove(request.params.id))) return false
-            if (target.entityType === 'observation' && target.entityId)
-                await dataRepository?.removeObservation(target.entityId)
-            if (target.entityType === 'meal' && target.entityId)
-                await dataRepository?.removeMeal(target.entityId)
-            return true
-        }
-        const removed = options?.database
-            ? await options.database.transaction(transaction =>
-                  removeLinked(
-                      new PostgresJournalRepository(transaction),
-                      new PostgresDataRepository(transaction),
-                  ),
-              )
-            : await removeLinked(repository, options?.dataRepository)
-        if (!removed) return reply.code(404).send({ error: 'not_found' })
-        await options?.auth?.recordAudit('data.record.deleted', 'journal_entry', request.params.id)
-        return reply.code(204).send()
-    })
-    app.patch<{ Params: { id: string } }>('/api/journal/:id', async (request, reply) => {
-        const input = updateJournalEntrySchema.safeParse(request.body)
-        if (!input.success) return badRequest(request, reply, { validation: input.error })
-        const updated = await repository.update(request.params.id, input.data)
-        if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-        return { data: updated }
-    })
-
     if (options?.dataRepository) {
         const data = options.dataRepository
         const recordRangeSchema = z.object({
@@ -908,6 +861,16 @@ export async function createApp(
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             return { data: updated }
         })
+        app.delete<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
+            if (!(await data.removeObservation(request.params.id)))
+                return reply.code(404).send({ error: 'not_found' })
+            await options?.auth?.recordAudit(
+                'data.record.deleted',
+                'observation',
+                request.params.id,
+            )
+            return reply.code(204).send()
+        })
         app.get<{ Querystring: { from?: string; to?: string } }>(
             '/api/meals',
             async (request, reply) => {
@@ -923,30 +886,7 @@ export async function createApp(
         app.post('/api/meals', async (request, reply) => {
             const input = mealInputSchema.safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })
-            const createLinked = async (
-                dataRepository: DataRepository,
-                journalRepository: JournalRepository,
-            ) => {
-                const meal = (await dataRepository.createMeal(input.data)) as { id: string }
-                await journalRepository.create({
-                    category: 'Meals',
-                    title: input.data.name,
-                    detail: 'Nutrition snapshot logged',
-                    source: 'You',
-                    observedAt: input.data.eatenAt,
-                    entityType: 'meal',
-                    entityId: meal.id,
-                })
-                return meal
-            }
-            const meal = options.database
-                ? await options.database.transaction(transaction =>
-                      createLinked(
-                          new PostgresDataRepository(transaction),
-                          new PostgresJournalRepository(transaction),
-                      ),
-                  )
-                : await createLinked(data, repository)
+            const meal = await data.createMeal(input.data)
             return reply.code(201).send({ data: meal })
         })
         app.patch<{ Params: { id: string } }>('/api/meals/:id', async (request, reply) => {
@@ -954,17 +894,6 @@ export async function createApp(
             if (!input.success) return badRequest(request, reply, { validation: input.error })
             const updated = await data.updateMeal(request.params.id, input.data)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-            const journalRecord = (await repository.list()).find(
-                record => record.entityType === 'meal' && record.entityId === request.params.id,
-            )
-            if (journalRecord) {
-                await repository.update(journalRecord.id, {
-                    title: input.data.name ?? journalRecord.title,
-                    detail: 'Nutrition snapshot logged',
-                    observedAt: input.data.eatenAt,
-                    version: journalRecord.version,
-                })
-            }
             return { data: updated }
         })
         app.get('/api/preferences', async () => ({ data: await data.getPreferences() }))

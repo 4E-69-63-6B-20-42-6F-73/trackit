@@ -25,7 +25,7 @@ const definitions: Record<string, { title: string; category: JournalCategory; me
         BodyFatRecord: { title: 'Body fat', category: 'Measurements', metrics: ['body_fat'] },
         HeightRecord: { title: 'Height', category: 'Measurements', metrics: ['height'] },
         Vo2MaxRecord: { title: 'VO₂ max', category: 'Measurements', metrics: ['vo2_max'] },
-        HydrationRecord: { title: 'Hydration', category: 'Measurements', metrics: ['hydration'] },
+        HydrationRecord: { title: 'Hydration', category: 'Measurements', metrics: ['water'] },
         LeanBodyMassRecord: {
             title: 'Lean body mass',
             category: 'Measurements',
