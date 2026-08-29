@@ -11,8 +11,9 @@ import {
     Switch,
     Text,
 } from '@mantine/core'
-import { IconArrowDown, IconArrowUp } from '@tabler/icons-react'
+import { IconArrowDown, IconArrowLeft, IconArrowUp } from '@tabler/icons-react'
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { MetricRow } from '../components/MetricRow'
 import { metricCatalog, type MetricDefinition } from '../domain/metricCatalog'
@@ -115,6 +116,17 @@ export function Metrics() {
             <PageHeader
                 title="Metric Center"
                 description="Configure definitions, display units, formatting, and source resolution."
+                actions={
+                    <Button
+                        component={Link}
+                        to="/library"
+                        variant="subtle"
+                        color="gray"
+                        leftSection={<IconArrowLeft size={16} />}
+                    >
+                        Back to Library
+                    </Button>
+                }
             />
             <section className="panel metrics-units" aria-labelledby="unit-system-heading">
                 <Text id="unit-system-heading" fw={700}>
