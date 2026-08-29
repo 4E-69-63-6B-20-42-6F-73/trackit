@@ -17,11 +17,7 @@ import {
     calendarTodayKey,
     formatCalendarDate,
 } from '../../domain/calendar'
-import {
-    convertMetricValue,
-    displayUnitFor,
-    toCanonicalMetricValue,
-} from '../../domain/metrics'
+import { convertMetricValue, displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
 import { useServerData } from '../../hooks/useServerData'
 import type { CreateObservationInput } from '../../lib/observationApi'
 
