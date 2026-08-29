@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { LoggingProvider, useLogger } from '../../logging/LoggingContext'
@@ -29,23 +29,26 @@ const setup = () =>
     )
 
 describe('GlobalLogFab', () => {
-    it('toggles the stable action menu and closes with Escape or outside click', async () => {
+    it('toggles the stable action dialog and closes with Escape or outside click', async () => {
         const user = userEvent.setup()
         setup()
         const launcher = screen.getByRole('button', { name: 'Log health information' })
 
         await user.click(launcher)
         expect(launcher).toHaveAttribute('aria-expanded', 'true')
-        expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(
-            logActions.map(action => `${action.label}${action.description}`),
-        )
+        const chooser = screen.getByRole('dialog', { name: 'Choose what to log' })
+        expect(
+            within(chooser)
+                .getAllByRole('button')
+                .map(item => item.textContent),
+        ).toEqual(logActions.map(action => `${action.label}${action.description}`))
         await user.keyboard('{Escape}')
-        expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+        expect(screen.queryByRole('dialog', { name: 'Choose what to log' })).not.toBeInTheDocument()
         expect(launcher).toHaveFocus()
 
         await user.click(launcher)
         await user.click(screen.getByTestId('outside'))
-        expect(screen.queryByRole('menu')).not.toBeInTheDocument()
+        expect(screen.queryByRole('dialog', { name: 'Choose what to log' })).not.toBeInTheDocument()
     })
 
     it.each(logActions)('opens the $label logger and restores focus after close', async action => {
@@ -53,7 +56,8 @@ describe('GlobalLogFab', () => {
         setup()
         const launcher = screen.getByRole('button', { name: 'Log health information' })
         await user.click(launcher)
-        const actionButton = screen.getByRole('menuitem', {
+        const chooser = screen.getByRole('dialog', { name: 'Choose what to log' })
+        const actionButton = within(chooser).getByRole('button', {
             name: `${action.label}${action.description}`,
         })
         await user.click(actionButton)
