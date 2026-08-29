@@ -5,8 +5,8 @@ import {
     Group,
     Modal,
     NumberInput,
-    Select,
     SimpleGrid,
+    Slider,
     Stack,
     Text,
     TextInput,
@@ -24,6 +24,21 @@ import type { CreateObservationInput } from '../../lib/observationApi'
 export type ManualEntryKind = 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
 
 type WaterChoice = '100' | '250' | 'custom'
+
+const energyLabels = [
+    '',
+    'Very low',
+    'Low',
+    'Low',
+    'Slightly low',
+    'Neutral',
+    'Slightly high',
+    'High',
+    'High',
+    'Very high',
+    'Very high',
+] as const
+const energyLabel = (value: number) => energyLabels[Math.round(value)] ?? 'Neutral'
 
 export function ManualEntryLogger({
     opened,
@@ -53,7 +68,7 @@ export function ManualEntryLogger({
     )
     const [waterChoice, setWaterChoice] = useState<WaterChoice>('250')
     const [customWaterAmount, setCustomWaterAmount] = useState<number | string>('')
-    const [energy, setEnergy] = useState<string | null>('5 · Neutral')
+    const [energy, setEnergy] = useState(5)
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
     const [severity, setSeverity] = useState<number | string>(5)
@@ -134,10 +149,10 @@ export function ManualEntryLogger({
                 title: 'Energy check-in',
                 source: 'You',
                 observedAt,
-                value: Number(energy?.split(' ')[0]) || 5,
+                value: energy,
                 unit: 'score',
                 attributes: {
-                    description: `${energy?.split(' ')[0] || 5} out of 10${note ? ` · ${note}` : ''}`,
+                    description: `${energy} out of 10${note ? ` · ${note}` : ''}`,
                 },
             }
         } else if (kind === 'Symptom') {
@@ -287,24 +302,38 @@ export function ManualEntryLogger({
                 )}
                 {kind === 'Check-in' && (
                     <>
-                        <Select
-                            autoFocus
-                            label="How is your energy?"
-                            value={energy}
-                            onChange={setEnergy}
-                            data={[
-                                '1 · Very low',
-                                '2',
-                                '3',
-                                '4',
-                                '5 · Neutral',
-                                '6',
-                                '7',
-                                '8',
-                                '9',
-                                '10 · Excellent',
-                            ]}
-                        />
+                        <Stack gap={6} pb="xs">
+                            <Group justify="space-between" align="baseline">
+                                <Text size="sm" fw={600}>
+                                    How is your energy?
+                                </Text>
+                                <Text size="sm" fw={700}>
+                                    {energy} · {energyLabel(energy)}
+                                </Text>
+                            </Group>
+                            <Slider
+                                color="trackit"
+                                value={energy}
+                                onChange={setEnergy}
+                                min={1}
+                                max={10}
+                                step={1}
+                                thumbLabel="Energy level"
+                                label={value => `${value} · ${energyLabel(value)}`}
+                                marks={[
+                                    { value: 1, label: 'Low' },
+                                    { value: 5, label: 'Neutral' },
+                                    { value: 10, label: 'High' },
+                                ]}
+                                styles={{
+                                    track: {
+                                        backgroundImage:
+                                            'linear-gradient(90deg, var(--mantine-color-orange-5) 0%, var(--mantine-color-gray-4) 44%, var(--mantine-color-teal-6) 100%)',
+                                    },
+                                    bar: { backgroundColor: 'transparent' },
+                                }}
+                            />
+                        </Stack>
                         <TextInput
                             label="Note (optional)"
                             value={note}
