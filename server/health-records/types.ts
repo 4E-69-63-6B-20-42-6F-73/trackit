@@ -1,6 +1,7 @@
 export type JsonObject = Record<string, unknown>
 
 export type CanonicalHealthRecordInput = {
+    connector?: string
     provider: string
     recordType: string
     externalId: string

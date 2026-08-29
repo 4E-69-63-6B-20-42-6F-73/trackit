@@ -33,7 +33,7 @@ const sections = [
     {
         slug: 'data',
         title: 'Data',
-        description: 'Export and deliberate deletion',
+        description: 'Export, maintenance, and deliberate deletion',
         icon: IconDatabase,
         content: PrivacyPanel,
     },
