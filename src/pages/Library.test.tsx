@@ -4,11 +4,7 @@ import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Food } from '../domain/nutrition'
-import {
-    listRecipes,
-    searchFoods,
-    type RecipeRecord,
-} from '../lib/nutritionApi'
+import { listRecipes, searchFoods, type RecipeRecord } from '../lib/nutritionApi'
 import { Library } from './Library'
 import { LibraryFoods } from './LibraryFoods'
 import { LibraryRecipes } from './LibraryRecipes'

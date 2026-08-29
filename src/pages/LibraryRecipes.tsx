@@ -6,12 +6,7 @@ import { NewRecipeModal } from '../components/NewRecipeModal'
 import { PageHeader } from '../components/PageHeader'
 import { RecipeYieldModal } from '../components/RecipeYieldModal'
 import type { Food } from '../domain/nutrition'
-import {
-    listRecipes,
-    searchFoods,
-    updateRecipeYield,
-    type RecipeRecord,
-} from '../lib/nutritionApi'
+import { listRecipes, searchFoods, updateRecipeYield, type RecipeRecord } from '../lib/nutritionApi'
 
 export function LibraryRecipes() {
     const [foods, setFoods] = useState<Food[]>([])
@@ -92,7 +87,8 @@ export function LibraryRecipes() {
                                 <Text size="xs" c="dimmed">
                                     {recipe.servings}{' '}
                                     {recipe.servings === 1 ? 'serving' : 'servings'} ·{' '}
-                                    {Math.round(recipe.nutrientsPerServing.calories)} kcal per serving
+                                    {Math.round(recipe.nutrientsPerServing.calories)} kcal per
+                                    serving
                                 </Text>
                             </div>
                         </button>

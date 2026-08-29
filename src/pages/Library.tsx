@@ -1,11 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Button, Group, Paper, SimpleGrid, Text } from '@mantine/core'
-import {
-    IconApple,
-    IconChartDots,
-    IconChefHat,
-    IconChevronRight,
-} from '@tabler/icons-react'
+import { IconApple, IconChartDots, IconChefHat, IconChevronRight } from '@tabler/icons-react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { listRecipes, searchFoods } from '../lib/nutritionApi'
