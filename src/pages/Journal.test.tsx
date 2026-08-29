@@ -10,6 +10,7 @@ import type { JournalEvent } from '../domain/types'
 const records: JournalEvent[] = [
     {
         id: '1',
+        definitionId: 'meal',
         time: '08:00',
         category: 'Meals',
         title: 'Breakfast',
@@ -19,6 +20,7 @@ const records: JournalEvent[] = [
     },
     {
         id: '2',
+        definitionId: 'walk',
         time: '09:00',
         category: 'Activity',
         title: 'Walk',
@@ -28,6 +30,7 @@ const records: JournalEvent[] = [
     },
     {
         id: '3',
+        definitionId: 'walk',
         time: '10:00',
         category: 'Activity',
         title: 'Earlier walk',
