@@ -2,12 +2,7 @@ import { and, eq, gte, isNull, lt, lte, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import {
-    dailyMetrics,
-    dailyProjectionRuns,
-    observations,
-    preferences,
-} from '../db/schema.js'
+import { dailyMetrics, dailyProjectionRuns, observations, preferences } from '../db/schema.js'
 import { localDayRange } from './timezone.js'
 import { markProjectionDatesDirty } from './projection-state.js'
 
@@ -26,9 +21,13 @@ export class ProjectionMaintenanceService {
 
         const observationConditions: SQL[] = [isNull(observations.deletedAt)]
         if (range.from)
-            observationConditions.push(gte(observations.observedAt, localDayRange(range.from, timezone).from))
+            observationConditions.push(
+                gte(observations.observedAt, localDayRange(range.from, timezone).from),
+            )
         if (range.to)
-            observationConditions.push(lt(observations.observedAt, localDayRange(range.to, timezone).to))
+            observationConditions.push(
+                lt(observations.observedAt, localDayRange(range.to, timezone).to),
+            )
 
         const metricConditions: SQL[] = []
         const runConditions: SQL[] = [eq(dailyProjectionRuns.userId, 'owner')]
