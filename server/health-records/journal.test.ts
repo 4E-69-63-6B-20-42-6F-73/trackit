@@ -109,16 +109,22 @@ describe('Health record journal projections', () => {
     it('preserves a meaningful exercise title', () => {
         expect(
             projectHealthRecordToJournal(
-                record('ExerciseSessionRecord', { title: 'Morning run' }),
-                [observation('exercise', 42, 'min')],
+                record('ExerciseSessionRecord', { title: 'Morning run', exerciseType: 'running' }),
+                [observation('exercise', 42, 'minutes')],
             ),
         ).toMatchObject({ category: 'Activity', title: 'Morning run' })
         expect(
             projectHealthRecordToJournal(
-                record('ExerciseSessionRecord', { exerciseType: 'trail_running' }),
-                [observation('exercise', 42, 'min')],
+                record('ExerciseSessionRecord', { exerciseType: 'running' }),
+                [observation('exercise', 42, 'minutes')],
             ),
-        ).toMatchObject({ category: 'Activity', title: 'Trail running' })
+        ).toMatchObject({ category: 'Activity', title: 'Running' })
+        expect(
+            projectHealthRecordToJournal(
+                record('ExerciseSessionRecord', { exerciseType: 'other' }),
+                [observation('exercise', 42, 'minutes')],
+            ),
+        ).toMatchObject({ category: 'Activity', title: 'Exercise' })
     })
 
     it('does not expose unsupported or empty records', () => {

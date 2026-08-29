@@ -11,6 +11,7 @@ import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone, localDayRange, nextDate } from '../data/timezone.js'
 import { deriveRecord } from './derive.js'
 import { projectHealthRecordToJournal } from './journal.js'
+import { normalizeHealthRecord } from './normalize.js'
 import type { CanonicalHealthRecord } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -28,6 +29,7 @@ const connectorLabel = (connector?: string) => {
 }
 
 async function insertObservationGraph(transaction: Transaction, record: CanonicalHealthRecord) {
+    record = normalizeHealthRecord(record)
     const connector = connectorLabel(record.connector)
     const derived = deriveRecord(record)
     const components = derived.length
@@ -170,7 +172,7 @@ export class ProviderRecordMaintenanceService {
                     if (stored.endTime) dirtyDates.add(dateKeyInTimezone(stored.endTime, timezone))
 
                     if (!stored.deletedAt) {
-                        const result = await insertObservationGraph(transaction, {
+                        const record = normalizeHealthRecord({
                             id: stored.id,
                             userId: stored.userId,
                             connector: stored.connector,
@@ -186,6 +188,12 @@ export class ProviderRecordMaintenanceService {
                             payload: stored.payload as Record<string, unknown>,
                             lastModifiedTime: stored.lastModifiedTime?.toISOString(),
                         })
+                        if (record.recordType === 'ExerciseSessionRecord')
+                            await transaction
+                                .update(healthRecords)
+                                .set({ payload: record.payload })
+                                .where(eq(healthRecords.id, stored.id))
+                        const result = await insertObservationGraph(transaction, record)
                         canonicalObservations += result.observationCount
                         for (const projection of result.derived) {
                             if (projection.observedAt)
