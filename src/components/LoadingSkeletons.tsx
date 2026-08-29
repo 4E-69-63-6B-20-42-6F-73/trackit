@@ -115,12 +115,7 @@ export function TodayGoalsSkeleton() {
                         <Skeleton height={13} width={index === 1 ? 92 : 118} />
                         <Skeleton height={10} width={index === 1 ? 148 : 176} />
                     </Stack>
-                    <Skeleton
-                        className="today-goal-progress"
-                        height={8}
-                        width="38%"
-                        radius="xl"
-                    />
+                    <Skeleton className="today-goal-progress" height={8} width="38%" radius="xl" />
                 </div>
             ))}
         </Stack>

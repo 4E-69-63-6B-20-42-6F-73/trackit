@@ -8,8 +8,7 @@ import {
     TodayGoalsSkeleton,
 } from './LoadingSkeletons'
 
-const renderSkeleton = (node: React.ReactNode) =>
-    render(<MantineProvider>{node}</MantineProvider>)
+const renderSkeleton = (node: React.ReactNode) => render(<MantineProvider>{node}</MantineProvider>)
 
 describe('LoadingSkeletons', () => {
     it('exposes page-shaped Journal and Goals loading states', () => {

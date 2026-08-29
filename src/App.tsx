@@ -91,16 +91,8 @@ export default function App() {
                     limit: 100,
                 }
               : { limit: page === 'Journal' ? 100 : 10 }
-    const {
-        events,
-        status,
-        refresh,
-        syncFailure,
-        retry,
-        hasOlder,
-        loadingOlder,
-        loadOlder,
-    } = useJournal(journalQuery)
+    const { events, status, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
+        useJournal(journalQuery)
     const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(refresh)
     const [lastAdded, setLastAdded] = useState<{ id: string; title: string } | null>(null)
     const mainRef = useRef<HTMLElement>(null)
