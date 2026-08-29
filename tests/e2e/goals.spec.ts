@@ -7,7 +7,7 @@ test('creates, persists, evaluates, and edits a seven-day average weight goal', 
     const goals: Record<string, unknown>[] = []
     const observations = [79, 80, 81, 80].map((value, index) => ({
         id: `weight-${index}`,
-        metric: 'weight',
+        definitionId: 'weight',
         canonicalValue: value,
         canonicalUnit: 'kg',
         originalValue: value,
@@ -66,7 +66,7 @@ test('shows an informative failing status for weight above an LTE target', async
     ]
     const observations = [81, 82, 81, 82].map((value, index) => ({
         id: `weight-high-${index}`,
-        metric: 'weight',
+        definitionId: 'weight',
         canonicalValue: value,
         canonicalUnit: 'kg',
         originalValue: value,
@@ -88,7 +88,7 @@ test('creates and displays a canonical weight goal using pounds', async ({ page 
     const observations = [
         {
             id: 'weight-lb-display',
-            metric: 'weight',
+            definitionId: 'weight',
             canonicalValue: 80,
             canonicalUnit: 'kg',
             originalValue: 176.4,
