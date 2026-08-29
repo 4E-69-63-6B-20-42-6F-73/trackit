@@ -1,0 +1,235 @@
+name: TrackIt verification
+
+on:
+    workflow_call:
+        inputs:
+            ref:
+                required: true
+                type: string
+            base_sha:
+                required: false
+                type: string
+                default: ''
+
+permissions:
+    contents: read
+
+jobs:
+    quality:
+        name: Code quality
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+                  fetch-depth: 0
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Formatting for changed files
+              env:
+                  BASE_SHA: ${{ inputs.base_sha }}
+              run: |
+                  base="$BASE_SHA"
+                  if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+                    base="HEAD^"
+                  fi
+                  git diff --name-only --diff-filter=ACMR -z "$base" HEAD -- \
+                    '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                    '*.md' '*.css' '*.scss' '*.yaml' '*.yml' \
+                    | xargs -0 -r npx --yes prettier@3.9.6 --check
+            - name: Lint
+              run: npm run lint
+            - name: Typecheck, build, and bundle budget
+              run: npm run build
+
+    unit:
+        name: Unit and integration
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run test
+
+    database:
+        name: Database
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        services:
+            postgres:
+                image: postgres:17-alpine
+                env:
+                    POSTGRES_DB: trackit
+                    POSTGRES_USER: trackit
+                    POSTGRES_PASSWORD: trackit-ci
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U trackit"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        env:
+            DATABASE_URL: postgres://trackit:trackit-ci@127.0.0.1:5432/trackit
+            TRACKIT_DB_PASSWORD: trackit-ci
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+                  fetch-depth: 0
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Validate Drizzle migration metadata
+              run: npm run db:check
+            - name: Verify generated migration matches schema
+              run: |
+                  npm run db:generate -- --name=ci_schema_drift
+                  test -z "$(git status --porcelain -- server/db/migrations)"
+            - name: Apply migrations to clean PostgreSQL
+              run: npm run db:migrate
+
+    e2e:
+        name: Browser behavior (${{ matrix.name }})
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        strategy:
+            fail-fast: false
+            matrix:
+                include:
+                    - name: chromium
+                      browser: chromium
+                      projects: --project=chromium --project=mobile-chromium --project=slow-mobile-chromium
+                    - name: firefox
+                      browser: firefox
+                      projects: --project=firefox
+                    - name: webkit
+                      browser: webkit
+                      projects: --project=webkit
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Install ${{ matrix.browser }}
+              run: npx playwright install --with-deps ${{ matrix.browser }}
+            - name: Run Playwright
+              run: npx playwright test ${{ matrix.projects }}
+            - name: Upload Playwright traces on failure
+              if: failure()
+              uses: actions/upload-artifact@v7
+              with:
+                  name: playwright-${{ matrix.name }}-${{ github.run_attempt }}
+                  path: test-results
+                  if-no-files-found: ignore
+                  retention-days: 7
+
+    container:
+        name: Container
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        services:
+            postgres:
+                image: postgres:17-alpine
+                env:
+                    POSTGRES_DB: trackit
+                    POSTGRES_USER: trackit
+                    POSTGRES_PASSWORD: trackit-ci
+                ports:
+                    - 5432:5432
+                options: >-
+                    --health-cmd "pg_isready -U trackit"
+                    --health-interval 5s
+                    --health-timeout 5s
+                    --health-retries 10
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+            - name: Build runtime image
+              run: docker build --tag trackit-ci:test .
+            - name: Smoke test runtime image
+              run: |
+                  container=$(docker run --detach --network host \
+                    --env HOST=127.0.0.1 \
+                    --env PORT=3000 \
+                    --env TRACKIT_DB_HOST=127.0.0.1 \
+                    --env TRACKIT_DB_PASSWORD=trackit-ci \
+                    --env BOOTSTRAP_SECRET=0123456789abcdef0123456789abcdef \
+                    trackit-ci:test)
+                  trap 'docker logs "$container"; docker rm --force "$container"' EXIT
+                  for attempt in $(seq 1 30); do
+                    if curl --fail --silent http://127.0.0.1:3000/api/ready; then
+                      exit 0
+                    fi
+                    sleep 1
+                  done
+                  exit 1
+            - name: Scan runtime image
+              uses: aquasecurity/trivy-action@v0.36.0
+              with:
+                  scan-type: image
+                  image-ref: trackit-ci:test
+                  severity: CRITICAL,HIGH
+                  exit-code: 1
+
+    security:
+        name: Security
+        runs-on: ubuntu-latest
+        timeout-minutes: 10
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+                  fetch-depth: 0
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - name: Dependency audit
+              run: npm run security:deps
+            - name: Scan repository secrets
+              uses: gitleaks/gitleaks-action@v3
+              env:
+                  GITHUB_TOKEN: ${{ github.token }}
+
+    android:
+        name: Android
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+            - uses: actions/setup-java@v5
+              with:
+                  distribution: temurin
+                  java-version: 17
+                  cache: gradle
+            - uses: android-actions/setup-android@v4
+            - run: chmod +x android/gradlew
+            - name: Unit tests and debug build
+              run: cd android && ./gradlew testDebugUnitTest assembleDebug
+            - name: Upload debug APK
+              if: github.event_name == 'push'
+              uses: actions/upload-artifact@v7
+              with:
+                  name: trackit-android-debug
+                  path: android/app/build/outputs/apk/debug/app-debug.apk
+                  retention-days: 7
