@@ -52,10 +52,7 @@ const preferences = {
     units: 'metric' as const,
 }
 
-const renderJournal = (
-    entry = '/',
-    update = vi.fn().mockResolvedValue(true),
-) =>
+const renderJournal = (entry = '/', update = vi.fn().mockResolvedValue(true)) =>
     render(
         <MemoryRouter initialEntries={[entry]}>
             <MantineProvider>
