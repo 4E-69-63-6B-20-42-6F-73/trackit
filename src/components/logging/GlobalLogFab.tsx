@@ -10,6 +10,15 @@ export function GlobalLogFab() {
     const { openLogger } = useLogger()
 
     useEffect(() => {
+        const openMenu = () => {
+            setOpen(true)
+            requestAnimationFrame(() => button.current?.focus())
+        }
+        window.addEventListener('trackit:open-log-menu', openMenu)
+        return () => window.removeEventListener('trackit:open-log-menu', openMenu)
+    }, [])
+
+    useEffect(() => {
         if (!open) return
         const closeOutside = (event: PointerEvent) => {
             if (!root.current?.contains(event.target as Node)) setOpen(false)
@@ -58,7 +67,7 @@ export function GlobalLogFab() {
                 onClick={() => setOpen(value => !value)}
             >
                 {open ? <IconX size={22} /> : <IconPlus size={22} />}
-                <span>{open ? 'Close' : 'Log'}</span>
+                <span>Log</span>
             </button>
         </div>
     )
