@@ -13,13 +13,7 @@ export type Preferences = {
 
 /** @deprecated Remove with the remaining Today dashboard customization UI. */
 export type DashboardCard =
-    | 'sleep'
-    | 'heart'
-    | 'energy'
-    | 'weight'
-    | 'progress'
-    | 'trend'
-    | 'journal'
+    'sleep' | 'heart' | 'energy' | 'weight' | 'progress' | 'trend' | 'journal'
 
 /** @deprecated Remove with the remaining manual-entry routine UI. */
 export type LegacyRoutine = {
