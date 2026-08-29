@@ -129,9 +129,7 @@ describe('MCP food confirmation flow', () => {
                 }),
             }),
         ])
-        expect(
-            (meals[0] as { nutrientSnapshot: { fat: number } }).nutrientSnapshot.fat,
-        ).toBeCloseTo(0.3)
+        expect(meals[0].nutrientSnapshot.fat).toBeCloseTo(0.3)
 
         await client.close()
         await server.close()
