@@ -9,11 +9,13 @@ import { Today } from './Today'
 
 const todayHealthState = vi.hoisted(() => ({
     summaryMetrics: [] as Array<Record<string, unknown>>,
+    loading: false,
 }))
+const nutritionState = vi.hoisted(() => ({ loading: false }))
 
 vi.mock('../hooks/useTodayHealth', () => ({
     useTodayHealth: () => ({
-        loading: false,
+        loading: todayHealthState.loading,
         unavailable: false,
         summaryMetrics: todayHealthState.summaryMetrics,
         dailyGoals: [
@@ -46,7 +48,7 @@ vi.mock('../hooks/useDailyNutrition', () => ({
     useDailyNutrition: () => ({
         nutrients: { calories: 640, protein: 42, carbs: 70, fat: 18, fiber: 9 },
         mealCount: 1,
-        loading: false,
+        loading: nutritionState.loading,
         unavailable: false,
         proteinGoal: 120,
         hasProteinGoal: true,
@@ -90,6 +92,8 @@ const renderToday = (events: JournalEvent[] = [], openTrends = vi.fn()) =>
 describe('Today', () => {
     beforeEach(() => {
         todayHealthState.summaryMetrics = []
+        todayHealthState.loading = false
+        nutritionState.loading = false
     })
 
     it('renders active daily goal progress without the summary panel', async () => {
@@ -109,6 +113,17 @@ describe('Today', () => {
         expect(screen.queryByText('No sleep trend yet')).not.toBeInTheDocument()
         await userEvent.click(screen.getByRole('button', { name: 'View all trends' }))
         expect(openTrends).toHaveBeenCalledOnce()
+    })
+
+    it('shows shaped Goals and Nutrition skeletons while those sections load', () => {
+        todayHealthState.loading = true
+        nutritionState.loading = true
+        renderToday()
+
+        expect(screen.getByRole('status', { name: 'Loading daily goals' })).toBeInTheDocument()
+        expect(screen.getByRole('status', { name: 'Loading daily nutrition' })).toBeInTheDocument()
+        expect(screen.queryByLabelText('Steps progress')).not.toBeInTheDocument()
+        expect(screen.queryByText('640 kcal')).not.toBeInTheDocument()
     })
 
     it('opens the sleep phase diagram from the Sleep duration card', async () => {

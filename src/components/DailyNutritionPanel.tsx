@@ -1,5 +1,6 @@
-import { Badge, Button, Group, Progress, SimpleGrid, Skeleton, Stack, Text } from '@mantine/core'
+import { Badge, Button, Group, Progress, SimpleGrid, Stack, Text } from '@mantine/core'
 import { useDailyNutrition } from '../hooks/useDailyNutrition'
+import { NutritionSkeleton } from './LoadingSkeletons'
 
 export function DailyNutritionPanel({
     openGoals,
@@ -18,10 +19,7 @@ export function DailyNutritionPanel({
         nutritionQuality,
     } = useDailyNutrition(selectedDate)
 
-    if (loading)
-        return (
-            <Skeleton role="status" aria-label="Loading daily nutrition" height={96} radius="md" />
-        )
+    if (loading) return <NutritionSkeleton />
 
     return (
         <Stack gap="md">

@@ -14,6 +14,7 @@ import { useSearchParams } from 'react-router-dom'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { JournalEntryDetailModal } from '../components/JournalEntryDetailModal'
 import { JournalEventList } from '../components/JournalEventList'
+import { TodayGoalsSkeleton } from '../components/LoadingSkeletons'
 import { MetricCard } from '../components/MetricCard'
 import {
     addCalendarDays,
@@ -349,7 +350,9 @@ export function Today({
                         )}
                     </div>
                     <article className="panel today-goals">
-                        {health.dailyGoals.length > 0 ? (
+                        {health.loading ? (
+                            <TodayGoalsSkeleton />
+                        ) : health.dailyGoals.length > 0 ? (
                             health.dailyGoals.slice(0, 4).map(({ goal, evaluation }) => {
                                 const definition = metricDefinition(goal.metricId)
                                 const value = evaluation?.value
