@@ -249,9 +249,10 @@ export function Today({
             ) : health.summaryMetrics.length > 0 ? (
                 <section className="metric-grid">
                     {health.summaryMetrics.map(metric => {
-                        const visual = metricVisual[
-                            metric.definition.category as Exclude<MetricCategory, 'Nutrition'>
-                        ]
+                        const visual =
+                            metricVisual[
+                                metric.definition.category as Exclude<MetricCategory, 'Nutrition'>
+                            ]
                         const Icon = visual?.icon ?? IconActivity
                         return (
                             <MetricCard
@@ -337,7 +338,11 @@ export function Today({
                                             aria-label={`${definition?.name ?? goal.metricId} progress`}
                                         />
                                     ) : (
-                                        <Text size="xs" fw={650} c={evaluation?.met ? 'teal' : 'dimmed'}>
+                                        <Text
+                                            size="xs"
+                                            fw={650}
+                                            c={evaluation?.met ? 'teal' : 'dimmed'}
+                                        >
                                             {evaluation?.met === true
                                                 ? 'Goal met'
                                                 : evaluation?.met === false
@@ -352,8 +357,8 @@ export function Today({
                         <div className="today-empty-goals">
                             <Text fw={650}>No daily goals active</Text>
                             <Text size="sm" c="dimmed">
-                                Goals are optional. Add one when there is something you want to track
-                                against each day.
+                                Goals are optional. Add one when there is something you want to
+                                track against each day.
                             </Text>
                             {openGoals && (
                                 <Button
