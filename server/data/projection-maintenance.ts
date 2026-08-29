@@ -3,11 +3,11 @@ import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { dailyMetrics, dailyProjectionRuns, observations, preferences } from '../db/schema.js'
-import { localDayRange } from './timezone.js'
+import type { MaintenanceDateRange } from './maintenance-range.js'
 import { markProjectionDatesDirty } from './projection-state.js'
+import { localDayRange } from './timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
-export type MaintenanceDateRange = { from?: string; to?: string }
 
 export class ProjectionMaintenanceService {
     constructor(private readonly database: Database) {}
