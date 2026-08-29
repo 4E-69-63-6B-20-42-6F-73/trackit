@@ -22,7 +22,9 @@ test('primary dashboard interaction remains responsive on a throttled phone', as
         timeout: 8_000,
     })
     await page.getByRole('button', { name: 'Log health information' }).click()
-    await page.getByRole('menuitem', { name: 'Weight' }).click()
+    const chooser = page.getByRole('dialog', { name: 'Choose what to log' })
+    await expect(chooser).toBeVisible()
+    await chooser.getByRole('button', { name: /^Weight/ }).click()
     await expect(page.getByRole('dialog')).toBeVisible()
     await page.unrouteAll({ behavior: 'wait' })
     await session.detach()
