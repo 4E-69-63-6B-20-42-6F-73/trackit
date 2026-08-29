@@ -17,7 +17,11 @@ import {
     calendarTodayKey,
     formatCalendarDate,
 } from '../../domain/calendar'
-import { displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
+import {
+    convertMetricValue,
+    displayUnitFor,
+    toCanonicalMetricValue,
+} from '../../domain/metrics'
 import { useServerData } from '../../hooks/useServerData'
 import type { CreateObservationInput } from '../../lib/observationApi'
 
@@ -66,6 +70,18 @@ export function ManualEntryLogger({
     const isHistorical = targetDate !== todayKey
     const selectedTimestamp = () =>
         calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
+    const waterPreset = (millilitres: 100 | 250) => {
+        const value = convertMetricValue('water', millilitres, 'ml', waterUnit)
+        const maximumFractionDigits = waterUnit === 'L' ? 2 : waterUnit === 'fl oz' ? 1 : 0
+        const amount = value.toLocaleString(locale, { maximumFractionDigits })
+        return { amount, label: `${amount} ${waterUnit}` }
+    }
+    const water100 = waterPreset(100)
+    const water250 = waterPreset(250)
+    const selectedWaterPreset = waterChoice === '100' ? water100 : water250
+    const customWaterStep = waterUnit === 'L' ? 0.05 : waterUnit === 'fl oz' ? 1 : 50
+    const customWaterMin = waterUnit === 'L' ? 0.01 : waterUnit === 'fl oz' ? 0.1 : 1
+    const customWaterPrecision = waterUnit === 'L' ? 2 : waterUnit === 'fl oz' ? 1 : 0
 
     const submit = () => {
         setError('')
@@ -73,7 +89,7 @@ export function ManualEntryLogger({
             setError('Choose a date and time for this observation.')
             return
         }
-        if (kind === 'Water' && waterChoice === 'custom' && Number(customWaterAmount) < 1) {
+        if (kind === 'Water' && waterChoice === 'custom' && Number(customWaterAmount) <= 0) {
             setError('Enter the amount of water you want to record.')
             return
         }
@@ -82,7 +98,6 @@ export function ManualEntryLogger({
         if (kind === 'Water') {
             const custom = waterChoice === 'custom'
             const enteredAmount = custom ? Number(customWaterAmount) || 0 : Number(waterChoice)
-            const enteredUnit = custom ? waterUnit : 'ml'
             input = {
                 id: crypto.randomUUID(),
                 definitionId: 'water',
@@ -95,7 +110,11 @@ export function ManualEntryLogger({
                     ? toCanonicalMetricValue('water', enteredAmount, waterUnit)
                     : enteredAmount,
                 unit: 'ml',
-                attributes: { description: `${enteredAmount} ${enteredUnit}` },
+                attributes: {
+                    description: custom
+                        ? `${enteredAmount} ${waterUnit}`
+                        : selectedWaterPreset.label,
+                },
             }
         } else if (kind === 'Weight') {
             input = {
@@ -205,33 +224,33 @@ export function ManualEntryLogger({
                             <Button
                                 variant={waterChoice === '100' ? 'light' : 'default'}
                                 color="trackit"
-                                aria-label="100 ml"
+                                aria-label={water100.label}
                                 aria-pressed={waterChoice === '100'}
                                 onClick={() => setWaterChoice('100')}
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                                 styles={{ label: { flexDirection: 'column', gap: 2 } }}
                             >
                                 <Text size="lg" fw={700} lh={1}>
-                                    100
+                                    {water100.amount}
                                 </Text>
                                 <Text size="xs" fw={600}>
-                                    ml
+                                    {waterUnit}
                                 </Text>
                             </Button>
                             <Button
                                 variant={waterChoice === '250' ? 'light' : 'default'}
                                 color="trackit"
-                                aria-label="250 ml"
+                                aria-label={water250.label}
                                 aria-pressed={waterChoice === '250'}
                                 onClick={() => setWaterChoice('250')}
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                                 styles={{ label: { flexDirection: 'column', gap: 2 } }}
                             >
                                 <Text size="lg" fw={700} lh={1}>
-                                    250
+                                    {water250.amount}
                                 </Text>
                                 <Text size="xs" fw={600}>
-                                    ml
+                                    {waterUnit}
                                 </Text>
                             </Button>
                             <Button
@@ -251,8 +270,9 @@ export function ManualEntryLogger({
                                 value={customWaterAmount}
                                 onChange={setCustomWaterAmount}
                                 suffix={` ${waterUnit}`}
-                                step={50}
-                                min={1}
+                                step={customWaterStep}
+                                min={customWaterMin}
+                                decimalScale={customWaterPrecision}
                             />
                         )}
                     </Stack>
@@ -365,13 +385,13 @@ export function ManualEntryLogger({
                         disabled={
                             kind === 'Water' &&
                             waterChoice === 'custom' &&
-                            Number(customWaterAmount) < 1
+                            Number(customWaterAmount) <= 0
                         }
                     >
                         {kind === 'Water'
                             ? waterChoice === 'custom'
                                 ? `Log ${customWaterAmount || 0} ${waterUnit}`
-                                : `Log ${waterChoice} ml`
+                                : `Log ${selectedWaterPreset.label}`
                             : kind === 'Weight'
                               ? 'Save weight'
                               : kind === 'Check-in'
