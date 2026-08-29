@@ -9,6 +9,7 @@ import { db, sql } from './db/client.js'
 import { PostgresDataRepository } from './data/postgres-repository.js'
 import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { McpAccessService } from './mcp/service.js'
+import { registerMcpBrowserCors } from './mcp/browser-cors.js'
 import { DeviceService } from './devices/service.js'
 import { DataDeletionService } from './data-lifecycle/deletion.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
@@ -23,13 +24,14 @@ const deletion = new DataDeletionService(db)
 const projections = new ProjectionWorker(db)
 const projectionMaintenance = new ProjectionMaintenanceService(db)
 const providerRecordMaintenance = new ProviderRecordMaintenanceService(db)
+const mcp = new McpAccessService(db)
 projections.start()
 
 const app = await createApp(new PostgresJournalRepository(db), {
     logger: true,
     dataRepository: new PostgresDataRepository(db),
     auth: new AuthService(db),
-    mcp: new McpAccessService(db),
+    mcp,
     devices: new DeviceService(db, config.WEB_ORIGIN),
     deletion,
     trustProxy: config.TRUST_PROXY,
@@ -39,6 +41,8 @@ const app = await createApp(new PostgresJournalRepository(db), {
         ? new FoodCatalogService(config.FOOD_CATALOG_URL)
         : undefined,
 })
+
+registerMcpBrowserCors(app, mcp)
 
 await registerDataMaintenanceRoutes(app, {
     projections: projectionMaintenance,
