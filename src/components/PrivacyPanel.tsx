@@ -24,10 +24,7 @@ import { downloadExport } from '../lib/exportApi'
 type RangeMode = '30d' | 'all' | 'custom'
 type RecordCategory = 'all' | 'sleep' | 'heart' | 'activity' | 'measurements'
 
-const recordCategories: Record<
-    RecordCategory,
-    { label: string; recordTypes?: string[] }
-> = {
+const recordCategories: Record<RecordCategory, { label: string; recordTypes?: string[] }> = {
     all: { label: 'All imported data' },
     sleep: { label: 'Sleep', recordTypes: ['SleepSessionRecord'] },
     heart: {
@@ -292,7 +289,9 @@ export function PrivacyPanel() {
                             label="Imported data category"
                             description="Limit re-derivation to reduce memory use for high-volume data."
                             value={recordCategory}
-                            onChange={value => setRecordCategory((value ?? 'all') as RecordCategory)}
+                            onChange={value =>
+                                setRecordCategory((value ?? 'all') as RecordCategory)
+                            }
                             data={Object.entries(recordCategories).map(([value, category]) => ({
                                 value,
                                 label: category.label,

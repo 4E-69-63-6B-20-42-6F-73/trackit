@@ -8,15 +8,17 @@ type MaintenanceErrorBody = {
     requestId?: string
 }
 
-const postMaintenance = async <T>(path: string, range: MaintenanceDateRange | MaintenanceRederiveRequest) => {
+const postMaintenance = async <T>(
+    path: string,
+    range: MaintenanceDateRange | MaintenanceRederiveRequest,
+) => {
     const response = await authRequest(path, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(range),
     })
     const body = (await response.json().catch(() => null)) as
-        | ({ data?: T } & MaintenanceErrorBody)
-        | null
+        ({ data?: T } & MaintenanceErrorBody) | null
     if (!response.ok) {
         const details = [
             `HTTP ${response.status}`,
