@@ -100,7 +100,9 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             )}
             <Button
                 loading={saving}
-                disabled={!value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()}
+                disabled={
+                    !value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()
+                }
                 onClick={() => void save()}
             >
                 Save changes
