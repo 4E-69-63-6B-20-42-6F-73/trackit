@@ -412,6 +412,47 @@ export async function createApp(
 
     if (options?.mcp && options.dataRepository) {
         const mcp = options.mcp
+        const allowedMcpOrigin = async (request: FastifyRequest) => {
+            const origin = request.headers.origin
+            if (typeof origin !== 'string') return undefined
+            return (await mcp.allowedOrigins()).includes(origin) ? origin : undefined
+        }
+        const setMcpCorsHeaders = (reply: FastifyReply, origin: string) => {
+            reply.header('Access-Control-Allow-Origin', origin)
+            reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS')
+            reply.header(
+                'Access-Control-Allow-Headers',
+                'Authorization, Content-Type, MCP-Protocol-Version, MCP-Session-Id',
+            )
+            reply.header('Access-Control-Expose-Headers', 'MCP-Session-Id')
+            reply.header('Cross-Origin-Resource-Policy', 'cross-origin')
+            reply.header('Vary', 'Origin')
+        }
+        app.addHook('onSend', async (request, reply) => {
+            if (request.url.split('?')[0] !== '/mcp') return
+            const origin = await allowedMcpOrigin(request)
+            if (origin) setMcpCorsHeaders(reply, origin)
+        })
+        const browserOriginSchema = z
+            .string()
+            .trim()
+            .max(2048)
+            .refine(value => {
+                try {
+                    const url = new URL(value)
+                    return url.protocol === 'https:' && url.origin === value
+                } catch {
+                    return false
+                }
+            }, 'Must be an exact HTTPS origin')
+        const browserOriginsSchema = z.object({
+            origins: z
+                .array(browserOriginSchema)
+                .max(20)
+                .refine(origins => {
+                    return new Set(origins).size === origins.length
+                }, 'Origins must be unique'),
+        })
         const issueSchema = z
             .object({
                 name: z.string().trim().min(1).max(100),
@@ -442,16 +483,26 @@ export async function createApp(
             .refine(input => !input.expiresAt || new Date(input.expiresAt) > new Date(), {
                 message: 'Expiry must be in the future',
             })
-        app.get('/api/mcp/status', async () => ({
-            enabled: await mcp.enabled(),
-            clients: await mcp.list(),
-        }))
+        app.get('/api/mcp/status', async () => {
+            const [enabled, clients, allowedOrigins] = await Promise.all([
+                mcp.enabled(),
+                mcp.list(),
+                mcp.allowedOrigins(),
+            ])
+            return { enabled, clients, allowedOrigins }
+        })
         app.get('/api/mcp/access-log', async () => ({ data: await mcp.listAccessEvents() }))
         app.patch('/api/mcp/status', async (request, reply) => {
             const input = z.object({ enabled: z.boolean() }).safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })
             await mcp.setEnabled(input.data.enabled)
             return { enabled: input.data.enabled }
+        })
+        app.put('/api/mcp/browser-origins', async (request, reply) => {
+            const input = browserOriginsSchema.safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            await mcp.setAllowedOrigins(input.data.origins)
+            return { allowedOrigins: input.data.origins }
         })
         app.post('/api/mcp/clients', async (request, reply) => {
             const input = issueSchema.safeParse(request.body)
@@ -469,6 +520,12 @@ export async function createApp(
                 return reply.code(204).send()
             },
         )
+        app.options('/mcp', async (request, reply) => {
+            const origin = await allowedMcpOrigin(request)
+            if (!origin) return reply.code(403).send({ error: 'mcp_origin_not_allowed' })
+            setMcpCorsHeaders(reply, origin)
+            return reply.code(204).send()
+        })
         app.post('/mcp', async (request, reply) => {
             const authorization = request.headers.authorization
             const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : undefined

@@ -216,16 +216,17 @@ export function McpNew() {
                                                     key={scope.value}
                                                     label={scope.label}
                                                     checked={selectedScopes.includes(scope.value)}
-                                                    onChange={event =>
+                                                    onChange={event => {
+                                                        const checked = event.currentTarget.checked
                                                         setSelectedScopes(current =>
-                                                            event.currentTarget.checked
+                                                            checked
                                                                 ? [...current, scope.value]
                                                                 : current.filter(
                                                                       value =>
                                                                           value !== scope.value,
                                                                   ),
                                                         )
-                                                    }
+                                                    }}
                                                 />
                                             ))}
                                     </div>

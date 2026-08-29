@@ -8,17 +8,27 @@ import {
     Code,
     Group,
     Modal,
+    Stack,
     Switch,
     Text,
+    TextInput,
     Title,
 } from '@mantine/core'
-import { IconArrowLeft, IconCopy, IconPlus, IconRefresh, IconRobot } from '@tabler/icons-react'
+import {
+    IconArrowLeft,
+    IconCopy,
+    IconPlus,
+    IconRefresh,
+    IconRobot,
+    IconTrash,
+} from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import {
     deleteMcpClient,
     getMcpStatus,
     listMcpAccessEvents,
     revokeMcpClient,
+    setMcpAllowedOrigins,
     setMcpEnabled,
     type McpAccessEvent,
     type McpClientRecord,
@@ -61,6 +71,9 @@ export function McpAccess() {
     const [enabled, setEnabled] = useState(false)
     const [clients, setClients] = useState<McpClientRecord[]>([])
     const [events, setEvents] = useState<McpAccessEvent[]>([])
+    const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
+    const [originDraft, setOriginDraft] = useState('')
+    const [originError, setOriginError] = useState('')
     const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState('')
@@ -77,6 +90,7 @@ export function McpAccess() {
             ])
             setEnabled(status.enabled)
             setClients(status.clients)
+            setAllowedOrigins(status.allowedOrigins)
             setEvents(accessEvents)
             setError('')
         } catch {
@@ -159,6 +173,36 @@ export function McpAccess() {
             setError('The endpoint could not be copied automatically.')
         }
     }
+    const addOrigin = () => {
+        const value = originDraft.trim()
+        try {
+            const url = new URL(value)
+            if (url.protocol !== 'https:' || url.origin !== value) throw new Error('invalid')
+        } catch {
+            setOriginError('Enter an exact HTTPS origin, such as https://assistant.example.net')
+            return
+        }
+        if (allowedOrigins.includes(value)) {
+            setOriginError('That origin is already allowed.')
+            return
+        }
+        setAllowedOrigins(current => [...current, value])
+        setOriginDraft('')
+        setOriginError('')
+    }
+    const saveOrigins = async () => {
+        setSaving(true)
+        try {
+            const result = await setMcpAllowedOrigins(allowedOrigins)
+            setAllowedOrigins(result.allowedOrigins)
+            setOriginError('')
+            setError('')
+        } catch {
+            setError('Browser origins could not be updated. Try again.')
+        } finally {
+            setSaving(false)
+        }
+    }
 
     return (
         <div className="page-content mcp-page">
@@ -229,6 +273,62 @@ export function McpAccess() {
                         )}
                     </Group>
                 </div>
+            </Card>
+
+            <Card withBorder radius="md" padding="lg">
+                <Stack gap="sm">
+                    <div>
+                        <Text fw={700}>Browser client origins</Text>
+                        <Text size="sm" c="dimmed">
+                            Allow browser-based assistants on these exact HTTPS origins to connect
+                            to the MCP endpoint. Server-side assistants do not need an origin here.
+                        </Text>
+                    </div>
+                    {allowedOrigins.map(origin => (
+                        <Group key={origin} justify="space-between" wrap="nowrap">
+                            <Code>{origin}</Code>
+                            <ActionIcon
+                                variant="subtle"
+                                color="red"
+                                aria-label={`Remove ${origin}`}
+                                onClick={() =>
+                                    setAllowedOrigins(current =>
+                                        current.filter(candidate => candidate !== origin),
+                                    )
+                                }
+                            >
+                                <IconTrash size={16} />
+                            </ActionIcon>
+                        </Group>
+                    ))}
+                    <Group align="flex-start">
+                        <TextInput
+                            value={originDraft}
+                            onChange={event => setOriginDraft(event.currentTarget.value)}
+                            onKeyDown={event => {
+                                if (event.key === 'Enter') {
+                                    event.preventDefault()
+                                    addOrigin()
+                                }
+                            }}
+                            placeholder="https://assistant.example.net"
+                            error={originError}
+                            style={{ flex: 1 }}
+                        />
+                        <Button
+                            variant="default"
+                            onClick={addOrigin}
+                            disabled={!originDraft.trim()}
+                        >
+                            Add origin
+                        </Button>
+                    </Group>
+                    <Group justify="flex-end">
+                        <Button loading={saving} onClick={() => void saveOrigins()}>
+                            Save browser origins
+                        </Button>
+                    </Group>
+                </Stack>
             </Card>
 
             <Group className="mcp-section-heading" justify="space-between">

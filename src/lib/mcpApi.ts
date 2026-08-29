@@ -30,7 +30,21 @@ export async function listMcpAccessEvents(): Promise<McpAccessEvent[]> {
 export async function getMcpStatus() {
     const response = await authRequest('/api/mcp/status')
     if (!response.ok) throw new Error('MCP settings unavailable')
-    return (await response.json()) as { enabled: boolean; clients: McpClientRecord[] }
+    return (await response.json()) as {
+        enabled: boolean
+        clients: McpClientRecord[]
+        allowedOrigins: string[]
+    }
+}
+
+export async function setMcpAllowedOrigins(origins: string[]) {
+    const response = await authRequest('/api/mcp/browser-origins', {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ origins }),
+    })
+    if (!response.ok) throw new Error('Could not update MCP browser origins')
+    return (await response.json()) as { allowedOrigins: string[] }
 }
 
 export async function setMcpEnabled(enabled: boolean) {

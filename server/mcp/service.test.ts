@@ -1,11 +1,35 @@
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
+import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { applyTestMigrations } from '../db/test-migrations.js'
 import { McpAccessService } from './service.js'
 
 describe('MCP client access', () => {
+    it('persists owner-managed browser origins and audits changes', async () => {
+        const client = new PGlite()
+        await applyTestMigrations(client)
+        const database = drizzle(client, { schema })
+        const service = new McpAccessService(database as never)
+
+        expect(await service.allowedOrigins()).toEqual([])
+        await service.setAllowedOrigins([
+            'https://inference.home.bos.blue',
+            'https://assistant.example.net',
+        ])
+        expect(await service.allowedOrigins()).toEqual([
+            'https://inference.home.bos.blue',
+            'https://assistant.example.net',
+        ])
+        const events = await database
+            .select()
+            .from(schema.auditEvents)
+            .where(eq(schema.auditEvents.action, 'mcp.origins.changed'))
+        expect(events).toHaveLength(1)
+        await client.close()
+    })
+
     it('keeps multiple assistant credentials independent', async () => {
         const client = new PGlite()
         await applyTestMigrations(client)

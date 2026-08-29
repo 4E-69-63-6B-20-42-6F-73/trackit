@@ -61,6 +61,26 @@ export class McpAccessService {
         await this.audit('owner', 'mcp.permission.changed', 'mcp', 'endpoint', { enabled })
     }
 
+    async allowedOrigins() {
+        const [record] = await this.database
+            .select({ origins: preferences.mcpAllowedOrigins })
+            .from(preferences)
+            .where(eq(preferences.id, 'owner'))
+            .limit(1)
+        return record?.origins ?? []
+    }
+
+    async setAllowedOrigins(origins: string[]) {
+        await this.database
+            .insert(preferences)
+            .values({ id: 'owner', mcpAllowedOrigins: origins })
+            .onConflictDoUpdate({
+                target: preferences.id,
+                set: { mcpAllowedOrigins: origins, updatedAt: new Date() },
+            })
+        await this.audit('owner', 'mcp.origins.changed', 'mcp', 'browser_origins', { origins })
+    }
+
     async issue(input: {
         name: string
         scopes: string[]
