@@ -6,7 +6,7 @@ import { createApp } from './app.js'
 import { AuthService } from './auth/service.js'
 import { config } from './config.js'
 import { db, sql } from './db/client.js'
-import { PostgresDataRepository } from './data/postgres-repository.js'
+import { PostgresInsightDataRepository } from './data/postgres-insight-repository.js'
 import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { McpAccessService } from './mcp/service.js'
 import { registerMcpBrowserCors } from './mcp/browser-cors.js'
@@ -29,7 +29,7 @@ projections.start()
 
 const app = await createApp(new PostgresJournalRepository(db), {
     logger: true,
-    dataRepository: new PostgresDataRepository(db),
+    dataRepository: new PostgresInsightDataRepository(db),
     auth: new AuthService(db),
     mcp,
     devices: new DeviceService(db, config.WEB_ORIGIN),
