@@ -646,7 +646,7 @@ export function GoalsPanel() {
                         >
                             Advanced options
                         </Button>
-                        <Collapse in={advanced}>
+                        <Collapse opened={advanced}>
                             <Stack gap="md">
                                 <Select
                                     label="How should TrackIt measure progress?"
