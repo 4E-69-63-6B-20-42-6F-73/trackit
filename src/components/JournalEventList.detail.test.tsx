@@ -53,9 +53,7 @@ describe('Journal entry details', () => {
         ).toBeInTheDocument()
         expect(within(dialog).getByText('Health Connect · Garmin')).toBeInTheDocument()
 
-        await userEvent.click(
-            within(dialog).getByRole('button', { name: 'View detailed sleep' }),
-        )
+        await userEvent.click(within(dialog).getByRole('button', { name: 'View detailed sleep' }))
         expect(await within(dialog).findByText('Sleep phases')).toBeInTheDocument()
         expect(within(dialog).getByText(/Deep · 40 min/)).toBeInTheDocument()
         expect(within(dialog).getByRole('button', { name: 'Back to entry' })).toBeInTheDocument()
