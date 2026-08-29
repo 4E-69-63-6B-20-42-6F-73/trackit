@@ -59,7 +59,7 @@ const metricLabel = (metric: string) =>
         .replace(/^./, value => value.toUpperCase())
 
 const humanizeExerciseType = (value: unknown) =>
-    typeof value === 'string' && value.trim()
+    typeof value === 'string' && value.trim() && value !== 'other'
         ? value.replaceAll('_', ' ').replace(/^./, letter => letter.toUpperCase())
         : null
 
