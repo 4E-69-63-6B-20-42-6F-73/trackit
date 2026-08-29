@@ -58,7 +58,6 @@ export function Trends() {
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(false)
     const [savedViews, setSavedViews] = useState<TrendViewRecord[]>([])
-    const [selectedView, setSelectedView] = useState<string | null>(null)
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
     const [actionError, setActionError] = useState('')
 
@@ -135,10 +134,7 @@ export function Trends() {
         ? displayUnitFor(definitionId, preferences?.metricPreferences, preferences?.units)
         : undefined
     const convert = (value: number) =>
-        definitionId &&
-        metricDefinition(definitionId) &&
-        primaryRecords[0]?.canonicalUnit &&
-        displayUnit
+        definitionId && metricDefinition(definitionId) && primaryRecords[0]?.canonicalUnit && displayUnit
             ? convertMetricValue(definitionId, value, primaryRecords[0].canonicalUnit, displayUnit)
             : value
     const formatDisplayValue = (
@@ -216,7 +212,6 @@ export function Trends() {
                 granularity,
             })
             setSavedViews(current => [saved, ...current])
-            setSelectedView(saved.id)
             setActionError('')
         } catch {
             setActionError('The trend view could not be saved. Try again.')
@@ -226,7 +221,6 @@ export function Trends() {
     const loadView = (id: string) => {
         const view = savedViews.find(item => item.id === id)
         if (!view) return
-        setSelectedView(view.id)
         setDefinitionId(view.metric)
         setComparisonDefinitionId(view.comparisonMetric)
         setShowCompare(Boolean(view.comparisonMetric))
@@ -269,8 +263,7 @@ export function Trends() {
                                 value={definitionId}
                                 onChange={value => {
                                     setDefinitionId(value)
-                                    if (value === comparisonDefinitionId)
-                                        setComparisonDefinitionId(null)
+                                    if (value === comparisonDefinitionId) setComparisonDefinitionId(null)
                                     setInspectedIds(null)
                                     setShowAnalysis(false)
                                 }}
@@ -303,10 +296,7 @@ export function Trends() {
                                     </Menu.Target>
                                     <Menu.Dropdown>
                                         {savedViews.map(view => (
-                                            <Menu.Item
-                                                key={view.id}
-                                                onClick={() => loadView(view.id)}
-                                            >
+                                            <Menu.Item key={view.id} onClick={() => loadView(view.id)}>
                                                 {view.name}
                                             </Menu.Item>
                                         ))}
@@ -353,17 +343,11 @@ export function Trends() {
                     {average !== null && (
                         <div className="trends-summary" aria-label="Trend summary">
                             <div>
-                                <Text size="xs" c="dimmed">
-                                    Average
-                                </Text>
-                                <Text fw={750} size="xl">
-                                    {formatDisplayValue(average)}
-                                </Text>
+                                <Text size="xs" c="dimmed">Average</Text>
+                                <Text fw={750} size="xl">{formatDisplayValue(average)}</Text>
                             </div>
                             <div>
-                                <Text size="xs" c="dimmed">
-                                    vs previous {range.toLowerCase()}
-                                </Text>
+                                <Text size="xs" c="dimmed">vs previous {range.toLowerCase()}</Text>
                                 <Text fw={700}>
                                     {periodChange === null
                                         ? 'Not enough prior data'
@@ -371,23 +355,14 @@ export function Trends() {
                                 </Text>
                             </div>
                             <div>
-                                <Text size="xs" c="dimmed">
-                                    Coverage
-                                </Text>
+                                <Text size="xs" c="dimmed">Coverage</Text>
                                 <div className="trends-coverage-value">
                                     <Text fw={700}>
-                                        {coveredValues.length} / {points.length}{' '}
-                                        {granularity === 'weekly' ? 'weeks' : 'days'}
+                                        {coveredValues.length} / {points.length} {granularity === 'weekly' ? 'weeks' : 'days'}
                                     </Text>
                                     <Badge
                                         size="xs"
-                                        color={
-                                            coverageRatio >= 0.75
-                                                ? 'teal'
-                                                : coverageRatio >= 0.4
-                                                  ? 'yellow'
-                                                  : 'gray'
-                                        }
+                                        color={coverageRatio >= 0.75 ? 'teal' : coverageRatio >= 0.4 ? 'yellow' : 'gray'}
                                     >
                                         {confidence}
                                     </Badge>
@@ -399,9 +374,7 @@ export function Trends() {
                     {!loading && coveredValues.length === 0 ? (
                         <div className="trend-metric-empty">
                             <Text fw={650}>
-                                No{' '}
-                                {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'}{' '}
-                                data in this range
+                                No {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'} data in this range
                             </Text>
                             <Text size="sm" c="dimmed">
                                 {isNutritionMetric
@@ -422,9 +395,7 @@ export function Trends() {
                                         )
                                     }
                                 >
-                                    {isNutritionMetric
-                                        ? 'View meals in Journal'
-                                        : 'Review connections'}
+                                    {isNutritionMetric ? 'View meals in Journal' : 'Review connections'}
                                 </Button>
                             )}
                         </div>
@@ -503,9 +474,7 @@ export function Trends() {
                     )}
 
                     {actionError && (
-                        <Alert role="alert" color="orange">
-                            {actionError}
-                        </Alert>
+                        <Alert role="alert" color="orange">{actionError}</Alert>
                     )}
 
                     {inspectedIds && definitionId && (
@@ -539,8 +508,7 @@ export function Trends() {
                     )}
 
                     <Text size="xs" c="dimmed" className="trends-footnote">
-                        Missing periods are shown rather than estimated. Summary values use only
-                        periods that contain observations.
+                        Missing periods are shown rather than estimated. Summary values use only periods that contain observations.
                     </Text>
                 </section>
             )}
