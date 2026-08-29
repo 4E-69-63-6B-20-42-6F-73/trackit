@@ -30,7 +30,7 @@ export function registerMcpBrowserCors(app: FastifyInstance, mcp: McpAccessServi
             isMcpRequest(request) &&
             reply.raw.getHeader('Access-Control-Allow-Origin') !== undefined
         )
-            reply.raw.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
+            reply.header('Access-Control-Allow-Methods', 'POST, GET, OPTIONS')
         return payload
     })
 }
