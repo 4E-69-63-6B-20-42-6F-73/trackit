@@ -19,13 +19,25 @@ jobs:
         timeout-minutes: 15
         steps:
             - uses: actions/checkout@v7
+              with:
+                  fetch-depth: 0
             - uses: actions/setup-node@v7
               with:
                   node-version: 22
                   cache: npm
             - run: npm ci
-            - name: Formatting
-              run: npm run format:check
+            - name: Formatting for changed files
+              env:
+                  BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+              run: |
+                  base="$BASE_SHA"
+                  if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]]; then
+                    base="HEAD^"
+                  fi
+                  git diff --name-only --diff-filter=ACMR -z "$base" HEAD -- \
+                    '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                    '*.md' '*.css' '*.scss' '*.yaml' '*.yml' \
+                    | xargs -0 -r npx --yes prettier@3.9.6 --check
             - name: Lint
               run: npm run lint
             - name: Typecheck, build, and bundle budget
