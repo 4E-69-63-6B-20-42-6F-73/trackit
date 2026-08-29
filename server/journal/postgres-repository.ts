@@ -1,18 +1,19 @@
-import { and, desc, eq, gte, inArray, isNull, lt, notExists, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, notExists, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { healthRecords, observationRelations, observations, preferences } from '../db/schema.js'
+import { observationRelations, observations, preferences } from '../db/schema.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import type {
-    JournalEntry,
-    JournalListQuery,
-    JournalRepository,
-    SleepStageDetail,
-} from './types.js'
+import type { JournalDetailView, JournalEntry, JournalListQuery, JournalRepository } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
-type HealthRecord = typeof healthRecords.$inferSelect
+type ProjectedDescription = {
+    projectionVersion: 1
+    summary: string
+    startedAt?: string
+    endedAt?: string
+    detailView?: JournalDetailView
+}
 
 const sourceLabel = (row: typeof observations.$inferSelect) => {
     const attributes = row.attributes as Record<string, unknown>
@@ -28,34 +29,16 @@ const sourceLabel = (row: typeof observations.$inferSelect) => {
               : 'You'
 }
 
-const sleepStages = (record?: HealthRecord): SleepStageDetail[] => {
-    if (!record || record.recordType !== 'SleepSessionRecord') return []
-    const payload = record.payload as Record<string, unknown>
-    const stages = Array.isArray(payload.stages) ? payload.stages : []
-    return stages.flatMap(stage => {
-        if (!stage || typeof stage !== 'object') return []
-        const item = stage as Record<string, unknown>
-        if (
-            typeof item.type !== 'string' ||
-            typeof item.start !== 'string' ||
-            typeof item.end !== 'string'
-        )
-            return []
-        const normalized = item.type.toLowerCase()
-        const type: SleepStageDetail['type'] = ['awake', 'rem', 'light', 'deep'].includes(
-            normalized,
-        )
-            ? (normalized as SleepStageDetail['type'])
-            : 'unknown'
-        return [{ type, start: item.start, end: item.end }]
-    })
+const projectedDescription = (value: unknown): ProjectedDescription | null => {
+    if (!value || typeof value !== 'object') return null
+    const candidate = value as Record<string, unknown>
+    if (candidate.projectionVersion !== 1 || typeof candidate.summary !== 'string') return null
+    return candidate as ProjectedDescription
 }
 
-const toEntry = (
-    row: typeof observations.$inferSelect,
-    sourceRecord?: HealthRecord,
-): JournalEntry => {
+const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
+    const projection = projectedDescription(attributes.description)
     const primaryDefinitionId =
         typeof attributes.primaryDefinitionId === 'string'
             ? attributes.primaryDefinitionId
@@ -69,14 +52,14 @@ const toEntry = (
               : metricCategory === 'Nutrition'
                 ? 'Meals'
                 : 'Measurements'
-    const detail =
-        typeof attributes.description === 'string'
-            ? attributes.description
-            : (row.textValue ??
-              (row.valueType === 'number' && row.canonicalValue !== null
-                  ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
-                  : ''))
-    const stages = sleepStages(sourceRecord)
+    const detail = projection
+        ? projection.summary
+        : typeof attributes.description === 'string'
+          ? attributes.description
+          : (row.textValue ??
+            (row.valueType === 'number' && row.canonicalValue !== null
+                ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
+                : ''))
     return {
         id: row.id,
         definitionId: primaryDefinitionId,
@@ -85,15 +68,15 @@ const toEntry = (
         detail,
         source: sourceLabel(row),
         observedAt: row.observedAt.toISOString(),
-        startedAt: sourceRecord?.startTime.toISOString() ?? row.observedAt.toISOString(),
-        endedAt: sourceRecord?.endTime?.toISOString() ?? row.endedAt?.toISOString(),
+        startedAt: projection?.startedAt ?? row.observedAt.toISOString(),
+        endedAt: projection?.endedAt ?? row.endedAt?.toISOString(),
         externalId: row.externalId ?? undefined,
         version: Number(row.version),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
         entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
         entityId: row.id,
-        detailView: stages.length ? { kind: 'sleep', stages } : undefined,
+        detailView: projection?.detailView,
     }
 }
 
@@ -136,24 +119,7 @@ export class PostgresJournalRepository implements JournalRepository {
             .where(and(...conditions))
             .orderBy(desc(observations.observedAt))
             .limit(Math.min(filters.limit ?? 100, 100))
-        const sourceRecordIds = [
-            ...new Set(rows.flatMap(row => (row.sourceRecordId ? [row.sourceRecordId] : []))),
-        ]
-        const sourceRecords = sourceRecordIds.length
-            ? await this.database
-                  .select()
-                  .from(healthRecords)
-                  .where(inArray(healthRecords.id, sourceRecordIds))
-            : []
-        const sourceRecordById = new Map(sourceRecords.map(record => [record.id, record]))
-        return rows
-            .map(row =>
-                toEntry(
-                    row,
-                    row.sourceRecordId ? sourceRecordById.get(row.sourceRecordId) : undefined,
-                ),
-            )
-            .filter(entry => !filters.source || entry.source === filters.source)
+        return rows.map(toEntry).filter(entry => !filters.source || entry.source === filters.source)
     }
 
     async ready() {
