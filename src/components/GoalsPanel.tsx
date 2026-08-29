@@ -4,11 +4,11 @@ import {
     Badge,
     Button,
     Chip,
+    Collapse,
     Group,
     Menu,
     Modal,
     NumberInput,
-    Popover,
     Progress,
     Select,
     SimpleGrid,
@@ -17,8 +17,20 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { IconChevronDown, IconDots, IconTargetArrow, IconTrash } from '@tabler/icons-react'
+import {
+    IconChevronDown,
+    IconChevronUp,
+    IconDots,
+    IconTargetArrow,
+    IconTrash,
+} from '@tabler/icons-react'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useNavigate } from 'react-router-dom'
+import {
+    calendarDayRangeForKey,
+    calendarTodayKey,
+    formatCalendarDate,
+} from '../domain/calendar'
 import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '../domain/goals'
 import {
     metricCatalog,
@@ -65,6 +77,12 @@ const scheduleModeFor = (days: number[] | undefined): ScheduleMode => {
     if (sameDays(values, weekendSchedule)) return 'weekends'
     return 'custom'
 }
+const scheduleLabels: Record<ScheduleMode, string> = {
+    'every-day': 'Every day',
+    weekdays: 'Weekdays',
+    weekends: 'Weekends',
+    custom: 'Custom days',
+}
 const comparatorLabels: Record<MetricComparison, string> = {
     gte: 'At least',
     lte: 'At or below',
@@ -76,6 +94,7 @@ type Measurement = {
     aggregation: GoalAggregation
     period: GoalPeriod
 }
+
 function measurements(metricId: string): Measurement[] {
     const capabilities = metricDefinition(metricId)?.goalCapabilities
     if (!capabilities) return []
@@ -98,7 +117,7 @@ function measurements(metricId: string): Measurement[] {
                     value: `${aggregation}:${period}`,
                     label:
                         aggregation === 'latest'
-                            ? `Latest value ${period === 'day' ? 'today' : 'this week'}`
+                            ? `Latest value ${period === 'day' ? 'each day' : 'each week'}`
                             : `${period === 'day' ? 'Daily' : 'Weekly'} ${aggregation}`,
                     aggregation,
                     period: { type: period },
@@ -117,7 +136,7 @@ const periodText = (goal: Goal) =>
     goal.period.type === 'rolling'
         ? `${goal.period.days}-day ${goal.aggregation}`
         : goal.aggregation === 'latest'
-          ? `Latest value ${goal.period.type === 'day' ? 'today' : 'this week'}`
+          ? `${goal.period.type === 'day' ? 'Daily' : 'Weekly'} latest value`
           : `${goal.period.type === 'day' ? 'Daily' : 'Weekly'} ${goal.aggregation}`
 
 function TargetValueInput({
@@ -149,80 +168,6 @@ function TargetValueInput({
     )
 }
 
-function TimingDateControl({
-    kind,
-    mode,
-    value,
-    min,
-    locale,
-    onModeChange,
-    onValueChange,
-}: {
-    kind: 'start' | 'end'
-    mode: 'default' | 'date'
-    value: string
-    min?: string
-    locale?: string
-    onModeChange: (mode: 'default' | 'date') => void
-    onValueChange: (value: string) => void
-}) {
-    const [opened, setOpened] = useState(false)
-    const fallback = kind === 'start' ? 'Starts today' : 'No end date'
-    const label =
-        mode === 'date' && value
-            ? new Date(`${value}T12:00:00`).toLocaleDateString(locale, {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-              })
-            : fallback
-    return (
-        <Popover opened={opened} onChange={setOpened} position="bottom-start" width="target">
-            <Popover.Target>
-                <Button
-                    type="button"
-                    variant="default"
-                    className="goal-date-button"
-                    fullWidth
-                    justify="space-between"
-                    rightSection={<IconChevronDown size={15} />}
-                    aria-label={`Goal ${kind}`}
-                    aria-expanded={opened}
-                    onClick={() => setOpened(current => !current)}
-                >
-                    {label}
-                </Button>
-            </Popover.Target>
-            <Popover.Dropdown>
-                <Stack gap="xs">
-                    <TextInput
-                        type="date"
-                        aria-label={kind === 'start' ? 'Start date' : 'End date'}
-                        value={value}
-                        min={min}
-                        onChange={event => {
-                            onValueChange(event.currentTarget.value)
-                            onModeChange('date')
-                            setOpened(false)
-                        }}
-                    />
-                    <Button
-                        type="button"
-                        size="compact-sm"
-                        variant="subtle"
-                        onClick={() => {
-                            onModeChange('default')
-                            setOpened(false)
-                        }}
-                    >
-                        {fallback}
-                    </Button>
-                </Stack>
-            </Popover.Dropdown>
-        </Popover>
-    )
-}
-
 function GoalCard({
     goal,
     evaluation,
@@ -232,6 +177,7 @@ function GoalCard({
     onEdit,
     onRetire,
     onDelete,
+    onViewTrend,
 }: {
     goal: GoalRecord
     evaluation?: GoalEvaluation
@@ -241,6 +187,7 @@ function GoalCard({
     onEdit: () => void
     onRetire: () => Promise<void>
     onDelete: () => void
+    onViewTrend: () => void
 }) {
     const definition = metricDefinition(goal.metricId)
     const now = new Date()
@@ -257,28 +204,23 @@ function GoalCard({
         goal.comparator === 'between' && 'min' in goal.target
             ? `${formatMetric(goal.metricId, goal.target.min, metricPreferences, locale)}–${formatMetric(goal.metricId, goal.target.max, metricPreferences, locale)}`
             : 'value' in goal.target
-              ? `${goal.comparator === 'gte' ? '≥' : '≤'} ${formatMetric(goal.metricId, goal.target.value, metricPreferences, locale)}`
+              ? `${goal.comparator === 'gte' ? 'at least' : 'at or below'} ${formatMetric(goal.metricId, goal.target.value, metricPreferences, locale)}`
               : ''
     const differenceLabel =
-        result.value !== null &&
-        result.met === false &&
-        result.difference !== null &&
-        goal.comparator !== 'between'
+        result.value !== null && result.met === false && result.difference !== null && goal.comparator !== 'between'
             ? `${formatMetric(goal.metricId, result.difference, metricPreferences, locale)} ${goal.comparator === 'lte' ? 'above' : 'below'} target`
             : null
-    const scheduledDays = (
-        goal.schedule.weekdays?.length ? goal.schedule.weekdays.map(String) : everyDay
-    ).sort()
-    const scheduleLabel = sameDays(scheduledDays, everyDay)
-        ? null
-        : sameDays(scheduledDays, weekdaySchedule)
-          ? 'Weekdays'
-          : sameDays(scheduledDays, weekendSchedule)
-            ? 'Weekends'
-            : scheduledDays
+    const scheduledDays = (goal.schedule.weekdays?.length ? goal.schedule.weekdays.map(String) : everyDay).sort()
+    const mode = scheduleModeFor(goal.schedule.weekdays)
+    const scheduleLabel =
+        mode === 'custom'
+            ? scheduledDays
                   .map(day => weekdays.find(option => option.value === day)?.label.slice(0, 3))
                   .filter(Boolean)
                   .join(', ')
+            : mode === 'every-day'
+              ? null
+              : scheduleLabels[mode]
     const timingLabel = [
         scheduleLabel,
         goal.effectiveTo
@@ -292,26 +234,17 @@ function GoalCard({
     ]
         .filter(Boolean)
         .join(' · ')
+
     return (
         <article className="goal-card">
             <Group justify="space-between" align="start" wrap="nowrap">
                 <div>
                     <Text fw={700}>{definition?.name ?? goal.metricId}</Text>
-                    <Text size="sm" c="dimmed">
-                        {periodText(goal)}
-                    </Text>
+                    <Text size="sm" c="dimmed">{periodText(goal)}</Text>
                 </div>
                 <Group gap="xs">
                     <Badge
-                        color={
-                            retired || upcoming
-                                ? 'gray'
-                                : result.met === null
-                                  ? 'gray'
-                                  : result.met
-                                    ? 'teal'
-                                    : 'orange'
-                        }
+                        color={retired || upcoming ? 'gray' : result.met === null ? 'gray' : result.met ? 'teal' : 'orange'}
                         variant="light"
                     >
                         {retired
@@ -326,28 +259,19 @@ function GoalCard({
                     </Badge>
                     <Menu>
                         <Menu.Target>
-                            <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                aria-label={`Actions for ${definition?.name ?? goal.metricId}`}
-                            >
+                            <ActionIcon variant="subtle" color="gray" aria-label={`Actions for ${definition?.name ?? goal.metricId}`}>
                                 <IconDots size={17} />
                             </ActionIcon>
                         </Menu.Target>
                         <Menu.Dropdown>
+                            <Menu.Item onClick={onViewTrend}>View trend</Menu.Item>
                             {!retired ? (
                                 <>
                                     <Menu.Item onClick={onEdit}>Edit goal</Menu.Item>
-                                    <Menu.Item color="orange" onClick={() => void onRetire()}>
-                                        Retire goal today
-                                    </Menu.Item>
+                                    <Menu.Item color="orange" onClick={() => void onRetire()}>Retire goal today</Menu.Item>
                                 </>
                             ) : (
-                                <Menu.Item
-                                    color="red"
-                                    leftSection={<IconTrash size={15} />}
-                                    onClick={onDelete}
-                                >
+                                <Menu.Item color="red" leftSection={<IconTrash size={15} />} onClick={onDelete}>
                                     Delete goal
                                 </Menu.Item>
                             )}
@@ -362,60 +286,41 @@ function GoalCard({
                         : 'Nothing recorded yet'
                     : formatMetric(goal.metricId, result.value, metricPreferences, locale)}
             </Text>
-            <Text size="sm">Goal {targetLabel}</Text>
-            {timingLabel && (
-                <Text size="xs" c="dimmed">
-                    {timingLabel}
-                </Text>
-            )}
+            <Text size="sm">Target: {targetLabel}</Text>
+            {timingLabel && <Text size="xs" c="dimmed">{timingLabel}</Text>}
             {upcoming ? (
                 <Text size="sm" c="dimmed">
-                    This goal starts on{' '}
-                    {new Date(goal.effectiveFrom).toLocaleDateString(locale, {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        timeZone: timezone,
-                    })}
-                    .
+                    Starts {new Date(goal.effectiveFrom).toLocaleDateString(locale, { day: 'numeric', month: 'short', year: 'numeric', timeZone: timezone })}.
                 </Text>
             ) : result.value === null ? (
-                <Text size="sm" c="dimmed">
-                    Record {definition?.name.toLowerCase() ?? 'this metric'} to see how this goal is
-                    tracking.
-                </Text>
+                <Text size="sm" c="dimmed">Record {definition?.name.toLowerCase() ?? 'this metric'} to see progress.</Text>
             ) : (
                 <Text size="sm" c="dimmed">
-                    {result.observationCount} measurement
-                    {result.observationCount === 1 ? '' : 's'}
+                    {result.observationCount} measurement{result.observationCount === 1 ? '' : 's'}
                     {differenceLabel ? ` · ${differenceLabel}` : ''}
                 </Text>
             )}
-            {result.progress !== null && (
-                <Progress
-                    value={result.progress * 100}
-                    color="trackit"
-                    aria-label="Goal progress"
-                />
-            )}
+            {result.progress !== null && <Progress value={result.progress * 100} color="trackit" aria-label="Goal progress" />}
         </article>
     )
 }
 
 export function GoalsPanel() {
+    const navigate = useNavigate()
     const { goals, preferences, loading } = useServerData()
+    const timezone = preferences?.timezone ?? 'UTC'
+    const today = calendarTodayKey(timezone)
     const goalMetrics = metricCatalog.filter(item => item.goalCapabilities)
     const [metricId, setMetricId] = useState('weight')
     const [measurement, setMeasurement] = useState(() => preferredMeasurement('weight')!.value)
     const [comparator, setComparator] = useState<MetricComparison>('lte')
     const [target, setTarget] = useState<number | string>(80)
     const [rangeMax, setRangeMax] = useState<number | string>(82)
-    const [effectiveFrom, setEffectiveFrom] = useState(new Date().toISOString().slice(0, 10))
+    const [effectiveFrom, setEffectiveFrom] = useState(today)
     const [effectiveTo, setEffectiveTo] = useState('')
-    const [startMode, setStartMode] = useState<'today' | 'date'>('today')
-    const [endMode, setEndMode] = useState<'none' | 'date'>('none')
     const [scheduleMode, setScheduleMode] = useState<ScheduleMode>('every-day')
     const [selectedWeekdays, setSelectedWeekdays] = useState<string[]>(everyDay)
+    const [advanced, setAdvanced] = useState(false)
     const [editing, setEditing] = useState<GoalRecord | null>(null)
     const [deleting, setDeleting] = useState<GoalRecord | null>(null)
     const [evaluations, setEvaluations] = useState<Record<string, GoalEvaluation>>({})
@@ -425,14 +330,15 @@ export function GoalsPanel() {
     const definition = metricDefinition(metricId)!
     const displayUnit = displayUnitFor(metricId, preferences?.metricPreferences, preferences?.units)
     const options = measurements(metricId)
-    const selectedMeasurement =
-        options.find(item => item.value === measurement) ?? preferredMeasurement(metricId, options)!
+    const selectedMeasurement = options.find(item => item.value === measurement) ?? preferredMeasurement(metricId, options)!
+
     useEffect(() => {
         if (!goals.length) return
         void listGoalEvaluations()
             .then(setEvaluations)
             .catch(() => setError('Goal observations could not be loaded.'))
     }, [goals])
+
     const resetForMetric = (next: string) => {
         setMetricId(next)
         const choice = preferredMeasurement(next)
@@ -450,7 +356,6 @@ export function GoalsPanel() {
         setError('')
     }
     const resetForm = () => {
-        const today = new Date().toISOString().slice(0, 10)
         setEditing(null)
         setMetricId('weight')
         setMeasurement(preferredMeasurement('weight')!.value)
@@ -459,70 +364,51 @@ export function GoalsPanel() {
         setRangeMax(82)
         setEffectiveFrom(today)
         setEffectiveTo('')
-        setStartMode('today')
-        setEndMode('none')
         setScheduleMode('every-day')
         setSelectedWeekdays(everyDay)
+        setAdvanced(false)
         setError('')
     }
     const edit = (goal: GoalRecord) => {
         setEditing(goal)
         setMetricId(goal.metricId)
-        setMeasurement(
-            `${goal.aggregation}:${goal.period.type}${goal.period.type === 'rolling' ? `:${goal.period.days}` : ''}`,
-        )
+        setMeasurement(`${goal.aggregation}:${goal.period.type}${goal.period.type === 'rolling' ? `:${goal.period.days}` : ''}`)
         setComparator(goal.comparator)
         setEffectiveFrom(goal.effectiveFrom.slice(0, 10))
         setEffectiveTo(goal.effectiveTo?.slice(0, 10) ?? '')
-        const goalDays = goal.schedule.weekdays?.length
-            ? goal.schedule.weekdays.map(String)
-            : everyDay
-        setStartMode(
-            goal.effectiveFrom.slice(0, 10) === new Date().toISOString().slice(0, 10)
-                ? 'today'
-                : 'date',
-        )
-        setEndMode(goal.effectiveTo ? 'date' : 'none')
+        const goalDays = goal.schedule.weekdays?.length ? goal.schedule.weekdays.map(String) : everyDay
         setScheduleMode(scheduleModeFor(goal.schedule.weekdays))
         setSelectedWeekdays(goalDays)
-        const unit = displayUnitFor(
-            goal.metricId,
-            preferences?.metricPreferences,
-            preferences?.units,
-        )
+        setAdvanced(true)
+        const unit = displayUnitFor(goal.metricId, preferences?.metricPreferences, preferences?.units)
         if ('value' in goal.target)
-            setTarget(
-                convertMetricValue(goal.metricId, goal.target.value, goal.canonicalUnit, unit),
-            )
+            setTarget(convertMetricValue(goal.metricId, goal.target.value, goal.canonicalUnit, unit))
         else {
             setTarget(convertMetricValue(goal.metricId, goal.target.min, goal.canonicalUnit, unit))
-            setRangeMax(
-                convertMetricValue(goal.metricId, goal.target.max, goal.canonicalUnit, unit),
-            )
+            setRangeMax(convertMetricValue(goal.metricId, goal.target.max, goal.canonicalUnit, unit))
         }
     }
-    const draft = (): Omit<Goal, 'id'> => ({
-        metricId,
-        aggregation: selectedMeasurement.aggregation,
-        comparator,
-        target:
-            comparator === 'between'
-                ? {
-                      min: toCanonicalMetricValue(metricId, Number(target), displayUnit),
-                      max: toCanonicalMetricValue(metricId, Number(rangeMax), displayUnit),
-                  }
-                : { value: toCanonicalMetricValue(metricId, Number(target), displayUnit) },
-        period: selectedMeasurement.period,
-        canonicalUnit: definition.canonicalUnit,
-        effectiveFrom: new Date(
-            `${startMode === 'today' ? new Date().toISOString().slice(0, 10) : effectiveFrom}T00:00:00`,
-        ).toISOString(),
-        effectiveTo:
-            endMode === 'date' && effectiveTo
-                ? new Date(`${effectiveTo}T23:59:59`).toISOString()
-                : null,
-        schedule: { weekdays: selectedWeekdays.map(Number) },
-    })
+    const draft = (): Omit<Goal, 'id'> => {
+        const startRange = calendarDayRangeForKey(effectiveFrom || today, timezone)
+        const endRange = effectiveTo ? calendarDayRangeForKey(effectiveTo, timezone) : null
+        return {
+            metricId,
+            aggregation: selectedMeasurement.aggregation,
+            comparator,
+            target:
+                comparator === 'between'
+                    ? {
+                          min: toCanonicalMetricValue(metricId, Number(target), displayUnit),
+                          max: toCanonicalMetricValue(metricId, Number(rangeMax), displayUnit),
+                      }
+                    : { value: toCanonicalMetricValue(metricId, Number(target), displayUnit) },
+            period: selectedMeasurement.period,
+            canonicalUnit: definition.canonicalUnit,
+            effectiveFrom: startRange.from.toISOString(),
+            effectiveTo: endRange ? new Date(endRange.to.getTime() - 1).toISOString() : null,
+            schedule: { weekdays: selectedWeekdays.map(Number) },
+        }
+    }
     const validation = () => {
         if (scheduleMode === 'custom' && selectedWeekdays.length === 0)
             return ['Choose at least one day for a custom schedule.']
@@ -589,6 +475,11 @@ export function GoalsPanel() {
             setSaving(false)
         }
     }
+    const targetPreview =
+        comparator === 'between'
+            ? `between ${target} and ${rangeMax} ${unitPresentation(displayUnit).label}`
+            : `${comparator === 'gte' ? 'at least' : 'at or below'} ${target} ${unitPresentation(displayUnit).label}`
+
     return (
         <div className={`goals-layout${goals.length ? ' has-goals' : ''}`}>
             <section className="panel goal-create" aria-labelledby="create-goal-title">
@@ -596,28 +487,17 @@ export function GoalsPanel() {
                     <IconTargetArrow size={24} />
                     <div>
                         <h2 id="create-goal-title">{editing ? 'Edit goal' : 'Add a goal'}</h2>
-                        <Text size="sm" c="dimmed">
-                            Choose what to measure, then set a clear target.
-                        </Text>
+                        <Text size="sm" c="dimmed">Choose what matters, set the target, then decide when it applies.</Text>
                     </div>
                 </div>
                 <form onSubmit={event => void save(event)}>
                     <Stack>
                         <Select
-                            label="Metric"
+                            label="What do you want to track?"
                             value={metricId}
                             onChange={value => value && resetForMetric(value)}
                             data={goalMetrics.map(item => ({ value: item.id, label: item.name }))}
                             searchable
-                        />
-                        <Select
-                            label="Measure"
-                            value={measurement}
-                            onChange={value => value && setMeasurement(value)}
-                            data={options.map(item => ({
-                                value: item.value,
-                                label: item.label.replace(/^./, letter => letter.toUpperCase()),
-                            }))}
                         />
                         <Select
                             label="Target"
@@ -629,150 +509,101 @@ export function GoalsPanel() {
                             }))}
                         />
                         {comparator === 'between' ? (
-                            <div
-                                className="goal-range-inputs"
-                                role="group"
-                                aria-label="Target range"
-                            >
-                                <TargetValueInput
-                                    label="Minimum"
-                                    value={target}
-                                    onChange={setTarget}
-                                    unit={displayUnit}
-                                />
+                            <div className="goal-range-inputs" role="group" aria-label="Target range">
+                                <TargetValueInput label="Minimum" value={target} onChange={setTarget} unit={displayUnit} />
                                 <Text className="goal-range-separator">and</Text>
-                                <TargetValueInput
-                                    label="Maximum"
-                                    value={rangeMax}
-                                    onChange={setRangeMax}
-                                    unit={displayUnit}
-                                />
+                                <TargetValueInput label="Maximum" value={rangeMax} onChange={setRangeMax} unit={displayUnit} />
                             </div>
                         ) : (
-                            <TargetValueInput
-                                label="Value"
-                                value={target}
-                                onChange={setTarget}
-                                unit={displayUnit}
-                                required
-                            />
+                            <TargetValueInput label="Value" value={target} onChange={setTarget} unit={displayUnit} required />
                         )}
-                        <section className="goal-timing" aria-labelledby="goal-timing-heading">
-                            <Group justify="space-between" gap="xs">
-                                <Text id="goal-timing-heading" fw={650} size="sm">
-                                    Timing
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                    Optional
-                                </Text>
-                            </Group>
-                            <Text size="xs" fw={600} c="dimmed">
-                                Active period
-                            </Text>
-                            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                                <TimingDateControl
-                                    kind="start"
-                                    mode={startMode === 'today' ? 'default' : 'date'}
-                                    value={effectiveFrom}
-                                    locale={preferences?.locale}
-                                    onModeChange={mode => {
-                                        setStartMode(mode === 'default' ? 'today' : 'date')
-                                        if (mode === 'default')
-                                            setEffectiveFrom(new Date().toISOString().slice(0, 10))
-                                    }}
-                                    onValueChange={setEffectiveFrom}
+                        <Select
+                            label="How often?"
+                            value={scheduleMode}
+                            onChange={changeSchedule}
+                            data={Object.entries(scheduleLabels).map(([value, label]) => ({ value, label }))}
+                        />
+                        {scheduleMode === 'custom' && (
+                            <Chip.Group multiple value={selectedWeekdays} onChange={setSelectedWeekdays}>
+                                <div className="goal-weekday-grid" role="group" aria-label="Custom days">
+                                    {weekdays.map(day => (
+                                        <Chip key={day.value} value={day.value} size="sm" className="goal-weekday-chip" aria-label={day.label}>
+                                            {day.label.slice(0, 1)}
+                                        </Chip>
+                                    ))}
+                                </div>
+                            </Chip.Group>
+                        )}
+                        <Text size="sm" c="dimmed">
+                            {`Aim for ${definition.name.toLowerCase()} ${targetPreview} ${scheduleLabels[scheduleMode].toLowerCase()}.`}
+                        </Text>
+
+                        <Button
+                            type="button"
+                            variant="subtle"
+                            color="gray"
+                            justify="space-between"
+                            rightSection={advanced ? <IconChevronUp size={15} /> : <IconChevronDown size={15} />}
+                            onClick={() => setAdvanced(value => !value)}
+                        >
+                            Advanced options
+                        </Button>
+                        <Collapse in={advanced}>
+                            <Stack gap="md">
+                                <Select
+                                    label="How should TrackIt measure progress?"
+                                    value={measurement}
+                                    onChange={value => value && setMeasurement(value)}
+                                    data={options.map(item => ({
+                                        value: item.value,
+                                        label: item.label.replace(/^./, letter => letter.toUpperCase()),
+                                    }))}
                                 />
-                                <TimingDateControl
-                                    kind="end"
-                                    mode={endMode === 'none' ? 'default' : 'date'}
-                                    value={effectiveTo || effectiveFrom}
-                                    min={effectiveFrom}
-                                    locale={preferences?.locale}
-                                    onModeChange={mode =>
-                                        setEndMode(mode === 'default' ? 'none' : 'date')
-                                    }
-                                    onValueChange={setEffectiveTo}
-                                />
-                            </SimpleGrid>
-                            <Text size="xs" fw={600} c="dimmed">
-                                Schedule
-                            </Text>
-                            <Select
-                                aria-label="Goal schedule"
-                                value={scheduleMode}
-                                onChange={changeSchedule}
-                                data={[
-                                    { value: 'every-day', label: 'Every day' },
-                                    { value: 'weekdays', label: 'Weekdays' },
-                                    { value: 'weekends', label: 'Weekends' },
-                                    { value: 'custom', label: 'Custom' },
-                                ]}
-                            />
-                            {scheduleMode === 'custom' && (
-                                <Chip.Group
-                                    multiple
-                                    value={selectedWeekdays}
-                                    onChange={setSelectedWeekdays}
-                                >
-                                    <div
-                                        className="goal-weekday-grid"
-                                        role="group"
-                                        aria-label="Custom days"
-                                    >
-                                        {weekdays.map(day => (
-                                            <Chip
-                                                key={day.value}
-                                                value={day.value}
-                                                size="sm"
-                                                className="goal-weekday-chip"
-                                                aria-label={day.label}
-                                            >
-                                                {day.label.slice(0, 1)}
-                                            </Chip>
-                                        ))}
-                                    </div>
-                                </Chip.Group>
-                            )}
-                        </section>
+                                <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                                    <TextInput
+                                        type="date"
+                                        label="Starts"
+                                        value={effectiveFrom}
+                                        onChange={event => setEffectiveFrom(event.currentTarget.value)}
+                                    />
+                                    <TextInput
+                                        type="date"
+                                        label="Ends (optional)"
+                                        min={effectiveFrom}
+                                        value={effectiveTo}
+                                        onChange={event => setEffectiveTo(event.currentTarget.value)}
+                                    />
+                                </SimpleGrid>
+                                {effectiveFrom && (
+                                    <Text size="xs" c="dimmed">
+                                        Starts {formatCalendarDate(effectiveFrom, preferences?.locale, { day: 'numeric', month: 'short', year: 'numeric' })}
+                                        {effectiveTo
+                                            ? ` and ends ${formatCalendarDate(effectiveTo, preferences?.locale, { day: 'numeric', month: 'short', year: 'numeric' })}.`
+                                            : '.'}
+                                    </Text>
+                                )}
+                            </Stack>
+                        </Collapse>
                         {error && <Alert color="orange">{error}</Alert>}
                         <Group justify="flex-end">
-                            {editing && (
-                                <Button type="button" variant="default" onClick={resetForm}>
-                                    Cancel
-                                </Button>
-                            )}
-                            <Button type="submit" loading={saving}>
-                                {editing ? 'Save changes' : 'Create goal'}
-                            </Button>
+                            {editing && <Button type="button" variant="default" onClick={resetForm}>Cancel</Button>}
+                            <Button type="submit" loading={saving}>{editing ? 'Save changes' : 'Create goal'}</Button>
                         </Group>
                     </Stack>
                 </form>
             </section>
+
             <section className="panel goal-list" aria-labelledby="your-goals-title">
-                <Group justify="space-between">
-                    <div>
-                        <h2 id="your-goals-title">Your goals</h2>
-                        <Text size="sm" c="dimmed">
-                            Current status is calculated from your recorded observations.
-                        </Text>
-                    </div>
-                </Group>
-                {message && (
-                    <Alert color="teal" role="status">
-                        {message}
-                    </Alert>
-                )}
+                <h2 id="your-goals-title">Your goals</h2>
+                <Text size="sm" c="dimmed" mb="md">Current status is calculated from recorded observations.</Text>
+                {message && <Alert color="teal" role="status">{message}</Alert>}
                 {loading ? (
-                    <Stack role="status" aria-label="Loading goals">
-                        <Skeleton height={150} />
-                    </Stack>
+                    <Stack role="status" aria-label="Loading goals"><Skeleton height={150} /></Stack>
                 ) : goals.length === 0 ? (
                     <div className="goal-empty">
                         <IconTargetArrow size={28} />
                         <Text fw={700}>No goals yet</Text>
-                        <Text size="sm" c="dimmed">
-                            Create a goal to see its current status.
-                        </Text>
+                        <Text size="sm" c="dimmed">Create a goal when you want a target to add context to your observations.</Text>
                     </div>
                 ) : (
                     <Stack gap="sm">
@@ -781,12 +612,13 @@ export function GoalsPanel() {
                                 key={goal.id}
                                 goal={goal}
                                 evaluation={evaluations[goal.id]}
-                                timezone={preferences?.timezone ?? 'UTC'}
+                                timezone={timezone}
                                 locale={preferences?.locale}
                                 metricPreferences={preferences?.metricPreferences}
                                 onEdit={() => edit(goal)}
                                 onRetire={() => retire(goal)}
                                 onDelete={() => setDeleting(goal)}
+                                onViewTrend={() => navigate(`/trends?metric=${encodeURIComponent(goal.metricId)}`)}
                             />
                         ))}
                         {pastGoals.length > 0 && <Text fw={700}>Goal history</Text>}
@@ -795,35 +627,26 @@ export function GoalsPanel() {
                                 key={goal.id}
                                 goal={goal}
                                 evaluation={evaluations[goal.id]}
-                                timezone={preferences?.timezone ?? 'UTC'}
+                                timezone={timezone}
                                 locale={preferences?.locale}
                                 metricPreferences={preferences?.metricPreferences}
                                 onEdit={() => edit(goal)}
                                 onRetire={() => retire(goal)}
                                 onDelete={() => setDeleting(goal)}
+                                onViewTrend={() => navigate(`/trends?metric=${encodeURIComponent(goal.metricId)}`)}
                             />
                         ))}
                     </Stack>
                 )}
             </section>
-            <Modal
-                opened={Boolean(deleting)}
-                onClose={() => setDeleting(null)}
-                title="Delete this retired goal?"
-                centered
-                size="sm"
-            >
+
+            <Modal opened={Boolean(deleting)} onClose={() => setDeleting(null)} title="Delete this retired goal?" centered size="sm">
                 <Text size="sm">
-                    This permanently removes the {metricDefinition(deleting?.metricId ?? '')?.name}
-                    goal. Your health records are not affected.
+                    This permanently removes the {metricDefinition(deleting?.metricId ?? '')?.name} goal. Your observations are not affected.
                 </Text>
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setDeleting(null)}>
-                        Keep goal
-                    </Button>
-                    <Button color="red" loading={saving} onClick={() => void remove()}>
-                        Delete goal
-                    </Button>
+                    <Button variant="default" onClick={() => setDeleting(null)}>Keep goal</Button>
+                    <Button color="red" loading={saving} onClick={() => void remove()}>Delete goal</Button>
                 </Group>
             </Modal>
         </div>
