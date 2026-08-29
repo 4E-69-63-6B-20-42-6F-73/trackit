@@ -135,7 +135,7 @@ export class ProviderRecordMaintenanceService {
             if (to) conditions.push(lt(healthRecords.startTime, to))
             if (from)
                 conditions.push(
-                    sql`coalesce(${healthRecords.endTime}, ${healthRecords.startTime}) >= ${from}`,
+                    sql`coalesce(${healthRecords.endTime}, ${healthRecords.startTime}) >= ${from.toISOString()}::timestamptz`,
                 )
 
             const records = await this.database
