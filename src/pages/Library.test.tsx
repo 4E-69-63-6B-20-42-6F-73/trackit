@@ -108,6 +108,8 @@ describe('Library', () => {
             '/library',
         )
         expect(await screen.findByText('Porridge')).toBeInTheDocument()
-        await waitFor(() => expect(screen.getByRole('button', { name: 'New recipe' })).toBeEnabled())
+        await waitFor(() =>
+            expect(screen.getByRole('button', { name: 'New recipe' })).toBeEnabled(),
+        )
     })
 })
