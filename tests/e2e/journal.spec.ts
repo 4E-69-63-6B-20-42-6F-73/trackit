@@ -1,20 +1,25 @@
 import { expect, test } from '@playwright/test'
 import { useAuthenticatedServer } from './server-fixture'
 
-test('a server-owned journal entry survives reload and can be deleted', async ({ page }) => {
+test('an Observation projection survives reload and can be deleted from Journal', async ({
+    page,
+}) => {
     const records: Record<string, unknown>[] = []
-    await useAuthenticatedServer(page, { journal: records })
+    const observations: Record<string, unknown>[] = []
+    await useAuthenticatedServer(page, { journal: records, observations })
 
     await page.goto('/journal')
     await page.evaluate(async () => {
-        const response = await fetch('/api/journal', {
+        const response = await fetch('/api/observations', {
             method: 'POST',
             headers: { 'content-type': 'application/json' },
             body: JSON.stringify({
                 id: '30000000-0000-4000-8000-000000000001',
-                category: 'Meals',
+                definitionId: 'note',
+                valueType: 'text',
+                category: 'Check-ins',
                 title: 'Dinner',
-                detail: 'Lentil soup',
+                textValue: 'Lentil soup',
                 source: 'You',
                 observedAt: new Date().toISOString(),
                 time: '18:00',
