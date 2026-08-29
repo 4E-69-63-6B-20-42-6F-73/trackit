@@ -78,6 +78,9 @@ export function GlobalLogFab() {
                 aria-label="Choose what to log"
                 aria-hidden={!open}
                 style={{
+                    position: 'absolute',
+                    right: 0,
+                    bottom: 'calc(100% + 10px)',
                     width: 'min(256px, calc(100vw - 32px))',
                     opacity: open ? 1 : 0,
                     transform: open ? 'translateY(0)' : 'translateY(8px)',
