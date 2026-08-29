@@ -7,7 +7,7 @@ import * as schema from '../db/schema.js'
 import { ProviderRecordMaintenanceService } from './maintenance.js'
 
 describe('ProviderRecordMaintenanceService', () => {
-    it('re-derives overlapping live records and removes observations for tombstoned records', async () => {
+    it('re-derives overlapping live records, filters record types, and removes tombstoned records', async () => {
         const client = new PGlite()
         const migrations = (await readdir('server/db/migrations'))
             .filter(filename => filename.endsWith('.sql'))
@@ -74,7 +74,27 @@ describe('ProviderRecordMaintenanceService', () => {
             derivationVersion: 1,
         })
 
-        const result = await new ProviderRecordMaintenanceService(database as never).rederive({
+        const maintenance = new ProviderRecordMaintenanceService(database as never)
+        const filtered = await maintenance.rederive({
+            from: '2026-08-29',
+            to: '2026-08-29',
+            recordTypes: ['SleepSessionRecord'],
+        })
+
+        expect(filtered.sourceRecords).toBe(1)
+        expect(filtered.canonicalObservations).toBe(3)
+        expect(
+            (await database.select().from(schema.observations)).filter(
+                observation => observation.sourceRecordId === tombstone.id,
+            ),
+        ).toHaveLength(1)
+        expect(
+            (await database.select().from(schema.observations)).filter(
+                observation => observation.sourceRecordId === sleep.id,
+            ),
+        ).toHaveLength(3)
+
+        const result = await maintenance.rederive({
             from: '2026-08-29',
             to: '2026-08-29',
         })

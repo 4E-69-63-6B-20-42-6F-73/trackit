@@ -14,7 +14,7 @@ import { DataDeletionService } from './data-lifecycle/deletion.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
 import { ProjectionWorker } from './data/projection-state.js'
 import { ProjectionMaintenanceService } from './data/projection-maintenance.js'
-import { maintenanceDateRangeSchema } from './data/maintenance-range.js'
+import { registerDataMaintenanceRoutes } from './data/maintenance-routes.js'
 import { ProviderRecordMaintenanceService } from './health-records/maintenance.js'
 
 await migrate(db, { migrationsFolder: './server/db/migrations' })
@@ -40,16 +40,9 @@ const app = await createApp(new PostgresJournalRepository(db), {
         : undefined,
 })
 
-app.post('/api/data/rebuild-projections', async (request, reply) => {
-    const range = maintenanceDateRangeSchema.safeParse(request.body ?? {})
-    if (!range.success) return reply.code(400).send({ error: 'invalid_range' })
-    return { data: await projectionMaintenance.rebuild(range.data) }
-})
-
-app.post('/api/data/rederive-observations', async (request, reply) => {
-    const range = maintenanceDateRangeSchema.safeParse(request.body ?? {})
-    if (!range.success) return reply.code(400).send({ error: 'invalid_range' })
-    return { data: await providerRecordMaintenance.rederive(range.data) }
+await registerDataMaintenanceRoutes(app, {
+    projections: projectionMaintenance,
+    providerRecords: providerRecordMaintenance,
 })
 
 const webRoot = resolve('dist')

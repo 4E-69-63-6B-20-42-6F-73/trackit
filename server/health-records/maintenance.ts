@@ -1,11 +1,11 @@
-import { and, eq, gt, lt, sql } from 'drizzle-orm'
+import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { healthRecords, observationRelations, observations, preferences } from '../db/schema.js'
 import {
     resolveMaintenanceDateRange,
-    type MaintenanceDateRange,
+    type ProviderRecordMaintenanceRange,
 } from '../data/maintenance-range.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone, localDayRange, nextDate } from '../data/timezone.js'
@@ -113,7 +113,7 @@ async function insertObservationGraph(transaction: Transaction, record: Canonica
 export class ProviderRecordMaintenanceService {
     constructor(private readonly database: Database) {}
 
-    async rederive(input: MaintenanceDateRange = {}) {
+    async rederive(input: ProviderRecordMaintenanceRange = {}) {
         const [saved] = await this.database
             .select({ timezone: preferences.timezone })
             .from(preferences)
@@ -123,7 +123,7 @@ export class ProviderRecordMaintenanceService {
         const from = range.from ? localDayRange(range.from, timezone).from : undefined
         const to = range.to ? localDayRange(range.to, timezone).to : undefined
 
-        const batchSize = 250
+        const batchSize = 25
         let cursor: string | undefined
         let sourceRecords = 0
         let canonicalObservations = 0
@@ -135,8 +135,10 @@ export class ProviderRecordMaintenanceService {
             if (to) conditions.push(lt(healthRecords.startTime, to))
             if (from)
                 conditions.push(
-                    sql`coalesce(${healthRecords.endTime}, ${healthRecords.startTime}) >= ${from}`,
+                    sql`coalesce(${healthRecords.endTime}, ${healthRecords.startTime}) >= ${from.toISOString()}::timestamptz`,
                 )
+            if (input.recordTypes?.length)
+                conditions.push(inArray(healthRecords.recordType, input.recordTypes))
 
             const records = await this.database
                 .select()
