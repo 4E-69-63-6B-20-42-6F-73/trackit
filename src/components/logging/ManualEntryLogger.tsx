@@ -41,8 +41,7 @@ const energyLabels = [
     'Very high',
 ] as const
 const energyLabel = (value: number) => energyLabels[Math.round(value)] ?? 'Neutral'
-const severityLabel = (value: number) =>
-    value <= 3 ? 'Mild' : value <= 7 ? 'Moderate' : 'Severe'
+const severityLabel = (value: number) => (value <= 3 ? 'Mild' : value <= 7 ? 'Moderate' : 'Severe')
 
 export function ManualEntryLogger({
     opened,
