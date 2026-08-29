@@ -39,7 +39,7 @@ test('keyboard users can bypass repeated navigation', async ({ page }) => {
 test('global logger has no automatic WCAG A/AA violations', async ({ page }) => {
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
-    await page.getByRole('button', { name: 'Log data' }).click()
+    await page.getByRole('button', { name: 'Log health information' }).click()
     const results = await new AxeBuilder({ page })
         .include('[role="dialog"]')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
