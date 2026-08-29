@@ -100,10 +100,6 @@ export function Today({
     const locale = health.preferences?.locale
 
     useEffect(() => {
-        if (!params.get('date')) setSelectedKeyState(todayKey)
-    }, [params, todayKey])
-
-    useEffect(() => {
         const controller = new AbortController()
         void listJournal({ limit: 1 }, controller.signal)
             .then(records => setHasHistory(records.length > 0))

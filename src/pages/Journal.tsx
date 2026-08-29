@@ -72,11 +72,10 @@ export function Journal({
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
 
+    const hasBoundedFilter = Boolean(selectedDate || rangeFrom || rangeTo || category !== 'All')
+
     useEffect(() => {
-        if (!selectedDate && !rangeFrom && !rangeTo && category === 'All') {
-            setBoundedEvents(null)
-            return
-        }
+        if (!hasBoundedFilter) return
         let active = true
         const selectedRange = selectedDate ? calendarDayRangeForKey(selectedDate, timezone) : null
         const from = selectedRange
@@ -100,7 +99,7 @@ export function Journal({
         return () => {
             active = false
         }
-    }, [category, rangeFrom, rangeTo, selectedDate, timezone])
+    }, [category, hasBoundedFilter, rangeFrom, rangeTo, selectedDate, timezone])
 
     useEffect(() => {
         const next = new URLSearchParams()
@@ -114,7 +113,7 @@ export function Journal({
         setParams(next, { replace: true })
     }, [category, device, query, rangeFrom, rangeTo, selectedDate, setParams, source])
 
-    const availableEvents = boundedEvents ?? events
+    const availableEvents = hasBoundedFilter ? (boundedEvents ?? []) : events
     const shown = useMemo(
         () =>
             availableEvents.filter(event => {
