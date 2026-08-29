@@ -1,6 +1,6 @@
 import { authRequest } from './authApi'
 
-export type MaintenanceDateRange = { from?: string; to?: string }
+export type MaintenanceDateRange = { lastDays: number } | { from?: string; to?: string }
 
 const postMaintenance = async <T>(path: string, range: MaintenanceDateRange) => {
     const response = await authRequest(path, {
