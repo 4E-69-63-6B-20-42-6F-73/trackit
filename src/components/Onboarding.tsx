@@ -1,7 +1,21 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Group, Modal, Progress, Select, Stack, Text, TextInput } from '@mantine/core'
+import {
+    Alert,
+    Button,
+    Group,
+    Modal,
+    Progress,
+    Select,
+    Stack,
+    Text,
+    TextInput,
+} from '@mantine/core'
 import { useNavigate } from 'react-router-dom'
-import { updatePreferences, type ExperiencePreferences, type Preferences } from '../lib/preferencesApi'
+import {
+    updatePreferences,
+    type ExperiencePreferences,
+    type Preferences,
+} from '../lib/preferencesApi'
 import { useServerData } from '../hooks/useServerData'
 
 export function Onboarding() {
@@ -96,7 +110,11 @@ export function Onboarding() {
             size="lg"
             title={<Text fw={750}>Set up TrackIt</Text>}
         >
-            <Progress value={((step + 1) / 3) * 100} mb="lg" aria-label={`Setup step ${step + 1} of 3`} />
+            <Progress
+                value={((step + 1) / 3) * 100}
+                mb="lg"
+                aria-label={`Setup step ${step + 1} of 3`}
+            />
             {error && (
                 <Alert color="orange" mb="md">
                     {error}
@@ -121,7 +139,9 @@ export function Onboarding() {
                             <Text className="eyebrow teal-text">PRIVATE BY CONSTRUCTION</Text>
                             <h2>Your health observations, on your server.</h2>
                             <Text c="dimmed">
-                                TrackIt keeps the observations you log or import on the TrackIt server you control, then turns them into Today, Journal, Trends, and Goals.
+                                TrackIt keeps the observations you log or import on the TrackIt
+                                server you control, then turns them into Today, Journal, Trends, and
+                                Goals.
                             </Text>
                             <ul>
                                 <li>Manual logging works without a connected phone</li>
@@ -135,14 +155,18 @@ export function Onboarding() {
                             <div>
                                 <h2>Set your profile context</h2>
                                 <Text c="dimmed" size="sm">
-                                    Timezone controls day boundaries. Locale controls dates and number formatting.
+                                    Timezone controls day boundaries. Locale controls dates and
+                                    number formatting.
                                 </Text>
                             </div>
                             <TextInput
                                 label="Display name"
                                 value={preferences.displayName}
                                 onChange={event =>
-                                    setPreferences({ ...preferences, displayName: event.currentTarget.value })
+                                    setPreferences({
+                                        ...preferences,
+                                        displayName: event.currentTarget.value,
+                                    })
                                 }
                             />
                             <Select
@@ -150,14 +174,18 @@ export function Onboarding() {
                                 value={preferences.timezone}
                                 data={timezones}
                                 searchable
-                                onChange={timezone => timezone && setPreferences({ ...preferences, timezone })}
+                                onChange={timezone =>
+                                    timezone && setPreferences({ ...preferences, timezone })
+                                }
                             />
                             <Select
                                 label="Locale"
                                 value={preferences.locale}
                                 data={locales}
                                 searchable
-                                onChange={locale => locale && setPreferences({ ...preferences, locale })}
+                                onChange={locale =>
+                                    locale && setPreferences({ ...preferences, locale })
+                                }
                             />
                         </Stack>
                     )}
@@ -167,11 +195,16 @@ export function Onboarding() {
                                 <Text className="eyebrow teal-text">READY</Text>
                                 <h2>Choose how you want to start.</h2>
                                 <Text c="dimmed">
-                                    You can log something yourself, connect a source, or go straight to Today and do either later.
+                                    You can log something yourself, connect a source, or go straight
+                                    to Today and do either later.
                                 </Text>
                             </div>
                             <Group grow align="stretch">
-                                <Button size="md" onClick={() => void startLogging()} loading={saving}>
+                                <Button
+                                    size="md"
+                                    onClick={() => void startLogging()}
+                                    loading={saving}
+                                >
                                     Log something
                                 </Button>
                                 <Button
@@ -195,7 +228,12 @@ export function Onboarding() {
                             >
                                 Back
                             </Button>
-                            <Button variant="subtle" color="gray" loading={saving} onClick={() => void skip()}>
+                            <Button
+                                variant="subtle"
+                                color="gray"
+                                loading={saving}
+                                onClick={() => void skip()}
+                            >
                                 Skip setup
                             </Button>
                         </Group>
@@ -213,7 +251,12 @@ export function Onboarding() {
                                 Save and continue
                             </Button>
                         ) : (
-                            <Button variant="subtle" color="trackit" loading={saving} onClick={() => void skip()}>
+                            <Button
+                                variant="subtle"
+                                color="trackit"
+                                loading={saving}
+                                onClick={() => void skip()}
+                            >
                                 Go to Today
                             </Button>
                         )}

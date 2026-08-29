@@ -58,7 +58,9 @@ function SleepDetail({
     return (
         <Stack gap="lg">
             <div>
-                <Text fw={700} size="xl">Sleep phases</Text>
+                <Text fw={700} size="xl">
+                    Sleep phases
+                </Text>
                 {event.startedAt && event.endedAt && (
                     <Text size="sm" c="dimmed">
                         {formatTime(event.startedAt)} – {formatTime(event.endedAt)}
@@ -76,7 +78,9 @@ function SleepDetail({
                             alignItems: 'center',
                         }}
                     >
-                        <Text size="xs" c="dimmed">{stageLabels[type]}</Text>
+                        <Text size="xs" c="dimmed">
+                            {stageLabels[type]}
+                        </Text>
                         <div
                             style={{
                                 position: 'relative',
@@ -89,9 +93,11 @@ function SleepDetail({
                             {stages
                                 .filter(stage => stage.type === type)
                                 .map((stage, index) => {
-                                    const left = ((new Date(stage.start).getTime() - start) / duration) * 100
+                                    const left =
+                                        ((new Date(stage.start).getTime() - start) / duration) * 100
                                     const width =
-                                        ((new Date(stage.end).getTime() - new Date(stage.start).getTime()) /
+                                        ((new Date(stage.end).getTime() -
+                                            new Date(stage.start).getTime()) /
                                             duration) *
                                         100
                                     return (
@@ -141,7 +147,8 @@ export function JournalEntryDetailModal({
     const locale = preferences?.locale
     const timezone = preferences?.timezone ?? 'UTC'
     const [detailed, setDetailed] = useState(false)
-    const hasDetailedView = event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0
+    const hasDetailedView =
+        event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0
     const hasTrend = Boolean(event && metricDefinition(event.definitionId))
     const formatDateTime = (value?: string) =>
         value
@@ -187,7 +194,9 @@ export function JournalEntryDetailModal({
             ) : event ? (
                 <Stack gap="md">
                     <div>
-                        <Text fw={700} size="xl">{event.detail}</Text>
+                        <Text fw={700} size="xl">
+                            {event.detail}
+                        </Text>
                         <Text size="sm" c="dimmed" mt={4}>
                             {event.startedAt && event.endedAt && event.startedAt !== event.endedAt
                                 ? `${formatDateTime(event.startedAt)} – ${formatTime(event.endedAt)}`
@@ -196,19 +205,31 @@ export function JournalEntryDetailModal({
                     </div>
                     <Divider />
                     <div>
-                        <Text size="xs" c="dimmed">Source</Text>
-                        <Text size="sm" fw={600}>{event.source}</Text>
+                        <Text size="xs" c="dimmed">
+                            Source
+                        </Text>
+                        <Text size="sm" fw={600}>
+                            {event.source}
+                        </Text>
                     </div>
                     {event.deviceName && (
                         <div>
-                            <Text size="xs" c="dimmed">Device</Text>
-                            <Text size="sm" fw={600}>{event.deviceName}</Text>
+                            <Text size="xs" c="dimmed">
+                                Device
+                            </Text>
+                            <Text size="sm" fw={600}>
+                                {event.deviceName}
+                            </Text>
                         </div>
                     )}
                     <Group justify="space-between">
                         <Group gap="xs">
                             {hasDetailedView && (
-                                <Button variant="light" color="trackit" onClick={() => setDetailed(true)}>
+                                <Button
+                                    variant="light"
+                                    color="trackit"
+                                    onClick={() => setDetailed(true)}
+                                >
                                     View detailed sleep
                                 </Button>
                             )}
@@ -218,14 +239,18 @@ export function JournalEntryDetailModal({
                                     color="trackit"
                                     onClick={() => {
                                         close()
-                                        navigate(`/trends?metric=${encodeURIComponent(event.definitionId)}`)
+                                        navigate(
+                                            `/trends?metric=${encodeURIComponent(event.definitionId)}`,
+                                        )
                                     }}
                                 >
                                     View trend
                                 </Button>
                             )}
                         </Group>
-                        <Button variant="default" onClick={close}>Close</Button>
+                        <Button variant="default" onClick={close}>
+                            Close
+                        </Button>
                     </Group>
                 </Stack>
             ) : null}

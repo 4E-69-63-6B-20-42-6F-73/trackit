@@ -57,7 +57,9 @@ export function MetricCard({
                     <Icon size={19} stroke={1.8} />
                 </div>
                 <div className="metric-top">
-                    <Text size="sm" fw={650}>{label}</Text>
+                    <Text size="sm" fw={650}>
+                        {label}
+                    </Text>
                     {delta && (
                         <Badge
                             variant="light"
@@ -96,7 +98,9 @@ export function MetricCard({
                 {record && (
                     <Stack gap="sm">
                         <div>
-                            <Text size="xs" c="dimmed">Recorded</Text>
+                            <Text size="xs" c="dimmed">
+                                Recorded
+                            </Text>
                             <Text size="sm">
                                 {new Date(record.observedAt).toLocaleString(locale, {
                                     timeZone: timezone,
@@ -104,7 +108,9 @@ export function MetricCard({
                             </Text>
                         </div>
                         <div>
-                            <Text size="xs" c="dimmed">Source</Text>
+                            <Text size="xs" c="dimmed">
+                                Source
+                            </Text>
                             <Text size="sm">
                                 {friendlySourceName(
                                     typeof record.metadata?.dataOrigin === 'string'
@@ -116,7 +122,9 @@ export function MetricCard({
                             </Text>
                         </div>
                         <div>
-                            <Text size="xs" c="dimmed">Value</Text>
+                            <Text size="xs" c="dimmed">
+                                Value
+                            </Text>
                             <Text size="sm">
                                 {record.originalValue} {record.originalUnit}
                             </Text>
@@ -133,7 +141,9 @@ export function MetricCard({
                                 >
                                     View trend
                                 </Button>
-                            ) : <span />}
+                            ) : (
+                                <span />
+                            )}
                             <Button variant="default" onClick={() => setDetailsOpen(false)}>
                                 Close
                             </Button>

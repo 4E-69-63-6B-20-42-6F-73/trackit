@@ -81,15 +81,16 @@ export function Trends() {
                 const preferred = ['sleep', 'steps', 'weight', 'resting_heart_rate', 'energy'].find(
                     candidate => recorded.includes(candidate),
                 )
-                const requested = requestedMetric && recorded.includes(requestedMetric)
-                    ? requestedMetric
-                    : null
+                const requested =
+                    requestedMetric && recorded.includes(requestedMetric) ? requestedMetric : null
                 setDefinitionId(requested ?? preferred ?? recorded[0] ?? null)
                 setError(false)
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
-        void listTrendViews().then(setSavedViews).catch(() => undefined)
+        void listTrendViews()
+            .then(setSavedViews)
+            .catch(() => undefined)
         // requestedMetric is intentionally only used as the initial route preference.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [todayKey])
@@ -192,7 +193,8 @@ export function Trends() {
     const previousAverage = previousValues.length
         ? previousValues.reduce((total, value) => total + value, 0) / previousValues.length
         : null
-    const periodChange = average !== null && previousAverage !== null ? average - previousAverage : null
+    const periodChange =
+        average !== null && previousAverage !== null ? average - previousAverage : null
     const coverageRatio = points.length ? coveredValues.length / points.length : 0
     const confidence =
         coverageRatio >= 0.75
@@ -200,8 +202,12 @@ export function Trends() {
             : coverageRatio >= 0.4
               ? 'Partial coverage'
               : 'Low coverage'
-    const isNutritionMetric = definitionId ? metricDefinition(definitionId)?.source === 'meal' : false
-    const isManualMetric = definitionId ? metricDefinition(definitionId)?.source === 'manual' : false
+    const isNutritionMetric = definitionId
+        ? metricDefinition(definitionId)?.source === 'meal'
+        : false
+    const isManualMetric = definitionId
+        ? metricDefinition(definitionId)?.source === 'manual'
+        : false
 
     const toggleExcluded = async (observation: NumericObservation) => {
         try {
@@ -277,7 +283,8 @@ export function Trends() {
                                 value={definitionId}
                                 onChange={value => {
                                     setDefinitionId(value)
-                                    if (value === comparisonDefinitionId) setComparisonDefinitionId(null)
+                                    if (value === comparisonDefinitionId)
+                                        setComparisonDefinitionId(null)
                                     setInspectedIds(null)
                                     setShowAnalysis(false)
                                 }}
@@ -310,7 +317,10 @@ export function Trends() {
                                     </Menu.Target>
                                     <Menu.Dropdown>
                                         {savedViews.map(view => (
-                                            <Menu.Item key={view.id} onClick={() => loadView(view.id)}>
+                                            <Menu.Item
+                                                key={view.id}
+                                                onClick={() => loadView(view.id)}
+                                            >
                                                 {view.name}
                                             </Menu.Item>
                                         ))}
@@ -346,7 +356,9 @@ export function Trends() {
                                         />
                                     </Menu.Item>
                                     <Menu.Divider />
-                                    <Menu.Item onClick={() => void saveView()}>Save current view</Menu.Item>
+                                    <Menu.Item onClick={() => void saveView()}>
+                                        Save current view
+                                    </Menu.Item>
                                 </Menu.Dropdown>
                             </Menu>
                         </div>
@@ -355,11 +367,17 @@ export function Trends() {
                     {average !== null && (
                         <div className="trends-summary" aria-label="Trend summary">
                             <div>
-                                <Text size="xs" c="dimmed">Average</Text>
-                                <Text fw={750} size="xl">{formatDisplayValue(average)}</Text>
+                                <Text size="xs" c="dimmed">
+                                    Average
+                                </Text>
+                                <Text fw={750} size="xl">
+                                    {formatDisplayValue(average)}
+                                </Text>
                             </div>
                             <div>
-                                <Text size="xs" c="dimmed">vs previous {range.toLowerCase()}</Text>
+                                <Text size="xs" c="dimmed">
+                                    vs previous {range.toLowerCase()}
+                                </Text>
                                 <Text fw={700}>
                                     {periodChange === null
                                         ? 'Not enough prior data'
@@ -367,14 +385,23 @@ export function Trends() {
                                 </Text>
                             </div>
                             <div>
-                                <Text size="xs" c="dimmed">Coverage</Text>
+                                <Text size="xs" c="dimmed">
+                                    Coverage
+                                </Text>
                                 <div className="trends-coverage-value">
                                     <Text fw={700}>
-                                        {coveredValues.length} / {points.length} {granularity === 'weekly' ? 'weeks' : 'days'}
+                                        {coveredValues.length} / {points.length}{' '}
+                                        {granularity === 'weekly' ? 'weeks' : 'days'}
                                     </Text>
                                     <Badge
                                         size="xs"
-                                        color={coverageRatio >= 0.75 ? 'teal' : coverageRatio >= 0.4 ? 'yellow' : 'gray'}
+                                        color={
+                                            coverageRatio >= 0.75
+                                                ? 'teal'
+                                                : coverageRatio >= 0.4
+                                                  ? 'yellow'
+                                                  : 'gray'
+                                        }
                                     >
                                         {confidence}
                                     </Badge>
@@ -386,7 +413,9 @@ export function Trends() {
                     {!loading && coveredValues.length === 0 ? (
                         <div className="trend-metric-empty">
                             <Text fw={650}>
-                                No {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'} data in this range
+                                No{' '}
+                                {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'}{' '}
+                                data in this range
                             </Text>
                             <Text size="sm" c="dimmed">
                                 {isNutritionMetric
@@ -400,10 +429,16 @@ export function Trends() {
                                     size="xs"
                                     variant="default"
                                     onClick={() =>
-                                        navigate(isNutritionMetric ? '/journal?category=Meals' : '/settings/connections')
+                                        navigate(
+                                            isNutritionMetric
+                                                ? '/journal?category=Meals'
+                                                : '/settings/connections',
+                                        )
                                     }
                                 >
-                                    {isNutritionMetric ? 'View meals in Journal' : 'Review Connections'}
+                                    {isNutritionMetric
+                                        ? 'View meals in Journal'
+                                        : 'Review Connections'}
                                 </Button>
                             )}
                         </div>
@@ -415,7 +450,11 @@ export function Trends() {
                             metric={definitionId ? metricLabel(definitionId) : ''}
                             onInspect={isNutritionMetric ? undefined : setInspectedIds}
                             comparisonPoints={comparisonDefinitionId ? comparisonPoints : undefined}
-                            comparisonLabel={comparisonDefinitionId ? metricLabel(comparisonDefinitionId) : undefined}
+                            comparisonLabel={
+                                comparisonDefinitionId
+                                    ? metricLabel(comparisonDefinitionId)
+                                    : undefined
+                            }
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
                             valueLabel={
                                 definitionId && displayUnit
@@ -477,22 +516,35 @@ export function Trends() {
                         </div>
                     )}
 
-                    {actionError && <Alert role="alert" color="orange">{actionError}</Alert>}
+                    {actionError && (
+                        <Alert role="alert" color="orange">
+                            {actionError}
+                        </Alert>
+                    )}
 
                     {inspectedIds && definitionId && (
                         <div className="trends-inspector">
                             <div className="trends-inspector-heading">
                                 <div>
                                     <Text fw={700}>Contributing observations</Text>
-                                    <Text size="sm" c="dimmed">These are the records behind the selected chart point.</Text>
+                                    <Text size="sm" c="dimmed">
+                                        These are the records behind the selected chart point.
+                                    </Text>
                                 </div>
-                                <Button size="xs" variant="subtle" color="gray" onClick={() => setInspectedIds(null)}>
+                                <Button
+                                    size="xs"
+                                    variant="subtle"
+                                    color="gray"
+                                    onClick={() => setInspectedIds(null)}
+                                >
                                     Close
                                 </Button>
                             </div>
                             <ObservationRecords
                                 observations={observations.filter(
-                                    record => record.definitionId === definitionId && inspectedIds.includes(record.id),
+                                    record =>
+                                        record.definitionId === definitionId &&
+                                        inspectedIds.includes(record.id),
                                 )}
                                 onToggleExcluded={observation => void toggleExcluded(observation)}
                                 showAll
@@ -501,7 +553,8 @@ export function Trends() {
                     )}
 
                     <Text size="xs" c="dimmed" className="trends-footnote">
-                        Missing periods are shown rather than estimated. Summary values use only periods that contain observations.
+                        Missing periods are shown rather than estimated. Summary values use only
+                        periods that contain observations.
                     </Text>
                 </section>
             )}

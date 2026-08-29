@@ -11,7 +11,14 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { IconApple, IconChartDots, IconChefHat, IconChevronRight, IconPlus, IconSearch } from '@tabler/icons-react'
+import {
+    IconApple,
+    IconChartDots,
+    IconChefHat,
+    IconChevronRight,
+    IconPlus,
+    IconSearch,
+} from '@tabler/icons-react'
 import { Link } from 'react-router-dom'
 import { FoodCatalogLookup } from '../components/FoodCatalogLookup'
 import { FoodCsvImport } from '../components/FoodCsvImport'
@@ -84,31 +91,55 @@ export function Library() {
                 title="Library"
                 description="Reusable reference data for logging, recipes, and metric behavior."
             />
-            {message && <Alert mt="md" color="orange">{message}</Alert>}
+            {message && (
+                <Alert mt="md" color="orange">
+                    {message}
+                </Alert>
+            )}
 
             <SimpleGrid cols={{ base: 1, sm: 3 }} mt="md" mb="lg">
                 <Paper withBorder p="md" radius="md">
                     <Group justify="space-between" align="start">
                         <IconApple size={22} />
-                        <Text size="xs" c="dimmed">{allFoods.length}</Text>
+                        <Text size="xs" c="dimmed">
+                            {allFoods.length}
+                        </Text>
                     </Group>
-                    <Text fw={700} mt="sm">Foods</Text>
-                    <Text size="sm" c="dimmed" mb="sm">Reference foods used by meals and recipes.</Text>
-                    <Button variant="subtle" size="compact-sm" onClick={() => setTab('foods')}>Browse foods</Button>
+                    <Text fw={700} mt="sm">
+                        Foods
+                    </Text>
+                    <Text size="sm" c="dimmed" mb="sm">
+                        Reference foods used by meals and recipes.
+                    </Text>
+                    <Button variant="subtle" size="compact-sm" onClick={() => setTab('foods')}>
+                        Browse foods
+                    </Button>
                 </Paper>
                 <Paper withBorder p="md" radius="md">
                     <Group justify="space-between" align="start">
                         <IconChefHat size={22} />
-                        <Text size="xs" c="dimmed">{recipes.length}</Text>
+                        <Text size="xs" c="dimmed">
+                            {recipes.length}
+                        </Text>
                     </Group>
-                    <Text fw={700} mt="sm">Recipes</Text>
-                    <Text size="sm" c="dimmed" mb="sm">Reusable combinations with stable serving yields.</Text>
-                    <Button variant="subtle" size="compact-sm" onClick={() => setTab('recipes')}>Browse recipes</Button>
+                    <Text fw={700} mt="sm">
+                        Recipes
+                    </Text>
+                    <Text size="sm" c="dimmed" mb="sm">
+                        Reusable combinations with stable serving yields.
+                    </Text>
+                    <Button variant="subtle" size="compact-sm" onClick={() => setTab('recipes')}>
+                        Browse recipes
+                    </Button>
                 </Paper>
                 <Paper withBorder p="md" radius="md">
                     <IconChartDots size={22} />
-                    <Text fw={700} mt="sm">Metric Center</Text>
-                    <Text size="sm" c="dimmed" mb="sm">Units, definitions, and how TrackIt interprets metrics.</Text>
+                    <Text fw={700} mt="sm">
+                        Metric Center
+                    </Text>
+                    <Text size="sm" c="dimmed" mb="sm">
+                        Units, definitions, and how TrackIt interprets metrics.
+                    </Text>
                     <Button
                         component={Link}
                         to="/library/metrics"
@@ -123,8 +154,12 @@ export function Library() {
 
             <Tabs value={tab} onChange={setTab} keepMounted={false}>
                 <Tabs.List mb="md">
-                    <Tabs.Tab value="foods" leftSection={<IconApple size={16} />}>Foods</Tabs.Tab>
-                    <Tabs.Tab value="recipes" leftSection={<IconChefHat size={16} />}>Recipes</Tabs.Tab>
+                    <Tabs.Tab value="foods" leftSection={<IconApple size={16} />}>
+                        Foods
+                    </Tabs.Tab>
+                    <Tabs.Tab value="recipes" leftSection={<IconChefHat size={16} />}>
+                        Recipes
+                    </Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="foods">
@@ -132,7 +167,9 @@ export function Library() {
                         <Group justify="space-between" align="end" mb="md">
                             <div>
                                 <h2>Foods</h2>
-                                <Text size="sm" c="dimmed">Search, create, or import reusable food definitions.</Text>
+                                <Text size="sm" c="dimmed">
+                                    Search, create, or import reusable food definitions.
+                                </Text>
                             </div>
                             <Group gap="xs">
                                 <FoodCatalogLookup onCreated={addFoodLocally} />
@@ -142,7 +179,11 @@ export function Library() {
                                         refreshAllFoods()
                                     }}
                                 />
-                                <Button size="sm" leftSection={<IconPlus size={16} />} onClick={() => setCreateFoodOpened(true)}>
+                                <Button
+                                    size="sm"
+                                    leftSection={<IconPlus size={16} />}
+                                    onClick={() => setCreateFoodOpened(true)}
+                                >
                                     New food
                                 </Button>
                             </Group>
@@ -156,22 +197,35 @@ export function Library() {
                         />
                         <Stack gap="xs" mt="md">
                             {foods.map(food => (
-                                <button className="food-row" key={food.id} onClick={() => setEditingFood(food)}>
-                                    <div className="food-icon"><IconApple size={18} /></div>
+                                <button
+                                    className="food-row"
+                                    key={food.id}
+                                    onClick={() => setEditingFood(food)}
+                                >
+                                    <div className="food-icon">
+                                        <IconApple size={18} />
+                                    </div>
                                     <div>
-                                        <Text fw={600} size="sm">{food.name}</Text>
+                                        <Text fw={600} size="sm">
+                                            {food.name}
+                                        </Text>
                                         <Text size="xs" c="dimmed">
-                                            {food.brand ? `${food.brand} · ` : ''}{food.per100g.calories ?? '—'} kcal per 100 g
+                                            {food.brand ? `${food.brand} · ` : ''}
+                                            {food.per100g.calories ?? '—'} kcal per 100 g
                                         </Text>
                                     </div>
                                     {food.nutritionQuality !== 'complete' && (
-                                        <Badge size="xs" variant="light">{food.nutritionQuality}</Badge>
+                                        <Badge size="xs" variant="light">
+                                            {food.nutritionQuality}
+                                        </Badge>
                                     )}
                                 </button>
                             ))}
                             {foods.length === 0 && !message && (
                                 <div className="compact-empty">
-                                    <Text fw={650}>{query ? 'No matching foods' : 'Your food library is empty'}</Text>
+                                    <Text fw={650}>
+                                        {query ? 'No matching foods' : 'Your food library is empty'}
+                                    </Text>
                                     <Text size="sm" c="dimmed">
                                         {query
                                             ? `Create “${query}”, search a configured catalog, or clear the search.`
@@ -179,8 +233,19 @@ export function Library() {
                                     </Text>
                                     {query && (
                                         <Group gap="xs" mt="xs">
-                                            <Button size="compact-sm" onClick={() => setCreateFoodOpened(true)}>Create “{query}”</Button>
-                                            <Button size="compact-sm" variant="subtle" onClick={() => setQuery('')}>Clear search</Button>
+                                            <Button
+                                                size="compact-sm"
+                                                onClick={() => setCreateFoodOpened(true)}
+                                            >
+                                                Create “{query}”
+                                            </Button>
+                                            <Button
+                                                size="compact-sm"
+                                                variant="subtle"
+                                                onClick={() => setQuery('')}
+                                            >
+                                                Clear search
+                                            </Button>
                                         </Group>
                                     )}
                                 </div>
@@ -194,7 +259,10 @@ export function Library() {
                         <Group justify="space-between" mb="md">
                             <div>
                                 <h2>Recipes</h2>
-                                <Text size="sm" c="dimmed">Reusable combinations of foods. Logged meals keep their historical nutrient snapshot.</Text>
+                                <Text size="sm" c="dimmed">
+                                    Reusable combinations of foods. Logged meals keep their
+                                    historical nutrient snapshot.
+                                </Text>
                             </div>
                             <Button
                                 variant="default"
@@ -208,11 +276,20 @@ export function Library() {
                         </Group>
                         <Stack gap="xs">
                             {recipes.map(recipe => (
-                                <button className="food-row" key={recipe.id} onClick={() => setEditingRecipe(recipe)}>
+                                <button
+                                    className="food-row"
+                                    key={recipe.id}
+                                    onClick={() => setEditingRecipe(recipe)}
+                                >
                                     <div>
-                                        <Text fw={600} size="sm">{recipe.name}</Text>
+                                        <Text fw={600} size="sm">
+                                            {recipe.name}
+                                        </Text>
                                         <Text size="xs" c="dimmed">
-                                            {recipe.servings} {recipe.servings === 1 ? 'serving' : 'servings'} · {Math.round(recipe.nutrientsPerServing.calories)} kcal per serving
+                                            {recipe.servings}{' '}
+                                            {recipe.servings === 1 ? 'serving' : 'servings'} ·{' '}
+                                            {Math.round(recipe.nutrientsPerServing.calories)} kcal
+                                            per serving
                                         </Text>
                                     </div>
                                 </button>
@@ -249,8 +326,12 @@ export function Library() {
                     onClose={() => setEditingFood(null)}
                     onSave={async changes => {
                         const updated = await updateFood(editingFood, changes)
-                        setFoods(current => current.map(food => (food.id === updated.id ? updated : food)))
-                        setAllFoods(current => current.map(food => (food.id === updated.id ? updated : food)))
+                        setFoods(current =>
+                            current.map(food => (food.id === updated.id ? updated : food)),
+                        )
+                        setAllFoods(current =>
+                            current.map(food => (food.id === updated.id ? updated : food)),
+                        )
                     }}
                 />
             )}

@@ -33,7 +33,9 @@ const McpAccess = lazy(() =>
 const McpNew = lazy(() =>
     import('./pages/connections/mcp/new').then(module => ({ default: module.McpNew })),
 )
-const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
+const Settings = lazy(() =>
+    import('./pages/Settings').then(module => ({ default: module.Settings })),
+)
 const MobileMore = lazy(() =>
     import('./components/MobileMore').then(module => ({ default: module.MobileMore })),
 )
@@ -108,9 +110,15 @@ export default function App() {
 
     return (
         <>
-            <a className="skip-link" href="#main-content">Skip to main content</a>
+            <a className="skip-link" href="#main-content">
+                Skip to main content
+            </a>
             <Box className="app-shell">
-                <Sidebar page={page} collapsed={collapsed} toggle={() => setCollapsed(!collapsed)} />
+                <Sidebar
+                    page={page}
+                    collapsed={collapsed}
+                    toggle={() => setCollapsed(!collapsed)}
+                />
                 <main ref={mainRef} className="main" id="main-content" tabIndex={-1}>
                     <Header page={page} />
                     {(commandFailure || syncFailure) && (
@@ -165,17 +173,46 @@ export default function App() {
                             <Route path="/library" element={<Library />} />
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
-                            <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
-                            <Route path="/settings/connections/devices" element={<DeviceManagement />} />
-                            <Route path="/settings/connections/devices/new" element={<DeviceNew />} />
+                            <Route
+                                path="/metrics"
+                                element={<Navigate to="/library/metrics" replace />}
+                            />
+                            <Route
+                                path="/settings/connections/devices"
+                                element={<DeviceManagement />}
+                            />
+                            <Route
+                                path="/settings/connections/devices/new"
+                                element={<DeviceNew />}
+                            />
                             <Route path="/settings/connections/mcp" element={<McpAccess />} />
                             <Route path="/settings/connections/mcp/new" element={<McpNew />} />
-                            <Route path="/connections" element={<Navigate to="/settings/connections" replace />} />
-                            <Route path="/connections/devices" element={<Navigate to="/settings/connections/devices" replace />} />
-                            <Route path="/connections/devices/new" element={<Navigate to="/settings/connections/devices/new" replace />} />
-                            <Route path="/connections/mcp" element={<Navigate to="/settings/connections/mcp" replace />} />
-                            <Route path="/connections/mcp/new" element={<Navigate to="/settings/connections/mcp/new" replace />} />
-                            <Route path="/settings/goals" element={<Navigate to="/goals" replace />} />
+                            <Route
+                                path="/connections"
+                                element={<Navigate to="/settings/connections" replace />}
+                            />
+                            <Route
+                                path="/connections/devices"
+                                element={<Navigate to="/settings/connections/devices" replace />}
+                            />
+                            <Route
+                                path="/connections/devices/new"
+                                element={
+                                    <Navigate to="/settings/connections/devices/new" replace />
+                                }
+                            />
+                            <Route
+                                path="/connections/mcp"
+                                element={<Navigate to="/settings/connections/mcp" replace />}
+                            />
+                            <Route
+                                path="/connections/mcp/new"
+                                element={<Navigate to="/settings/connections/mcp/new" replace />}
+                            />
+                            <Route
+                                path="/settings/goals"
+                                element={<Navigate to="/goals" replace />}
+                            />
                             <Route path="/settings/*" element={<Settings />} />
                             <Route path="*" element={<Navigate to="/today" replace />} />
                         </Routes>
@@ -184,7 +221,9 @@ export default function App() {
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
                 {nav
-                    .filter(({ label }) => ['Today', 'Journal', 'Trends', 'Library'].includes(label))
+                    .filter(({ label }) =>
+                        ['Today', 'Journal', 'Trends', 'Library'].includes(label),
+                    )
                     .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
@@ -202,11 +241,15 @@ export default function App() {
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"
                 >
-                    <span className="more-symbol" aria-hidden="true">•••</span>
+                    <span className="more-symbol" aria-hidden="true">
+                        •••
+                    </span>
                     <span>More</span>
                 </button>
             </nav>
-            <Suspense fallback={null}><Onboarding /></Suspense>
+            <Suspense fallback={null}>
+                <Onboarding />
+            </Suspense>
             {moreOpen && (
                 <Suspense fallback={null}>
                     <MobileMore page={page} close={() => setMoreOpen(false)} />

@@ -78,9 +78,7 @@ export function Journal({
             return
         }
         let active = true
-        const selectedRange = selectedDate
-            ? calendarDayRangeForKey(selectedDate, timezone)
-            : null
+        const selectedRange = selectedDate ? calendarDayRangeForKey(selectedDate, timezone) : null
         const from = selectedRange
             ? selectedRange.from.toISOString()
             : rangeFrom
@@ -133,7 +131,17 @@ export function Journal({
                         .includes(query.toLowerCase())
                 )
             }),
-        [availableEvents, category, device, query, rangeFrom, rangeTo, selectedDate, source, timezone],
+        [
+            availableEvents,
+            category,
+            device,
+            query,
+            rangeFrom,
+            rangeTo,
+            selectedDate,
+            source,
+            timezone,
+        ],
     )
     const sources = useMemo(
         () => [...new Set(availableEvents.map(event => event.source))].sort(),
@@ -227,12 +235,19 @@ export function Journal({
                             <Select
                                 label="Category"
                                 value={category}
-                                onChange={value => setCategory((value as 'All' | Category) ?? 'All')}
-                                data={categories.map(value => ({ value, label: value === 'All' ? 'All categories' : value }))}
+                                onChange={value =>
+                                    setCategory((value as 'All' | Category) ?? 'All')
+                                }
+                                data={categories.map(value => ({
+                                    value,
+                                    label: value === 'All' ? 'All categories' : value,
+                                }))}
                             />
                             <SegmentedControl
                                 aria-label="Journal time range"
-                                value={selectedDate ? 'day' : rangeFrom || rangeTo ? 'range' : 'all'}
+                                value={
+                                    selectedDate ? 'day' : rangeFrom || rangeTo ? 'range' : 'all'
+                                }
                                 onChange={value => {
                                     if (value === 'day') {
                                         setSelectedDate(todayKey)
@@ -240,7 +255,9 @@ export function Journal({
                                         setRangeTo('')
                                     } else if (value === 'range') {
                                         setSelectedDate(null)
-                                        setRangeFrom(current => current || addCalendarDays(todayKey, -6))
+                                        setRangeFrom(
+                                            current => current || addCalendarDays(todayKey, -6),
+                                        )
                                         setRangeTo(current => current || todayKey)
                                     } else {
                                         setSelectedDate(null)
@@ -256,7 +273,12 @@ export function Journal({
                             />
                             {selectedDate && (
                                 <Group gap="xs" wrap="nowrap">
-                                    <ActionIcon variant="subtle" color="gray" aria-label="Previous day" onClick={() => moveDay(-1)}>
+                                    <ActionIcon
+                                        variant="subtle"
+                                        color="gray"
+                                        aria-label="Previous day"
+                                        onClick={() => moveDay(-1)}
+                                    >
                                         <IconChevronLeft size={18} />
                                     </ActionIcon>
                                     <TextInput
@@ -264,7 +286,10 @@ export function Journal({
                                         aria-label="Journal date"
                                         value={selectedDate}
                                         max={todayKey}
-                                        onChange={event => event.currentTarget.value && setSelectedDate(event.currentTarget.value)}
+                                        onChange={event =>
+                                            event.currentTarget.value &&
+                                            setSelectedDate(event.currentTarget.value)
+                                        }
                                         style={{ flex: 1 }}
                                     />
                                     <ActionIcon
@@ -317,7 +342,12 @@ export function Journal({
                                     data={devices}
                                 />
                             )}
-                            <Button variant="subtle" color="gray" disabled={!activeFilterCount} onClick={clearFilters}>
+                            <Button
+                                variant="subtle"
+                                color="gray"
+                                disabled={!activeFilterCount}
+                                onClick={clearFilters}
+                            >
                                 Clear filters
                             </Button>
                         </Stack>
@@ -328,13 +358,26 @@ export function Journal({
             {activeFilterCount > 0 && (
                 <Group gap="xs" mb="md" aria-label="Active Journal filters">
                     {category !== 'All' && (
-                        <Button size="compact-xs" variant="light" rightSection={<IconX size={12} />} onClick={() => setCategory('All')}>
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            rightSection={<IconX size={12} />}
+                            onClick={() => setCategory('All')}
+                        >
                             {category}
                         </Button>
                     )}
                     {selectedDate && (
-                        <Button size="compact-xs" variant="light" rightSection={<IconX size={12} />} onClick={() => setSelectedDate(null)}>
-                            {formatCalendarDate(selectedDate, locale, { month: 'short', day: 'numeric' })}
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            rightSection={<IconX size={12} />}
+                            onClick={() => setSelectedDate(null)}
+                        >
+                            {formatCalendarDate(selectedDate, locale, {
+                                month: 'short',
+                                day: 'numeric',
+                            })}
                         </Button>
                     )}
                     {!selectedDate && (rangeFrom || rangeTo) && (
@@ -350,30 +393,61 @@ export function Journal({
                             {rangeFrom || '…'} – {rangeTo || '…'}
                         </Button>
                     )}
-                    {source && <Button size="compact-xs" variant="light" rightSection={<IconX size={12} />} onClick={() => setSource(null)}>{source}</Button>}
-                    {device && <Button size="compact-xs" variant="light" rightSection={<IconX size={12} />} onClick={() => setDevice(null)}>{device}</Button>}
+                    {source && (
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            rightSection={<IconX size={12} />}
+                            onClick={() => setSource(null)}
+                        >
+                            {source}
+                        </Button>
+                    )}
+                    {device && (
+                        <Button
+                            size="compact-xs"
+                            variant="light"
+                            rightSection={<IconX size={12} />}
+                            onClick={() => setDevice(null)}
+                        >
+                            {device}
+                        </Button>
+                    )}
                 </Group>
             )}
 
             <section className="panel timeline journal-timeline">
                 {groups.map(group => (
                     <div key={group.key}>
-                        <div className="day-divider"><span>{group.label}</span></div>
+                        <div className="day-divider">
+                            <span>{group.label}</span>
+                        </div>
                         <JournalEventList
                             events={group.events}
                             roomy
                             renderActions={event => (
                                 <Menu>
                                     <Menu.Target>
-                                        <ActionIcon aria-label={`Actions for ${event.title}`} variant="subtle" color="gray">
+                                        <ActionIcon
+                                            aria-label={`Actions for ${event.title}`}
+                                            variant="subtle"
+                                            color="gray"
+                                        >
                                             <IconDots size={18} />
                                         </ActionIcon>
                                     </Menu.Target>
                                     <Menu.Dropdown>
                                         {event.source === 'You' && (
                                             <>
-                                                <Menu.Item onClick={() => beginEdit(event)}>Edit</Menu.Item>
-                                                <Menu.Item onClick={() => setDeleting(event)} color="red">Delete</Menu.Item>
+                                                <Menu.Item onClick={() => beginEdit(event)}>
+                                                    Edit
+                                                </Menu.Item>
+                                                <Menu.Item
+                                                    onClick={() => setDeleting(event)}
+                                                    color="red"
+                                                >
+                                                    Delete
+                                                </Menu.Item>
                                             </>
                                         )}
                                     </Menu.Dropdown>
@@ -386,55 +460,97 @@ export function Journal({
                     <div className="empty-state">
                         <IconSearch size={24} />
                         <Text fw={600}>Nothing matches</Text>
-                        <Text size="sm" c="dimmed">Change the search or clear a filter to see your timeline again.</Text>
-                        <Button variant="subtle" onClick={clearFilters}>Clear filters</Button>
+                        <Text size="sm" c="dimmed">
+                            Change the search or clear a filter to see your timeline again.
+                        </Text>
+                        <Button variant="subtle" onClick={clearFilters}>
+                            Clear filters
+                        </Button>
                     </div>
                 )}
                 {availableEvents.length === 0 && (
                     <div className="empty-state">
                         <IconPlus size={24} />
                         <Text fw={600}>Your journal is ready</Text>
-                        <Text size="sm" c="dimmed">Meals, measurements, check-ins, and synced activity will appear here. Use Log to record your first entry.</Text>
+                        <Text size="sm" c="dimmed">
+                            Meals, measurements, check-ins, and synced activity will appear here.
+                            Use Log to record your first entry.
+                        </Text>
                     </div>
                 )}
                 {(selectedDate || rangeFrom || rangeTo) && (
                     <div className="journal-load-more">
-                        <Button variant="subtle" color="gray" onClick={showEarlier}>Show earlier</Button>
+                        <Button variant="subtle" color="gray" onClick={showEarlier}>
+                            Show earlier
+                        </Button>
                     </div>
                 )}
                 {hasOlder && !selectedDate && !rangeFrom && !rangeTo && (
                     <div className="journal-load-more">
-                        <Button variant="default" loading={loadingOlder} onClick={loadOlder}>Load older entries</Button>
+                        <Button variant="default" loading={loadingOlder} onClick={loadOlder}>
+                            Load older entries
+                        </Button>
                     </div>
                 )}
             </section>
 
-            <Modal opened={Boolean(editing)} onClose={() => setEditing(null)} title="Edit entry" centered>
-                <TextInput label="Title" value={draftTitle} onChange={event => setDraftTitle(event.currentTarget.value)} />
-                <TextInput mt="md" label="Details" value={draftDetail} onChange={event => setDraftDetail(event.currentTarget.value)} />
+            <Modal
+                opened={Boolean(editing)}
+                onClose={() => setEditing(null)}
+                title="Edit entry"
+                centered
+            >
+                <TextInput
+                    label="Title"
+                    value={draftTitle}
+                    onChange={event => setDraftTitle(event.currentTarget.value)}
+                />
+                <TextInput
+                    mt="md"
+                    label="Details"
+                    value={draftDetail}
+                    onChange={event => setDraftDetail(event.currentTarget.value)}
+                />
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setEditing(null)}>Cancel</Button>
+                    <Button variant="default" onClick={() => setEditing(null)}>
+                        Cancel
+                    </Button>
                     <Button
                         disabled={!draftTitle.trim()}
                         onClick={async () => {
                             if (!editing) return
-                            if (await update(editing, { title: draftTitle, detail: draftDetail })) setEditing(null)
+                            if (await update(editing, { title: draftTitle, detail: draftDetail }))
+                                setEditing(null)
                         }}
                     >
                         Save changes
                     </Button>
                 </Group>
             </Modal>
-            <Modal opened={Boolean(deleting)} onClose={() => setDeleting(null)} title="Delete this entry?" centered size="sm">
-                <Text size="sm">This removes {deleting?.title} from your observations and any summaries derived from it.</Text>
+            <Modal
+                opened={Boolean(deleting)}
+                onClose={() => setDeleting(null)}
+                title="Delete this entry?"
+                centered
+                size="sm"
+            >
+                <Text size="sm">
+                    This removes {deleting?.title} from your observations and any summaries derived
+                    from it.
+                </Text>
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setDeleting(null)}>Keep entry</Button>
+                    <Button variant="default" onClick={() => setDeleting(null)}>
+                        Keep entry
+                    </Button>
                     <Button
                         color="red"
                         onClick={() => {
                             if (deleting) {
                                 remove(deleting.id)
-                                setBoundedEvents(current => current?.filter(event => event.id !== deleting.id) ?? null)
+                                setBoundedEvents(
+                                    current =>
+                                        current?.filter(event => event.id !== deleting.id) ?? null,
+                                )
                             }
                             setDeleting(null)
                         }}

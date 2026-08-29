@@ -1,5 +1,15 @@
 import { useState } from 'react'
-import { Alert, Button, Group, Modal, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import {
+    Alert,
+    Button,
+    Group,
+    Modal,
+    NumberInput,
+    Select,
+    Stack,
+    Text,
+    TextInput,
+} from '@mantine/core'
 import {
     calendarLocalDateTimeToInstant,
     calendarLocalDateTimeValue,
@@ -49,7 +59,8 @@ export function ManualEntryLogger({
     )
     const [error, setError] = useState('')
     const isHistorical = targetDate !== todayKey
-    const selectedTimestamp = () => calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
+    const selectedTimestamp = () =>
+        calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
 
     const submit = () => {
         setError('')
@@ -177,8 +188,12 @@ export function ManualEntryLogger({
                 {kind === 'Water' && (
                     <Stack gap="xs">
                         <Group grow>
-                            <Button variant="default" onClick={() => setAmount(250)}>250 ml</Button>
-                            <Button variant="default" onClick={() => setAmount(500)}>500 ml</Button>
+                            <Button variant="default" onClick={() => setAmount(250)}>
+                                250 ml
+                            </Button>
+                            <Button variant="default" onClick={() => setAmount(500)}>
+                                500 ml
+                            </Button>
                         </Group>
                         <NumberInput
                             autoFocus
@@ -211,7 +226,16 @@ export function ManualEntryLogger({
                             value={energy}
                             onChange={setEnergy}
                             data={[
-                                '1 · Very low', '2', '3', '4', '5 · Neutral', '6', '7', '8', '9', '10 · Excellent',
+                                '1 · Very low',
+                                '2',
+                                '3',
+                                '4',
+                                '5 · Neutral',
+                                '6',
+                                '7',
+                                '8',
+                                '9',
+                                '10 · Excellent',
                             ]}
                         />
                         <TextInput
@@ -281,7 +305,9 @@ export function ManualEntryLogger({
                 />
                 {error && <Alert color="orange">{error}</Alert>}
                 <Group justify="flex-end">
-                    <Button variant="subtle" color="gray" onClick={close}>Cancel</Button>
+                    <Button variant="subtle" color="gray" onClick={close}>
+                        Cancel
+                    </Button>
                     <Button color="trackit" onClick={submit}>
                         {kind === 'Water'
                             ? `Log ${amount || 0} ${waterUnit}`

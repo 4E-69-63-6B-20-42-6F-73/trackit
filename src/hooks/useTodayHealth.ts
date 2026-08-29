@@ -168,7 +168,10 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 )
                 const leftRank = leftCategory === -1 ? categoryOrder.length : leftCategory
                 const rightRank = rightCategory === -1 ? categoryOrder.length : rightCategory
-                return leftRank - rightRank || left.definition!.name.localeCompare(right.definition!.name)
+                return (
+                    leftRank - rightRank ||
+                    left.definition!.name.localeCompare(right.definition!.name)
+                )
             })
             .slice(0, 4)
             .map(({ row, definition }) => ({

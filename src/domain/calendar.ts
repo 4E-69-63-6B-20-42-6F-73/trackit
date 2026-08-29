@@ -101,4 +101,5 @@ export const formatCalendarDate = (
     dateKey: string,
     locale?: string,
     options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' },
-) => new Date(`${dateKey}T12:00:00.000Z`).toLocaleDateString(locale, { ...options, timeZone: 'UTC' })
+) =>
+    new Date(`${dateKey}T12:00:00.000Z`).toLocaleDateString(locale, { ...options, timeZone: 'UTC' })

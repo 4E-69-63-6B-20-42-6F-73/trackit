@@ -173,7 +173,9 @@ export function FoodLogger({
                                             }}
                                         >
                                             <span>{food.name}</span>
-                                            <small>{food.brand || `${food.servingGrams} g serving`}</small>
+                                            <small>
+                                                {food.brand || `${food.servingGrams} g serving`}
+                                            </small>
                                         </button>
                                     ))}
                                 {(view === 'recipes' || query) &&
@@ -196,9 +198,15 @@ export function FoodLogger({
                                         ))}
                                 {visibleFoods.length === 0 && visibleRecipes.length === 0 && (
                                     <Stack gap="xs">
-                                        <Text size="sm" c="dimmed">No matching saved foods or recipes.</Text>
+                                        <Text size="sm" c="dimmed">
+                                            No matching saved foods or recipes.
+                                        </Text>
                                         {query && (
-                                            <Button variant="subtle" size="compact-sm" onClick={() => setCreating(true)}>
+                                            <Button
+                                                variant="subtle"
+                                                size="compact-sm"
+                                                onClick={() => setCreating(true)}
+                                            >
                                                 Create “{query}”
                                             </Button>
                                         )}
@@ -206,17 +214,25 @@ export function FoodLogger({
                                 )}
                             </div>
                             <Group>
-                                <FoodCatalogLookup onCreated={food => setFoods(current => [food, ...current])} />
-                                <Button variant="default" onClick={() => setCreating(true)}>Create food</Button>
+                                <FoodCatalogLookup
+                                    onCreated={food => setFoods(current => [food, ...current])}
+                                />
+                                <Button variant="default" onClick={() => setCreating(true)}>
+                                    Create food
+                                </Button>
                             </Group>
                         </>
                     ) : (
                         <>
                             <div>
                                 <Text fw={700} size="lg">
-                                    {selection.kind === 'food' ? selection.food.name : selection.recipe.name}
+                                    {selection.kind === 'food'
+                                        ? selection.food.name
+                                        : selection.recipe.name}
                                 </Text>
-                                <Text size="sm" c="dimmed">Choose how much you consumed.</Text>
+                                <Text size="sm" c="dimmed">
+                                    Choose how much you consumed.
+                                </Text>
                             </div>
                             <NumberInput
                                 autoFocus
@@ -228,10 +244,26 @@ export function FoodLogger({
                                 suffix={selection.kind === 'food' ? ' g' : ''}
                             />
                             <Group grow className="food-nutrient-preview">
-                                <Text><strong>{nutrients?.calories ?? '—'}</strong><br /><small>kcal</small></Text>
-                                <Text><strong>{nutrients?.protein ?? '—'} g</strong><br /><small>protein</small></Text>
-                                <Text><strong>{nutrients?.carbs ?? '—'} g</strong><br /><small>carbs</small></Text>
-                                <Text><strong>{nutrients?.fat ?? '—'} g</strong><br /><small>fat</small></Text>
+                                <Text>
+                                    <strong>{nutrients?.calories ?? '—'}</strong>
+                                    <br />
+                                    <small>kcal</small>
+                                </Text>
+                                <Text>
+                                    <strong>{nutrients?.protein ?? '—'} g</strong>
+                                    <br />
+                                    <small>protein</small>
+                                </Text>
+                                <Text>
+                                    <strong>{nutrients?.carbs ?? '—'} g</strong>
+                                    <br />
+                                    <small>carbs</small>
+                                </Text>
+                                <Text>
+                                    <strong>{nutrients?.fat ?? '—'} g</strong>
+                                    <br />
+                                    <small>fat</small>
+                                </Text>
                             </Group>
                             <TextInput
                                 type="datetime-local"
@@ -242,7 +274,9 @@ export function FoodLogger({
                                 required
                             />
                             <Group justify="space-between">
-                                <Button variant="subtle" onClick={() => setSelection(null)}>Back</Button>
+                                <Button variant="subtle" onClick={() => setSelection(null)}>
+                                    Back
+                                </Button>
                                 <Button loading={busy} onClick={() => void save()}>
                                     Add to {mealType.toLowerCase()}
                                 </Button>

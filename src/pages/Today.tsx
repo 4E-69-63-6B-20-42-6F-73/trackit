@@ -183,7 +183,10 @@ export function Today({
                                 aria-label="Choose date"
                                 value={selectedKey}
                                 max={todayKey}
-                                onChange={event => event.currentTarget.value && setSelectedKey(event.currentTarget.value)}
+                                onChange={event =>
+                                    event.currentTarget.value &&
+                                    setSelectedKey(event.currentTarget.value)
+                                }
                             />
                         </label>
                         <ActionIcon
@@ -216,7 +219,8 @@ export function Today({
                 <section className="panel today-summary">
                     <h2>Start building your health record</h2>
                     <Text c="dimmed" mb="lg">
-                        TrackIt becomes useful as soon as it has observations. Log something yourself or connect a source to import existing data.
+                        TrackIt becomes useful as soon as it has observations. Log something
+                        yourself or connect a source to import existing data.
                     </Text>
                     <Group>
                         <Button
@@ -235,14 +239,28 @@ export function Today({
             ) : (
                 <>
                     {health.unavailable && (
-                        <section className="today-attention" aria-labelledby="today-attention-title">
-                            <div className="today-attention-icon"><IconPlugConnected size={20} /></div>
-                            <div>
-                                <Text fw={700} size="xs" c="teal">ATTENTION</Text>
-                                <h2 id="today-attention-title">Some health data is unavailable</h2>
-                                <Text size="sm">Review Connections if this day is missing data you expected to see.</Text>
+                        <section
+                            className="today-attention"
+                            aria-labelledby="today-attention-title"
+                        >
+                            <div className="today-attention-icon">
+                                <IconPlugConnected size={20} />
                             </div>
-                            {openConnections && <Button color="trackit" onClick={openConnections}>Review Connections</Button>}
+                            <div>
+                                <Text fw={700} size="xs" c="teal">
+                                    ATTENTION
+                                </Text>
+                                <h2 id="today-attention-title">Some health data is unavailable</h2>
+                                <Text size="sm">
+                                    Review Connections if this day is missing data you expected to
+                                    see.
+                                </Text>
+                            </div>
+                            {openConnections && (
+                                <Button color="trackit" onClick={openConnections}>
+                                    Review Connections
+                                </Button>
+                            )}
                         </section>
                     )}
 
@@ -254,20 +272,36 @@ export function Today({
                     <div className="today-section-heading">
                         <div>
                             <h2>At a glance</h2>
-                            <Text size="xs" c="dimmed">Key observations for this day, with recent context.</Text>
+                            <Text size="xs" c="dimmed">
+                                Key observations for this day, with recent context.
+                            </Text>
                         </div>
-                        <Button onClick={() => openTrends()} variant="subtle" color="trackit" size="xs">
+                        <Button
+                            onClick={() => openTrends()}
+                            variant="subtle"
+                            color="trackit"
+                            size="xs"
+                        >
                             View all trends
                         </Button>
                     </div>
                     {health.loading ? (
-                        <Skeleton role="status" height={150} radius="lg" aria-label="Loading daily summary" />
+                        <Skeleton
+                            role="status"
+                            height={150}
+                            radius="lg"
+                            aria-label="Loading daily summary"
+                        />
                     ) : health.summaryMetrics.length > 0 ? (
                         <section className="metric-grid">
                             {health.summaryMetrics.map(metric => {
-                                const visual = metricVisual[
-                                    metric.definition.category as Exclude<MetricCategory, 'Nutrition'>
-                                ]
+                                const visual =
+                                    metricVisual[
+                                        metric.definition.category as Exclude<
+                                            MetricCategory,
+                                            'Nutrition'
+                                        >
+                                    ]
                                 const Icon = visual?.icon ?? IconActivity
                                 return (
                                     <MetricCard
@@ -299,16 +333,24 @@ export function Today({
                     ) : (
                         <section className="panel today-empty-summary">
                             <Text fw={650}>No key observations recorded</Text>
-                            <Text size="sm" c="dimmed">This day can still contain meals, notes, and other Journal entries.</Text>
+                            <Text size="sm" c="dimmed">
+                                This day can still contain meals, notes, and other Journal entries.
+                            </Text>
                         </section>
                     )}
 
                     <div className="today-section-heading">
                         <div>
                             <h2>Goals</h2>
-                            <Text size="xs" c="dimmed">Active daily goals for this day.</Text>
+                            <Text size="xs" c="dimmed">
+                                Active daily goals for this day.
+                            </Text>
                         </div>
-                        {openGoals && <Button onClick={openGoals} variant="subtle" color="trackit" size="xs">View goals</Button>}
+                        {openGoals && (
+                            <Button onClick={openGoals} variant="subtle" color="trackit" size="xs">
+                                View goals
+                            </Button>
+                        )}
                     </div>
                     <article className="panel today-goals">
                         {health.dailyGoals.length > 0 ? (
@@ -324,7 +366,9 @@ export function Today({
                                 return (
                                     <div className="today-goal-row" key={goal.id}>
                                         <div className="today-goal-copy">
-                                            <Text fw={650}>{definition?.name ?? goal.metricId}</Text>
+                                            <Text fw={650}>
+                                                {definition?.name ?? goal.metricId}
+                                            </Text>
                                             <Text size="xs" c="dimmed">
                                                 {value === null || value === undefined
                                                     ? `No data · target ${target}`
@@ -336,7 +380,8 @@ export function Today({
                                                       )} · target ${target}`}
                                             </Text>
                                         </div>
-                                        {evaluation?.progress !== null && evaluation?.progress !== undefined ? (
+                                        {evaluation?.progress !== null &&
+                                        evaluation?.progress !== undefined ? (
                                             <Progress
                                                 className="today-goal-progress"
                                                 value={evaluation.progress * 100}
@@ -346,7 +391,11 @@ export function Today({
                                                 aria-label={`${definition?.name ?? goal.metricId} progress`}
                                             />
                                         ) : (
-                                            <Text size="xs" fw={650} c={evaluation?.met ? 'teal' : 'dimmed'}>
+                                            <Text
+                                                size="xs"
+                                                fw={650}
+                                                c={evaluation?.met ? 'teal' : 'dimmed'}
+                                            >
                                                 {evaluation?.met === true
                                                     ? 'Goal met'
                                                     : evaluation?.met === false
@@ -360,7 +409,10 @@ export function Today({
                         ) : (
                             <Stack gap={4}>
                                 <Text fw={650}>No daily goals active</Text>
-                                <Text size="sm" c="dimmed">Goals are optional. Add one when there is something you want to track against.</Text>
+                                <Text size="sm" c="dimmed">
+                                    Goals are optional. Add one when there is something you want to
+                                    track against.
+                                </Text>
                             </Stack>
                         )}
                     </article>
@@ -368,7 +420,9 @@ export function Today({
                     <div className="today-section-heading">
                         <div>
                             <h2>Nutrition</h2>
-                            <Text size="xs" c="dimmed">Meals and nutrient totals recorded for this day.</Text>
+                            <Text size="xs" c="dimmed">
+                                Meals and nutrient totals recorded for this day.
+                            </Text>
                         </div>
                     </div>
                     <article className="panel today-nutrition">
@@ -378,7 +432,12 @@ export function Today({
                     <section className="panel timeline today-timeline">
                         <div className="panel-head">
                             <h2>Journal</h2>
-                            <Button onClick={() => openJournal(selectedKey)} variant="subtle" color="trackit" size="xs">
+                            <Button
+                                onClick={() => openJournal(selectedKey)}
+                                variant="subtle"
+                                color="trackit"
+                                size="xs"
+                            >
                                 View this day
                             </Button>
                         </div>
@@ -387,7 +446,10 @@ export function Today({
                         ) : (
                             <div className="today-empty-journal">
                                 <Text fw={650}>No Journal entries for this day</Text>
-                                <Text size="sm" c="dimmed">Logged and synced observations will appear here in chronological order.</Text>
+                                <Text size="sm" c="dimmed">
+                                    Logged and synced observations will appear here in chronological
+                                    order.
+                                </Text>
                             </div>
                         )}
                     </section>
