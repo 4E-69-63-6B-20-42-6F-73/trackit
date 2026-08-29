@@ -82,5 +82,9 @@ describe('useTodayHealth effective totals', () => {
             new Date(observationRange!.to!).getTime() - new Date(observationRange!.from!).getTime(),
         ).toBe(86_400_000)
         expect(observationRange!.definitionIds).toBeUndefined()
+        expect(listGoalEvaluations).toHaveBeenCalledWith(
+            expect.any(AbortSignal),
+            '2026-08-25T23:59:59.999Z',
+        )
     })
 })
