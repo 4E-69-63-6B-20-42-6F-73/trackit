@@ -1,12 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge, Stack, Text } from '@mantine/core'
-import {
-    IconChevronRight,
-    IconCircleCheck,
-    IconDeviceMobile,
-    IconTools,
-} from '@tabler/icons-react'
+import { IconChevronRight, IconCircleCheck, IconDeviceMobile, IconTools } from '@tabler/icons-react'
 import { PageHeader } from '../components/PageHeader'
 import { healthConnectStatus, listDevices, type HealthConnectStatus } from '../lib/deviceApi'
 import { getMcpStatus } from '../lib/mcpApi'

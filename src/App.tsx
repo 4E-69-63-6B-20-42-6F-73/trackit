@@ -191,7 +191,10 @@ export default function App() {
                             <Route path="/library" element={<Library />} />
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
-                            <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
+                            <Route
+                                path="/metrics"
+                                element={<Navigate to="/library/metrics" replace />}
+                            />
                             <Route
                                 path="/settings/connections/devices"
                                 element={<DeviceManagement />}
@@ -212,7 +215,9 @@ export default function App() {
                             />
                             <Route
                                 path="/connections/devices/new"
-                                element={<Navigate to="/settings/connections/devices/new" replace />}
+                                element={
+                                    <Navigate to="/settings/connections/devices/new" replace />
+                                }
                             />
                             <Route
                                 path="/connections/mcp"
@@ -247,7 +252,9 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''}
+                    className={
+                        ['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''
+                    }
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"
