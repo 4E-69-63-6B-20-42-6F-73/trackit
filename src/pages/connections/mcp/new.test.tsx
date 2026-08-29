@@ -30,15 +30,16 @@ describe('new MCP assistant permissions', () => {
             </MantineProvider>,
         )
 
-        const healthData = await screen.findByRole('switch', { name: 'Health data' })
+        const measurements = await screen.findByRole('switch', { name: 'Measurements & insights' })
         const meals = screen.getByRole('switch', { name: 'Meals' })
-        expect(healthData).toBeChecked()
+        expect(measurements).toBeChecked()
         expect(meals).not.toBeChecked()
+        expect(screen.getByText('View metric definitions and measurement history for trend analysis.')).toBeInTheDocument()
 
-        await user.click(healthData)
+        await user.click(measurements)
         await user.click(meals)
 
-        expect(healthData).not.toBeChecked()
+        expect(measurements).not.toBeChecked()
         expect(meals).toBeChecked()
     })
 })
