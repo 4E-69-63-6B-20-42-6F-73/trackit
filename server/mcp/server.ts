@@ -530,13 +530,17 @@ export function createTrackItMcpServer(
                 }
                 if (
                     error instanceof Error &&
-                    ['confirmation_required', 'confirmation_payload_invalid'].includes(error.message)
+                    ['confirmation_required', 'confirmation_payload_invalid'].includes(
+                        error.message,
+                    )
                 ) {
                     return denied(
                         'The food preview confirmation is invalid, expired, already used, or from a different client. Call preview_create_food again and reuse its createArguments unchanged after approval.',
                     )
                 }
-                return denied('Food creation failed before it could be saved. Preview the food again.')
+                return denied(
+                    'Food creation failed before it could be saved. Preview the food again.',
+                )
             }
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
@@ -614,8 +618,13 @@ export function createTrackItMcpServer(
                             'add_food_to_meal',
                         )
                         if (!confirmation) throw new Error('confirmation_required')
-                        const parsedInput = addFoodToMealPayloadSchema.safeParse(confirmation.payload)
-                        if (!parsedInput.success || parsedInput.data.foodId !== confirmation.targetId) {
+                        const parsedInput = addFoodToMealPayloadSchema.safeParse(
+                            confirmation.payload,
+                        )
+                        if (
+                            !parsedInput.success ||
+                            parsedInput.data.foodId !== confirmation.targetId
+                        ) {
                             throw new Error('confirmation_payload_invalid')
                         }
                         const input = parsedInput.data
@@ -644,7 +653,9 @@ export function createTrackItMcpServer(
                 )
             } catch (error) {
                 if (error instanceof Error && error.message === 'food_changed') {
-                    return denied('The food changed after preview. Preview it again before adding it.')
+                    return denied(
+                        'The food changed after preview. Preview it again before adding it.',
+                    )
                 }
                 if (error instanceof Error && error.message === 'timestamp_outside_grant') {
                     return denied('The meal timestamp is outside this client grant.')
@@ -656,13 +667,17 @@ export function createTrackItMcpServer(
                 }
                 if (
                     error instanceof Error &&
-                    ['confirmation_required', 'confirmation_payload_invalid'].includes(error.message)
+                    ['confirmation_required', 'confirmation_payload_invalid'].includes(
+                        error.message,
+                    )
                 ) {
                     return denied(
                         'The add-food preview confirmation is invalid, expired, already used, or from a different client. Preview it again and reuse commitArguments unchanged after approval.',
                     )
                 }
-                return denied('Adding the food to the meal failed. Preview it again before retrying.')
+                return denied(
+                    'Adding the food to the meal failed. Preview it again before retrying.',
+                )
             }
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
