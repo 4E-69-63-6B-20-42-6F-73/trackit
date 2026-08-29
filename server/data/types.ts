@@ -232,7 +232,7 @@ export const foodInputSchema = z.object({
     potassiumPer100g: z.number().finite().nonnegative().nullish(),
     servingName: z.string().trim().min(1).max(60).default('serving'),
     servingGrams: z.number().finite().positive().default(100),
-    favorite: z.boolean('favorite').notNull().default(false),
+    favorite: z.boolean().default(false),
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
 })
 
