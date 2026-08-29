@@ -1,5 +1,5 @@
 import { Badge, Text } from '@mantine/core'
-import type { ReactNode } from 'react'
+import type { KeyboardEvent, ReactNode } from 'react'
 import { eventVisual } from '../domain/data'
 import type { JournalEvent } from '../domain/types'
 
@@ -8,18 +8,32 @@ export function JournalEventList({
     roomy = false,
     showChevron = false,
     renderActions,
+    onSelect,
 }: {
     events: JournalEvent[]
     roomy?: boolean
     showChevron?: boolean
     renderActions?: (event: JournalEvent) => ReactNode
+    onSelect?: (event: JournalEvent) => void
 }) {
     const journalStyle = roomy || showChevron
+    const activate = (event: JournalEvent, keyboardEvent?: KeyboardEvent<HTMLDivElement>) => {
+        if (keyboardEvent && !['Enter', ' '].includes(keyboardEvent.key)) return
+        keyboardEvent?.preventDefault()
+        onSelect?.(event)
+    }
 
     return events.map(event => {
         const { icon: Icon, tone } = eventVisual(event.category)
         return (
-            <div className={`event${journalStyle ? ' roomy' : ''}`} key={event.id}>
+            <div
+                className={`event${journalStyle ? ' roomy' : ''}${onSelect ? ' event-selectable' : ''}`}
+                key={event.id}
+                role={onSelect ? 'button' : undefined}
+                tabIndex={onSelect ? 0 : undefined}
+                onClick={() => activate(event)}
+                onKeyDown={keyboardEvent => activate(event, keyboardEvent)}
+            >
                 <time>{event.time}</time>
                 <div className={`event-icon ${tone}`}>
                     <Icon size={17} />
@@ -37,7 +51,11 @@ export function JournalEventList({
                         {event.detail}
                     </Text>
                 </div>
-                {renderActions?.(event)}
+                {renderActions && (
+                    <div onClick={clickEvent => clickEvent.stopPropagation()}>
+                        {renderActions(event)}
+                    </div>
+                )}
             </div>
         )
     })
