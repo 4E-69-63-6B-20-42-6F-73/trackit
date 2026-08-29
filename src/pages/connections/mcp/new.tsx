@@ -16,13 +16,48 @@ import { useNavigate } from 'react-router-dom'
 import { getMcpStatus, issueMcpClient } from '../../../lib/mcpApi'
 
 const scopes = [
-    { value: 'observations', label: 'Health data', group: 'View data' },
-    { value: 'meals', label: 'Meals', group: 'View data' },
-    { value: 'journal', label: 'Journal', group: 'View data' },
-    { value: 'preferences', label: 'Preferences', group: 'View data' },
-    { value: 'observations:write', label: 'Add health data', group: 'Change data' },
-    { value: 'meals:write', label: 'Add meals and manage foods', group: 'Change data' },
-    { value: 'checkins:write', label: 'Add check-ins', group: 'Change data' },
+    {
+        value: 'observations',
+        label: 'Measurements & insights',
+        description: 'View metric definitions and measurement history for trend analysis.',
+        group: 'View and analyze',
+    },
+    {
+        value: 'meals',
+        label: 'Meals',
+        description: 'View meal history and stored nutrient snapshots.',
+        group: 'View and analyze',
+    },
+    {
+        value: 'journal',
+        label: 'Journal',
+        description: 'Search Journal titles and details within the allowed date range.',
+        group: 'View and analyze',
+    },
+    {
+        value: 'preferences',
+        label: 'Preferences',
+        description: 'View non-sensitive display, timezone, and unit preferences.',
+        group: 'View and analyze',
+    },
+    {
+        value: 'observations:write',
+        label: 'Manage measurements',
+        description: 'Add measurements and confirm deletion of measurement-backed records.',
+        group: 'Change data',
+    },
+    {
+        value: 'meals:write',
+        label: 'Add meals and manage foods',
+        description: 'Create foods and add saved foods to meals after preview confirmation.',
+        group: 'Change data',
+    },
+    {
+        value: 'checkins:write',
+        label: 'Add check-ins',
+        description: 'Create Journal check-ins with assistant provenance.',
+        group: 'Change data',
+    },
 ]
 
 const defaultExpiryDate = () => {
@@ -180,7 +215,8 @@ export function McpNew() {
                                         Permissions
                                     </Text>
                                     <Text size="xs" c="dimmed">
-                                        Grant only what this assistant needs.
+                                        Read access can reveal sensitive personal data. Grant only
+                                        what this assistant needs.
                                     </Text>
                                 </div>
                                 <Group gap="xs">
@@ -203,7 +239,7 @@ export function McpNew() {
                                     </Button>
                                 </Group>
                             </Group>
-                            {['View data', 'Change data'].map(group => (
+                            {['View and analyze', 'Change data'].map(group => (
                                 <div className="mcp-permission-group" key={group}>
                                     <Text size="xs" fw={700} c="dimmed" tt="uppercase">
                                         {group}
@@ -215,6 +251,7 @@ export function McpNew() {
                                                 <Switch
                                                     key={scope.value}
                                                     label={scope.label}
+                                                    description={scope.description}
                                                     checked={selectedScopes.includes(scope.value)}
                                                     onChange={event => {
                                                         const checked = event.currentTarget.checked
@@ -235,8 +272,8 @@ export function McpNew() {
                         </div>
                         {hasWriteScope && (
                             <Alert color="orange" title="This assistant can change data">
-                                Write and delete permissions can modify your TrackIt records.
-                                Destructive actions still require short-lived confirmation.
+                                Change permissions can modify your TrackIt records. Destructive
+                                actions still require short-lived confirmation.
                             </Alert>
                         )}
                         <details className="mcp-access-limits">
