@@ -7,11 +7,17 @@ import {
     IconPlugConnected,
 } from '@tabler/icons-react'
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CorrelationNote } from '../components/CorrelationNote'
 import { ObservationRecords } from '../components/ObservationRecords'
 import { PageHeader } from '../components/PageHeader'
 import { TrendChart } from '../components/TrendChart'
+import {
+    addCalendarDays,
+    calendarDateFromKey,
+    calendarDayRangeForKey,
+    calendarTodayKey,
+} from '../domain/calendar'
 import {
     dailySeries,
     weeklySeries,
@@ -37,20 +43,17 @@ const metricLabel = (definitionId: string) =>
     metricDefinition(definitionId)?.name ??
     definitionId.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
 
-const dateDaysAgo = (days: number) => {
-    const value = new Date()
-    value.setUTCHours(12, 0, 0, 0)
-    value.setUTCDate(value.getUTCDate() - days)
-    return value
-}
-
 export function Trends() {
     const navigate = useNavigate()
+    const [params, setParams] = useSearchParams()
     const { preferences } = useServerData()
+    const timezone = preferences?.timezone ?? 'UTC'
+    const todayKey = calendarTodayKey(timezone)
+    const requestedMetric = params.get('metric')
     const [observations, setObservations] = useState<NumericObservation[]>([])
     const [availableMetrics, setAvailableMetrics] = useState<DailyMetric[]>([])
     const [range, setRange] = useState<keyof typeof ranges>('30 days')
-    const [definitionId, setDefinitionId] = useState<string | null>(null)
+    const [definitionId, setDefinitionIdState] = useState<string | null>(requestedMetric)
     const [comparisonDefinitionId, setComparisonDefinitionId] = useState<string | null>(null)
     const [showCompare, setShowCompare] = useState(false)
     const [showAnalysis, setShowAnalysis] = useState(false)
@@ -61,34 +64,47 @@ export function Trends() {
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
     const [actionError, setActionError] = useState('')
 
+    const setDefinitionId = (value: string | null) => {
+        setDefinitionIdState(value)
+        const next = new URLSearchParams(params)
+        if (value) next.set('metric', value)
+        else next.delete('metric')
+        setParams(next, { replace: true })
+    }
+
     useEffect(() => {
-        const from = dateDaysAgo(180)
-        void listDailyMetrics({
-            from: from.toISOString().slice(0, 10),
-            to: new Date().toISOString().slice(0, 10),
-        })
+        const from = addCalendarDays(todayKey, -179)
+        void listDailyMetrics({ from, to: todayKey })
             .then(records => {
                 setAvailableMetrics(records)
                 const recorded = [...new Set(records.map(record => record.definitionId))]
                 const preferred = ['sleep', 'steps', 'weight', 'resting_heart_rate', 'energy'].find(
                     candidate => recorded.includes(candidate),
                 )
-                setDefinitionId(preferred ?? recorded[0] ?? null)
+                const requested =
+                    requestedMetric && recorded.includes(requestedMetric) ? requestedMetric : null
+                setDefinitionId(requested ?? preferred ?? recorded[0] ?? null)
+                setError(false)
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
         void listTrendViews()
             .then(setSavedViews)
             .catch(() => undefined)
-    }, [])
+        // requestedMetric is intentionally only used as the initial route preference.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [todayKey])
 
     useEffect(() => {
         if (!definitionId) return
-        const from = dateDaysAgo(ranges[range] * 2 - 1)
+        const days = ranges[range]
+        const fromKey = addCalendarDays(todayKey, -(days * 2 - 1))
+        const from = calendarDayRangeForKey(fromKey, timezone).from
+        const to = calendarDayRangeForKey(todayKey, timezone).to
         queueMicrotask(() => setLoading(true))
         void listObservations({
             from: from.toISOString(),
-            to: new Date().toISOString(),
+            to: to.toISOString(),
             definitionIds: [
                 definitionId,
                 ...(comparisonDefinitionId ? [comparisonDefinitionId] : []),
@@ -100,7 +116,7 @@ export function Trends() {
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
-    }, [comparisonDefinitionId, definitionId, range])
+    }, [comparisonDefinitionId, definitionId, range, timezone, todayKey])
 
     const recordedDefinitionIds = useMemo(
         () => [...new Set(availableMetrics.map(record => record.definitionId))],
@@ -121,9 +137,10 @@ export function Trends() {
     }, [recordedDefinitionIds])
 
     const days = ranges[range]
-    const timezone = preferences?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone
-    const currentStart = useMemo(() => dateDaysAgo(days - 1), [days])
-    const previousStart = useMemo(() => dateDaysAgo(days * 2 - 1), [days])
+    const currentStartKey = addCalendarDays(todayKey, -(days - 1))
+    const previousStartKey = addCalendarDays(todayKey, -(days * 2 - 1))
+    const currentStart = calendarDateFromKey(currentStartKey, timezone)
+    const previousStart = calendarDateFromKey(previousStartKey, timezone)
     const primaryRecords = observations.filter(
         record => record.definitionId === definitionId && !record.excluded,
     )
@@ -247,13 +264,13 @@ export function Trends() {
                     <Text c="dimmed" size="sm">
                         {error
                             ? 'TrackIt could not load your observations. Review the server and connection status.'
-                            : 'Trends appear after measurements, activities, sleep, meals, or other observations have been recorded.'}
+                            : 'Trends appear after observations have been recorded or imported.'}
                     </Text>
                     <Button
                         leftSection={<IconPlugConnected size={17} />}
                         onClick={() => navigate('/settings/connections')}
                     >
-                        Review connections
+                        Review Connections
                     </Button>
                 </section>
             ) : (
@@ -405,7 +422,7 @@ export function Trends() {
                                     ? 'This trend will appear after meals containing this nutrient are recorded.'
                                     : isManualMetric
                                       ? 'Use Log to add an observation for this metric.'
-                                      : 'This trend will appear after observations are synced from a connection.'}
+                                      : 'This trend will appear after observations are imported from a Connection.'}
                             </Text>
                             {!isManualMetric && (
                                 <Button
@@ -421,7 +438,7 @@ export function Trends() {
                                 >
                                     {isNutritionMetric
                                         ? 'View meals in Journal'
-                                        : 'Review connections'}
+                                        : 'Review Connections'}
                                 </Button>
                             )}
                         </div>

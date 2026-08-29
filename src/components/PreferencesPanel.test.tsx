@@ -20,7 +20,10 @@ describe('PreferencesPanel', () => {
             units: 'metric' as const,
         }
         vi.mocked(getPreferences).mockResolvedValue(preferences)
-        vi.mocked(updatePreferences).mockImplementation(async value => ({ ...preferences, ...value }))
+        vi.mocked(updatePreferences).mockImplementation(async value => ({
+            ...preferences,
+            ...value,
+        }))
         render(
             <MantineProvider>
                 <ServerDataProvider initialData={{ preferences }}>

@@ -7,12 +7,13 @@ import { GlobalLogFab } from './components/logging/GlobalLogFab'
 import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
+import { calendarDayRangeForKey, calendarTodayKey } from './domain/calendar'
 import { nav } from './domain/data'
 import type { Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
 import { useObservationCommands } from './hooks/useObservationCommands'
+import { useServerData } from './hooks/useServerData'
 import type { CreateObservationInput } from './lib/observationApi'
-import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
 const Journal = lazy(() => import('./pages/Journal').then(module => ({ default: module.Journal })))
@@ -42,52 +43,46 @@ const Onboarding = lazy(() =>
     import('./components/Onboarding').then(module => ({ default: module.Onboarding })),
 )
 
-const pagePaths: Record<Page, string> = {
+const pagePaths: Record<Exclude<Page, 'Settings'>, string> & { Settings: string } = {
     Today: '/today',
     Journal: '/journal',
     Trends: '/trends',
     Goals: '/goals',
     Library: '/library',
-    Connections: '/settings/connections',
     Settings: '/settings',
-}
-
-const localDateKey = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
-const dayRange = (value: string) => {
-    const from = new Date(`${value}T00:00:00`)
-    const to = new Date(from)
-    to.setDate(to.getDate() + 1)
-    return { from: from.toISOString(), to: to.toISOString() }
 }
 
 export default function App() {
     const navigate = useNavigate()
-    const { openLogger } = useLogger()
+    const { preferences } = useServerData()
     const location = useLocation()
     const page: Page = location.pathname.startsWith('/settings')
         ? 'Settings'
-        : location.pathname.startsWith('/connections')
-          ? 'Connections'
-          : location.pathname.startsWith('/library')
-            ? 'Library'
-            : location.pathname.startsWith('/journal')
-              ? 'Journal'
-              : location.pathname.startsWith('/trends')
-                ? 'Trends'
-                : location.pathname.startsWith('/goals')
-                  ? 'Goals'
-                  : 'Today'
-    const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
+        : location.pathname.startsWith('/library')
+          ? 'Library'
+          : location.pathname.startsWith('/journal')
+            ? 'Journal'
+            : location.pathname.startsWith('/trends')
+              ? 'Trends'
+              : location.pathname.startsWith('/goals')
+                ? 'Goals'
+                : 'Today'
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
-    const [insight, setInsight] = useState(true)
+    const timezone = preferences?.timezone ?? 'UTC'
+    const routeDate = new URLSearchParams(location.search).get('date')
+    const todayDate = routeDate ?? calendarTodayKey(timezone)
+    const todayRange = calendarDayRangeForKey(todayDate, timezone)
+    const journalRouteRange = routeDate ? calendarDayRangeForKey(routeDate, timezone) : null
     const journalQuery =
-        page === 'Today' && selectedDay
-            ? { ...dayRange(selectedDay), limit: 100 }
-            : page === 'Journal' && selectedDay
-              ? { ...dayRange(selectedDay), limit: 100 }
+        page === 'Today'
+            ? { from: todayRange.from.toISOString(), to: todayRange.to.toISOString(), limit: 100 }
+            : page === 'Journal' && journalRouteRange
+              ? {
+                    from: journalRouteRange.from.toISOString(),
+                    to: journalRouteRange.to.toISOString(),
+                    limit: 100,
+                }
               : { limit: page === 'Journal' ? 100 : 10 }
     const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
@@ -101,7 +96,7 @@ export default function App() {
         previousPath.current = location.pathname
     }, [location.pathname])
 
-    const openPage = (nextPage: Page) => navigate(pagePaths[nextPage])
+    const openPage = (nextPage: Exclude<Page, 'Settings'>) => navigate(pagePaths[nextPage])
     const addQuick = (input: CreateObservationInput) => {
         add(input)
         setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
@@ -141,15 +136,17 @@ export default function App() {
                                 element={
                                     <Today
                                         events={events}
-                                        insight={insight}
-                                        dismissInsight={() => setInsight(false)}
-                                        openJournal={() => openPage('Journal')}
-                                        openTrends={() => openPage('Trends')}
-                                        openConnections={() => openPage('Connections')}
+                                        openJournal={date => navigate(`/journal?date=${date}`)}
+                                        openTrends={definitionId =>
+                                            navigate(
+                                                definitionId
+                                                    ? `/trends?metric=${encodeURIComponent(definitionId)}`
+                                                    : '/trends',
+                                            )
+                                        }
+                                        openConnections={() => navigate('/settings/connections')}
                                         openGoals={() => openPage('Goals')}
-                                        openLogger={openLogger}
-                                        onSelectedDateChange={setSelectedDay}
-                                        initialSelectedDate={selectedDay}
+                                        initialSelectedDate={routeDate}
                                     />
                                 }
                             />
@@ -224,7 +221,9 @@ export default function App() {
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
                 {nav
-                    .filter(({ label }) => ['Today', 'Journal', 'Trends', 'Goals'].includes(label))
+                    .filter(({ label }) =>
+                        ['Today', 'Journal', 'Trends', 'Library'].includes(label),
+                    )
                     .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
@@ -237,9 +236,7 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={
-                        ['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''
-                    }
+                    className={['Goals', 'Settings'].includes(page) ? 'active' : ''}
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"
@@ -260,9 +257,9 @@ export default function App() {
             )}
             <LoggerHost
                 add={addQuick}
-                selectedDate={['Today', 'Journal'].includes(page) ? selectedDay : null}
+                selectedDate={page === 'Today' ? todayDate : page === 'Journal' ? routeDate : null}
             />
-            {!['Connections'].includes(page) && <GlobalLogFab />}
+            <GlobalLogFab />
             {lastAdded && (
                 <Notification
                     className="record-feedback"

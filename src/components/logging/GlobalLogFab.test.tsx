@@ -37,7 +37,7 @@ describe('GlobalLogFab', () => {
         await user.click(launcher)
         expect(launcher).toHaveAttribute('aria-expanded', 'true')
         expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(
-            logActions.map(action => action.label),
+            logActions.map(action => `${action.label}${action.description}`),
         )
         await user.keyboard('{Escape}')
         expect(screen.queryByRole('menu')).not.toBeInTheDocument()
@@ -53,7 +53,9 @@ describe('GlobalLogFab', () => {
         setup()
         const launcher = screen.getByRole('button', { name: 'Log health information' })
         await user.click(launcher)
-        const actionButton = screen.getByRole('menuitem', { name: action.label })
+        const actionButton = screen.getByRole('menuitem', {
+            name: `${action.label}${action.description}`,
+        })
         await user.click(actionButton)
 
         expect(screen.getByRole('dialog', { name: `${action.id} logger` })).toBeInTheDocument()

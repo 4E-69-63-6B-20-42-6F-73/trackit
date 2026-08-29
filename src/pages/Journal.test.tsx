@@ -1,15 +1,21 @@
 import { MantineProvider } from '@mantine/core'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-
-import { Journal } from './Journal'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JournalEvent } from '../domain/types'
+import { ServerDataProvider } from '../hooks/useServerData'
+import { listJournal } from '../lib/journalApi'
+import { Journal } from './Journal'
+
+vi.mock('../lib/journalApi', () => ({
+    listJournal: vi.fn(),
+}))
 
 const records: JournalEvent[] = [
     {
         id: '1',
+        definitionId: 'meal',
         time: '08:00',
         category: 'Meals',
         title: 'Breakfast',
@@ -19,6 +25,7 @@ const records: JournalEvent[] = [
     },
     {
         id: '2',
+        definitionId: 'walk',
         time: '09:00',
         category: 'Activity',
         title: 'Walk',
@@ -28,6 +35,7 @@ const records: JournalEvent[] = [
     },
     {
         id: '3',
+        definitionId: 'walk',
         time: '10:00',
         category: 'Activity',
         title: 'Earlier walk',
@@ -37,20 +45,37 @@ const records: JournalEvent[] = [
     },
 ]
 
+const preferences = {
+    displayName: 'Owner',
+    timezone: 'UTC',
+    locale: 'en',
+    units: 'metric' as const,
+}
+
+const renderJournal = (entry = '/', update = vi.fn().mockResolvedValue(true)) =>
+    render(
+        <MemoryRouter initialEntries={[entry]}>
+            <MantineProvider>
+                <ServerDataProvider initialData={{ preferences }}>
+                    <Journal events={records} remove={vi.fn()} update={update} />
+                </ServerDataProvider>
+            </MantineProvider>
+        </MemoryRouter>,
+    )
+
 describe('Journal', () => {
+    beforeEach(() => {
+        vi.mocked(listJournal).mockReset()
+        vi.mocked(listJournal).mockResolvedValue(records)
+    })
+
     it('filters records and exposes owner actions', async () => {
         const update = vi.fn().mockResolvedValue(true)
-
-        render(
-            <MemoryRouter initialEntries={['/?from=2026-08-16&to=2026-08-23']}>
-                <MantineProvider>
-                    <Journal events={records} remove={vi.fn()} update={update} />
-                </MantineProvider>
-            </MemoryRouter>,
-        )
+        renderJournal('/?from=2026-08-16&to=2026-08-23', update)
 
         const user = userEvent.setup()
         const search = screen.getByRole('textbox', { name: 'Search journal' })
+        await screen.findByText('Breakfast')
 
         await user.type(search, 'walk')
 
@@ -85,47 +110,30 @@ describe('Journal', () => {
     })
 
     it('can select a specific journal day and return to all dates', async () => {
-        render(
-            <MemoryRouter>
-                <MantineProvider>
-                    <Journal
-                        events={records}
-                        remove={vi.fn()}
-                        update={vi.fn().mockResolvedValue(true)}
-                    />
-                </MantineProvider>
-            </MemoryRouter>,
-        )
+        renderJournal()
 
         const user = userEvent.setup()
         await user.click(screen.getByRole('button', { name: /^Filters/ }))
-        await user.click(await screen.findByText('Single day'))
+        await user.click(await screen.findByText('One day'))
         fireEvent.change(screen.getByLabelText('Journal date'), {
             target: { value: '2026-08-23' },
         })
 
-        expect(screen.getByText('Breakfast')).toBeInTheDocument()
+        expect(await screen.findByText('Breakfast')).toBeInTheDocument()
         expect(screen.queryByText('Walk')).not.toBeInTheDocument()
 
-        await user.click(screen.getByText('All entries'))
+        await user.click(screen.getByRole('button', { name: 'Aug 23' }))
         expect(screen.getByText('Walk')).toBeInTheDocument()
     })
 
-    it('extends the default seven-day window with earlier entries', async () => {
-        render(
-            <MemoryRouter>
-                <MantineProvider>
-                    <Journal
-                        events={records}
-                        remove={vi.fn()}
-                        update={vi.fn().mockResolvedValue(true)}
-                    />
-                </MantineProvider>
-            </MemoryRouter>,
-        )
+    it('extends an explicit date range with earlier entries', async () => {
+        renderJournal('/?from=2026-08-22&to=2026-08-23')
 
+        expect(await screen.findByText('Breakfast')).toBeInTheDocument()
+        expect(screen.getByText('Walk')).toBeInTheDocument()
         expect(screen.queryByText('Earlier walk')).not.toBeInTheDocument()
+
         await userEvent.click(screen.getByRole('button', { name: 'Show earlier' }))
-        expect(screen.getByText('Earlier walk')).toBeInTheDocument()
+        expect(await screen.findByText('Earlier walk')).toBeInTheDocument()
     })
 })

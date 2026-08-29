@@ -14,6 +14,9 @@ export function MetricCard({
     tone,
     action,
     record,
+    onViewTrend,
+    locale,
+    timezone,
 }: {
     icon: typeof IconMoon
     label: string
@@ -26,6 +29,9 @@ export function MetricCard({
         onClick: () => void
     }
     record?: NumericObservation | null
+    onViewTrend?: () => void
+    locale?: string
+    timezone?: string
 }) {
     const [detailsOpen, setDetailsOpen] = useState(false)
     return (
@@ -51,7 +57,9 @@ export function MetricCard({
                     <Icon size={19} stroke={1.8} />
                 </div>
                 <div className="metric-top">
-                    <Text className="eyebrow">{label}</Text>
+                    <Text size="sm" fw={650}>
+                        {label}
+                    </Text>
                     {delta && (
                         <Badge
                             variant="light"
@@ -66,7 +74,10 @@ export function MetricCard({
                 {action ? (
                     <Button
                         className="metric-action"
-                        onClick={action.onClick}
+                        onClick={event => {
+                            event.stopPropagation()
+                            action.onClick()
+                        }}
                         variant="subtle"
                         color="trackit"
                         size="compact-sm"
@@ -90,7 +101,11 @@ export function MetricCard({
                             <Text size="xs" c="dimmed">
                                 Recorded
                             </Text>
-                            <Text size="sm">{new Date(record.observedAt).toLocaleString()}</Text>
+                            <Text size="sm">
+                                {new Date(record.observedAt).toLocaleString(locale, {
+                                    timeZone: timezone,
+                                })}
+                            </Text>
                         </div>
                         <div>
                             <Text size="xs" c="dimmed">
@@ -114,17 +129,21 @@ export function MetricCard({
                                 {record.originalValue} {record.originalUnit}
                             </Text>
                         </div>
-                        {record.metadata?.recordType !== undefined && (
-                            <div>
-                                <Text size="xs" c="dimmed">
-                                    Record type
-                                </Text>
-                                <Text size="sm">
-                                    {String(record.metadata.recordType).replaceAll('_', ' ')}
-                                </Text>
-                            </div>
-                        )}
-                        <Group justify="flex-end">
+                        <Group justify="space-between">
+                            {onViewTrend ? (
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    onClick={() => {
+                                        setDetailsOpen(false)
+                                        onViewTrend()
+                                    }}
+                                >
+                                    View trend
+                                </Button>
+                            ) : (
+                                <span />
+                            )}
                             <Button variant="default" onClick={() => setDetailsOpen(false)}>
                                 Close
                             </Button>

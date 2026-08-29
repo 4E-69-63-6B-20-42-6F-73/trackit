@@ -19,6 +19,13 @@ export const theme = createTheme({
                 overlayProps: { backgroundOpacity: 0.45, blur: 2 },
             },
         },
+        TextInput: {
+            styles: {
+                description: {
+                    color: 'var(--mantine-color-gray-7)',
+                },
+            },
+        },
     },
     colors: {
         trackit: [

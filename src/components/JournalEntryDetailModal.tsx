@@ -1,7 +1,10 @@
 import { Badge, Button, Divider, Group, Modal, Stack, Text } from '@mantine/core'
 import { IconArrowLeft } from '@tabler/icons-react'
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { metricDefinition } from '../domain/metricCatalog'
 import type { JournalEvent, SleepStageDetail } from '../domain/types'
+import { useServerData } from '../hooks/useServerData'
 
 const stageLabels: Record<SleepStageDetail['type'], string> = {
     awake: 'Awake',
@@ -19,24 +22,25 @@ const stageTone: Record<SleepStageDetail['type'], string> = {
     unknown: 'var(--mantine-color-gray-5)',
 }
 
-const formatDateTime = (value?: string) =>
-    value
-        ? new Intl.DateTimeFormat(undefined, {
-              dateStyle: 'medium',
-              timeStyle: 'short',
-          }).format(new Date(value))
-        : null
-
-const formatTime = (value: string) =>
-    new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(
-        new Date(value),
-    )
-
 const durationMinutes = (start: string, end: string) =>
     Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000))
 
-function SleepDetail({ event }: { event: JournalEvent }) {
+function SleepDetail({
+    event,
+    locale,
+    timezone,
+}: {
+    event: JournalEvent
+    locale?: string
+    timezone: string
+}) {
     const stages = event.detailView?.kind === 'sleep' ? event.detailView.stages : []
+    const formatTime = (value: string) =>
+        new Intl.DateTimeFormat(locale, {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: timezone,
+        }).format(new Date(value))
     const start = event.startedAt
         ? new Date(event.startedAt).getTime()
         : Math.min(...stages.map(stage => new Date(stage.start).getTime()))
@@ -138,17 +142,37 @@ export function JournalEntryDetailModal({
     event: JournalEvent | null
     onClose: () => void
 }) {
+    const navigate = useNavigate()
+    const { preferences } = useServerData()
+    const locale = preferences?.locale
+    const timezone = preferences?.timezone ?? 'UTC'
     const [detailed, setDetailed] = useState(false)
     const hasDetailedView =
         event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0
+    const hasTrend = Boolean(event && metricDefinition(event.definitionId))
+    const formatDateTime = (value?: string) =>
+        value
+            ? new Intl.DateTimeFormat(locale, {
+                  dateStyle: 'medium',
+                  timeStyle: 'short',
+                  timeZone: timezone,
+              }).format(new Date(value))
+            : null
+    const formatTime = (value: string) =>
+        new Intl.DateTimeFormat(locale, {
+            hour: '2-digit',
+            minute: '2-digit',
+            timeZone: timezone,
+        }).format(new Date(value))
+    const close = () => {
+        setDetailed(false)
+        onClose()
+    }
 
     return (
         <Modal
             opened={Boolean(event)}
-            onClose={() => {
-                setDetailed(false)
-                onClose()
-            }}
+            onClose={close}
             title={detailed ? undefined : event?.title}
             centered
             size={detailed ? 'lg' : 'md'}
@@ -165,7 +189,7 @@ export function JournalEntryDetailModal({
                     >
                         Back to entry
                     </Button>
-                    <SleepDetail event={event} />
+                    <SleepDetail event={event} locale={locale} timezone={timezone} />
                 </Stack>
             ) : event ? (
                 <Stack gap="md">
@@ -198,11 +222,36 @@ export function JournalEntryDetailModal({
                             </Text>
                         </div>
                     )}
-                    {hasDetailedView && (
-                        <Button variant="light" color="trackit" onClick={() => setDetailed(true)}>
-                            View detailed sleep
+                    <Group justify="space-between">
+                        <Group gap="xs">
+                            {hasDetailedView && (
+                                <Button
+                                    variant="light"
+                                    color="trackit"
+                                    onClick={() => setDetailed(true)}
+                                >
+                                    View detailed sleep
+                                </Button>
+                            )}
+                            {hasTrend && (
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    onClick={() => {
+                                        close()
+                                        navigate(
+                                            `/trends?metric=${encodeURIComponent(event.definitionId)}`,
+                                        )
+                                    }}
+                                >
+                                    View trend
+                                </Button>
+                            )}
+                        </Group>
+                        <Button variant="default" onClick={close}>
+                            Close
                         </Button>
-                    )}
+                    </Group>
                 </Stack>
             ) : null}
         </Modal>

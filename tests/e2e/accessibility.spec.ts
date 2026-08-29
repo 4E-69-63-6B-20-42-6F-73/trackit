@@ -51,7 +51,15 @@ test('primary navigation works by keyboard and moves focus to page content', asy
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
 
-    const goalsLink = page.getByRole('link', { name: 'Goals', exact: true }).first()
+    let goalsLink = page.getByRole('link', { name: 'Goals', exact: true }).first()
+    if (!(await goalsLink.isVisible())) {
+        const more = page.getByRole('button', { name: 'Open more pages' })
+        await more.focus()
+        await page.keyboard.press('Enter')
+        const dialog = page.getByRole('dialog', { name: 'More' })
+        await expect(dialog).toBeVisible()
+        goalsLink = dialog.getByRole('link', { name: 'Goals', exact: true })
+    }
     await goalsLink.focus()
     await page.keyboard.press('Enter')
     await expect(page).toHaveURL(/\/goals$/)

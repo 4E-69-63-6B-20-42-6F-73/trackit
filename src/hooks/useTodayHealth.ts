@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { addCalendarDays, calendarDateKey, calendarDayRangeForKey } from '../domain/calendar'
 import type { GoalEvaluation } from '../domain/goals'
 import type { NumericObservation } from '../domain/health'
 import { metricDefinition } from '../domain/metricCatalog'
-import { calendarDateKey, calendarDayRange } from '../domain/calendar'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { listGoalEvaluations } from '../lib/goalApi'
 import { listObservations } from '../lib/observationApi'
@@ -38,15 +38,13 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
     const selectedKey = calendarDateKey(selectedDate, timezone)
     const load = useCallback(
         (signal: AbortSignal) => {
-            const fromDate = new Date(selectedDate)
-            fromDate.setDate(fromDate.getDate() - 29)
-            const day = calendarDayRange(selectedDate, timezone)
+            const day = calendarDayRangeForKey(selectedKey, timezone)
             queueMicrotask(() => {
                 if (!signal.aborted) setLoading(true)
             })
             return Promise.all([
                 listDailyMetrics(
-                    { from: calendarDateKey(fromDate, timezone), to: selectedKey },
+                    { from: addCalendarDays(selectedKey, -29), to: selectedKey },
                     signal,
                 ),
                 listObservations(
@@ -56,7 +54,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                     },
                     signal,
                 ),
-                listGoalEvaluations(signal, selectedDate.toISOString()),
+                listGoalEvaluations(signal, day.from.toISOString()),
             ])
                 .then(([metrics, observations, evaluations]) => {
                     setDaily(metrics)
@@ -72,7 +70,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                     if (!signal.aborted) setLoading(false)
                 })
         },
-        [selectedDate, selectedKey, timezone],
+        [selectedKey, timezone],
     )
 
     useEffect(() => {
@@ -128,20 +126,23 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 unit: current.unit,
             }
         }
-        const weekday = selectedDate.getDay()
-        const activeGoals = goals.filter(
-            goal =>
-                new Date(goal.effectiveFrom) <= selectedDate &&
-                (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
-                (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday)),
-        )
+        const weekday = new Date(`${selectedKey}T12:00:00.000Z`).getUTCDay()
+        const activeGoals = goals.filter(goal => {
+            const effectiveFrom = calendarDateKey(new Date(goal.effectiveFrom), timezone)
+            const effectiveTo = goal.effectiveTo
+                ? calendarDateKey(new Date(goal.effectiveTo), timezone)
+                : null
+            return (
+                effectiveFrom <= selectedKey &&
+                (!effectiveTo || effectiveTo >= selectedKey) &&
+                (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))
+            )
+        })
         const activeGoal = (metric: string) =>
             activeGoals.find(goal => goal.metricId === metric) ?? null
         const sleepByDate = new Map(values('sleep').map(row => [row.date, row]))
         const sleepRows = Array.from({ length: 7 }, (_, offset) => {
-            const date = new Date(selectedDate)
-            date.setDate(date.getDate() - 6 + offset)
-            const key = calendarDateKey(date, timezone)
+            const key = addCalendarDays(selectedKey, -6 + offset)
             return { key, row: sleepByDate.get(key) }
         })
         const effectiveTotal = (metric: string) => {
@@ -226,7 +227,6 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         goalEvaluations,
         loading,
         preferences,
-        selectedDate,
         selectedKey,
         sharedLoading,
         sharedUnavailable,
