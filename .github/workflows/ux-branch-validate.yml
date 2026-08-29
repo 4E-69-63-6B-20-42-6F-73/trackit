@@ -1,0 +1,16 @@
+name: Validate UX branch
+
+on:
+    push:
+        branches:
+            - feature/ux-journey-consolidation
+
+permissions:
+    contents: read
+
+jobs:
+    verify:
+        uses: ./.github/workflows/verify.yml
+        with:
+            ref: ${{ github.sha }}
+            base_sha: a1622d64844c4d33c3527c0eff98b63dda43e912
