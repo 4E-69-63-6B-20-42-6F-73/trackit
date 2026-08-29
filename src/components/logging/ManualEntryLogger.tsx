@@ -8,7 +8,9 @@ import {
     SimpleGrid,
     Slider,
     Stack,
+    TagsInput,
     Text,
+    Textarea,
     TextInput,
 } from '@mantine/core'
 import {
@@ -39,6 +41,8 @@ const energyLabels = [
     'Very high',
 ] as const
 const energyLabel = (value: number) => energyLabels[Math.round(value)] ?? 'Neutral'
+const severityLabel = (value: number) =>
+    value <= 3 ? 'Mild' : value <= 7 ? 'Moderate' : 'Severe'
 
 export function ManualEntryLogger({
     opened,
@@ -71,9 +75,10 @@ export function ManualEntryLogger({
     const [energy, setEnergy] = useState(5)
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
-    const [severity, setSeverity] = useState<number | string>(5)
-    const [duration, setDuration] = useState('')
-    const [tags, setTags] = useState('')
+    const [severity, setSeverity] = useState(5)
+    const [durationHours, setDurationHours] = useState<number | string>('')
+    const [durationMinutes, setDurationMinutes] = useState<number | string>('')
+    const [tags, setTags] = useState<string[]>([])
     const [recordedAt, setRecordedAt] = useState(
         `${targetDate}T${selectedDate && selectedDate !== initialDay ? '12:00' : initialTime}`,
     )
@@ -93,6 +98,15 @@ export function ManualEntryLogger({
     const customWaterStep = waterUnit === 'L' ? 0.05 : waterUnit === 'fl oz' ? 1 : 50
     const customWaterMin = waterUnit === 'L' ? 0.01 : waterUnit === 'fl oz' ? 0.1 : 1
     const customWaterPrecision = waterUnit === 'L' ? 2 : waterUnit === 'fl oz' ? 1 : 0
+    const hours = Math.max(0, Math.floor(Number(durationHours) || 0))
+    const minutes = Math.min(59, Math.max(0, Math.floor(Number(durationMinutes) || 0)))
+    const duration = [hours ? `${hours} h` : '', minutes ? `${minutes} min` : '']
+        .filter(Boolean)
+        .join(' ')
+    const formattedTags = tags
+        .map(value => value.trim())
+        .filter(Boolean)
+        .map(value => `#${value.replace(/^#/, '')}`)
 
     const submit = () => {
         setError('')
@@ -168,18 +182,14 @@ export function ManualEntryLogger({
                 title: symptom.trim(),
                 source: 'You',
                 observedAt,
-                value: Number(severity) || 5,
+                value: severity,
                 unit: 'score',
                 attributes: {
                     description: [
-                        `Severity ${Number(severity) || 5} out of 10`,
-                        duration.trim() && `Duration ${duration.trim()}`,
+                        `Severity ${severity} out of 10`,
+                        duration && `Duration ${duration}`,
                         note.trim(),
-                        ...tags
-                            .split(',')
-                            .map(value => value.trim())
-                            .filter(Boolean)
-                            .map(value => `#${value.replace(/^#/, '')}`),
+                        ...formattedTags,
                     ]
                         .filter(Boolean)
                         .join(' · '),
@@ -192,14 +202,7 @@ export function ManualEntryLogger({
                 valueType: 'text',
                 category: 'Check-ins',
                 title: 'Note',
-                textValue: [
-                    note.trim() || 'Personal note',
-                    ...tags
-                        .split(',')
-                        .map(value => value.trim())
-                        .filter(Boolean)
-                        .map(value => `#${value.replace(/^#/, '')}`),
-                ].join(' · '),
+                textValue: [note.trim() || 'Personal note', ...formattedTags].join(' · '),
                 source: 'You',
                 observedAt,
             }
@@ -352,43 +355,94 @@ export function ManualEntryLogger({
                             placeholder="For example, headache"
                             required
                         />
-                        <NumberInput
-                            label="Severity"
-                            description="1 is mild; 10 is most intense."
-                            value={severity}
-                            onChange={setSeverity}
-                            min={1}
-                            max={10}
-                        />
-                        <TextInput
-                            label="Duration (optional)"
-                            value={duration}
-                            onChange={event => setDuration(event.currentTarget.value)}
-                            placeholder="For example, 45 minutes"
-                        />
-                        <TextInput
+                        <Stack gap={6} pb="xs">
+                            <Group justify="space-between" align="baseline">
+                                <Text size="sm" fw={600}>
+                                    Severity
+                                </Text>
+                                <Text size="sm" fw={700}>
+                                    {severity} · {severityLabel(severity)}
+                                </Text>
+                            </Group>
+                            <Slider
+                                color="orange"
+                                value={severity}
+                                onChange={setSeverity}
+                                min={1}
+                                max={10}
+                                step={1}
+                                thumbLabel="Symptom severity"
+                                label={value => `${value} · ${severityLabel(value)}`}
+                                marks={[
+                                    { value: 1, label: 'Mild' },
+                                    { value: 5, label: 'Moderate' },
+                                    { value: 10, label: 'Severe' },
+                                ]}
+                                styles={{
+                                    track: {
+                                        backgroundImage:
+                                            'linear-gradient(90deg, var(--mantine-color-teal-4) 0%, var(--mantine-color-yellow-5) 50%, var(--mantine-color-red-6) 100%)',
+                                    },
+                                    bar: { backgroundColor: 'transparent' },
+                                }}
+                            />
+                        </Stack>
+                        <Stack gap={6}>
+                            <Text size="sm" fw={600}>
+                                Duration (optional)
+                            </Text>
+                            <SimpleGrid cols={2} spacing="sm">
+                                <NumberInput
+                                    label="Hours"
+                                    value={durationHours}
+                                    onChange={setDurationHours}
+                                    min={0}
+                                    step={1}
+                                    decimalScale={0}
+                                />
+                                <NumberInput
+                                    label="Minutes"
+                                    value={durationMinutes}
+                                    onChange={setDurationMinutes}
+                                    min={0}
+                                    max={59}
+                                    step={5}
+                                    decimalScale={0}
+                                />
+                            </SimpleGrid>
+                        </Stack>
+                        <Textarea
                             label="Context (optional)"
                             value={note}
                             onChange={event => setNote(event.currentTarget.value)}
                             placeholder="What was happening around it?"
+                            autosize
+                            minRows={2}
+                            maxRows={5}
                         />
                     </>
                 )}
                 {kind === 'Note' && (
-                    <TextInput
+                    <Textarea
                         autoFocus
                         label="What do you want to remember?"
                         value={note}
                         onChange={event => setNote(event.currentTarget.value)}
+                        placeholder="Write anything worth remembering"
+                        autosize
+                        minRows={3}
+                        maxRows={8}
                     />
                 )}
                 {(kind === 'Symptom' || kind === 'Note') && (
-                    <TextInput
+                    <TagsInput
                         label="Tags (optional)"
-                        description="Separate tags with commas."
+                        description="Type a tag and press comma or Enter."
                         value={tags}
-                        onChange={event => setTags(event.currentTarget.value)}
+                        onChange={setTags}
+                        splitChars={[',']}
                         placeholder="travel, medication change"
+                        clearable
                     />
                 )}
                 <TextInput
