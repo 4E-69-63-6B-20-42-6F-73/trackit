@@ -61,7 +61,7 @@ export function Library() {
                     <Text size="sm" c="dimmed" mb="sm">
                         Reference foods used by meals and recipes.
                     </Text>
-                    <Group gap={4} c="teal">
+                    <Group gap={4} c="var(--teal)">
                         <Text size="sm" fw={600}>
                             Browse foods
                         </Text>
@@ -89,7 +89,7 @@ export function Library() {
                     <Text size="sm" c="dimmed" mb="sm">
                         Reusable combinations with stable serving yields.
                     </Text>
-                    <Group gap={4} c="teal">
+                    <Group gap={4} c="var(--teal)">
                         <Text size="sm" fw={600}>
                             Browse recipes
                         </Text>
@@ -112,7 +112,7 @@ export function Library() {
                     <Text size="sm" c="dimmed" mb="sm">
                         Units, definitions, and how TrackIt interprets metrics.
                     </Text>
-                    <Group gap={4} c="teal">
+                    <Group gap={4} c="var(--teal)">
                         <Text size="sm" fw={600}>
                             Open Metric Center
                         </Text>
