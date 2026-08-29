@@ -11,6 +11,8 @@ import { nav } from './domain/data'
 import type { Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
 import { useObservationCommands } from './hooks/useObservationCommands'
+import { useServerData } from './hooks/useServerData'
+import { dayRangeInTimezone, todayKeyInTimezone } from './lib/dateContext'
 import type { CreateObservationInput } from './lib/observationApi'
 import { useLogger } from './logging/LoggingContext'
 
@@ -32,9 +34,7 @@ const McpAccess = lazy(() =>
 const McpNew = lazy(() =>
     import('./pages/connections/mcp/new').then(module => ({ default: module.McpNew })),
 )
-const Settings = lazy(() =>
-    import('./pages/Settings').then(module => ({ default: module.Settings })),
-)
+const Settings = lazy(() => import('./pages/Settings').then(module => ({ default: module.Settings })))
 const MobileMore = lazy(() =>
     import('./components/MobileMore').then(module => ({ default: module.MobileMore })),
 )
@@ -52,42 +52,32 @@ const pagePaths: Record<Page, string> = {
     Settings: '/settings',
 }
 
-const localDateKey = (date: Date) =>
-    `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
-
-const dayRange = (value: string) => {
-    const from = new Date(`${value}T00:00:00`)
-    const to = new Date(from)
-    to.setDate(to.getDate() + 1)
-    return { from: from.toISOString(), to: to.toISOString() }
-}
-
 export default function App() {
     const navigate = useNavigate()
     const { openLogger } = useLogger()
+    const { preferences } = useServerData()
     const location = useLocation()
     const page: Page = location.pathname.startsWith('/settings')
         ? 'Settings'
-        : location.pathname.startsWith('/connections')
-          ? 'Connections'
-          : location.pathname.startsWith('/library')
-            ? 'Library'
-            : location.pathname.startsWith('/journal')
-              ? 'Journal'
-              : location.pathname.startsWith('/trends')
-                ? 'Trends'
-                : location.pathname.startsWith('/goals')
-                  ? 'Goals'
-                  : 'Today'
-    const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
+        : location.pathname.startsWith('/library')
+          ? 'Library'
+          : location.pathname.startsWith('/journal')
+            ? 'Journal'
+            : location.pathname.startsWith('/trends')
+              ? 'Trends'
+              : location.pathname.startsWith('/goals')
+                ? 'Goals'
+                : 'Today'
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
-    const [insight, setInsight] = useState(true)
+    const timezone = preferences?.timezone ?? 'UTC'
+    const routeDate = new URLSearchParams(location.search).get('date')
+    const todayDate = routeDate ?? todayKeyInTimezone(timezone)
     const journalQuery =
-        page === 'Today' && selectedDay
-            ? { ...dayRange(selectedDay), limit: 100 }
-            : page === 'Journal' && selectedDay
-              ? { ...dayRange(selectedDay), limit: 100 }
+        page === 'Today'
+            ? { ...dayRangeInTimezone(todayDate, timezone), limit: 100 }
+            : page === 'Journal' && routeDate
+              ? { ...dayRangeInTimezone(routeDate, timezone), limit: 100 }
               : { limit: page === 'Journal' ? 100 : 10 }
     const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
@@ -119,11 +109,7 @@ export default function App() {
                 Skip to main content
             </a>
             <Box className="app-shell">
-                <Sidebar
-                    page={page}
-                    collapsed={collapsed}
-                    toggle={() => setCollapsed(!collapsed)}
-                />
+                <Sidebar page={page} collapsed={collapsed} toggle={() => setCollapsed(!collapsed)} />
                 <main ref={mainRef} className="main" id="main-content" tabIndex={-1}>
                     <Header page={page} />
                     {(commandFailure || syncFailure) && (
@@ -141,15 +127,18 @@ export default function App() {
                                 element={
                                     <Today
                                         events={events}
-                                        insight={insight}
-                                        dismissInsight={() => setInsight(false)}
-                                        openJournal={() => openPage('Journal')}
-                                        openTrends={() => openPage('Trends')}
-                                        openConnections={() => openPage('Connections')}
+                                        openJournal={date => navigate(`/journal?date=${date}`)}
+                                        openTrends={definitionId =>
+                                            navigate(
+                                                definitionId
+                                                    ? `/trends?metric=${encodeURIComponent(definitionId)}`
+                                                    : '/trends',
+                                            )
+                                        }
+                                        openConnections={() => navigate('/settings/connections')}
                                         openGoals={() => openPage('Goals')}
                                         openLogger={openLogger}
-                                        onSelectedDateChange={setSelectedDay}
-                                        initialSelectedDate={selectedDay}
+                                        initialSelectedDate={routeDate}
                                     />
                                 }
                             />
@@ -176,46 +165,17 @@ export default function App() {
                             <Route path="/library" element={<Library />} />
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
-                            <Route
-                                path="/metrics"
-                                element={<Navigate to="/library/metrics" replace />}
-                            />
-                            <Route
-                                path="/settings/connections/devices"
-                                element={<DeviceManagement />}
-                            />
-                            <Route
-                                path="/settings/connections/devices/new"
-                                element={<DeviceNew />}
-                            />
+                            <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
+                            <Route path="/settings/connections/devices" element={<DeviceManagement />} />
+                            <Route path="/settings/connections/devices/new" element={<DeviceNew />} />
                             <Route path="/settings/connections/mcp" element={<McpAccess />} />
                             <Route path="/settings/connections/mcp/new" element={<McpNew />} />
-                            <Route
-                                path="/connections"
-                                element={<Navigate to="/settings/connections" replace />}
-                            />
-                            <Route
-                                path="/connections/devices"
-                                element={<Navigate to="/settings/connections/devices" replace />}
-                            />
-                            <Route
-                                path="/connections/devices/new"
-                                element={
-                                    <Navigate to="/settings/connections/devices/new" replace />
-                                }
-                            />
-                            <Route
-                                path="/connections/mcp"
-                                element={<Navigate to="/settings/connections/mcp" replace />}
-                            />
-                            <Route
-                                path="/connections/mcp/new"
-                                element={<Navigate to="/settings/connections/mcp/new" replace />}
-                            />
-                            <Route
-                                path="/settings/goals"
-                                element={<Navigate to="/goals" replace />}
-                            />
+                            <Route path="/connections" element={<Navigate to="/settings/connections" replace />} />
+                            <Route path="/connections/devices" element={<Navigate to="/settings/connections/devices" replace />} />
+                            <Route path="/connections/devices/new" element={<Navigate to="/settings/connections/devices/new" replace />} />
+                            <Route path="/connections/mcp" element={<Navigate to="/settings/connections/mcp" replace />} />
+                            <Route path="/connections/mcp/new" element={<Navigate to="/settings/connections/mcp/new" replace />} />
+                            <Route path="/settings/goals" element={<Navigate to="/goals" replace />} />
                             <Route path="/settings/*" element={<Settings />} />
                             <Route path="*" element={<Navigate to="/today" replace />} />
                         </Routes>
@@ -224,7 +184,7 @@ export default function App() {
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
                 {nav
-                    .filter(({ label }) => ['Today', 'Journal', 'Trends', 'Goals'].includes(label))
+                    .filter(({ label }) => ['Today', 'Journal', 'Trends', 'Library'].includes(label))
                     .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
@@ -237,16 +197,12 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={
-                        ['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''
-                    }
+                    className={['Goals', 'Settings'].includes(page) ? 'active' : ''}
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"
                 >
-                    <span className="more-symbol" aria-hidden="true">
-                        •••
-                    </span>
+                    <span className="more-symbol" aria-hidden="true">•••</span>
                     <span>More</span>
                 </button>
             </nav>
@@ -260,9 +216,9 @@ export default function App() {
             )}
             <LoggerHost
                 add={addQuick}
-                selectedDate={['Today', 'Journal'].includes(page) ? selectedDay : null}
+                selectedDate={page === 'Today' ? todayDate : page === 'Journal' ? routeDate : null}
             />
-            {!['Connections'].includes(page) && <GlobalLogFab />}
+            <GlobalLogFab />
             {lastAdded && (
                 <Notification
                     className="record-feedback"
