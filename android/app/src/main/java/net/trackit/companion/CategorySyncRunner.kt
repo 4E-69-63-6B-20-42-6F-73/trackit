@@ -19,6 +19,10 @@ object CategorySyncRunner {
                 "cancelled"
             } catch (_: SecurityException) {
                 "permission_revoked"
+            } catch (_: DeviceAuthenticationException) {
+                "authentication_failed"
+            } catch (_: PermanentSyncException) {
+                "permanent_error"
             } catch (_: Exception) {
                 "error"
             }

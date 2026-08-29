@@ -100,13 +100,13 @@ class HistoricalImportWorker(
                     val notificationText =
                         when (progress.phase) {
                             HistoricalImportPhase.WAITING_TO_RETRY ->
-                                "${progress.category.removeSuffix("Record")}: retrying soon"
+                                "${healthCategoryLabel(progress.category)}: retrying soon"
 
                             HistoricalImportPhase.COMPLETE ->
-                                "${progress.category.removeSuffix("Record")}: complete"
+                                "${healthCategoryLabel(progress.category)}: complete"
 
                             else ->
-                                "${progress.category.removeSuffix("Record")}: " +
+                                "${healthCategoryLabel(progress.category)}: " +
                                     "${progress.uploadedRecords} uploaded"
                         }
 

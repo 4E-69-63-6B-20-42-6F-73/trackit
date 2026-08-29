@@ -30,4 +30,29 @@ class CategorySyncRunnerTest {
             reported,
         )
     }
+
+    @Test
+    fun `permanent and authentication failures are not reported as transient`() = runBlocking {
+        val results = CategorySyncRunner.run(
+            categories = linkedSetOf("auth", "invalid", "network"),
+            cancelled = { false },
+            sync = { category ->
+                when (category) {
+                    "auth" -> throw DeviceAuthenticationException("revoked", Exception())
+                    "invalid" -> throw PermanentSyncException("invalid", Exception())
+                    else -> error("offline")
+                }
+            },
+            onResult = { _, _, _, _ -> },
+        )
+
+        assertEquals(
+            mapOf(
+                "auth" to "authentication_failed",
+                "invalid" to "permanent_error",
+                "network" to "error",
+            ),
+            results,
+        )
+    }
 }

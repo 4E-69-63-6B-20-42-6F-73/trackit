@@ -620,9 +620,11 @@ export async function createApp(
                 serverIdentity?: string | undefined
             } => 'error' in r && r.error !== undefined
             if (isErrorResponse(paired)) {
-                return reply.code(401).send({
+                return reply.code(paired.error === 'identity_mismatch' ? 409 : 401).send({
                     error: paired.error,
+                    message: paired.error_details.message,
                     error_details: paired.error_details,
+                    serverIdentity: paired.serverIdentity,
                 })
             }
             return reply.code(202).send(paired)

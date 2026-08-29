@@ -43,6 +43,17 @@ class PairingClient(private val context: Context) {
                 ?.takeIf { it.isNotBlank() }
 
             when {
+                responseCode == 202 &&
+                    response != null &&
+                    response.has("deviceId") &&
+                    response.has("credential") &&
+                    serverIdentityInResponse != null -> PairingResult.Pending(
+                    deviceId = response.getString("deviceId"),
+                    credential = response.getString("credential"),
+                    keyFingerprint = deviceKey.fingerprint,
+                    serverIdentity = serverIdentityInResponse,
+                )
+
                 responseCode in 200..299 &&
                     response != null &&
                     response.has("deviceId") &&
@@ -50,16 +61,9 @@ class PairingClient(private val context: Context) {
                     serverIdentityInResponse != null -> PairingResult.Success(
                     deviceId = response.getString("deviceId"),
                     credential = response.getString("credential"),
+                    keyFingerprint = deviceKey.fingerprint,
                     serverIdentity = serverIdentityInResponse,
                 )
-
-                responseCode == 202 -> {
-                    val deviceId = response?.optString("deviceId") ?: ""
-                    PairingResult.Pending(
-                        deviceId = deviceId,
-                        serverIdentity = serverIdentityInResponse ?: "",
-                    )
-                }
 
                 responseCode == 401 -> {
                     val errorType = response?.optString("error")?.takeIf { it.isNotBlank() }
@@ -68,6 +72,9 @@ class PairingClient(private val context: Context) {
                         "invalid" -> "Invalid or expired pairing code. Please check the code and try again."
                         "already_paired" -> "This device is already paired. Use a new pairing code."
                         else -> response?.optString("message")?.takeIf { it.isNotBlank() }
+                            ?: response?.optJSONObject("error_details")
+                                ?.optString("message")
+                                ?.takeIf { it.isNotBlank() }
                             ?: "Invalid or expired pairing code."
                     }
                     PairingResult.Failure(reason, null)
@@ -123,11 +130,14 @@ sealed class PairingResult {
     data class Success(
         val deviceId: String,
         val credential: String,
+        val keyFingerprint: String,
         val serverIdentity: String,
     ) : PairingResult()
 
     data class Pending(
         val deviceId: String,
+        val credential: String,
+        val keyFingerprint: String,
         val serverIdentity: String,
     ) : PairingResult()
 

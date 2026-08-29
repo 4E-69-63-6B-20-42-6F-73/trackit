@@ -12,28 +12,63 @@ import javax.crypto.spec.GCMParameterSpec
 class CredentialStore(context: Context) {
     private val preferences = context.getSharedPreferences("trackit-private", Context.MODE_PRIVATE)
 
-    fun save(serverUrl: String, deviceId: String, credential: String, fingerprint: String) {
+    fun save(
+        serverUrl: String,
+        deviceId: String,
+        credential: String,
+        serverIdentity: String,
+        keyFingerprint: String,
+    ) {
         preferences.edit()
             .putString("serverUrl", serverUrl)
             .putString("deviceId", deviceId)
             .putString("credential", encrypt(credential))
-            .putString("fingerprint", fingerprint)
-            .apply()
-    }
-
-    fun save(serverUrl: String, deviceId: String, credential: String) {
-        preferences.edit()
-            .putString("serverUrl", serverUrl)
-            .putString("deviceId", deviceId)
-            .putString("credential", encrypt(credential))
+            .putString("serverIdentity", serverIdentity)
+            .putString("keyFingerprint", keyFingerprint)
             .apply()
     }
 
     fun read(key: String): String? = preferences.getString(key, null)?.let {
         if (key == "credential") decrypt(it) else it
     }
-    fun cursor(recordType: String): String? = preferences.getString("cursor:$recordType", null)
-    fun saveCursor(recordType: String, cursor: String) = preferences.edit().putString("cursor:$recordType", cursor).apply()
+
+    fun hasValidPairing(): Boolean = try {
+        read("deviceId") != null && read("serverUrl") != null && read("credential") != null
+    } catch (_: Exception) {
+        clearPairing()
+        false
+    }
+    private fun cursorKey(recordType: String): String? =
+        read("deviceId")?.let { syncCursorKey(it, recordType) }
+
+    fun cursor(recordType: String): String? =
+        cursorKey(recordType)?.let { preferences.getString(it, null) }
+
+    fun saveCursor(recordType: String, cursor: String) {
+        cursorKey(recordType)?.let { preferences.edit().putString(it, cursor).apply() }
+    }
+
+    fun clearPairing() {
+        preferences.edit()
+            .remove("serverUrl")
+            .remove("deviceId")
+            .remove("credential")
+            .remove("serverIdentity")
+            .remove("keyFingerprint")
+            .remove("lastSyncAt")
+            .remove("lastSyncError")
+            .putBoolean("backgroundSyncEnabled", false)
+            .apply()
+    }
+
+    fun saveSyncSuccess(timestamp: String) = preferences.edit()
+        .putString("lastSyncAt", timestamp)
+        .remove("lastSyncError")
+        .apply()
+
+    fun saveSyncError(message: String) = preferences.edit()
+        .putString("lastSyncError", message.take(500))
+        .apply()
     fun saveSelectedRecordTypes(recordTypes: Set<String>) =
         preferences.edit().putStringSet("selectedRecordTypes", recordTypes).apply()
     fun selectedRecordTypes(): Set<String> =
@@ -78,3 +113,6 @@ class CredentialStore(context: Context) {
 
     companion object { private const val KEY_ALIAS = "trackit-credential-key" }
 }
+
+fun syncCursorKey(deviceId: String, recordType: String): String =
+    "cursor:$deviceId:$recordType"

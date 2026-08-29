@@ -14,6 +14,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -22,6 +23,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -35,6 +37,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
+import java.time.Instant
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
@@ -53,13 +56,7 @@ class MainActivity : ComponentActivity() {
                 Surface(Modifier.fillMaxSize()) {
                     val credentialStore = remember { CredentialStore(this@MainActivity) }
                     var paired by remember {
-                        mutableStateOf(
-                            runCatching {
-                                credentialStore.read("deviceId") != null &&
-                                    credentialStore.read("serverUrl") != null &&
-                                    credentialStore.read("credential") != null
-                            }.getOrDefault(false),
-                        )
+                        mutableStateOf(credentialStore.hasValidPairing())
                     }
                     var status by remember {
                         mutableStateOf(if (paired) "Paired. Ready to sync." else "Not paired")
@@ -72,6 +69,16 @@ class MainActivity : ComponentActivity() {
                     var syncRunning by remember { mutableStateOf(false) }
                     var showPairingDialog by remember { mutableStateOf(false) }
                     var showHistoricalUpload by remember { mutableStateOf(false) }
+                    var showDisconnectDialog by remember { mutableStateOf(false) }
+                    var showReplacePairingDialog by remember { mutableStateOf(false) }
+                    var serverUrl by remember { mutableStateOf(credentialStore.read("serverUrl")) }
+                    var serverIdentity by remember {
+                        mutableStateOf(credentialStore.read("serverIdentity"))
+                    }
+                    var lastSyncAt by remember { mutableStateOf(credentialStore.read("lastSyncAt")) }
+                    var lastSyncError by remember {
+                        mutableStateOf(credentialStore.read("lastSyncError"))
+                    }
                     var selectedTypes by remember {
                         mutableStateOf(credentialStore.selectedRecordTypes())
                     }
@@ -97,26 +104,42 @@ class MainActivity : ComponentActivity() {
                                     cancelled = { cancelSync },
                                     onProgress = { completed, total, recordType ->
                                         syncProgress = if (total == 0) 0f else completed.toFloat() / total
-                                        status = "Imported $completed of $total: ${recordType.removeSuffix("Record")}" 
+                                        status = "Imported $completed of $total: ${healthCategoryLabel(recordType)}"
                                     },
                                 )
                                 val paused = results.values.count { it == "permission_revoked" }
-                                val failed = results.values.count { it == "error" }
+                                val failed = results.values.count {
+                                    it in setOf("error", "authentication_failed", "permanent_error")
+                                }
                                 val backgroundGranted = backgroundSync &&
                                     backgroundReadAvailable &&
                                     healthSync.hasBackgroundReadPermission()
                                 status = when {
                                     cancelSync -> "Import cancelled safely"
+                                    results.values.any { it == "authentication_failed" } ->
+                                        "This device is no longer authorized. Disconnect and pair it again."
+                                    results.values.any { it == "permanent_error" } ->
+                                        "Sync stopped because the server rejected one or more categories."
                                     failed > 0 -> "Sync finished; $failed categories need a retry. Other categories were saved."
                                     paused > 0 -> "Sync finished; $paused categories are paused until access is granted."
                                     backgroundSync && !backgroundReadAvailable -> "Sync complete. Background reads are not supported on this device."
                                     backgroundSync && !backgroundGranted -> "Sync complete. Background access was not granted."
                                     else -> "Sync complete"
                                 }
+                                if (failed == 0 && paused == 0) {
+                                    lastSyncAt = Instant.now().toString()
+                                    lastSyncError = null
+                                    credentialStore.saveSyncSuccess(lastSyncAt!!)
+                                } else {
+                                    lastSyncError = status
+                                    credentialStore.saveSyncError(status)
+                                }
                             } catch (_: CancellationException) {
                                 status = "Import cancelled safely"
                             } catch (e: Exception) {
                                 status = "Sync failed: ${e.message ?: "Unknown error"}"
+                                lastSyncError = status
+                                credentialStore.saveSyncError(status)
                             } finally {
                                 syncRunning = false
                             }
@@ -195,6 +218,15 @@ class MainActivity : ComponentActivity() {
                         ) {
                             Text("TrackIt Companion", style = MaterialTheme.typography.headlineMedium)
                             Text(status)
+                            if (paired) {
+                                Text("Server: ${serverUrl ?: "Unknown"}")
+                                Text("Identity: ${serverIdentity ?: "Unknown"}")
+                                Text("Last successful sync: ${lastSyncAt ?: "Not yet synced"}")
+                                lastSyncError?.let { Text("Last issue: $it") }
+                                Button(onClick = { showDisconnectDialog = true }) {
+                                    Text("Forget this connection")
+                                }
+                            }
                             Text(
                                 if (paired) {
                                     "Use the + button to pair with a different TrackIt server."
@@ -222,7 +254,7 @@ class MainActivity : ComponentActivity() {
                                         }
                                         credentialStore.saveSelectedRecordTypes(selectedTypes)
                                     },
-                                    label = { Text(name.removeSuffix("Record")) },
+                                    label = { Text(healthCategoryLabel(name)) },
                                 )
                             }
                             Text(
@@ -232,6 +264,12 @@ class MainActivity : ComponentActivity() {
                                     else -> "Background access is optional. Foreground sync works without it."
                                 },
                             )
+                            if (backgroundSync) {
+                                Text(
+                                    "Android may delay scheduled work because of battery optimization. " +
+                                        "Opening TrackIt and using Sync now always performs a foreground sync.",
+                                )
+                            }
                             Switch(
                                 checked = backgroundSync,
                                 enabled = backgroundReadAvailable,
@@ -267,7 +305,10 @@ class MainActivity : ComponentActivity() {
                         }
 
                         FloatingActionButton(
-                            onClick = { showPairingDialog = true },
+                            onClick = {
+                                if (paired) showReplacePairingDialog = true
+                                else showPairingDialog = true
+                            },
                             modifier = Modifier
                                 .align(Alignment.BottomEnd)
                                 .padding(16.dp),
@@ -282,7 +323,72 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = { showPairingDialog = false },
                                 onPaired = {
                                     paired = true
+                                    serverUrl = credentialStore.read("serverUrl")
+                                    serverIdentity = credentialStore.read("serverIdentity")
+                                    lastSyncAt = null
+                                    lastSyncError = null
                                     status = "Paired successfully. Ready to sync."
+                                },
+                            )
+                        }
+                        if (showDisconnectDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showDisconnectDialog = false },
+                                title = { Text("Forget this connection?") },
+                                text = {
+                                    Text(
+                                        "This removes the server credential from this phone. " +
+                                            "You can also revoke the device permanently in TrackIt.",
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            BackgroundSyncWorker.cancel(this@MainActivity)
+                                            credentialStore.clearPairing()
+                                            paired = false
+                                            serverUrl = null
+                                            serverIdentity = null
+                                            lastSyncAt = null
+                                            lastSyncError = null
+                                            status = "Not paired"
+                                            showDisconnectDialog = false
+                                        },
+                                    ) {
+                                        Text("Forget connection")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showDisconnectDialog = false }) {
+                                        Text("Cancel")
+                                    }
+                                },
+                            )
+                        }
+                        if (showReplacePairingDialog) {
+                            AlertDialog(
+                                onDismissRequest = { showReplacePairingDialog = false },
+                                title = { Text("Pair with another server?") },
+                                text = {
+                                    Text(
+                                        "The existing connection stays usable until the new pairing " +
+                                            "is approved. Its sync cursors will not be reused.",
+                                    )
+                                },
+                                confirmButton = {
+                                    Button(
+                                        onClick = {
+                                            showReplacePairingDialog = false
+                                            showPairingDialog = true
+                                        },
+                                    ) {
+                                        Text("Continue")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showReplacePairingDialog = false }) {
+                                        Text("Cancel")
+                                    }
                                 },
                             )
                         }

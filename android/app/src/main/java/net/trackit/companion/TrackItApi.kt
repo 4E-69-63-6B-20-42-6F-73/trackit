@@ -41,6 +41,28 @@ data class ApiRetryEvent(
     val maxAttempts: Int,
 )
 
+class DeviceAuthenticationException(message: String, cause: Throwable) :
+    IOException(message, cause)
+
+class PermanentSyncException(message: String, cause: Throwable) :
+    IOException(message, cause)
+
+fun canonicalDeviceRequest(
+    method: String,
+    path: String,
+    timestamp: String,
+    nonce: String,
+    bodyHash: String,
+    deviceId: String,
+): String = listOf(
+    method.uppercase(),
+    path,
+    timestamp,
+    nonce,
+    bodyHash,
+    deviceId,
+).joinToString("\n")
+
 private class HttpResponseException(
     val statusCode: Int,
     val responseBody: String,
@@ -156,12 +178,23 @@ class TrackItApi(context: Context) {
                         e.statusCode == 429 ->
                             e.retryAfterMillis ?: 30_000L
 
+                        e.statusCode == 408 ->
+                            1_000L shl zeroBasedAttempt.coerceAtMost(4)
+
                         e.statusCode in 500..599 ->
                             e.retryAfterMillis
                                 ?: (1_000L shl zeroBasedAttempt.coerceAtMost(4))
 
-                        else ->
-                            throw e
+                        e.statusCode in setOf(401, 403) ->
+                            throw DeviceAuthenticationException(
+                                "This device is no longer authorized by the TrackIt server.",
+                                e,
+                            )
+
+                        e.statusCode in 400..499 && e.statusCode != 413 ->
+                            throw PermanentSyncException(e.message ?: "Invalid sync request", e)
+
+                        else -> throw e
                     }
 
                 if (attempt == MAX_ATTEMPTS) {
@@ -173,6 +206,9 @@ class TrackItApi(context: Context) {
                         reason = when {
                             e.statusCode == 429 ->
                                 "Server is busy"
+
+                            e.statusCode == 408 ->
+                                "Server request timed out"
 
                             e.statusCode in 500..599 ->
                                 "Server is temporarily unavailable"
@@ -253,14 +289,14 @@ class TrackItApi(context: Context) {
             credentials.read("serverUrl")
                 ?: throw IllegalStateException("Missing serverUrl")
 
-        val canonical = listOf(
-            method.uppercase(),
+        val canonical = canonicalDeviceRequest(
+            method,
             path,
             timestamp,
             nonce,
             bodyHash,
             deviceId,
-        ).joinToString("\n")
+        )
 
         val store = KeyStore
             .getInstance("AndroidKeyStore")

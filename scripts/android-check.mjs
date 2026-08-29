@@ -6,4 +6,7 @@ const result = spawnSync(executable, ['testDebugUnitTest', 'assembleDebug'], {
     stdio: 'inherit',
     shell: process.platform === 'win32',
 })
+if (result.error) {
+    console.error(`Unable to launch the Android Gradle wrapper: ${result.error.message}`)
+}
 process.exit(result.status ?? 1)

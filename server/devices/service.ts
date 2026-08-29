@@ -300,7 +300,9 @@ export class DeviceService {
             .limit(1)
         if (!device) return failure('device_not_found')
         if (device.revokedAt || device.status === 'revoked') return failure('device_revoked')
-        if (device.status !== 'confirmed') return failure('device_not_confirmed')
+        if (!['confirmed', 'active'].includes(device.status)) {
+            return failure('device_not_confirmed')
+        }
         const canonical = [
             input.method.toUpperCase(),
             input.path,
@@ -823,5 +825,17 @@ export class DeviceService {
                 target: [syncCursors.deviceId, syncCursors.recordType],
                 set: { cursor, status, lastSyncedAt: new Date(), diagnostic: null },
             })
+        if (status === 'complete') {
+            await this.database
+                .update(devices)
+                .set({ status: 'active', lastSeenAt: new Date() })
+                .where(
+                    and(
+                        eq(devices.id, deviceId),
+                        eq(devices.status, 'confirmed'),
+                        isNull(devices.revokedAt),
+                    ),
+                )
+        }
     }
 }

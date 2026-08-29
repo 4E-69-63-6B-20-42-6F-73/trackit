@@ -374,16 +374,18 @@ class HealthConnectSync(private val context: Context) {
     ) {
         val key = recordType.simpleName.orEmpty()
         val savedToken = state.cursor(key)
-        var token: String
+        var token = savedToken.orEmpty()
+        val reporter = CategorySyncReporter(
+            reportSyncing = { api.updateCursor(key, token, "syncing") },
+            reportComplete = { api.updateCursor(key, token, "complete") },
+        )
 
         if (savedToken == null) {
             token = newChangesToken(recordType)
-            rereadWindow(recordType, cancelled)
+            rereadWindow(recordType, cancelled, reporter::recordsFound)
         } else {
             token = savedToken
         }
-
-        api.updateCursor(key, token, "syncing")
 
         while (true) {
             if (cancelled()) throw CancellationException("Import cancelled")
@@ -392,8 +394,7 @@ class HealthConnectSync(private val context: Context) {
 
             if (response.changesTokenExpired) {
                 token = newChangesToken(recordType)
-                rereadWindow(recordType, cancelled)
-                api.updateCursor(key, token, "syncing")
+                rereadWindow(recordType, cancelled, reporter::recordsFound)
                 continue
             }
 
@@ -420,6 +421,7 @@ class HealthConnectSync(private val context: Context) {
             uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
                 if (cancelled()) throw CancellationException("Import cancelled")
                 if (batch.isNotEmpty()) {
+                    reporter.recordsFound()
                     api.upload(UUID.randomUUID().toString(), batch)
                 }
             }
@@ -429,7 +431,7 @@ class HealthConnectSync(private val context: Context) {
         }
 
         state.saveCursor(key, token)
-        api.updateCursor(key, token, "complete")
+        reporter.finish()
     }
 
     private suspend fun newChangesToken(recordType: KClass<out Record>): String =
@@ -438,6 +440,7 @@ class HealthConnectSync(private val context: Context) {
     private suspend fun rereadWindow(
         recordType: KClass<out Record>,
         cancelled: () -> Boolean,
+        onRecordsFound: suspend () -> Unit,
     ) {
         val filter = TimeRangeFilter.after(Instant.now().minus(Duration.ofDays(30)))
         var pageToken: String? = null
@@ -482,6 +485,7 @@ class HealthConnectSync(private val context: Context) {
             uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
                 if (cancelled()) throw CancellationException("Import cancelled")
                 if (batch.isNotEmpty()) {
+                    onRecordsFound()
                     api.upload(UUID.randomUUID().toString(), batch)
                 }
             }

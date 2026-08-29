@@ -8,6 +8,7 @@ import androidx.work.NetworkType
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import java.time.Instant
 import java.util.concurrent.TimeUnit
 
 class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
@@ -15,6 +16,7 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
     override suspend fun doWork(): Result = runCatching {
         val store = CredentialStore(applicationContext)
         if (!store.backgroundSyncEnabled()) return Result.success()
+        if (!store.hasValidPairing()) return Result.failure()
 
         val sync = HealthConnectSync(applicationContext)
         if (sync.availability() != androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE) {
@@ -31,9 +33,29 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
         val required = sync.permissionsFor(recordTypes, includeBackground = true)
         if (!sync.hasPermissions(required)) return Result.success()
 
-        sync.syncSelected(recordTypes)
-        Result.success()
-    }.getOrElse {
+        val results = sync.syncSelected(recordTypes)
+        when {
+            results.values.any { it == "authentication_failed" || it == "permanent_error" } -> {
+                store.saveSyncError("The TrackIt connection needs attention")
+                Result.failure()
+            }
+            results.values.any { it == "error" } -> {
+                store.saveSyncError("A temporary synchronization error occurred")
+                Result.retry()
+            }
+            results.values.any { it == "permission_revoked" } -> {
+                store.saveSyncError("Health Connect access was revoked for one or more categories")
+                Result.success()
+            }
+            else -> {
+                store.saveSyncSuccess(Instant.now().toString())
+                Result.success()
+            }
+        }
+    }.getOrElse { error ->
+        CredentialStore(applicationContext).saveSyncError(
+            error.message ?: "Background synchronization failed",
+        )
         Result.retry()
     }
 

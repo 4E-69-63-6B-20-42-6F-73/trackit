@@ -106,6 +106,7 @@ fun PairingDialog(
                 result.deviceId,
                 result.credential,
                 result.serverIdentity,
+                result.keyFingerprint,
             )
         }
         if (saved.isFailure) {
@@ -163,6 +164,9 @@ fun PairingDialog(
                     val polled = pairingPoller.pollForConfirmation(
                         deviceId = result.deviceId,
                         serverUrl = normalized.serverUrl,
+                        credential = result.credential,
+                        keyFingerprint = result.keyFingerprint,
+                        serverIdentity = result.serverIdentity,
                     )
                     when (polled) {
                         is PairingResult.Success -> finishPairing(polled, attempt)

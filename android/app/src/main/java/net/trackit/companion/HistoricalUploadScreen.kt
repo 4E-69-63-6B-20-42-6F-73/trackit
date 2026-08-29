@@ -1,5 +1,9 @@
 package net.trackit.companion
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +45,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import androidx.health.connect.client.PermissionController
 import androidx.health.connect.client.records.Record
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -79,6 +84,9 @@ fun HistoricalUploadScreen(
     var selectedDays by remember { mutableStateOf(30) }
     var pendingDays by remember { mutableStateOf<Int?>(null) }
     var pendingTypes by remember { mutableStateOf<Set<KClass<out Record>>?>(null) }
+    var pendingNotificationImport by remember {
+        mutableStateOf<Pair<Int, Set<KClass<out Record>>>?>(null)
+    }
     var message by remember { mutableStateOf<String?>(null) }
     var showDetails by remember { mutableStateOf(true) }
     var showSetupAfterCompletion by remember { mutableStateOf(false) }
@@ -159,6 +167,31 @@ fun HistoricalUploadScreen(
         )
     }
 
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        pendingNotificationImport?.let { (days, types) -> runImport(days, types) }
+        pendingNotificationImport = null
+    }
+
+    fun runWithVisibleProgress(
+        days: Int,
+        types: Set<KClass<out Record>>,
+    ) {
+        val needsNotificationPermission = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                context,
+                Manifest.permission.POST_NOTIFICATIONS,
+            ) != PackageManager.PERMISSION_GRANTED
+
+        if (needsNotificationPermission) {
+            pendingNotificationImport = days to types
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        } else {
+            runImport(days, types)
+        }
+    }
+
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) {
@@ -171,12 +204,12 @@ fun HistoricalUploadScreen(
             scope.launch {
                 val required = healthSync.permissionsFor(
                     recordTypes = types,
-                    includeBackground = true,
+                    includeBackground = false,
                     includeHistory = days > 30,
                 )
 
                 if (healthSync.hasPermissions(required)) {
-                    runImport(days, types)
+                    runWithVisibleProgress(days, types)
                 } else {
                     message =
                         "Historical upload needs the selected Health Connect permissions."
@@ -192,12 +225,12 @@ fun HistoricalUploadScreen(
         scope.launch {
             val required = healthSync.permissionsFor(
                 recordTypes = types,
-                includeBackground = true,
+                includeBackground = false,
                 includeHistory = days > 30,
             )
 
             if (healthSync.hasPermissions(required)) {
-                runImport(days, types)
+                runWithVisibleProgress(days, types)
             } else {
                 pendingDays = days
                 pendingTypes = types
@@ -440,7 +473,7 @@ private fun SetupContent(
             if (showCategories) {
                 HorizontalDivider()
                 selectedCategories.forEach { category ->
-                    Text(category.removeSuffix("Record"))
+                    Text(healthCategoryLabel(category))
                 }
             }
         }
@@ -520,7 +553,7 @@ private fun RunningContent(
 
     active?.let { progress ->
         Text(
-            progress.category.removeSuffix("Record"),
+            healthCategoryLabel(progress.category),
             style = MaterialTheme.typography.titleMedium,
         )
 
@@ -768,7 +801,7 @@ private fun CategoryRow(
                 .padding(start = 12.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            Text(progress.category.removeSuffix("Record"))
+            Text(healthCategoryLabel(progress.category))
 
             when (progress.phase) {
                 HistoricalImportPhase.ERROR -> {

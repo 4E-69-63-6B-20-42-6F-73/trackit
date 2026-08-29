@@ -112,6 +112,13 @@ describe('Android device pairing and upload', () => {
                 nonce: randomUUID(),
             }),
         ).not.toBeNull()
+        await service.updateCursor(requested.deviceId, 'StepsRecord', 'cursor-1', 'complete')
+        expect(
+            await authenticate(requested.credential, {
+                deviceId: requested.deviceId,
+                nonce: randomUUID(),
+            }),
+        ).not.toBeNull()
         expect(
             await authenticate(requested?.credential, {
                 deviceId: requested?.deviceId,

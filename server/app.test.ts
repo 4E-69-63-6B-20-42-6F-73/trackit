@@ -135,6 +135,70 @@ describe('device authentication diagnostics', () => {
     )
 })
 
+describe('Android pairing contract', () => {
+    const request = {
+        code: '1234-5678',
+        name: 'Pixel',
+        keyFingerprint: 'fingerprint-1234567890',
+        publicKey: 'A'.repeat(64),
+        serverIdentity: 'trackit-server-1',
+    }
+
+    it('returns a pending credential for status polling before owner confirmation', async () => {
+        const requestPairing = vi.fn().mockResolvedValue({
+            deviceId: 'device-1',
+            credential: 'trk_device_secret',
+            status: 'pending',
+            serverIdentity: request.serverIdentity,
+        })
+        const app = await createApp(new MemoryJournalRepository(), {
+            devices: { requestPairing } as never,
+        })
+
+        const response = await app.inject({
+            method: 'POST',
+            url: '/api/devices/pair/request',
+            payload: request,
+        })
+
+        expect(response.statusCode).toBe(202)
+        expect(response.json()).toEqual({
+            deviceId: 'device-1',
+            credential: 'trk_device_secret',
+            status: 'pending',
+            serverIdentity: request.serverIdentity,
+        })
+        await app.close()
+    })
+
+    it('returns the expected identity when pairing targets the wrong server', async () => {
+        const requestPairing = vi.fn().mockResolvedValue({
+            error: 'identity_mismatch',
+            error_details: {
+                message: 'Server identity mismatch. Verify the server address and identity.',
+                error: 'identity_mismatch',
+            },
+            serverIdentity: 'actual-server',
+        })
+        const app = await createApp(new MemoryJournalRepository(), {
+            devices: { requestPairing } as never,
+        })
+
+        const response = await app.inject({
+            method: 'POST',
+            url: '/api/devices/pair/request',
+            payload: request,
+        })
+
+        expect(response.statusCode).toBe(409)
+        expect(response.json()).toMatchObject({
+            error: 'identity_mismatch',
+            serverIdentity: 'actual-server',
+        })
+        await app.close()
+    })
+})
+
 describe('journal API', () => {
     it('has no managed backup or retention API while explicit deletion remains available', async () => {
         const deleteCategory = vi.fn().mockResolvedValue(undefined)
