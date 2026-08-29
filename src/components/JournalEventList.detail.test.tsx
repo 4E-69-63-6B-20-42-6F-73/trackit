@@ -19,9 +19,21 @@ const sleepEvent = {
     detailView: {
         kind: 'sleep' as const,
         stages: [
-            { type: 'light' as const, start: '2026-08-28T23:40:00.000Z', end: '2026-08-29T01:00:00.000Z' },
-            { type: 'deep' as const, start: '2026-08-29T01:00:00.000Z', end: '2026-08-29T01:40:00.000Z' },
-            { type: 'rem' as const, start: '2026-08-29T01:40:00.000Z', end: '2026-08-29T02:10:00.000Z' },
+            {
+                type: 'light' as const,
+                start: '2026-08-28T23:40:00.000Z',
+                end: '2026-08-29T01:00:00.000Z',
+            },
+            {
+                type: 'deep' as const,
+                start: '2026-08-29T01:00:00.000Z',
+                end: '2026-08-29T01:40:00.000Z',
+            },
+            {
+                type: 'rem' as const,
+                start: '2026-08-29T01:40:00.000Z',
+                end: '2026-08-29T02:10:00.000Z',
+            },
         ],
     },
 }
@@ -35,7 +47,9 @@ describe('Journal entry details', () => {
         )
 
         await userEvent.click(screen.getByRole('button', { name: /sleep session/i }))
-        expect(screen.getByText('Sleep 7.5 hours · Deep 1.2 hours · Rem 1.6 hours')).toBeInTheDocument()
+        expect(
+            screen.getByText('Sleep 7.5 hours · Deep 1.2 hours · Rem 1.6 hours'),
+        ).toBeInTheDocument()
         expect(screen.getByText('Health Connect · Garmin')).toBeInTheDocument()
 
         await userEvent.click(screen.getByRole('button', { name: 'View detailed sleep' }))

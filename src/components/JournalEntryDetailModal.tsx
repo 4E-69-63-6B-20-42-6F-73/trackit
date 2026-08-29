@@ -28,27 +28,38 @@ const formatDateTime = (value?: string) =>
         : null
 
 const formatTime = (value: string) =>
-    new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(new Date(value))
+    new Intl.DateTimeFormat(undefined, { hour: '2-digit', minute: '2-digit' }).format(
+        new Date(value),
+    )
 
 const durationMinutes = (start: string, end: string) =>
     Math.max(0, Math.round((new Date(end).getTime() - new Date(start).getTime()) / 60_000))
 
 function SleepDetail({ event }: { event: JournalEvent }) {
     const stages = event.detailView?.kind === 'sleep' ? event.detailView.stages : []
-    const start = event.startedAt ? new Date(event.startedAt).getTime() : Math.min(...stages.map(stage => new Date(stage.start).getTime()))
-    const end = event.endedAt ? new Date(event.endedAt).getTime() : Math.max(...stages.map(stage => new Date(stage.end).getTime()))
+    const start = event.startedAt
+        ? new Date(event.startedAt).getTime()
+        : Math.min(...stages.map(stage => new Date(stage.start).getTime()))
+    const end = event.endedAt
+        ? new Date(event.endedAt).getTime()
+        : Math.max(...stages.map(stage => new Date(stage.end).getTime()))
     const duration = Math.max(1, end - start)
     const totals = useMemo(() => {
         const result = new Map<SleepStageDetail['type'], number>()
         for (const stage of stages)
-            result.set(stage.type, (result.get(stage.type) ?? 0) + durationMinutes(stage.start, stage.end))
+            result.set(
+                stage.type,
+                (result.get(stage.type) ?? 0) + durationMinutes(stage.start, stage.end),
+            )
         return result
     }, [stages])
 
     return (
         <Stack gap="lg">
             <div>
-                <Text fw={700} size="xl">Sleep phases</Text>
+                <Text fw={700} size="xl">
+                    Sleep phases
+                </Text>
                 {event.startedAt && event.endedAt && (
                     <Text size="sm" c="dimmed">
                         {formatTime(event.startedAt)} – {formatTime(event.endedAt)}
@@ -57,20 +68,53 @@ function SleepDetail({ event }: { event: JournalEvent }) {
             </div>
             <Stack gap="xs">
                 {(['awake', 'rem', 'light', 'deep'] as const).map(type => (
-                    <div key={type} style={{ display: 'grid', gridTemplateColumns: '54px 1fr', gap: 10, alignItems: 'center' }}>
-                        <Text size="xs" c="dimmed">{stageLabels[type]}</Text>
-                        <div style={{ position: 'relative', height: 22, borderRadius: 7, background: 'var(--line)', overflow: 'hidden' }}>
-                            {stages.filter(stage => stage.type === type).map((stage, index) => {
-                                const left = ((new Date(stage.start).getTime() - start) / duration) * 100
-                                const width = ((new Date(stage.end).getTime() - new Date(stage.start).getTime()) / duration) * 100
-                                return (
-                                    <div
-                                        key={`${stage.start}-${stage.end}-${index}`}
-                                        title={`${stageLabels[type]} · ${formatTime(stage.start)}–${formatTime(stage.end)} · ${durationMinutes(stage.start, stage.end)} min`}
-                                        style={{ position: 'absolute', left: `${left}%`, width: `${Math.max(width, 0.6)}%`, top: 0, bottom: 0, background: stageTone[type], borderRadius: 6 }}
-                                    />
-                                )
-                            })}
+                    <div
+                        key={type}
+                        style={{
+                            display: 'grid',
+                            gridTemplateColumns: '54px 1fr',
+                            gap: 10,
+                            alignItems: 'center',
+                        }}
+                    >
+                        <Text size="xs" c="dimmed">
+                            {stageLabels[type]}
+                        </Text>
+                        <div
+                            style={{
+                                position: 'relative',
+                                height: 22,
+                                borderRadius: 7,
+                                background: 'var(--line)',
+                                overflow: 'hidden',
+                            }}
+                        >
+                            {stages
+                                .filter(stage => stage.type === type)
+                                .map((stage, index) => {
+                                    const left =
+                                        ((new Date(stage.start).getTime() - start) / duration) * 100
+                                    const width =
+                                        ((new Date(stage.end).getTime() -
+                                            new Date(stage.start).getTime()) /
+                                            duration) *
+                                        100
+                                    return (
+                                        <div
+                                            key={`${stage.start}-${stage.end}-${index}`}
+                                            title={`${stageLabels[type]} · ${formatTime(stage.start)}–${formatTime(stage.end)} · ${durationMinutes(stage.start, stage.end)} min`}
+                                            style={{
+                                                position: 'absolute',
+                                                left: `${left}%`,
+                                                width: `${Math.max(width, 0.6)}%`,
+                                                top: 0,
+                                                bottom: 0,
+                                                background: stageTone[type],
+                                                borderRadius: 6,
+                                            }}
+                                        />
+                                    )
+                                })}
                         </div>
                     </div>
                 ))}
@@ -79,7 +123,11 @@ function SleepDetail({ event }: { event: JournalEvent }) {
                 {(['awake', 'rem', 'light', 'deep'] as const).map(type => {
                     const minutes = totals.get(type) ?? 0
                     if (!minutes) return null
-                    return <Badge key={type} variant="light">{stageLabels[type]} · {minutes} min</Badge>
+                    return (
+                        <Badge key={type} variant="light">
+                            {stageLabels[type]} · {minutes} min
+                        </Badge>
+                    )
                 })}
             </Group>
         </Stack>
@@ -94,7 +142,8 @@ export function JournalEntryDetailModal({
     onClose: () => void
 }) {
     const [detailed, setDetailed] = useState(false)
-    const hasDetailedView = event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0
+    const hasDetailedView =
+        event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0
 
     return (
         <Modal
@@ -124,7 +173,9 @@ export function JournalEntryDetailModal({
             ) : event ? (
                 <Stack gap="md">
                     <div>
-                        <Text fw={700} size="xl">{event.detail}</Text>
+                        <Text fw={700} size="xl">
+                            {event.detail}
+                        </Text>
                         <Text size="sm" c="dimmed" mt={4}>
                             {event.startedAt && event.endedAt && event.startedAt !== event.endedAt
                                 ? `${formatDateTime(event.startedAt)} – ${formatTime(event.endedAt)}`
@@ -133,13 +184,21 @@ export function JournalEntryDetailModal({
                     </div>
                     <Divider />
                     <div>
-                        <Text size="xs" c="dimmed">Source</Text>
-                        <Text size="sm" fw={600}>{event.source}</Text>
+                        <Text size="xs" c="dimmed">
+                            Source
+                        </Text>
+                        <Text size="sm" fw={600}>
+                            {event.source}
+                        </Text>
                     </div>
                     {event.deviceName && (
                         <div>
-                            <Text size="xs" c="dimmed">Device</Text>
-                            <Text size="sm" fw={600}>{event.deviceName}</Text>
+                            <Text size="xs" c="dimmed">
+                                Device
+                            </Text>
+                            <Text size="sm" fw={600}>
+                                {event.deviceName}
+                            </Text>
                         </div>
                     )}
                     {hasDetailedView && (

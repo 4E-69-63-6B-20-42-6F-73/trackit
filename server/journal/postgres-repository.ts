@@ -3,7 +3,12 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { healthRecords, observationRelations, observations, preferences } from '../db/schema.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import type { JournalEntry, JournalListQuery, JournalRepository, SleepStageDetail } from './types.js'
+import type {
+    JournalEntry,
+    JournalListQuery,
+    JournalRepository,
+    SleepStageDetail,
+} from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -37,14 +42,19 @@ const sleepStages = (record?: HealthRecord): SleepStageDetail[] => {
         )
             return []
         const normalized = item.type.toLowerCase()
-        const type: SleepStageDetail['type'] = ['awake', 'rem', 'light', 'deep'].includes(normalized)
+        const type: SleepStageDetail['type'] = ['awake', 'rem', 'light', 'deep'].includes(
+            normalized,
+        )
             ? (normalized as SleepStageDetail['type'])
             : 'unknown'
         return [{ type, start: item.start, end: item.end }]
     })
 }
 
-const toEntry = (row: typeof observations.$inferSelect, sourceRecord?: HealthRecord): JournalEntry => {
+const toEntry = (
+    row: typeof observations.$inferSelect,
+    sourceRecord?: HealthRecord,
+): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
     const primaryDefinitionId =
         typeof attributes.primaryDefinitionId === 'string'
@@ -137,7 +147,12 @@ export class PostgresJournalRepository implements JournalRepository {
             : []
         const sourceRecordById = new Map(sourceRecords.map(record => [record.id, record]))
         return rows
-            .map(row => toEntry(row, row.sourceRecordId ? sourceRecordById.get(row.sourceRecordId) : undefined))
+            .map(row =>
+                toEntry(
+                    row,
+                    row.sourceRecordId ? sourceRecordById.get(row.sourceRecordId) : undefined,
+                ),
+            )
             .filter(entry => !filters.source || entry.source === filters.source)
     }
 
