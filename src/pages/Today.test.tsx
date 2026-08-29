@@ -7,7 +7,9 @@ import type { JournalEvent } from '../domain/types'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { Today } from './Today'
 
-const todayHealthState = vi.hoisted(() => ({ summaryMetrics: [] as Array<Record<string, unknown>> }))
+const todayHealthState = vi.hoisted(() => ({
+    summaryMetrics: [] as Array<Record<string, unknown>>,
+}))
 
 vi.mock('../hooks/useTodayHealth', () => ({
     useTodayHealth: () => ({
