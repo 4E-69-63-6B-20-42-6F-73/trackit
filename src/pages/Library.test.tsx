@@ -1,5 +1,6 @@
 import { MantineProvider } from '@mantine/core'
 import { render, screen } from '@testing-library/react'
+import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Food } from '../domain/nutrition'
@@ -58,7 +59,7 @@ const recipe: RecipeRecord = {
     items: [],
 }
 
-const renderPage = (page: React.ReactNode) =>
+const renderPage = (page: ReactNode) =>
     render(
         <MantineProvider>
             <MemoryRouter>{page}</MemoryRouter>
@@ -71,7 +72,7 @@ describe('Library', () => {
         vi.mocked(listRecipes).mockResolvedValue([recipe])
     })
 
-    it('uses dedicated subpage links for foods, recipes, and metrics', async () => {
+    it('uses dedicated subpage links for foods, recipes, and metrics', () => {
         renderPage(<Library />)
 
         expect(screen.getByRole('link', { name: 'Browse foods' })).toHaveAttribute(
@@ -86,7 +87,8 @@ describe('Library', () => {
             'href',
             '/library/metrics',
         )
-        expect(await screen.findByText('Oats')).not.toBeInTheDocument()
+        expect(screen.queryByText('Oats')).not.toBeInTheDocument()
+        expect(screen.queryByText('Porridge')).not.toBeInTheDocument()
     })
 
     it('renders Foods as a standalone Library subpage', async () => {
