@@ -1,10 +1,23 @@
 import { z } from 'zod'
 import { dateKeyInTimezone } from './timezone.js'
 
+const recordTypesSchema = z.array(z.string().trim().min(1)).min(1).max(64).optional()
+
 const explicitDateRangeSchema = z
     .object({
         from: z.string().date().optional(),
         to: z.string().date().optional(),
+    })
+    .refine(value => !value.from || !value.to || value.from <= value.to, {
+        message: 'from must be on or before to',
+        path: ['from'],
+    })
+
+const explicitProviderRecordRangeSchema = z
+    .object({
+        from: z.string().date().optional(),
+        to: z.string().date().optional(),
+        recordTypes: recordTypesSchema,
     })
     .refine(value => !value.from || !value.to || value.from <= value.to, {
         message: 'from must be on or before to',
@@ -16,7 +29,16 @@ export const maintenanceDateRangeSchema = z.union([
     explicitDateRangeSchema,
 ])
 
+export const providerRecordMaintenanceSchema = z.union([
+    z.object({
+        lastDays: z.number().int().min(1).max(3650),
+        recordTypes: recordTypesSchema,
+    }),
+    explicitProviderRecordRangeSchema,
+])
+
 export type MaintenanceDateRange = z.infer<typeof maintenanceDateRangeSchema>
+export type ProviderRecordMaintenanceRange = z.infer<typeof providerRecordMaintenanceSchema>
 export type ResolvedMaintenanceDateRange = { from?: string; to?: string }
 
 const shiftDate = (date: string, days: number) => {
@@ -34,5 +56,5 @@ export function resolveMaintenanceDateRange(
         const to = dateKeyInTimezone(now, timezone)
         return { from: shiftDate(to, -(range.lastDays - 1)), to }
     }
-    return range
+    return { from: range.from, to: range.to }
 }
