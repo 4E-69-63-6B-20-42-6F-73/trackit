@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -108,6 +108,6 @@ describe('Library', () => {
             '/library',
         )
         expect(await screen.findByText('Porridge')).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'New recipe' })).toBeEnabled()
+        await waitFor(() => expect(screen.getByRole('button', { name: 'New recipe' })).toBeEnabled())
     })
 })
