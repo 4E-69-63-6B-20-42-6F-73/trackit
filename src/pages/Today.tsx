@@ -12,6 +12,7 @@ import {
 import { useEffect, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
+import { JournalEntryDetailModal } from '../components/JournalEntryDetailModal'
 import { JournalEventList } from '../components/JournalEventList'
 import { MetricCard } from '../components/MetricCard'
 import {
@@ -96,8 +97,16 @@ export function Today({
     const selectedDate = calendarDateFromKey(selectedKey, timezone)
     const health = useTodayHealth(selectedDate)
     const [hasHistory, setHasHistory] = useState<boolean | null>(null)
+    const [selectedSleepEvent, setSelectedSleepEvent] = useState<JournalEvent | null>(null)
     const isToday = selectedKey === todayKey
     const locale = health.preferences?.locale
+    const detailedSleepEvent =
+        events.find(
+            event =>
+                event.definitionId === 'sleep' &&
+                event.detailView?.kind === 'sleep' &&
+                event.detailView.stages.length > 0,
+        ) ?? null
 
     useEffect(() => {
         const controller = new AbortController()
@@ -110,6 +119,7 @@ export function Today({
     const setSelectedKey = (next: string) => {
         const bounded = next > todayKey ? todayKey : next
         setSelectedKeyState(bounded)
+        setSelectedSleepEvent(null)
         const search = new URLSearchParams(params)
         if (bounded === todayKey) search.delete('date')
         else search.set('date', bounded)
@@ -304,6 +314,11 @@ export function Today({
                                             health.preferences?.metricPreferences,
                                             locale,
                                         )}
+                                        onOpenDetails={
+                                            metric.definition.id === 'sleep' && detailedSleepEvent
+                                                ? () => setSelectedSleepEvent(detailedSleepEvent)
+                                                : undefined
+                                        }
                                         onViewTrend={() => openTrends(metric.definition.id)}
                                         locale={locale}
                                         timezone={timezone}
@@ -436,6 +451,10 @@ export function Today({
                     </section>
                 </>
             )}
+            <JournalEntryDetailModal
+                event={selectedSleepEvent}
+                onClose={() => setSelectedSleepEvent(null)}
+            />
         </div>
     )
 }
