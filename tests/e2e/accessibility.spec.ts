@@ -4,12 +4,14 @@ import { useAuthenticatedServer } from './server-fixture'
 
 const routes = [
     '/today',
-    '/nutrition',
     '/journal',
-    '/goals',
     '/trends',
+    '/goals',
+    '/library',
+    '/library/metrics',
     '/connections',
     '/settings',
+    '/settings/data',
 ]
 
 test.beforeEach(async ({ page }) => useAuthenticatedServer(page))
@@ -45,14 +47,10 @@ test('global logger has no automatic WCAG A/AA violations', async ({ page }) => 
     expect(results.violations).toEqual([])
 })
 
-test('primary navigation works by keyboard and moves focus to page content', async ({
-    page,
-    isMobile,
-}) => {
+test('primary navigation works by keyboard and moves focus to page content', async ({ page }) => {
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
 
-    if (isMobile) await page.getByRole('button', { name: 'More' }).click()
     const goalsLink = page.getByRole('link', { name: 'Goals', exact: true }).first()
     await goalsLink.focus()
     await page.keyboard.press('Enter')
@@ -61,9 +59,7 @@ test('primary navigation works by keyboard and moves focus to page content', asy
     await expect(page.getByRole('heading', { name: 'Goals', level: 1 })).toBeVisible()
 })
 
-test('Today reflows without page-level horizontal scrolling at 320 CSS pixels', async ({
-    page,
-}) => {
+test('Today reflows without page-level horizontal scrolling at 320 CSS pixels', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 })
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
