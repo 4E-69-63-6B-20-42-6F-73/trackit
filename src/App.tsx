@@ -20,9 +20,6 @@ const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: mo
 const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
 const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: module.Goals })))
 const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
-const Connections = lazy(() =>
-    import('./pages/Connections').then(module => ({ default: module.Connections })),
-)
 const DeviceManagement = lazy(() =>
     import('./pages/connections/devices/index').then(module => ({ default: module.Devices })),
 )
@@ -51,7 +48,7 @@ const pagePaths: Record<Page, string> = {
     Trends: '/trends',
     Goals: '/goals',
     Library: '/library',
-    Connections: '/connections',
+    Connections: '/settings/connections',
     Settings: '/settings',
 }
 
@@ -194,12 +191,42 @@ export default function App() {
                             <Route path="/library" element={<Library />} />
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
-                            <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
-                            <Route path="/connections" element={<Connections />} />
-                            <Route path="/connections/devices" element={<DeviceManagement />} />
-                            <Route path="/connections/devices/new" element={<DeviceNew />} />
-                            <Route path="/connections/mcp" element={<McpAccess />} />
-                            <Route path="/connections/mcp/new" element={<McpNew />} />
+                            <Route
+                                path="/metrics"
+                                element={<Navigate to="/library/metrics" replace />}
+                            />
+                            <Route
+                                path="/settings/connections/devices"
+                                element={<DeviceManagement />}
+                            />
+                            <Route
+                                path="/settings/connections/devices/new"
+                                element={<DeviceNew />}
+                            />
+                            <Route path="/settings/connections/mcp" element={<McpAccess />} />
+                            <Route path="/settings/connections/mcp/new" element={<McpNew />} />
+                            <Route
+                                path="/connections"
+                                element={<Navigate to="/settings/connections" replace />}
+                            />
+                            <Route
+                                path="/connections/devices"
+                                element={<Navigate to="/settings/connections/devices" replace />}
+                            />
+                            <Route
+                                path="/connections/devices/new"
+                                element={
+                                    <Navigate to="/settings/connections/devices/new" replace />
+                                }
+                            />
+                            <Route
+                                path="/connections/mcp"
+                                element={<Navigate to="/settings/connections/mcp" replace />}
+                            />
+                            <Route
+                                path="/connections/mcp/new"
+                                element={<Navigate to="/settings/connections/mcp/new" replace />}
+                            />
                             <Route
                                 path="/settings/goals"
                                 element={<Navigate to="/goals" replace />}
@@ -225,7 +252,9 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''}
+                    className={
+                        ['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''
+                    }
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"

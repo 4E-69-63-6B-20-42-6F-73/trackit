@@ -1,17 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Badge, Stack, Text } from '@mantine/core'
-import {
-    IconChevronRight,
-    IconCircleCheck,
-    IconDeviceMobile,
-    IconTools,
-} from '@tabler/icons-react'
+import { IconChevronRight, IconCircleCheck, IconDeviceMobile, IconTools } from '@tabler/icons-react'
 import { PageHeader } from '../components/PageHeader'
 import { healthConnectStatus, listDevices, type HealthConnectStatus } from '../lib/deviceApi'
 import { getMcpStatus } from '../lib/mcpApi'
 
-export function Connections() {
+export function ConnectionsPanel() {
     const navigate = useNavigate()
     const [mcp, setMcp] = useState(false)
     const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
@@ -53,11 +48,7 @@ export function Connections() {
     ]
 
     return (
-        <div className="page-content connections-page">
-            <PageHeader
-                title="Connections"
-                description="Manage where observations come from and which trusted clients can access TrackIt."
-            />
+        <>
             <div className="connection-grid">
                 {cards.map(({ key, icon: Icon, title, status, desc, color }) => (
                     <button
@@ -65,7 +56,11 @@ export function Connections() {
                         className="connection-card"
                         key={title}
                         onClick={() =>
-                            navigate(key === 'health' ? '/connections/devices' : '/connections/mcp')
+                            navigate(
+                                key === 'health'
+                                    ? '/settings/connections/devices'
+                                    : '/settings/connections/mcp',
+                            )
                         }
                     >
                         <div className={`connection-icon ${color}`}>
@@ -92,7 +87,9 @@ export function Connections() {
                                 {status}
                             </Badge>
                         </div>
-                        <Text c="dimmed" size="sm">{desc}</Text>
+                        <Text c="dimmed" size="sm">
+                            {desc}
+                        </Text>
                         <div className="connection-action">
                             <Text fw={650} c="trackit">
                                 {key === 'health'
@@ -125,7 +122,8 @@ export function Connections() {
                 <div>
                     <Text fw={650}>Private by default</Text>
                     <Text size="sm" c="dimmed">
-                        TrackIt sends nothing to third parties unless you explicitly configure a connection.
+                        TrackIt sends nothing to third parties unless you explicitly configure a
+                        connection.
                     </Text>
                 </div>
             </section>
@@ -134,6 +132,18 @@ export function Connections() {
                     Export and deletion controls are available under Settings → Data.
                 </Text>
             </Stack>
+        </>
+    )
+}
+
+export function Connections() {
+    return (
+        <div className="page-content connections-page">
+            <PageHeader
+                title="Connections"
+                description="Manage where observations come from and which trusted clients can access TrackIt."
+            />
+            <ConnectionsPanel />
         </div>
     )
 }

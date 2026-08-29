@@ -38,8 +38,8 @@ export function PrivacyPanel() {
             <section>
                 <Text fw={700}>Export</Text>
                 <Text size="sm" c="dimmed" mb="md">
-                    Download a portable copy of your observations, projections, goals, foods, recipes,
-                    sources, and relevant configuration. Export does not change live data.
+                    Download a portable copy of your observations, projections, goals, foods,
+                    recipes, sources, and relevant configuration. Export does not change live data.
                 </Text>
                 <Group>
                     <Button
@@ -69,6 +69,7 @@ export function PrivacyPanel() {
                 <TextInput
                     label="Confirmation"
                     description="Type DELETE ALL TRACKIT DATA"
+                    styles={{ description: { color: 'var(--muted)' } }}
                     value={confirmation}
                     onChange={event => setConfirmation(event.currentTarget.value)}
                 />

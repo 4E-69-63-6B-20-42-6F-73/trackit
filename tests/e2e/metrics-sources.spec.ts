@@ -1,21 +1,15 @@
 import { expect, test } from '@playwright/test'
 import { useAuthenticatedServer } from './server-fixture'
 
-test('configures provider-aware source priority without exposing raw internals', async ({ page }) => {
-    const observations = ['Garmin', 'Samsung Health'].map((provider, index) => ({
-        id: `source-${index}`,
-        metric: 'steps',
-        canonicalValue: 4200 - index * 20,
-        canonicalUnit: 'count',
-        originalValue: 4200 - index * 20,
-        originalUnit: 'count',
-        observedAt: '2026-08-24T08:00:00.000Z',
-        endedAt: '2026-08-24T09:00:00.000Z',
-        metadata: { source: 'Health Connect', dataOrigin: provider },
-        excluded: false,
-        version: 1,
+test('configures provider-aware source priority without exposing raw internals', async ({
+    page,
+}) => {
+    const metricSources = ['Garmin', 'Samsung Health'].map(provider => ({
+        definitionId: 'steps',
+        provider,
+        connector: 'Health Connect',
     }))
-    await useAuthenticatedServer(page, { observations })
+    await useAuthenticatedServer(page, { metricSources })
     await page.goto('/library/metrics')
     await expect(page.getByRole('heading', { name: 'Metric Center', level: 1 })).toBeVisible()
     await page.getByRole('button', { name: /Configure Steps/ }).click()

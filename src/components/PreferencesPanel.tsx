@@ -15,6 +15,7 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             ? Intl.supportedValuesOf('timeZone')
             : [detectedTimezone]
     const locales = [...new Set([detectedLocale, 'en-US', 'en-GB', 'nl-NL', 'de-DE', 'fr-FR'])]
+    const accessibleDescriptionStyles = { description: { color: 'var(--muted)' } }
 
     useEffect(() => {
         queueMicrotask(() => setValue(preferences))
@@ -67,6 +68,7 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             <Select
                 label="Timezone"
                 description={`Browser recommendation: ${detectedTimezone}. Changing this can move observations between days.`}
+                styles={accessibleDescriptionStyles}
                 value={value.timezone}
                 onChange={timezone => timezone && setValue({ ...value, timezone })}
                 data={timezones}
@@ -75,13 +77,16 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             <Select
                 label="Locale"
                 description={`Browser recommendation: ${detectedLocale}`}
+                styles={accessibleDescriptionStyles}
                 value={value.locale}
                 onChange={locale => locale && setValue({ ...value, locale })}
                 data={locales}
                 searchable
             />
             <div className="preference-preview">
-                <Text size="xs" c="dimmed">Formatting preview</Text>
+                <Text size="xs" c="dimmed">
+                    Formatting preview
+                </Text>
                 <Text size="sm" fw={600}>
                     {new Intl.DateTimeFormat(value.locale, {
                         dateStyle: 'full',
@@ -95,7 +100,9 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             )}
             <Button
                 loading={saving}
-                disabled={!value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()}
+                disabled={
+                    !value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()
+                }
                 onClick={() => void save()}
             >
                 Save changes
