@@ -3,9 +3,12 @@ import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { healthRecords, observationRelations, observations, preferences } from '../db/schema.js'
+import {
+    resolveMaintenanceDateRange,
+    type MaintenanceDateRange,
+} from '../data/maintenance-range.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone, localDayRange, nextDate } from '../data/timezone.js'
-import type { MaintenanceDateRange } from '../data/maintenance-range.js'
 import { deriveRecord } from './derive.js'
 import { projectHealthRecordToJournal } from './journal.js'
 import type { CanonicalHealthRecord } from './types.js'
@@ -110,12 +113,13 @@ async function insertObservationGraph(transaction: Transaction, record: Canonica
 export class ProviderRecordMaintenanceService {
     constructor(private readonly database: Database) {}
 
-    async rederive(range: MaintenanceDateRange = {}) {
+    async rederive(input: MaintenanceDateRange = {}) {
         const [saved] = await this.database
             .select({ timezone: preferences.timezone })
             .from(preferences)
             .where(eq(preferences.id, 'owner'))
         const timezone = saved?.timezone ?? 'UTC'
+        const range = resolveMaintenanceDateRange(input, timezone)
         const from = range.from ? localDayRange(range.from, timezone).from : undefined
         const to = range.to ? localDayRange(range.to, timezone).to : undefined
 
