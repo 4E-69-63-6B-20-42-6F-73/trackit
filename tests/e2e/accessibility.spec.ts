@@ -57,7 +57,9 @@ test('primary navigation works by keyboard and moves focus to page content', asy
     await expect(page.locator('#main-content')).toBeFocused()
 })
 
-test('Today reflows without page-level horizontal scrolling at 320 CSS pixels', async ({ page }) => {
+test('Today reflows without page-level horizontal scrolling at 320 CSS pixels', async ({
+    page,
+}) => {
     await page.setViewportSize({ width: 320, height: 800 })
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
