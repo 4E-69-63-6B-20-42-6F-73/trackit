@@ -16,6 +16,7 @@ import {
 } from '../db/schema.js'
 import { deriveRecord } from '../health-records/derive.js'
 import { projectHealthRecordToJournal } from '../health-records/journal.js'
+import { normalizeHealthRecord, normalizeHealthRecordInput } from '../health-records/normalize.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { nextDate } from '../data/timezone.js'
 import type { CanonicalHealthRecord, CanonicalHealthRecordInput } from '../health-records/types.js'
@@ -29,6 +30,7 @@ async function insertHealthObservationGraph(
     transaction: Transaction,
     record: CanonicalHealthRecord,
 ) {
+    record = normalizeHealthRecord(record)
     const projections = deriveRecord(record)
     const components = projections.length
         ? await transaction
@@ -579,7 +581,8 @@ export class DeviceService {
                 .onConflictDoNothing({ target: sources.id })
 
             const affectedDates = new Set<string>()
-            for (const input of records) {
+            for (const sourceInput of records) {
+                const input = normalizeHealthRecordInput(sourceInput)
                 const now = new Date()
                 const connector = input.provider
                 const provider = input.dataOrigin ?? input.provider
@@ -756,9 +759,10 @@ export class DeviceService {
                     dates.add(stored.startTime.toISOString().slice(0, 10))
                     if (stored.endTime) dates.add(stored.endTime.toISOString().slice(0, 10))
 
-                    const projections = await insertHealthObservationGraph(transaction, {
+                    const record = normalizeHealthRecord({
                         id: stored.id,
                         userId: stored.userId,
+                        connector: stored.connector,
                         provider: stored.provider,
                         recordType: stored.recordType,
                         externalId: stored.externalId,
@@ -771,6 +775,12 @@ export class DeviceService {
                         payload: stored.payload as Record<string, unknown>,
                         lastModifiedTime: stored.lastModifiedTime?.toISOString(),
                     })
+                    if (record.recordType === 'ExerciseSessionRecord')
+                        await transaction
+                            .update(healthRecords)
+                            .set({ payload: record.payload })
+                            .where(eq(healthRecords.id, stored.id))
+                    const projections = await insertHealthObservationGraph(transaction, record)
 
                     for (const projection of projections) {
                         if (projection.observedAt)
