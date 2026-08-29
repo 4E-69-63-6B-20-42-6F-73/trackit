@@ -5,6 +5,7 @@ import {
     Modal,
     Paper,
     SegmentedControl,
+    Select,
     SimpleGrid,
     Stack,
     Text,
@@ -16,10 +17,53 @@ import {
     rebuildProjections,
     rederiveObservations,
     type MaintenanceDateRange,
+    type MaintenanceRederiveRequest,
 } from '../lib/dataApi'
 import { downloadExport } from '../lib/exportApi'
 
 type RangeMode = '30d' | 'all' | 'custom'
+type RecordCategory = 'all' | 'sleep' | 'heart' | 'activity' | 'measurements'
+
+const recordCategories: Record<
+    RecordCategory,
+    { label: string; recordTypes?: string[] }
+> = {
+    all: { label: 'All imported data' },
+    sleep: { label: 'Sleep', recordTypes: ['SleepSessionRecord'] },
+    heart: {
+        label: 'Heart & cardiovascular',
+        recordTypes: [
+            'HeartRateRecord',
+            'RestingHeartRateRecord',
+            'BloodPressureRecord',
+            'HeartRateVariabilityRmssdRecord',
+            'OxygenSaturationRecord',
+            'RespiratoryRateRecord',
+        ],
+    },
+    activity: {
+        label: 'Activity',
+        recordTypes: [
+            'StepsRecord',
+            'ExerciseSessionRecord',
+            'DistanceRecord',
+            'ActiveCaloriesBurnedRecord',
+            'TotalCaloriesBurnedRecord',
+            'Vo2MaxRecord',
+        ],
+    },
+    measurements: {
+        label: 'Body measurements',
+        recordTypes: [
+            'WeightRecord',
+            'BodyFatRecord',
+            'HeightRecord',
+            'LeanBodyMassRecord',
+            'BasalMetabolicRateRecord',
+            'HydrationRecord',
+        ],
+    },
+}
 
 const localDateKey = (date: Date) => {
     const year = date.getFullYear()
@@ -39,6 +83,7 @@ export function PrivacyPanel() {
     const [rangeMode, setRangeMode] = useState<RangeMode>('30d')
     const [customFrom, setCustomFrom] = useState('')
     const [customTo, setCustomTo] = useState(localDateKey(new Date()))
+    const [recordCategory, setRecordCategory] = useState<RecordCategory>('all')
     const [confirmRederive, setConfirmRederive] = useState(false)
     const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
 
@@ -47,6 +92,13 @@ export function PrivacyPanel() {
         if (rangeMode === '30d') return { lastDays: 30 }
         return { from: customFrom || undefined, to: customTo || undefined }
     }
+
+    const maintenanceRederiveRequest = (): MaintenanceRederiveRequest => ({
+        ...maintenanceRange(),
+        ...(recordCategories[recordCategory].recordTypes
+            ? { recordTypes: recordCategories[recordCategory].recordTypes }
+            : {}),
+    })
 
     const rangeValid =
         rangeMode !== 'custom' ||
@@ -57,6 +109,11 @@ export function PrivacyPanel() {
         if (rangeMode === '30d') return 'the last 30 days'
         return customFrom && customTo ? `${customFrom} through ${customTo}` : 'the selected range'
     }
+
+    const rederiveScopeLabel = () =>
+        recordCategory === 'all'
+            ? rangeLabel()
+            : `${recordCategories[recordCategory].label.toLowerCase()} in ${rangeLabel()}`
 
     const exportData = async (format: 'json' | 'csv') => {
         setExporting(format)
@@ -99,12 +156,12 @@ export function PrivacyPanel() {
         setMaintenanceBusy('observations')
         setMessage('')
         try {
-            const result = await rederiveObservations(maintenanceRange())
+            const result = await rederiveObservations(maintenanceRederiveRequest())
             setMessageColor('green')
             setMessage(
                 result.sourceRecords
-                    ? `Re-derived ${result.canonicalObservations} canonical observation${result.canonicalObservations === 1 ? '' : 's'} from ${result.sourceRecords} provider record${result.sourceRecords === 1 ? '' : 's'} in ${rangeLabel()}. ${result.queuedProjectionDates} affected projection day${result.queuedProjectionDates === 1 ? '' : 's'} queued for refresh.`
-                    : `There are no retained provider records to re-derive in ${rangeLabel()}.`,
+                    ? `Re-derived ${result.canonicalObservations} canonical observation${result.canonicalObservations === 1 ? '' : 's'} from ${result.sourceRecords} provider record${result.sourceRecords === 1 ? '' : 's'} for ${rederiveScopeLabel()}. ${result.queuedProjectionDates} affected projection day${result.queuedProjectionDates === 1 ? '' : 's'} queued for refresh.`
+                    : `There are no retained provider records to re-derive for ${rederiveScopeLabel()}.`,
             )
         } catch (error) {
             setMessageColor('orange')
@@ -231,6 +288,17 @@ export function PrivacyPanel() {
                             selected range. Affected projections are queued for rebuild
                             automatically.
                         </Text>
+                        <Select
+                            label="Imported data category"
+                            description="Limit re-derivation to reduce memory use for high-volume data."
+                            value={recordCategory}
+                            onChange={value => setRecordCategory((value ?? 'all') as RecordCategory)}
+                            data={Object.entries(recordCategories).map(([value, category]) => ({
+                                value,
+                                label: category.label,
+                            }))}
+                            mb="md"
+                        />
                         <Button
                             variant="light"
                             color="orange"
@@ -280,8 +348,8 @@ export function PrivacyPanel() {
                 <Stack gap="md">
                     <Text size="sm">
                         TrackIt will replace connector-derived canonical observations backed by
-                        retained provider records for {rangeLabel()} using the current derivation
-                        rules.
+                        retained provider records for {rederiveScopeLabel()} using the current
+                        derivation rules.
                     </Text>
                     <Text size="sm" c="dimmed">
                         Provider records and manual observations remain unchanged. Any affected
