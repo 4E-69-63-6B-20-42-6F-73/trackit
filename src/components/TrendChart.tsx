@@ -40,7 +40,8 @@ export function TrendChart({
     valueLabel?: string
     formatValue?: (value: number) => string
 }) {
-    if (loading) return <div role="status" aria-label="Loading trend" className="trend-chart-loading" />
+    if (loading)
+        return <div role="status" aria-label="Loading trend" className="trend-chart-loading" />
     if (error) return <Alert color="orange">Connect to TrackIt to load your observations.</Alert>
 
     const covered = points.filter(point => point.value !== null)
@@ -83,9 +84,7 @@ export function TrendChart({
                             tickLine={false}
                             domain={compared ? ['auto', 'auto'] : undefined}
                             tickFormatter={
-                                compared
-                                    ? value => `${Math.round(Number(value))}`
-                                    : formatValue
+                                compared ? value => `${Math.round(Number(value))}` : formatValue
                             }
                         />
                         <ChartTooltip

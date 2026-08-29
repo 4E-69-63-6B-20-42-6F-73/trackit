@@ -135,7 +135,10 @@ export function Trends() {
         ? displayUnitFor(definitionId, preferences?.metricPreferences, preferences?.units)
         : undefined
     const convert = (value: number) =>
-        definitionId && metricDefinition(definitionId) && primaryRecords[0]?.canonicalUnit && displayUnit
+        definitionId &&
+        metricDefinition(definitionId) &&
+        primaryRecords[0]?.canonicalUnit &&
+        displayUnit
             ? convertMetricValue(definitionId, value, primaryRecords[0].canonicalUnit, displayUnit)
             : value
     const formatDisplayValue = (
@@ -238,10 +241,7 @@ export function Trends() {
 
     return (
         <div className="page-content trends-page trends-revamp">
-            <PageHeader
-                title="Trends"
-                description="See how your observations change over time."
-            />
+            <PageHeader title="Trends" description="See how your observations change over time." />
 
             {pageEmpty ? (
                 <section className="panel page-empty">
@@ -269,7 +269,8 @@ export function Trends() {
                                 value={definitionId}
                                 onChange={value => {
                                     setDefinitionId(value)
-                                    if (value === comparisonDefinitionId) setComparisonDefinitionId(null)
+                                    if (value === comparisonDefinitionId)
+                                        setComparisonDefinitionId(null)
                                     setInspectedIds(null)
                                     setShowAnalysis(false)
                                 }}
@@ -398,7 +399,8 @@ export function Trends() {
                     {!loading && coveredValues.length === 0 ? (
                         <div className="trend-metric-empty">
                             <Text fw={650}>
-                                No {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'}{' '}
+                                No{' '}
+                                {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'}{' '}
                                 data in this range
                             </Text>
                             <Text size="sm" c="dimmed">
@@ -420,7 +422,9 @@ export function Trends() {
                                         )
                                     }
                                 >
-                                    {isNutritionMetric ? 'View meals in Journal' : 'Review connections'}
+                                    {isNutritionMetric
+                                        ? 'View meals in Journal'
+                                        : 'Review connections'}
                                 </Button>
                             )}
                         </div>
@@ -431,9 +435,7 @@ export function Trends() {
                             error={error && !isNutritionMetric}
                             metric={definitionId ? metricLabel(definitionId) : ''}
                             onInspect={isNutritionMetric ? undefined : setInspectedIds}
-                            comparisonPoints={
-                                comparisonDefinitionId ? comparisonPoints : undefined
-                            }
+                            comparisonPoints={comparisonDefinitionId ? comparisonPoints : undefined}
                             comparisonLabel={
                                 comparisonDefinitionId
                                     ? metricLabel(comparisonDefinitionId)
@@ -445,9 +447,7 @@ export function Trends() {
                                     ? `${metricLabel(definitionId)} (${unitPresentation(displayUnit).label})`
                                     : undefined
                             }
-                            formatValue={value =>
-                                formatDisplayValue(value, { withUnit: false })
-                            }
+                            formatValue={value => formatDisplayValue(value, { withUnit: false })}
                         />
                     )}
 
