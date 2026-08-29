@@ -5,6 +5,8 @@ export type Preferences = {
     displayName: string
     timezone: string
     locale: string
+    /** Internal Metric Center preset state; there is no standalone Units settings surface. */
+    units: 'metric' | 'imperial'
     metricPreferences?: MetricPreferences
     experience?: ExperiencePreferences
 }
@@ -20,7 +22,7 @@ export async function getPreferences(signal?: AbortSignal): Promise<Preferences>
     if (!response.ok) throw new Error('Preferences unavailable')
     const preferences = ((await response.json()) as { data: Preferences }).data
     if (preferences.metricPreferences) return preferences
-    const migrated = { metricPreferences: preferencesForPreset('metric') }
+    const migrated = { metricPreferences: preferencesForPreset(preferences.units ?? 'metric') }
     const migrationResponse = await authRequest('/api/preferences', {
         method: 'PATCH',
         headers: { 'content-type': 'application/json' },
