@@ -20,9 +20,6 @@ const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: mo
 const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
 const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: module.Goals })))
 const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
-const Connections = lazy(() =>
-    import('./pages/Connections').then(module => ({ default: module.Connections })),
-)
 const DeviceManagement = lazy(() =>
     import('./pages/connections/devices/index').then(module => ({ default: module.Devices })),
 )
@@ -51,7 +48,7 @@ const pagePaths: Record<Page, string> = {
     Trends: '/trends',
     Goals: '/goals',
     Library: '/library',
-    Connections: '/connections',
+    Connections: '/settings/connections',
     Settings: '/settings',
 }
 
@@ -195,7 +192,10 @@ export default function App() {
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
                             <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
-                            <Route path="/connections" element={<Connections />} />
+                            <Route
+                                path="/connections"
+                                element={<Navigate to="/settings/connections" replace />}
+                            />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route path="/connections/devices/new" element={<DeviceNew />} />
                             <Route path="/connections/mcp" element={<McpAccess />} />
