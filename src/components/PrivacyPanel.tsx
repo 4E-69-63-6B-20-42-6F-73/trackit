@@ -160,8 +160,8 @@ export function PrivacyPanel() {
                 <Text fw={700}>Data maintenance</Text>
                 <Text size="sm" c="dimmed" mb="md">
                     Repair derived data without deleting retained source data. Choose the calendar
-                    range once, then run the maintenance operation you need. Dates are interpreted in
-                    your TrackIt profile timezone.
+                    range once, then run the maintenance operation you need. Dates are interpreted
+                    in your TrackIt profile timezone.
                 </Text>
 
                 <Stack gap="md">
@@ -183,7 +183,11 @@ export function PrivacyPanel() {
                                 value={customFrom}
                                 max={customTo || localDateKey(new Date())}
                                 onChange={event => setCustomFrom(event.currentTarget.value)}
-                                error={customFrom && customTo && customFrom > customTo ? 'Must be on or before Through' : undefined}
+                                error={
+                                    customFrom && customTo && customFrom > customTo
+                                        ? 'Must be on or before Through'
+                                        : undefined
+                                }
                             />
                             <TextInput
                                 type="date"
@@ -199,8 +203,9 @@ export function PrivacyPanel() {
                     <Paper withBorder p="md" radius="md">
                         <Text fw={600}>Rebuild projections</Text>
                         <Text size="sm" c="dimmed" mt={4} mb="md">
-                            Recompute derived daily read models from the canonical observations already
-                            stored in TrackIt. Observations and provider records are not changed.
+                            Recompute derived daily read models from the canonical observations
+                            already stored in TrackIt. Observations and provider records are not
+                            changed.
                         </Text>
                         <Button
                             variant="default"
@@ -216,12 +221,13 @@ export function PrivacyPanel() {
                         <Text fw={600}>Re-derive imported observations</Text>
                         <Text size="sm" c="dimmed" mt={4} mb="xs">
                             Recreate connector-derived canonical observations from retained provider
-                            records using TrackIt’s current derivation rules. Manual observations are
-                            not touched.
+                            records using TrackIt’s current derivation rules. Manual observations
+                            are not touched.
                         </Text>
                         <Text size="xs" c="dimmed" mb="md">
-                            This can change Journal, Today, Trends, and goal results for the selected
-                            range. Affected projections are queued for rebuild automatically.
+                            This can change Journal, Today, Trends, and goal results for the
+                            selected range. Affected projections are queued for rebuild
+                            automatically.
                         </Text>
                         <Button
                             variant="light"
@@ -276,8 +282,8 @@ export function PrivacyPanel() {
                         rules.
                     </Text>
                     <Text size="sm" c="dimmed">
-                        Provider records and manual observations remain unchanged. Any affected daily
-                        projections will be rebuilt afterward.
+                        Provider records and manual observations remain unchanged. Any affected
+                        daily projections will be rebuilt afterward.
                     </Text>
                     <Group justify="flex-end">
                         <Button variant="default" onClick={() => setConfirmRederive(false)}>
