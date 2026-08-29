@@ -69,6 +69,7 @@ export function PrivacyPanel() {
                 <TextInput
                     label="Confirmation"
                     description="Type DELETE ALL TRACKIT DATA"
+                    styles={{ description: { color: 'var(--muted)' } }}
                     value={confirmation}
                     onChange={event => setConfirmation(event.currentTarget.value)}
                 />
