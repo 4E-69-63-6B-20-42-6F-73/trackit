@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it } from 'vitest'
 import { JournalEventList } from './JournalEventList'
@@ -47,14 +47,17 @@ describe('Journal entry details', () => {
         )
 
         await userEvent.click(screen.getByRole('button', { name: /sleep session/i }))
+        const dialog = await screen.findByRole('dialog')
         expect(
-            screen.getByText('Sleep 7.5 hours · Deep 1.2 hours · Rem 1.6 hours'),
+            within(dialog).getByText('Sleep 7.5 hours · Deep 1.2 hours · Rem 1.6 hours'),
         ).toBeInTheDocument()
-        expect(screen.getByText('Health Connect · Garmin')).toBeInTheDocument()
+        expect(within(dialog).getByText('Health Connect · Garmin')).toBeInTheDocument()
 
-        await userEvent.click(screen.getByRole('button', { name: 'View detailed sleep' }))
-        expect(screen.getByText('Sleep phases')).toBeInTheDocument()
-        expect(screen.getByText(/Deep · 40 min/)).toBeInTheDocument()
-        expect(screen.getByRole('button', { name: 'Back to entry' })).toBeInTheDocument()
+        await userEvent.click(
+            within(dialog).getByRole('button', { name: 'View detailed sleep' }),
+        )
+        expect(await within(dialog).findByText('Sleep phases')).toBeInTheDocument()
+        expect(within(dialog).getByText(/Deep · 40 min/)).toBeInTheDocument()
+        expect(within(dialog).getByRole('button', { name: 'Back to entry' })).toBeInTheDocument()
     })
 })
