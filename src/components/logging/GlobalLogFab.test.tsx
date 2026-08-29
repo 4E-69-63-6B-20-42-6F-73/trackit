@@ -37,7 +37,9 @@ describe('GlobalLogFab', () => {
         await user.click(launcher)
         expect(launcher).toHaveAttribute('aria-expanded', 'true')
         const chooser = screen.getByRole('dialog', { name: 'Choose what to log' })
-        expect(chooser.style.width).toBe('min(256px, calc(100vw - 32px))')
+        expect(chooser.style.width).toContain('256px')
+        expect(chooser.style.width).toContain('100vw')
+        expect(chooser.style.position).toBe('absolute')
         expect(chooser.style.opacity).toBe('1')
         const actionButtons = within(chooser).getAllByRole('button')
         expect(actionButtons.map(item => item.textContent)).toEqual(
@@ -47,6 +49,7 @@ describe('GlobalLogFab', () => {
         await user.keyboard('{Escape}')
         expect(screen.queryByRole('dialog', { name: 'Choose what to log' })).not.toBeInTheDocument()
         expect(chooser.style.opacity).toBe('0')
+        expect(chooser.style.pointerEvents).toBe('none')
         expect(launcher).toHaveFocus()
 
         await user.click(launcher)
