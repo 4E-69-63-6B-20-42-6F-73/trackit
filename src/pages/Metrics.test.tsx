@@ -35,6 +35,10 @@ describe('Metric Center', () => {
             metricPreferences: { weight: { displayUnit: 'lb' } },
         })
         renderPage()
+        expect(screen.getByRole('link', { name: 'Back to Library' })).toHaveAttribute(
+            'href',
+            '/library',
+        )
         expect(screen.getByText('Resting heart rate')).toBeInTheDocument()
         expect(screen.getByText('min')).toBeInTheDocument()
         expect(screen.getByText('h')).toBeInTheDocument()
