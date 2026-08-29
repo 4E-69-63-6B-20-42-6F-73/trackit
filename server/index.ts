@@ -13,11 +13,13 @@ import { DeviceService } from './devices/service.js'
 import { DataDeletionService } from './data-lifecycle/deletion.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
 import { ProjectionWorker } from './data/projection-state.js'
+import { ProjectionMaintenanceService } from './data/projection-maintenance.js'
 
 await migrate(db, { migrationsFolder: './server/db/migrations' })
 
 const deletion = new DataDeletionService(db)
 const projections = new ProjectionWorker(db)
+const projectionMaintenance = new ProjectionMaintenanceService(db)
 projections.start()
 
 const app = await createApp(new PostgresJournalRepository(db), {
@@ -34,6 +36,11 @@ const app = await createApp(new PostgresJournalRepository(db), {
         ? new FoodCatalogService(config.FOOD_CATALOG_URL)
         : undefined,
 })
+
+app.post('/api/data/rebuild-projections', async () => ({
+    data: await projectionMaintenance.rebuildAll(),
+}))
+
 const webRoot = resolve('dist')
 
 if (existsSync(webRoot)) {
