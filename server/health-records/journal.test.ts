@@ -25,7 +25,7 @@ const observation = (definitionId: string, value: number, unit: string) =>
         derivationVersion: 1,
     }) satisfies DerivedObservation
 
-describe('Health Connect journal projections', () => {
+describe('Health record journal projections', () => {
     it('does not expose passive interval or dense time-series records', () => {
         expect(
             projectHealthRecordToJournal(record('HeartRateRecord'), [
@@ -50,13 +50,60 @@ describe('Health Connect journal projections', () => {
                 observation('sleep', 7.5, 'hours'),
                 observation('sleep_deep', 1.2, 'hours'),
             ]),
-        ).toMatchObject({ category: 'Sleep', title: 'Sleep session' })
+        ).toMatchObject({
+            category: 'Sleep',
+            title: 'Sleep session',
+            detail: { projectionVersion: 1, summary: 'Sleep 7.5 hours · Sleep deep 1.2 hours' },
+        })
         expect(
             projectHealthRecordToJournal(record('BloodPressureRecord'), [
                 observation('blood_pressure_systolic', 122, 'mmHg'),
                 observation('blood_pressure_diastolic', 76, 'mmHg'),
             ]),
         ).toMatchObject({ category: 'Measurements', title: 'Blood pressure' })
+    })
+
+    it('normalizes provider sleep stages into the Journal projection payload', () => {
+        const sleep = {
+            ...record('SleepSessionRecord', {
+                stages: [
+                    {
+                        type: 'DEEP',
+                        start: '2026-08-22T23:30:00.000Z',
+                        end: '2026-08-23T00:15:00.000Z',
+                    },
+                    {
+                        type: 'REM',
+                        start: '2026-08-23T00:15:00.000Z',
+                        end: '2026-08-23T01:00:00.000Z',
+                    },
+                ],
+            }),
+            startTime: new Date('2026-08-22T23:30:00.000Z'),
+            endTime: new Date('2026-08-23T07:00:00.000Z'),
+        }
+        const projected = projectHealthRecordToJournal(sleep, [observation('sleep', 7.5, 'hours')])
+
+        expect(projected?.detail).toMatchObject({
+            projectionVersion: 1,
+            startedAt: '2026-08-22T23:30:00.000Z',
+            endedAt: '2026-08-23T07:00:00.000Z',
+            detailView: {
+                kind: 'sleep',
+                stages: [
+                    {
+                        type: 'deep',
+                        start: '2026-08-22T23:30:00.000Z',
+                        end: '2026-08-23T00:15:00.000Z',
+                    },
+                    {
+                        type: 'rem',
+                        start: '2026-08-23T00:15:00.000Z',
+                        end: '2026-08-23T01:00:00.000Z',
+                    },
+                ],
+            },
+        })
     })
 
     it('preserves a meaningful exercise title', () => {

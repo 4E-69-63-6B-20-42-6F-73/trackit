@@ -6,18 +6,34 @@ export type JournalEntityLink = {
     entityType?: 'meal' | 'observation' | 'health_record'
     entityId?: string
 }
+
+export type SleepStageDetail = {
+    type: 'awake' | 'rem' | 'light' | 'deep' | 'unknown'
+    start: string
+    end: string
+}
+
+export type JournalDetailView = {
+    kind: 'sleep'
+    stages: SleepStageDetail[]
+}
+
 export type JournalEntry = {
     id: string
+    definitionId: string
     category: z.infer<typeof categorySchema>
     title: string
     detail: string
     source: string
     observedAt: string
+    startedAt?: string
+    endedAt?: string
     externalId?: string
     version: number
     createdAt: string
     updatedAt: string
     deviceName?: string
+    detailView?: JournalDetailView
 } & JournalEntityLink
 
 export type JournalListQuery = {

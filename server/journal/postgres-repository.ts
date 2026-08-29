@@ -3,9 +3,22 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { observationRelations, observations, preferences } from '../db/schema.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import type { JournalEntry, JournalListQuery, JournalRepository } from './types.js'
+import type {
+    JournalDetailView,
+    JournalEntry,
+    JournalListQuery,
+    JournalRepository,
+} from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+
+type ProjectedDescription = {
+    projectionVersion: 1
+    summary: string
+    startedAt?: string
+    endedAt?: string
+    detailView?: JournalDetailView
+}
 
 const sourceLabel = (row: typeof observations.$inferSelect) => {
     const attributes = row.attributes as Record<string, unknown>
@@ -21,8 +34,16 @@ const sourceLabel = (row: typeof observations.$inferSelect) => {
               : 'You'
 }
 
+const projectedDescription = (value: unknown): ProjectedDescription | null => {
+    if (!value || typeof value !== 'object') return null
+    const candidate = value as Record<string, unknown>
+    if (candidate.projectionVersion !== 1 || typeof candidate.summary !== 'string') return null
+    return candidate as ProjectedDescription
+}
+
 const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
+    const projection = projectedDescription(attributes.description)
     const primaryDefinitionId =
         typeof attributes.primaryDefinitionId === 'string'
             ? attributes.primaryDefinitionId
@@ -36,26 +57,31 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
               : metricCategory === 'Nutrition'
                 ? 'Meals'
                 : 'Measurements'
-    const detail =
-        typeof attributes.description === 'string'
-            ? attributes.description
-            : (row.textValue ??
-              (row.valueType === 'number' && row.canonicalValue !== null
-                  ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
-                  : ''))
+    const detail = projection
+        ? projection.summary
+        : typeof attributes.description === 'string'
+          ? attributes.description
+          : (row.textValue ??
+            (row.valueType === 'number' && row.canonicalValue !== null
+                ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
+                : ''))
     return {
         id: row.id,
+        definitionId: primaryDefinitionId,
         category: (row.category ?? projectedCategory) as JournalEntry['category'],
         title: row.title ?? row.definitionId.replaceAll('_', ' '),
         detail,
         source: sourceLabel(row),
         observedAt: row.observedAt.toISOString(),
+        startedAt: projection?.startedAt ?? row.observedAt.toISOString(),
+        endedAt: projection?.endedAt ?? row.endedAt?.toISOString(),
         externalId: row.externalId ?? undefined,
         version: Number(row.version),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
         entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
         entityId: row.id,
+        detailView: projection?.detailView,
     }
 }
 

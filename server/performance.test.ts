@@ -11,6 +11,7 @@ class FiveYearJournal implements JournalRepository {
         ).toISOString()
         return {
             id: `${String(index).padStart(8, '0')}-0000-4000-8000-000000000000`,
+            definitionId: index % 2 ? 'meal' : 'weight',
             category: index % 2 ? 'Meals' : 'Measurements',
             title: `Representative record ${index}`,
             detail: 'Small realistic payload with provenance',
