@@ -70,13 +70,11 @@ export async function listMetricCoverage(database: Database, range: RecordRange 
         if (row.connector) values.add(row.connector)
         sources.set(row.definitionId, values)
     }
-    return coverageRows.map(
-        (row): MetricCoverage => ({
-            definitionId: row.definitionId,
-            recordCount: Number(row.recordCount),
-            availableFrom: asIso(row.availableFrom),
-            availableTo: asIso(row.availableTo),
-            sources: [...(sources.get(row.definitionId) ?? [])].sort(),
-        }),
-    )
+    return coverageRows.map((row): MetricCoverage => ({
+        definitionId: row.definitionId,
+        recordCount: Number(row.recordCount),
+        availableFrom: asIso(row.availableFrom),
+        availableTo: asIso(row.availableTo),
+        sources: [...(sources.get(row.definitionId) ?? [])].sort(),
+    }))
 }
