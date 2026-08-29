@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { calendarDateKey, calendarDayRangeForKey } from '../domain/calendar'
 import { emptyNutrients, type Nutrients } from '../domain/nutrition'
 import { listMeals } from '../lib/nutritionApi'
 import { useServerData } from './useServerData'
@@ -24,14 +25,13 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
         hasProteinGoal: false,
         nutritionQuality: 'complete',
     })
+    const timezone = preferences?.timezone ?? 'UTC'
+    const selectedKey = calendarDateKey(selectedDate, timezone)
 
     useEffect(() => {
         const controller = new AbortController()
-        const start = new Date(selectedDate)
-        start.setHours(0, 0, 0, 0)
-        const end = new Date(start)
-        end.setDate(end.getDate() + 1)
-        void listMeals({ from: start.toISOString(), to: end.toISOString() }, controller.signal)
+        const day = calendarDayRangeForKey(selectedKey, timezone)
+        void listMeals({ from: day.from.toISOString(), to: day.to.toISOString() }, controller.signal)
             .then(meals => {
                 const nutrients = meals.reduce((total, meal) => {
                     for (const key of Object.keys(total) as (keyof Nutrients)[]) {
@@ -39,15 +39,19 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                     }
                     return total
                 }, emptyNutrients())
-                const weekday = selectedDate.getDay()
-                const proteinGoal = goals.find(
-                    goal =>
+                const weekday = new Date(`${selectedKey}T12:00:00.000Z`).getUTCDay()
+                const proteinGoal = goals.find(goal => {
+                    const effectiveFrom = calendarDateKey(new Date(goal.effectiveFrom), timezone)
+                    const effectiveTo = goal.effectiveTo
+                        ? calendarDateKey(new Date(goal.effectiveTo), timezone)
+                        : null
+                    return (
                         goal.metricId === 'protein' &&
-                        new Date(goal.effectiveFrom) <= selectedDate &&
-                        (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
-                        (!goal.schedule.weekdays?.length ||
-                            goal.schedule.weekdays.includes(weekday)),
-                )
+                        effectiveFrom <= selectedKey &&
+                        (!effectiveTo || effectiveTo >= selectedKey) &&
+                        (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))
+                    )
+                })
                 const cumulativeProteinTarget =
                     proteinGoal?.aggregation === 'total' &&
                     proteinGoal.period.type === 'day' &&
@@ -82,7 +86,7 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                 })
             })
         return () => controller.abort()
-    }, [goals, preferences?.timezone, selectedDate])
+    }, [goals, selectedKey, timezone])
 
     return state
 }
