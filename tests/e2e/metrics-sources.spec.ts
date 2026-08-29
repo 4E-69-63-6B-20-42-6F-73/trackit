@@ -4,7 +4,7 @@ import { useAuthenticatedServer } from './server-fixture'
 test('configures provider-aware source priority without exposing raw internals', async ({ page }) => {
     const observations = ['Garmin', 'Samsung Health'].map((provider, index) => ({
         id: `source-${index}`,
-        metric: 'steps',
+        definitionId: 'steps',
         canonicalValue: 4200 - index * 20,
         canonicalUnit: 'count',
         originalValue: 4200 - index * 20,
