@@ -8,16 +8,16 @@ const escapeCsv = (value: unknown) => {
 }
 
 export class ExportService {
+    // Keep the projection repository parameter temporarily so the app wiring remains stable;
+    // exports intentionally do not serialize Journal as a second source of truth.
     constructor(
         private readonly data: DataRepository,
-        private readonly journal: JournalRepository,
+        _journal: JournalRepository,
     ) {}
 
     async snapshot() {
         const [
-            journal,
             observations,
-            meals,
             preferences,
             foods,
             recipes,
@@ -27,9 +27,7 @@ export class ExportService {
             healthRecords,
             dailyMetrics,
         ] = await Promise.all([
-            this.journal.list(),
             this.data.listRawObservations?.() ?? this.data.listObservations(),
-            this.data.listMeals(),
             this.data.getPreferences(),
             this.data.listFoods(),
             this.data.listRecipes(),
@@ -41,12 +39,10 @@ export class ExportService {
         ])
         return {
             schema: 'net.trackit.export',
-            version: 1,
+            version: 2,
             exportedAt: new Date().toISOString(),
             data: {
-                journal,
                 observations,
-                meals,
                 preferences,
                 foods,
                 recipes,
