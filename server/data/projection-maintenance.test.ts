@@ -32,9 +32,8 @@ describe('ProjectionMaintenanceService', () => {
         expect(result).toEqual({ queuedDates: 4 })
         expect(markProjectionDatesDirty).toHaveBeenCalledTimes(1)
         expect([
-            ...((markProjectionDatesDirty as ReturnType<typeof vi.fn>).mock.calls[0][1] as Set<string>),
-        ]).toEqual(
-            expect.arrayContaining(['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']),
-        )
+            ...((markProjectionDatesDirty as ReturnType<typeof vi.fn>).mock
+                .calls[0][1] as Set<string>),
+        ]).toEqual(expect.arrayContaining(['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']))
     })
 })
