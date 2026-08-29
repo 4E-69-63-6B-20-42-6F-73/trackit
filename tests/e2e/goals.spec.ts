@@ -20,8 +20,13 @@ test('creates, persists, evaluates, and edits a seven-day average weight goal', 
     await page.goto('/goals')
 
     await expect(page.getByRole('heading', { name: 'Goals', level: 1 })).toBeVisible()
-    await expect(page.getByRole('combobox', { name: 'Metric' })).toHaveValue('Weight')
-    await expect(page.getByRole('combobox', { name: 'Measure' })).toHaveValue('7-day average')
+    await expect(
+        page.getByRole('combobox', { name: 'What do you want to track?' }),
+    ).toHaveValue('Weight')
+    await page.getByRole('button', { name: 'Advanced options' }).click()
+    await expect(
+        page.getByRole('combobox', { name: 'How should TrackIt measure progress?' }),
+    ).toHaveValue('7-day average')
     await expect(page.getByRole('combobox', { name: 'Target' })).toHaveValue('At or below')
     await page.getByLabel('Value').fill('80')
     await page.getByRole('button', { name: 'Create goal' }).click()
