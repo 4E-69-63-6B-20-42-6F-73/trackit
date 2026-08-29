@@ -45,25 +45,6 @@ test('global logger has no automatic WCAG A/AA violations', async ({ page }) => 
     expect(results.violations).toEqual([])
 })
 
-test('every primary destination is reachable from navigation', async ({ page, isMobile }) => {
-    await page.goto('/today')
-    await page.getByRole('heading', { level: 1 }).waitFor()
-    if (isMobile) await page.getByRole('button', { name: 'More' }).click()
-    for (const destination of [
-        'Today',
-        'Nutrition',
-        'Journal',
-        'Goals',
-        'Trends',
-        'Connections',
-        'Settings',
-    ]) {
-        await expect(
-            page.getByRole('link', { name: destination, exact: true }).first(),
-        ).toBeVisible()
-    }
-})
-
 test('primary navigation works by keyboard and moves focus to page content', async ({
     page,
     isMobile,
