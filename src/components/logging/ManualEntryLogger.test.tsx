@@ -200,7 +200,7 @@ describe('ManualEntryLogger', () => {
         )
     })
 
-    it('uses a severity slider, split duration fields, and tag pills for symptoms', async () => {
+    it('uses a severity slider, duration amount and unit, and tag pills for symptoms', async () => {
         const user = userEvent.setup()
         const add = vi.fn()
 
@@ -220,8 +220,10 @@ describe('ManualEntryLogger', () => {
         expect(slider).toHaveAttribute('aria-valuenow', '7')
         expect(screen.getByText('7 · Moderate')).toBeInTheDocument()
 
-        await user.type(screen.getByLabelText('Hours'), '1')
-        await user.type(screen.getByLabelText('Minutes'), '30')
+        await user.type(screen.getByLabelText('Amount'), '1')
+        expect(screen.getByLabelText('Unit')).toHaveValue('Minutes')
+        await user.click(screen.getByLabelText('Unit'))
+        await user.click(screen.getByRole('option', { name: 'Hours' }))
         const context = screen.getByLabelText('Context (optional)')
         expect(context.tagName).toBe('TEXTAREA')
         await user.type(context, 'After a long flight')
@@ -240,7 +242,7 @@ describe('ManualEntryLogger', () => {
                 unit: 'score',
                 attributes: {
                     description:
-                        'Severity 7 out of 10 · Duration 1 h 30 min · After a long flight · #travel · #medication change',
+                        'Severity 7 out of 10 · Duration 1 hour · After a long flight · #travel · #medication change',
                 },
             }),
         )
