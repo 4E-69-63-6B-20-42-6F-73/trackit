@@ -12,7 +12,7 @@ vi.mock('../lib/preferencesApi', () => ({
 }))
 
 describe('PreferencesPanel', () => {
-    it('loads and persists owner preferences', async () => {
+    it('loads and persists owner profile preferences', async () => {
         const preferences = {
             displayName: 'Owner',
             timezone: 'UTC',
@@ -20,10 +20,7 @@ describe('PreferencesPanel', () => {
             units: 'metric' as const,
         }
         vi.mocked(getPreferences).mockResolvedValue(preferences)
-        vi.mocked(updatePreferences).mockImplementation(async value => ({
-            ...preferences,
-            ...value,
-        }))
+        vi.mocked(updatePreferences).mockImplementation(async value => ({ ...preferences, ...value }))
         render(
             <MantineProvider>
                 <ServerDataProvider initialData={{ preferences }}>
@@ -36,9 +33,11 @@ describe('PreferencesPanel', () => {
         await user.clear(name)
         await user.type(name, 'Alex')
         await user.click(screen.getByRole('button', { name: 'Save changes' }))
-        expect(updatePreferences).toHaveBeenCalledWith(
-            expect.objectContaining({ displayName: 'Alex', timezone: 'UTC', units: 'metric' }),
-        )
+        expect(updatePreferences).toHaveBeenCalledWith({
+            displayName: 'Alex',
+            timezone: 'UTC',
+            locale: 'en',
+        })
         expect(await screen.findByText('Preferences saved.')).toBeInTheDocument()
     })
 })
