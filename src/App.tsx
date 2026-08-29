@@ -16,12 +16,10 @@ import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
 const Journal = lazy(() => import('./pages/Journal').then(module => ({ default: module.Journal })))
-const Nutrition = lazy(() =>
-    import('./pages/Nutrition').then(module => ({ default: module.Nutrition })),
-)
 const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: module.Trends })))
 const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
 const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: module.Goals })))
+const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
 const Connections = lazy(() =>
     import('./pages/Connections').then(module => ({ default: module.Connections })),
 )
@@ -46,24 +44,16 @@ const MobileMore = lazy(() =>
 const Onboarding = lazy(() =>
     import('./components/Onboarding').then(module => ({ default: module.Onboarding })),
 )
-const ReminderPrompt = lazy(() =>
-    import('./components/ReminderPrompt').then(module => ({ default: module.ReminderPrompt })),
-)
 
 const pagePaths: Record<Page, string> = {
     Today: '/today',
-    Nutrition: '/nutrition',
     Journal: '/journal',
-    Goals: '/goals',
     Trends: '/trends',
-    Metrics: '/metrics',
+    Goals: '/goals',
+    Library: '/library',
     Connections: '/connections',
     Settings: '/settings',
 }
-
-const pathPages = Object.fromEntries(
-    Object.entries(pagePaths).map(([page, path]) => [path, page]),
-) as Record<string, Page>
 
 const localDateKey = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -89,11 +79,19 @@ export default function App() {
     const navigate = useNavigate()
     const { openLogger } = useLogger()
     const location = useLocation()
-    const page = location.pathname.startsWith('/settings')
+    const page: Page = location.pathname.startsWith('/settings')
         ? 'Settings'
         : location.pathname.startsWith('/connections')
           ? 'Connections'
-          : (pathPages[location.pathname] ?? 'Today')
+          : location.pathname.startsWith('/library')
+            ? 'Library'
+            : location.pathname.startsWith('/journal')
+              ? 'Journal'
+              : location.pathname.startsWith('/trends')
+                ? 'Trends'
+                : location.pathname.startsWith('/goals')
+                  ? 'Goals'
+                  : 'Today'
     const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
@@ -191,18 +189,12 @@ export default function App() {
                                     />
                                 }
                             />
-                            <Route
-                                path="/nutrition"
-                                element={
-                                    <Nutrition
-                                        selectedDate={selectedDay}
-                                        onSelectedDateChange={setSelectedDay}
-                                    />
-                                }
-                            />
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
-                            <Route path="/metrics" element={<Metrics />} />
+                            <Route path="/library" element={<Library />} />
+                            <Route path="/library/metrics" element={<Metrics />} />
+                            <Route path="/nutrition" element={<Navigate to="/library" replace />} />
+                            <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
                             <Route path="/connections" element={<Connections />} />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route path="/connections/devices/new" element={<DeviceNew />} />
@@ -220,20 +212,7 @@ export default function App() {
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
                 {nav
-                    .filter(({ label }) => ['Today', 'Journal'].includes(label))
-                    .map(({ label, icon: Icon }) => (
-                        <NavLink
-                            className={page === label ? 'active' : ''}
-                            aria-current={page === label ? 'page' : undefined}
-                            to={pagePaths[label]}
-                            key={label}
-                        >
-                            <Icon size={21} />
-                            <span>{label}</span>
-                        </NavLink>
-                    ))}
-                {nav
-                    .filter(({ label }) => label === 'Trends')
+                    .filter(({ label }) => ['Today', 'Journal', 'Trends', 'Goals'].includes(label))
                     .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
@@ -246,11 +225,7 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={
-                        ['Nutrition', 'Goals', 'Metrics', 'Connections', 'Settings'].includes(page)
-                            ? 'active'
-                            : ''
-                    }
+                    className={['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''}
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"
@@ -263,7 +238,6 @@ export default function App() {
             </nav>
             <Suspense fallback={null}>
                 <Onboarding />
-                <ReminderPrompt open={openLogger} />
             </Suspense>
             {moreOpen && (
                 <Suspense fallback={null}>
@@ -272,9 +246,9 @@ export default function App() {
             )}
             <LoggerHost
                 add={addQuick}
-                selectedDate={['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null}
+                selectedDate={['Today', 'Journal'].includes(page) ? selectedDay : null}
             />
-            {!['Goals', 'Metrics', 'Connections'].includes(page) && <GlobalLogFab />}
+            {!['Connections'].includes(page) && <GlobalLogFab />}
             {lastAdded && (
                 <Notification
                     className="record-feedback"
