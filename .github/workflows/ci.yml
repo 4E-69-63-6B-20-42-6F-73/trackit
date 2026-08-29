@@ -6,14 +6,15 @@ on:
         branches: [main]
     workflow_dispatch:
 
+concurrency:
+    group: verify-${{ github.event.pull_request.number || github.ref }}
+    cancel-in-progress: true
+
 permissions:
     contents: read
 
 jobs:
     verify:
-        if: >-
-            github.event_name != 'pull_request' ||
-            github.event.pull_request.head.repo.full_name != github.repository
         uses: ./.github/workflows/verify.yml
         with:
             ref: ${{ github.sha }}
