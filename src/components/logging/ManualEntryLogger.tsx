@@ -6,8 +6,12 @@ import {
     Modal,
     NumberInput,
     Select,
+    SimpleGrid,
+    Slider,
     Stack,
+    TagsInput,
     Text,
+    Textarea,
     TextInput,
 } from '@mantine/core'
 import {
@@ -16,11 +20,30 @@ import {
     calendarTodayKey,
     formatCalendarDate,
 } from '../../domain/calendar'
-import { displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
+import { convertMetricValue, displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
 import { useServerData } from '../../hooks/useServerData'
 import type { CreateObservationInput } from '../../lib/observationApi'
 
 export type ManualEntryKind = 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
+
+type WaterChoice = '100' | '250' | 'custom'
+type DurationUnit = 'minutes' | 'hours'
+
+const energyLabels = [
+    '',
+    'Very low',
+    'Low',
+    'Low',
+    'Slightly low',
+    'Neutral',
+    'Slightly high',
+    'High',
+    'High',
+    'Very high',
+    'Very high',
+] as const
+const energyLabel = (value: number) => energyLabels[Math.round(value)] ?? 'Neutral'
+const severityLabel = (value: number) => (value <= 3 ? 'Mild' : value <= 7 ? 'Moderate' : 'Severe')
 
 export function ManualEntryLogger({
     opened,
@@ -45,15 +68,18 @@ export function ManualEntryLogger({
     const [kind] = useState<ManualEntryKind>(initialKind)
     const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
     const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
-    const [amount, setAmount] = useState<number | string>(
-        initialKind === 'Weight' ? (weightUnit === 'lb' ? 165 : 75) : 250,
+    const [weightAmount, setWeightAmount] = useState<number | string>(
+        weightUnit === 'lb' ? 165 : 75,
     )
-    const [energy, setEnergy] = useState<string | null>('5 · Neutral')
+    const [waterChoice, setWaterChoice] = useState<WaterChoice>('250')
+    const [customWaterAmount, setCustomWaterAmount] = useState<number | string>('')
+    const [energy, setEnergy] = useState(5)
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
-    const [severity, setSeverity] = useState<number | string>(5)
-    const [duration, setDuration] = useState('')
-    const [tags, setTags] = useState('')
+    const [severity, setSeverity] = useState(5)
+    const [durationAmount, setDurationAmount] = useState<number | string>('')
+    const [durationUnit, setDurationUnit] = useState<DurationUnit>('minutes')
+    const [tags, setTags] = useState<string[]>([])
     const [recordedAt, setRecordedAt] = useState(
         `${targetDate}T${selectedDate && selectedDate !== initialDay ? '12:00' : initialTime}`,
     )
@@ -61,6 +87,28 @@ export function ManualEntryLogger({
     const isHistorical = targetDate !== todayKey
     const selectedTimestamp = () =>
         calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
+    const waterPreset = (millilitres: 100 | 250) => {
+        const value = convertMetricValue('water', millilitres, 'ml', waterUnit)
+        const maximumFractionDigits = waterUnit === 'L' ? 2 : waterUnit === 'fl oz' ? 1 : 0
+        const amount = value.toLocaleString(locale, { maximumFractionDigits })
+        return { amount, label: `${amount} ${waterUnit}` }
+    }
+    const water100 = waterPreset(100)
+    const water250 = waterPreset(250)
+    const selectedWaterPreset = waterChoice === '100' ? water100 : water250
+    const customWaterStep = waterUnit === 'L' ? 0.05 : waterUnit === 'fl oz' ? 1 : 50
+    const customWaterMin = waterUnit === 'L' ? 0.01 : waterUnit === 'fl oz' ? 0.1 : 1
+    const customWaterPrecision = waterUnit === 'L' ? 2 : waterUnit === 'fl oz' ? 1 : 0
+    const durationValue = Math.max(0, Math.floor(Number(durationAmount) || 0))
+    const duration = durationValue
+        ? durationUnit === 'hours'
+            ? `${durationValue} ${durationValue === 1 ? 'hour' : 'hours'}`
+            : `${durationValue} min`
+        : ''
+    const formattedTags = tags
+        .map(value => value.trim())
+        .filter(Boolean)
+        .map(value => `#${value.replace(/^#/, '')}`)
 
     const submit = () => {
         setError('')
@@ -68,9 +116,15 @@ export function ManualEntryLogger({
             setError('Choose a date and time for this observation.')
             return
         }
+        if (kind === 'Water' && waterChoice === 'custom' && Number(customWaterAmount) <= 0) {
+            setError('Enter the amount of water you want to record.')
+            return
+        }
         const observedAt = selectedTimestamp()
         let input: CreateObservationInput
         if (kind === 'Water') {
+            const custom = waterChoice === 'custom'
+            const enteredAmount = custom ? Number(customWaterAmount) || 0 : Number(waterChoice)
             input = {
                 id: crypto.randomUUID(),
                 definitionId: 'water',
@@ -79,9 +133,15 @@ export function ManualEntryLogger({
                 title: 'Water',
                 source: 'You',
                 observedAt,
-                value: toCanonicalMetricValue('water', Number(amount) || 0, waterUnit),
+                value: custom
+                    ? toCanonicalMetricValue('water', enteredAmount, waterUnit)
+                    : enteredAmount,
                 unit: 'ml',
-                attributes: { description: `${amount || 0} ${waterUnit}` },
+                attributes: {
+                    description: custom
+                        ? `${enteredAmount} ${waterUnit}`
+                        : selectedWaterPreset.label,
+                },
             }
         } else if (kind === 'Weight') {
             input = {
@@ -92,9 +152,9 @@ export function ManualEntryLogger({
                 title: 'Weight',
                 source: 'You',
                 observedAt,
-                value: toCanonicalMetricValue('weight', Number(amount) || 0, weightUnit),
+                value: toCanonicalMetricValue('weight', Number(weightAmount) || 0, weightUnit),
                 unit: 'kg',
-                attributes: { description: `${amount || 0} ${weightUnit}` },
+                attributes: { description: `${weightAmount || 0} ${weightUnit}` },
             }
         } else if (kind === 'Check-in') {
             input = {
@@ -105,10 +165,10 @@ export function ManualEntryLogger({
                 title: 'Energy check-in',
                 source: 'You',
                 observedAt,
-                value: Number(energy?.split(' ')[0]) || 5,
+                value: energy,
                 unit: 'score',
                 attributes: {
-                    description: `${energy?.split(' ')[0] || 5} out of 10${note ? ` · ${note}` : ''}`,
+                    description: `${energy} out of 10${note ? ` · ${note}` : ''}`,
                 },
             }
         } else if (kind === 'Symptom') {
@@ -124,18 +184,14 @@ export function ManualEntryLogger({
                 title: symptom.trim(),
                 source: 'You',
                 observedAt,
-                value: Number(severity) || 5,
+                value: severity,
                 unit: 'score',
                 attributes: {
                     description: [
-                        `Severity ${Number(severity) || 5} out of 10`,
-                        duration.trim() && `Duration ${duration.trim()}`,
+                        `Severity ${severity} out of 10`,
+                        duration && `Duration ${duration}`,
                         note.trim(),
-                        ...tags
-                            .split(',')
-                            .map(value => value.trim())
-                            .filter(Boolean)
-                            .map(value => `#${value.replace(/^#/, '')}`),
+                        ...formattedTags,
                     ]
                         .filter(Boolean)
                         .join(' · '),
@@ -148,14 +204,7 @@ export function ManualEntryLogger({
                 valueType: 'text',
                 category: 'Check-ins',
                 title: 'Note',
-                textValue: [
-                    note.trim() || 'Personal note',
-                    ...tags
-                        .split(',')
-                        .map(value => value.trim())
-                        .filter(Boolean)
-                        .map(value => `#${value.replace(/^#/, '')}`),
-                ].join(' · '),
+                textValue: [note.trim() || 'Personal note', ...formattedTags].join(' · '),
                 source: 'You',
                 observedAt,
             }
@@ -186,32 +235,70 @@ export function ManualEntryLogger({
         >
             <Stack gap="md">
                 {kind === 'Water' && (
-                    <Stack gap="xs">
-                        <Group grow>
-                            <Button variant="default" onClick={() => setAmount(250)}>
-                                250 ml
+                    <Stack gap="sm">
+                        <SimpleGrid cols={3} spacing="sm">
+                            <Button
+                                variant={waterChoice === '100' ? 'light' : 'default'}
+                                color="trackit"
+                                aria-label={water100.label}
+                                aria-pressed={waterChoice === '100'}
+                                onClick={() => setWaterChoice('100')}
+                                style={{ aspectRatio: '1 / 1', height: 'auto' }}
+                                styles={{ label: { flexDirection: 'column', gap: 2 } }}
+                            >
+                                <Text size="lg" fw={700} lh={1}>
+                                    {water100.amount}
+                                </Text>
+                                <Text size="xs" fw={600}>
+                                    {waterUnit}
+                                </Text>
                             </Button>
-                            <Button variant="default" onClick={() => setAmount(500)}>
-                                500 ml
+                            <Button
+                                variant={waterChoice === '250' ? 'light' : 'default'}
+                                color="trackit"
+                                aria-label={water250.label}
+                                aria-pressed={waterChoice === '250'}
+                                onClick={() => setWaterChoice('250')}
+                                style={{ aspectRatio: '1 / 1', height: 'auto' }}
+                                styles={{ label: { flexDirection: 'column', gap: 2 } }}
+                            >
+                                <Text size="lg" fw={700} lh={1}>
+                                    {water250.amount}
+                                </Text>
+                                <Text size="xs" fw={600}>
+                                    {waterUnit}
+                                </Text>
                             </Button>
-                        </Group>
-                        <NumberInput
-                            autoFocus
-                            label="Amount"
-                            value={amount}
-                            onChange={setAmount}
-                            suffix={` ${waterUnit}`}
-                            step={50}
-                            min={1}
-                        />
+                            <Button
+                                variant={waterChoice === 'custom' ? 'light' : 'default'}
+                                color="trackit"
+                                aria-pressed={waterChoice === 'custom'}
+                                onClick={() => setWaterChoice('custom')}
+                                style={{ aspectRatio: '1 / 1', height: 'auto' }}
+                            >
+                                Custom
+                            </Button>
+                        </SimpleGrid>
+                        {waterChoice === 'custom' && (
+                            <NumberInput
+                                autoFocus
+                                label="Custom amount"
+                                value={customWaterAmount}
+                                onChange={setCustomWaterAmount}
+                                suffix={` ${waterUnit}`}
+                                step={customWaterStep}
+                                min={customWaterMin}
+                                decimalScale={customWaterPrecision}
+                            />
+                        )}
                     </Stack>
                 )}
                 {kind === 'Weight' && (
                     <NumberInput
                         autoFocus
                         label="Weight"
-                        value={amount}
-                        onChange={setAmount}
+                        value={weightAmount}
+                        onChange={setWeightAmount}
                         decimalScale={1}
                         suffix={` ${weightUnit}`}
                         placeholder={weightUnit === 'lb' ? '165.0' : '72.4'}
@@ -220,24 +307,38 @@ export function ManualEntryLogger({
                 )}
                 {kind === 'Check-in' && (
                     <>
-                        <Select
-                            autoFocus
-                            label="How is your energy?"
-                            value={energy}
-                            onChange={setEnergy}
-                            data={[
-                                '1 · Very low',
-                                '2',
-                                '3',
-                                '4',
-                                '5 · Neutral',
-                                '6',
-                                '7',
-                                '8',
-                                '9',
-                                '10 · Excellent',
-                            ]}
-                        />
+                        <Stack gap={6} pb="xs">
+                            <Group justify="space-between" align="baseline">
+                                <Text size="sm" fw={600}>
+                                    How is your energy?
+                                </Text>
+                                <Text size="sm" fw={700}>
+                                    {energy} · {energyLabel(energy)}
+                                </Text>
+                            </Group>
+                            <Slider
+                                color="trackit"
+                                value={energy}
+                                onChange={setEnergy}
+                                min={1}
+                                max={10}
+                                step={1}
+                                thumbLabel="Energy level"
+                                label={value => `${value} · ${energyLabel(value)}`}
+                                marks={[
+                                    { value: 1, label: 'Low' },
+                                    { value: 5, label: 'Neutral' },
+                                    { value: 10, label: 'High' },
+                                ]}
+                                styles={{
+                                    track: {
+                                        backgroundImage:
+                                            'linear-gradient(90deg, var(--mantine-color-orange-5) 0%, var(--mantine-color-gray-4) 44%, var(--mantine-color-teal-6) 100%)',
+                                    },
+                                    bar: { backgroundColor: 'transparent' },
+                                }}
+                            />
+                        </Stack>
                         <TextInput
                             label="Note (optional)"
                             value={note}
@@ -256,43 +357,93 @@ export function ManualEntryLogger({
                             placeholder="For example, headache"
                             required
                         />
-                        <NumberInput
-                            label="Severity"
-                            description="1 is mild; 10 is most intense."
-                            value={severity}
-                            onChange={setSeverity}
-                            min={1}
-                            max={10}
-                        />
-                        <TextInput
-                            label="Duration (optional)"
-                            value={duration}
-                            onChange={event => setDuration(event.currentTarget.value)}
-                            placeholder="For example, 45 minutes"
-                        />
-                        <TextInput
+                        <Stack gap={6} pb="xs">
+                            <Group justify="space-between" align="baseline">
+                                <Text size="sm" fw={600}>
+                                    Severity
+                                </Text>
+                                <Text size="sm" fw={700}>
+                                    {severity} · {severityLabel(severity)}
+                                </Text>
+                            </Group>
+                            <Slider
+                                color="orange"
+                                value={severity}
+                                onChange={setSeverity}
+                                min={1}
+                                max={10}
+                                step={1}
+                                thumbLabel="Symptom severity"
+                                label={value => `${value} · ${severityLabel(value)}`}
+                                marks={[
+                                    { value: 1, label: 'Mild' },
+                                    { value: 5, label: 'Moderate' },
+                                    { value: 10, label: 'Severe' },
+                                ]}
+                                styles={{
+                                    track: {
+                                        backgroundImage:
+                                            'linear-gradient(90deg, var(--mantine-color-teal-4) 0%, var(--mantine-color-yellow-5) 50%, var(--mantine-color-red-6) 100%)',
+                                    },
+                                    bar: { backgroundColor: 'transparent' },
+                                }}
+                            />
+                        </Stack>
+                        <Stack gap={6}>
+                            <Text size="sm" fw={600}>
+                                Duration (optional)
+                            </Text>
+                            <SimpleGrid cols={2} spacing="sm">
+                                <NumberInput
+                                    label="Amount"
+                                    value={durationAmount}
+                                    onChange={setDurationAmount}
+                                    min={0}
+                                    step={durationUnit === 'hours' ? 1 : 5}
+                                    decimalScale={0}
+                                />
+                                <Select
+                                    label="Unit"
+                                    value={durationUnit}
+                                    onChange={value =>
+                                        setDurationUnit((value ?? 'minutes') as DurationUnit)
+                                    }
+                                    data={[
+                                        { value: 'minutes', label: 'Minutes' },
+                                        { value: 'hours', label: 'Hours' },
+                                    ]}
+                                    allowDeselect={false}
+                                />
+                            </SimpleGrid>
+                        </Stack>
+                        <Textarea
                             label="Context (optional)"
                             value={note}
                             onChange={event => setNote(event.currentTarget.value)}
                             placeholder="What was happening around it?"
+                            rows={3}
                         />
                     </>
                 )}
                 {kind === 'Note' && (
-                    <TextInput
+                    <Textarea
                         autoFocus
                         label="What do you want to remember?"
                         value={note}
                         onChange={event => setNote(event.currentTarget.value)}
+                        placeholder="Write anything worth remembering"
+                        rows={4}
                     />
                 )}
                 {(kind === 'Symptom' || kind === 'Note') && (
-                    <TextInput
+                    <TagsInput
                         label="Tags (optional)"
-                        description="Separate tags with commas."
+                        description="Type a tag and press comma or Enter."
                         value={tags}
-                        onChange={event => setTags(event.currentTarget.value)}
+                        onChange={setTags}
+                        splitChars={[',']}
                         placeholder="travel, medication change"
+                        clearable
                     />
                 )}
                 <TextInput
@@ -308,9 +459,19 @@ export function ManualEntryLogger({
                     <Button variant="subtle" color="gray" onClick={close}>
                         Cancel
                     </Button>
-                    <Button color="trackit" onClick={submit}>
+                    <Button
+                        color="trackit"
+                        onClick={submit}
+                        disabled={
+                            kind === 'Water' &&
+                            waterChoice === 'custom' &&
+                            Number(customWaterAmount) <= 0
+                        }
+                    >
                         {kind === 'Water'
-                            ? `Log ${amount || 0} ${waterUnit}`
+                            ? waterChoice === 'custom'
+                                ? `Log ${customWaterAmount || 0} ${waterUnit}`
+                                : `Log ${selectedWaterPreset.label}`
                             : kind === 'Weight'
                               ? 'Save weight'
                               : kind === 'Check-in'
