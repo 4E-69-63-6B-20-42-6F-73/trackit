@@ -62,16 +62,6 @@ const dayRange = (value: string) => {
     return { from: from.toISOString(), to: to.toISOString() }
 }
 
-const currentWeekRange = () => {
-    const from = new Date()
-    from.setHours(0, 0, 0, 0)
-    from.setDate(from.getDate() - ((from.getDay() + 6) % 7))
-    const to = new Date()
-    to.setDate(to.getDate() + 1)
-    to.setHours(0, 0, 0, 0)
-    return { from: from.toISOString(), to: to.toISOString() }
-}
-
 export default function App() {
     const navigate = useNavigate()
     const { openLogger } = useLogger()
@@ -95,12 +85,7 @@ export default function App() {
     const [insight, setInsight] = useState(true)
     const journalQuery =
         page === 'Today' && selectedDay
-            ? {
-                  ...(selectedDay === localDateKey(new Date())
-                      ? currentWeekRange()
-                      : dayRange(selectedDay)),
-                  limit: 100,
-              }
+            ? { ...dayRange(selectedDay), limit: 100 }
             : page === 'Journal' && selectedDay
               ? { ...dayRange(selectedDay), limit: 100 }
               : { limit: page === 'Journal' ? 100 : 10 }
