@@ -128,7 +128,7 @@ describe('GoalsPanel', () => {
         expect(createGoal).not.toHaveBeenCalled()
     })
 
-    it('shows chosen dates in the timing controls and rejects an end before the start', async () => {
+    it('shows chosen dates in the timing controls and prevents an end before the start', async () => {
         const user = userEvent.setup()
         renderPanel()
         await user.click(screen.getByRole('button', { name: 'Advanced options' }))
@@ -137,9 +137,11 @@ describe('GoalsPanel', () => {
         expect(startDate).toHaveValue('2026-09-10')
 
         const endDate = screen.getByLabelText('Ends (optional)')
+        expect(endDate).toHaveAttribute('min', '2026-09-10')
         fireEvent.change(endDate, { target: { value: '2026-09-01' } })
+        expect(endDate).toBeInvalid()
         await user.click(screen.getByRole('button', { name: 'Create goal' }))
-        expect(await screen.findByText('End date must be on or after start date.')).toBeVisible()
+        expect(createGoal).not.toHaveBeenCalled()
     })
 
     it('derives measurement options by metric and saves pound input canonically', async () => {
