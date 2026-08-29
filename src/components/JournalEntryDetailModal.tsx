@@ -1,6 +1,6 @@
 import { Badge, Button, Divider, Group, Modal, Stack, Text } from '@mantine/core'
 import { IconArrowLeft } from '@tabler/icons-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { JournalEvent, SleepStageDetail } from '../domain/types'
 
 const stageLabels: Record<SleepStageDetail['type'], string> = {
@@ -44,15 +44,12 @@ function SleepDetail({ event }: { event: JournalEvent }) {
         ? new Date(event.endedAt).getTime()
         : Math.max(...stages.map(stage => new Date(stage.end).getTime()))
     const duration = Math.max(1, end - start)
-    const totals = useMemo(() => {
-        const result = new Map<SleepStageDetail['type'], number>()
-        for (const stage of stages)
-            result.set(
-                stage.type,
-                (result.get(stage.type) ?? 0) + durationMinutes(stage.start, stage.end),
-            )
-        return result
-    }, [stages])
+    const totals = new Map<SleepStageDetail['type'], number>()
+    for (const stage of stages)
+        totals.set(
+            stage.type,
+            (totals.get(stage.type) ?? 0) + durationMinutes(stage.start, stage.end),
+        )
 
     return (
         <Stack gap="lg">
