@@ -16,23 +16,28 @@ import {
 export function LibraryRecipes() {
     const [foods, setFoods] = useState<Food[]>([])
     const [recipes, setRecipes] = useState<RecipeRecord[]>([])
-    const [message, setMessage] = useState('')
+    const [foodMessage, setFoodMessage] = useState('')
+    const [recipeMessage, setRecipeMessage] = useState('')
     const [createRecipeOpened, setCreateRecipeOpened] = useState(false)
     const [editingRecipe, setEditingRecipe] = useState<RecipeRecord | null>(null)
+    const message = recipeMessage || foodMessage
 
     const refreshRecipes = useCallback(() => {
         void listRecipes()
             .then(records => {
                 setRecipes(records)
-                setMessage('')
+                setRecipeMessage('')
             })
-            .catch(() => setMessage('Your recipes could not be loaded from the server.'))
+            .catch(() => setRecipeMessage('Your recipes could not be loaded from the server.'))
     }, [])
 
     useEffect(() => {
         void searchFoods('')
-            .then(setFoods)
-            .catch(() => setMessage('Your food library could not be loaded from the server.'))
+            .then(records => {
+                setFoods(records)
+                setFoodMessage('')
+            })
+            .catch(() => setFoodMessage('Your food library could not be loaded from the server.'))
         refreshRecipes()
     }, [refreshRecipes])
 
