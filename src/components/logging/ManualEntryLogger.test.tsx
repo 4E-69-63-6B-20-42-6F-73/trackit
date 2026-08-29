@@ -252,7 +252,9 @@ describe('ManualEntryLogger', () => {
 
         render(
             <MantineProvider>
-                {provider(<ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Note" />)}
+                {provider(
+                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Note" />,
+                )}
             </MantineProvider>,
         )
 
