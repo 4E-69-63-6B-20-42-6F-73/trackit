@@ -2,13 +2,10 @@ import {
     Alert,
     Badge,
     Button,
-    Group,
     Menu,
-    Modal,
     SegmentedControl,
     Select,
     Text,
-    TextInput,
 } from '@mantine/core'
 import {
     IconAdjustments,
@@ -38,7 +35,6 @@ import {
 } from '../domain/metrics'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
-import { updatePreferences } from '../lib/preferencesApi'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
 
 const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
@@ -62,8 +58,6 @@ export function Trends() {
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
     const { preferences } = useServerData()
     const [actionError, setActionError] = useState('')
-    const [experimentOpen, setExperimentOpen] = useState(false)
-    const [experimentQuestion, setExperimentQuestion] = useState('')
 
     useEffect(() => {
         const from = new Date()
@@ -297,30 +291,7 @@ export function Trends() {
                                     {question.label}
                                 </Button>
                             ))}
-                            <Button
-                                size="compact-sm"
-                                variant="light"
-                                onClick={() => setExperimentOpen(true)}
-                            >
-                                Start a personal experiment
-                            </Button>
                         </div>
-                        {(preferences?.experience?.experiments ?? [])
-                            .filter(item => item.status === 'active')
-                            .map(experiment => (
-                                <button
-                                    className="experiment-link"
-                                    key={experiment.id}
-                                    onClick={() => {
-                                        setMetric(experiment.primaryMetric)
-                                        setComparisonMetric(experiment.comparisonMetric ?? null)
-                                        setShowCompare(Boolean(experiment.comparisonMetric))
-                                    }}
-                                >
-                                    <span>Active experiment</span>
-                                    <strong>{experiment.question}</strong>
-                                </button>
-                            ))}
                     </div>
                     <div className="trend-primary-controls">
                         <Select
@@ -561,62 +532,6 @@ export function Trends() {
                         onToggleExcluded={observation => void toggleExcluded(observation)}
                         showAll={Boolean(inspectedIds)}
                     />
-                    <Modal
-                        opened={experimentOpen}
-                        onClose={() => setExperimentOpen(false)}
-                        title="Start a personal experiment"
-                        centered
-                    >
-                        <Text size="sm" c="dimmed" mb="md">
-                            Track a question over time without treating an association as medical
-                            advice or proof of cause.
-                        </Text>
-                        <TextInput
-                            label="Question"
-                            value={experimentQuestion}
-                            onChange={event => setExperimentQuestion(event.currentTarget.value)}
-                            placeholder="For example, do I report more energy after longer sleep?"
-                        />
-                        <Group justify="flex-end" mt="lg">
-                            <Button variant="default" onClick={() => setExperimentOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                disabled={!experimentQuestion.trim() || !metric}
-                                onClick={async () => {
-                                    if (!preferences || !metric) return
-                                    const experience = preferences.experience ?? {}
-                                    try {
-                                        await updatePreferences({
-                                            experience: {
-                                                ...experience,
-                                                experiments: [
-                                                    ...(experience.experiments ?? []),
-                                                    {
-                                                        id: crypto.randomUUID(),
-                                                        question: experimentQuestion.trim(),
-                                                        primaryMetric: metric,
-                                                        comparisonMetric:
-                                                            comparisonMetric ?? undefined,
-                                                        startedAt: new Date().toISOString(),
-                                                        status: 'active',
-                                                    },
-                                                ],
-                                            },
-                                        })
-                                        setExperimentQuestion('')
-                                        setExperimentOpen(false)
-                                    } catch {
-                                        setActionError(
-                                            'The experiment could not be saved to your server.',
-                                        )
-                                    }
-                                }}
-                            >
-                                Start experiment
-                            </Button>
-                        </Group>
-                    </Modal>
                 </section>
             )}
         </div>
