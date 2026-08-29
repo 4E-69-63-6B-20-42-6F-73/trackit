@@ -48,7 +48,7 @@ const preferences = {
 }
 
 describe('Journal entry details', () => {
-    it('opens a general detail view and then a detailed sleep view', async () => {
+    it('opens a detailed sleep view directly', async () => {
         render(
             <MemoryRouter>
                 <MantineProvider>
@@ -61,14 +61,15 @@ describe('Journal entry details', () => {
 
         await userEvent.click(screen.getByRole('button', { name: /sleep session/i }))
         const dialog = await screen.findByRole('dialog')
-        expect(
-            within(dialog).getByText('Sleep 7.5 hours · Deep 1.2 hours · Rem 1.6 hours'),
-        ).toBeInTheDocument()
-        expect(within(dialog).getByText('Health Connect · Garmin')).toBeInTheDocument()
-
-        await userEvent.click(within(dialog).getByRole('button', { name: 'View detailed sleep' }))
-        expect(await within(dialog).findByText('Sleep phases')).toBeInTheDocument()
+        expect(within(dialog).getByText('Sleep phases')).toBeInTheDocument()
         expect(within(dialog).getByText(/Deep · 40 min/)).toBeInTheDocument()
-        expect(within(dialog).getByRole('button', { name: 'Back to entry' })).toBeInTheDocument()
+        expect(within(dialog).getByText('Health Connect · Garmin')).toBeInTheDocument()
+        expect(
+            within(dialog).queryByRole('button', { name: 'View detailed sleep' }),
+        ).not.toBeInTheDocument()
+        expect(
+            within(dialog).queryByRole('button', { name: 'Back to entry' }),
+        ).not.toBeInTheDocument()
+        expect(within(dialog).queryByRole('button', { name: 'View trend' })).not.toBeInTheDocument()
     })
 })

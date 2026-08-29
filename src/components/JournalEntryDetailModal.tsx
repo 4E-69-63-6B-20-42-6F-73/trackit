@@ -1,8 +1,4 @@
 import { Badge, Button, Divider, Group, Modal, Stack, Text } from '@mantine/core'
-import { IconArrowLeft } from '@tabler/icons-react'
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { metricDefinition } from '../domain/metricCatalog'
 import type { JournalEvent, SleepStageDetail } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 
@@ -142,14 +138,11 @@ export function JournalEntryDetailModal({
     event: JournalEvent | null
     onClose: () => void
 }) {
-    const navigate = useNavigate()
     const { preferences } = useServerData()
     const locale = preferences?.locale
     const timezone = preferences?.timezone ?? 'UTC'
-    const [detailed, setDetailed] = useState(false)
     const hasDetailedView =
         event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0
-    const hasTrend = Boolean(event && metricDefinition(event.definitionId))
     const formatDateTime = (value?: string) =>
         value
             ? new Intl.DateTimeFormat(locale, {
@@ -164,32 +157,44 @@ export function JournalEntryDetailModal({
             minute: '2-digit',
             timeZone: timezone,
         }).format(new Date(value))
-    const close = () => {
-        setDetailed(false)
-        onClose()
-    }
 
     return (
         <Modal
             opened={Boolean(event)}
-            onClose={close}
-            title={detailed ? undefined : event?.title}
+            onClose={onClose}
+            title={event?.title}
             centered
-            size={detailed ? 'lg' : 'md'}
+            size={hasDetailedView ? 'lg' : 'md'}
         >
-            {event && detailed && hasDetailedView ? (
+            {event && hasDetailedView ? (
                 <Stack gap="md">
-                    <Button
-                        variant="subtle"
-                        color="gray"
-                        size="compact-sm"
-                        leftSection={<IconArrowLeft size={16} />}
-                        onClick={() => setDetailed(false)}
-                        style={{ alignSelf: 'flex-start' }}
-                    >
-                        Back to entry
-                    </Button>
                     <SleepDetail event={event} locale={locale} timezone={timezone} />
+                    <Divider />
+                    <Group justify="space-between" align="flex-end">
+                        <Group gap="xl">
+                            <div>
+                                <Text size="xs" c="dimmed">
+                                    Source
+                                </Text>
+                                <Text size="sm" fw={600}>
+                                    {event.source}
+                                </Text>
+                            </div>
+                            {event.deviceName && (
+                                <div>
+                                    <Text size="xs" c="dimmed">
+                                        Device
+                                    </Text>
+                                    <Text size="sm" fw={600}>
+                                        {event.deviceName}
+                                    </Text>
+                                </div>
+                            )}
+                        </Group>
+                        <Button variant="default" onClick={onClose}>
+                            Close
+                        </Button>
+                    </Group>
                 </Stack>
             ) : event ? (
                 <Stack gap="md">
@@ -222,33 +227,8 @@ export function JournalEntryDetailModal({
                             </Text>
                         </div>
                     )}
-                    <Group justify="space-between">
-                        <Group gap="xs">
-                            {hasDetailedView && (
-                                <Button
-                                    variant="light"
-                                    color="trackit"
-                                    onClick={() => setDetailed(true)}
-                                >
-                                    View detailed sleep
-                                </Button>
-                            )}
-                            {hasTrend && (
-                                <Button
-                                    variant="subtle"
-                                    color="trackit"
-                                    onClick={() => {
-                                        close()
-                                        navigate(
-                                            `/trends?metric=${encodeURIComponent(event.definitionId)}`,
-                                        )
-                                    }}
-                                >
-                                    View trend
-                                </Button>
-                            )}
-                        </Group>
-                        <Button variant="default" onClick={close}>
+                    <Group justify="flex-end">
+                        <Button variant="default" onClick={onClose}>
                             Close
                         </Button>
                     </Group>

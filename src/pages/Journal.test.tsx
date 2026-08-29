@@ -45,6 +45,35 @@ const records: JournalEvent[] = [
     },
 ]
 
+const sleepRecord: JournalEvent = {
+    id: 'sleep-1',
+    definitionId: 'sleep',
+    time: '07:30',
+    category: 'Sleep',
+    title: 'Sleep',
+    detail: '7 h 30 min',
+    source: 'Health Connect',
+    deviceName: 'Pixel Watch',
+    observedAt: '2026-08-23T07:30:00.000Z',
+    startedAt: '2026-08-22T22:00:00.000Z',
+    endedAt: '2026-08-23T05:30:00.000Z',
+    detailView: {
+        kind: 'sleep',
+        stages: [
+            {
+                type: 'deep',
+                start: '2026-08-22T22:00:00.000Z',
+                end: '2026-08-22T23:00:00.000Z',
+            },
+            {
+                type: 'rem',
+                start: '2026-08-22T23:00:00.000Z',
+                end: '2026-08-23T00:00:00.000Z',
+            },
+        ],
+    },
+}
+
 const preferences = {
     displayName: 'Owner',
     timezone: 'UTC',
@@ -52,12 +81,16 @@ const preferences = {
     units: 'metric' as const,
 }
 
-const renderJournal = (entry = '/', update = vi.fn().mockResolvedValue(true)) =>
+const renderJournal = (
+    entry = '/',
+    update = vi.fn().mockResolvedValue(true),
+    events: JournalEvent[] = records,
+) =>
     render(
         <MemoryRouter initialEntries={[entry]}>
             <MantineProvider>
                 <ServerDataProvider initialData={{ preferences }}>
-                    <Journal events={records} remove={vi.fn()} update={update} />
+                    <Journal events={events} remove={vi.fn()} update={update} />
                 </ServerDataProvider>
             </MantineProvider>
         </MemoryRouter>,
@@ -107,6 +140,20 @@ describe('Journal', () => {
                 }),
             )
         })
+    })
+
+    it('renders detailed entries directly without a second detail step or trend action', async () => {
+        renderJournal('/', vi.fn().mockResolvedValue(true), [sleepRecord])
+
+        await userEvent.click(screen.getByText('Sleep'))
+
+        const dialog = await screen.findByRole('dialog')
+        expect(within(dialog).getByText('Sleep phases')).toBeInTheDocument()
+        expect(within(dialog).getByText('Pixel Watch')).toBeInTheDocument()
+        expect(
+            within(dialog).queryByRole('button', { name: 'View detailed sleep' }),
+        ).not.toBeInTheDocument()
+        expect(within(dialog).queryByRole('button', { name: 'View trend' })).not.toBeInTheDocument()
     })
 
     it('can select a specific journal day and return to all dates', async () => {
