@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { NumericObservation } from '../domain/health'
-import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
-import { listObservations } from '../lib/observationApi'
-import { listGoalEvaluations } from '../lib/goalApi'
 import type { GoalEvaluation } from '../domain/goals'
-import { useServerData } from './useServerData'
+import type { NumericObservation } from '../domain/health'
+import { metricDefinition } from '../domain/metricCatalog'
 import { calendarDateKey, calendarDayRange } from '../domain/calendar'
+import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
+import { listGoalEvaluations } from '../lib/goalApi'
+import { listObservations } from '../lib/observationApi'
+import { useServerData } from './useServerData'
 
 const asObservation = (row: DailyMetric): NumericObservation => ({
     id: `daily:${row.date}:${row.definitionId}`,
@@ -18,6 +19,8 @@ const asObservation = (row: DailyMetric): NumericObservation => ({
     excluded: false,
     version: row.derivationVersion,
 })
+
+const categoryOrder = ['Sleep', 'Health', 'Wellbeing', 'Body', 'Activity'] as const
 
 export function useTodayHealth(selectedDate: Date = new Date()) {
     const {
@@ -50,14 +53,6 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                     {
                         from: day.from.toISOString(),
                         to: day.to.toISOString(),
-                        definitionIds: [
-                            'steps',
-                            'water',
-                            'sleep',
-                            'resting_heart_rate',
-                            'energy',
-                            'weight',
-                        ],
                     },
                     signal,
                 ),
@@ -133,16 +128,15 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 unit: current.unit,
             }
         }
+        const weekday = selectedDate.getDay()
+        const activeGoals = goals.filter(
+            goal =>
+                new Date(goal.effectiveFrom) <= selectedDate &&
+                (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
+                (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday)),
+        )
         const activeGoal = (metric: string) =>
-            goals.find(goal => {
-                const weekday = selectedDate.getDay()
-                return (
-                    goal.metricId === metric &&
-                    new Date(goal.effectiveFrom) <= selectedDate &&
-                    (!goal.effectiveTo || new Date(goal.effectiveTo) >= selectedDate) &&
-                    (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))
-                )
-            }) ?? null
+            activeGoals.find(goal => goal.metricId === metric) ?? null
         const sleepByDate = new Map(values('sleep').map(row => [row.date, row]))
         const sleepRows = Array.from({ length: 7 }, (_, offset) => {
             const date = new Date(selectedDate)
@@ -156,6 +150,47 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 ? rows.reduce((sum, row) => sum + row.canonicalValue, 0)
                 : (dailyMetric(metric)?.value ?? 0)
         }
+        const summaryMetrics = todayRows
+            .map(row => ({ row, definition: metricDefinition(row.definitionId) }))
+            .filter(
+                item =>
+                    item.definition &&
+                    item.definition.category !== 'Nutrition' &&
+                    !['steps', 'active_calories'].includes(item.row.definitionId),
+            )
+            .sort((left, right) => {
+                const leftCategory = categoryOrder.indexOf(
+                    left.definition!.category as (typeof categoryOrder)[number],
+                )
+                const rightCategory = categoryOrder.indexOf(
+                    right.definition!.category as (typeof categoryOrder)[number],
+                )
+                const leftRank = leftCategory === -1 ? categoryOrder.length : leftCategory
+                const rightRank = rightCategory === -1 ? categoryOrder.length : rightCategory
+                return (
+                    leftRank - rightRank ||
+                    left.definition!.name.localeCompare(right.definition!.name)
+                )
+            })
+            .slice(0, 4)
+            .map(({ row, definition }) => ({
+                definition: definition!,
+                observation:
+                    details
+                        .filter(item => item.definitionId === row.definitionId && !item.excluded)
+                        .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0] ?? null,
+                value: row.value,
+                baseline: baseline(row.definitionId),
+            }))
+        const dailyGoals = activeGoals
+            .filter(goal => goal.period.type === 'day')
+            .map(goal => ({ goal, evaluation: goalEvaluations[goal.id] }))
+            .sort((left, right) => {
+                const leftMet = left.evaluation?.met === true ? 1 : 0
+                const rightMet = right.evaluation?.met === true ? 1 : 0
+                return leftMet - rightMet
+            })
+
         return {
             loading: loading || sharedLoading,
             unavailable: unavailable || sharedUnavailable,
@@ -180,6 +215,8 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             stepsGoal: activeGoal('steps'),
             waterGoal: activeGoal('water'),
             goalEvaluations,
+            summaryMetrics,
+            dailyGoals,
             preferences,
         }
     }, [

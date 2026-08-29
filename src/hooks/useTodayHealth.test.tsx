@@ -65,7 +65,7 @@ describe('useTodayHealth effective totals', () => {
         ])
     })
 
-    it('uses the source-resolved daily cache and only loads detail observations for one day', async () => {
+    it('uses the source-resolved daily cache and loads all detail observations for one day', async () => {
         const { result } = renderHook(() => useTodayHealth(new Date('2026-08-25T12:00:00Z')), {
             wrapper,
         })
@@ -81,13 +81,6 @@ describe('useTodayHealth effective totals', () => {
         expect(
             new Date(observationRange!.to!).getTime() - new Date(observationRange!.from!).getTime(),
         ).toBe(86_400_000)
-        expect(observationRange!.definitionIds).toEqual([
-            'steps',
-            'water',
-            'sleep',
-            'resting_heart_rate',
-            'energy',
-            'weight',
-        ])
+        expect(observationRange!.definitionIds).toBeUndefined()
     })
 })

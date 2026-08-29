@@ -1,0 +1,6 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Known historical CI bootstrap placeholder"
+regexes = ['''^0123456789abcdef0123456789abcdef$''']
