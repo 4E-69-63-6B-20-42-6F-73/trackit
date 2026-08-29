@@ -161,6 +161,45 @@ describe('ManualEntryLogger', () => {
         )
     })
 
+    it('uses a discrete low-to-high slider for energy check-ins', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                {provider(
+                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Check-in" />,
+                )}
+            </MantineProvider>,
+        )
+
+        const slider = screen.getByRole('slider', { name: 'Energy level' })
+        expect(slider).toHaveAttribute('aria-valuemin', '1')
+        expect(slider).toHaveAttribute('aria-valuemax', '10')
+        expect(slider).toHaveAttribute('aria-valuenow', '5')
+        expect(screen.getByText('5 · Neutral')).toBeInTheDocument()
+        expect(screen.getByText('Low')).toBeInTheDocument()
+        expect(screen.getByText('Neutral')).toBeInTheDocument()
+        expect(screen.getByText('High')).toBeInTheDocument()
+
+        slider.focus()
+        await user.keyboard('{ArrowRight}{ArrowRight}')
+        expect(slider).toHaveAttribute('aria-valuenow', '7')
+        expect(screen.getByText('7 · High')).toBeInTheDocument()
+
+        await user.type(screen.getByLabelText('Note (optional)'), 'After lunch')
+        await user.click(screen.getByRole('button', { name: 'Save check-in' }))
+
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                definitionId: 'energy',
+                value: 7,
+                unit: 'score',
+                attributes: { description: '7 out of 10 · After lunch' },
+            }),
+        )
+    })
+
     it('records against the day selected in the current page', async () => {
         const user = userEvent.setup()
         const add = vi.fn()
