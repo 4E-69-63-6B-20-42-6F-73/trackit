@@ -83,7 +83,7 @@ describe('GoalsPanel', () => {
         expect(await screen.findByText('On target')).toBeInTheDocument()
         expect(screen.getAllByText('7-day average')).not.toHaveLength(0)
         expect(screen.getByText('80.0 kg')).toBeInTheDocument()
-        expect(screen.getByText(/Goal ≤ 80.0 kg/)).toBeInTheDocument()
+        expect(screen.getByText('Target: at or below 80.0 kg')).toBeInTheDocument()
     })
 
     it('keeps valid timing defaults visible and maps schedule presets to weekdays', async () => {
@@ -91,16 +91,15 @@ describe('GoalsPanel', () => {
         vi.mocked(createGoal).mockImplementation(async input => ({ id: 'saved', ...input }))
         renderPanel()
 
-        expect(screen.getByText('Timing')).toBeVisible()
-        expect(screen.getByText('Optional')).toBeVisible()
-        expect(screen.getByText('Active period')).toBeVisible()
-        expect(screen.getByRole('button', { name: 'Goal start' })).toHaveTextContent('Starts today')
-        expect(screen.getByRole('button', { name: 'Goal end' })).toHaveTextContent('No end date')
-        expect(screen.getByRole('combobox', { name: 'Goal schedule' })).toHaveValue('Every day')
-        expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument()
-        expect(screen.queryByLabelText('End date')).not.toBeInTheDocument()
+        expect(screen.getByRole('combobox', { name: 'How often?' })).toHaveValue('Every day')
+        await user.click(screen.getByRole('button', { name: 'Advanced options' }))
+        expect(
+            screen.getByRole('combobox', { name: 'How should TrackIt measure progress?' }),
+        ).toHaveValue('7-day average')
+        expect(screen.getByRole('textbox', { name: 'Starts' })).not.toHaveValue('')
+        expect(screen.getByRole('textbox', { name: 'Ends (optional)' })).toHaveValue('')
 
-        await choose(user, 'Goal schedule', 'Weekdays')
+        await choose(user, 'How often?', 'Weekdays')
         await user.click(screen.getByRole('button', { name: 'Create goal' }))
         await waitFor(() => expect(createGoal).toHaveBeenCalledOnce())
         expect(vi.mocked(createGoal).mock.calls[0][0].schedule.weekdays).toEqual([1, 2, 3, 4, 5])
@@ -109,7 +108,7 @@ describe('GoalsPanel', () => {
     it('reveals day choices only for Custom and requires at least one', async () => {
         const user = userEvent.setup()
         renderPanel()
-        await choose(user, 'Goal schedule', 'Custom')
+        await choose(user, 'How often?', 'Custom')
         const days = screen.getByRole('group', { name: 'Custom days' })
         expect(within(days).getByLabelText('Monday')).toBeVisible()
         for (const day of [
@@ -132,13 +131,12 @@ describe('GoalsPanel', () => {
     it('shows chosen dates in the timing controls and rejects an end before the start', async () => {
         const user = userEvent.setup()
         renderPanel()
-        await user.click(screen.getByRole('button', { name: 'Goal start' }))
-        const startDate = await screen.findByLabelText('Start date')
+        await user.click(screen.getByRole('button', { name: 'Advanced options' }))
+        const startDate = screen.getByRole('textbox', { name: 'Starts' })
         fireEvent.change(startDate, { target: { value: '2026-09-10' } })
-        expect(screen.getByRole('button', { name: 'Goal start' })).toHaveTextContent('Sep 10, 2026')
+        expect(startDate).toHaveValue('2026-09-10')
 
-        await user.click(screen.getByRole('button', { name: 'Goal end' }))
-        const endDate = await screen.findByLabelText('End date')
+        const endDate = screen.getByRole('textbox', { name: 'Ends (optional)' })
         fireEvent.change(endDate, { target: { value: '2026-09-01' } })
         await user.click(screen.getByRole('button', { name: 'Create goal' }))
         expect(await screen.findByText('End date must be on or after start date.')).toBeVisible()
@@ -170,8 +168,11 @@ describe('GoalsPanel', () => {
         })
         expect('value' in saved.target && saved.target.value).toBeCloseTo(80, 3)
 
-        await choose(user, 'Metric', 'Steps')
-        expect(screen.getByRole('combobox', { name: 'Measure' })).toHaveValue('Daily total')
+        await choose(user, 'What do you want to track?', 'Steps')
+        await user.click(screen.getByRole('button', { name: 'Advanced options' }))
+        expect(
+            screen.getByRole('combobox', { name: 'How should TrackIt measure progress?' }),
+        ).toHaveValue('Daily total')
         expect(screen.getByRole('combobox', { name: 'Target' })).toHaveValue('At least')
         expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('10000')
     })
@@ -180,7 +181,7 @@ describe('GoalsPanel', () => {
         vi.mocked(listGoalEvaluations).mockResolvedValue({})
         renderPanel([goal])
         expect(await screen.findByText('Nothing recorded yet')).toBeVisible()
-        expect(screen.getByText('Record weight to see how this goal is tracking.')).toBeVisible()
+        expect(screen.getByText('Record weight to see progress.')).toBeVisible()
     })
 
     it('shows range inputs, validates them, and populates edit fields', async () => {

@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
+import { ServerDataProvider } from '../hooks/useServerData'
 import { JournalEventList } from './JournalEventList'
 
 const sleepEvent = {
@@ -39,12 +40,21 @@ const sleepEvent = {
     },
 }
 
+const preferences = {
+    displayName: 'Owner',
+    timezone: 'UTC',
+    locale: 'en',
+    units: 'metric' as const,
+}
+
 describe('Journal entry details', () => {
     it('opens a general detail view and then a detailed sleep view', async () => {
         render(
             <MemoryRouter>
                 <MantineProvider>
-                    <JournalEventList events={[sleepEvent]} roomy />
+                    <ServerDataProvider initialData={{ preferences }}>
+                        <JournalEventList events={[sleepEvent]} roomy />
+                    </ServerDataProvider>
                 </MantineProvider>
             </MemoryRouter>,
         )

@@ -66,7 +66,7 @@ describe('Today', () => {
         expect(screen.getByText('No key observations recorded')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Check in now' })).not.toBeInTheDocument()
         expect(screen.queryByText('No sleep trend yet')).not.toBeInTheDocument()
-        await userEvent.click(screen.getByRole('button', { name: 'View trends' }))
+        await userEvent.click(screen.getByRole('button', { name: 'View all trends' }))
         expect(openTrends).toHaveBeenCalledOnce()
     })
 })
