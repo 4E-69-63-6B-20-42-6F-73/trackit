@@ -229,8 +229,8 @@ export function McpAccess() {
                         Assistant access
                     </Title>
                     <Text c="dimmed">
-                        Give compatible assistants separate, limited access to analyze or change your
-                        TrackIt data.
+                        Give compatible assistants separate, limited access to analyze or change
+                        your TrackIt data.
                     </Text>
                 </div>
                 <Button

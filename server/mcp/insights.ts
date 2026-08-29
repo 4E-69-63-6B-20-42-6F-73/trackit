@@ -1,10 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { DataRepository } from '../data/types.js'
-import {
-    aggregateDailyObservations,
-    type NumericObservation,
-} from '../../src/domain/health.js'
+import { aggregateDailyObservations, type NumericObservation } from '../../src/domain/health.js'
 import { metricCatalog, metricDefinition } from '../../src/domain/metricCatalog.js'
 import type { McpClient } from './service.js'
 
@@ -54,9 +51,7 @@ const isAdditive = (definitionId: string) =>
     Boolean(metricDefinition(definitionId)?.goalCapabilities?.aggregations.total)
 
 const dailyAggregation = (definitionId: string) =>
-    isAdditive(definitionId)
-        ? 'sum'
-        : (metricDefinition(definitionId)?.aggregations[0] ?? 'latest')
+    isAdditive(definitionId) ? 'sum' : (metricDefinition(definitionId)?.aggregations[0] ?? 'latest')
 
 const periodAggregation = (definitionId: string) => (isAdditive(definitionId) ? 'sum' : 'average')
 
@@ -96,7 +91,8 @@ const resolveRange = (
     const from = new Date(
         Math.max(requestedFrom.getTime(), client.dateFrom?.getTime() ?? -Infinity),
     )
-    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to) return null
+    if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from >= to)
+        return null
     return { from: from.toISOString(), to: to.toISOString() }
 }
 
@@ -255,7 +251,9 @@ export function registerMeasurementInsightTools(
                 (new Date(range.to).getTime() - new Date(range.from).getTime()) / 86_400_000,
             )
             if (granularity === 'raw' && rangeDays > 366) {
-                return denied('Raw measurement queries are limited to 366 days. Use day, week, or month granularity for longer ranges.')
+                return denied(
+                    'Raw measurement queries are limited to 366 days. Use day, week, or month granularity for longer ranges.',
+                )
             }
             if (granularity !== 'raw' && rangeDays > 3650) {
                 return denied('Aggregated measurement queries are limited to 10 years.')
@@ -288,7 +286,8 @@ export function registerMeasurementInsightTools(
                 const coveredPeriods =
                     granularity === 'raw'
                         ? matching.length
-                        : (points as DailyInsightPoint[]).filter(point => point.value !== null).length
+                        : (points as DailyInsightPoint[]).filter(point => point.value !== null)
+                              .length
                 return {
                     definitionId,
                     label: definition.name,

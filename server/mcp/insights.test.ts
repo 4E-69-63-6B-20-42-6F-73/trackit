@@ -124,8 +124,12 @@ describe('MCP measurement insights', () => {
             },
         })
         const payload = JSON.parse((response as { content: { text: string }[] }).content[0].text)
-        const steps = payload.series.find((series: { definitionId: string }) => series.definitionId === 'steps')
-        const weight = payload.series.find((series: { definitionId: string }) => series.definitionId === 'weight')
+        const steps = payload.series.find(
+            (series: { definitionId: string }) => series.definitionId === 'steps',
+        )
+        const weight = payload.series.find(
+            (series: { definitionId: string }) => series.definitionId === 'weight',
+        )
 
         expect(steps.points).toEqual([
             { period: '2026-01-10', value: 300, coveredDays: 1, totalDays: 1 },

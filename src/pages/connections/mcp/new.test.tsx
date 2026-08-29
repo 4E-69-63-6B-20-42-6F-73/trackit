@@ -34,7 +34,9 @@ describe('new MCP assistant permissions', () => {
         const meals = screen.getByRole('switch', { name: 'Meals' })
         expect(measurements).toBeChecked()
         expect(meals).not.toBeChecked()
-        expect(screen.getByText('View metric definitions and measurement history for trend analysis.')).toBeInTheDocument()
+        expect(
+            screen.getByText('View metric definitions and measurement history for trend analysis.'),
+        ).toBeInTheDocument()
 
         await user.click(measurements)
         await user.click(meals)
