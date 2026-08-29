@@ -41,13 +41,12 @@ const Onboarding = lazy(() =>
     import('./components/Onboarding').then(module => ({ default: module.Onboarding })),
 )
 
-const pagePaths: Record<Page, string> = {
+const pagePaths: Record<Exclude<Page, 'Settings'>, string> & { Settings: string } = {
     Today: '/today',
     Journal: '/journal',
     Trends: '/trends',
     Goals: '/goals',
     Library: '/library',
-    Connections: '/settings/connections',
     Settings: '/settings',
 }
 
@@ -95,7 +94,7 @@ export default function App() {
         previousPath.current = location.pathname
     }, [location.pathname])
 
-    const openPage = (nextPage: Page) => navigate(pagePaths[nextPage])
+    const openPage = (nextPage: Exclude<Page, 'Settings'>) => navigate(pagePaths[nextPage])
     const addQuick = (input: CreateObservationInput) => {
         add(input)
         setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
