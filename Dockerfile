@@ -6,7 +6,8 @@ COPY . .
 RUN npm run build
 
 FROM node:22-alpine AS runtime
-RUN apk add --no-cache postgresql-client
+RUN apk upgrade --no-cache \
+    && apk add --no-cache postgresql-client
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./

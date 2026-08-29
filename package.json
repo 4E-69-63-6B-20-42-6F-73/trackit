@@ -17,8 +17,8 @@
         "db:migrate:local": "tsx --env-file=.env server/db/migrate.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
-        "format": "prettier --write .",
-        "format:check": "prettier --check .",
+        "format": "npx --yes prettier@3.9.6 --write .",
+        "format:check": "npx --yes prettier@3.9.6 --check .",
         "test": "vitest run",
         "test:watch": "vitest",
         "test:e2e": "playwright test",
@@ -27,7 +27,7 @@
         "build:android": "cd android && gradlew.bat assembleDebug",
         "security:secrets": "node scripts/scan-secrets.mjs",
         "security:deps": "npm audit --omit=dev --audit-level=high",
-        "check": "npm run lint && npm run db:check && npm run security:secrets && npm run test",
+        "check": "npm run format:check && npm run lint && npm run db:check && npm run security:secrets && npm run test && npm run build",
         "preview": "vite preview"
     },
     "dependencies": {
