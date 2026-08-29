@@ -16,15 +16,20 @@ export function Library() {
     const [message, setMessage] = useState('')
 
     useEffect(() => {
-        const controller = new AbortController()
+        let active = true
         void Promise.all([searchFoods(''), listRecipes()])
             .then(([foods, recipes]) => {
+                if (!active) return
                 setFoodCount(foods.length)
                 setRecipeCount(recipes.length)
                 setMessage('')
             })
-            .catch(() => setMessage('Your library could not be loaded from the server.'))
-        return () => controller.abort()
+            .catch(() => {
+                if (active) setMessage('Your library could not be loaded from the server.')
+            })
+        return () => {
+            active = false
+        }
     }, [])
 
     return (
