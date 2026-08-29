@@ -40,20 +40,19 @@ export function LibraryFoods() {
 
     return (
         <div className="page-content simple-page">
+            <Button
+                component={Link}
+                to="/library"
+                variant="subtle"
+                color="gray"
+                mb="sm"
+                leftSection={<IconArrowLeft size={16} />}
+            >
+                Back to Library
+            </Button>
             <PageHeader
                 title="Foods"
                 description="Search, create, or import reusable food definitions."
-                actions={
-                    <Button
-                        component={Link}
-                        to="/library"
-                        variant="subtle"
-                        color="gray"
-                        leftSection={<IconArrowLeft size={16} />}
-                    >
-                        Back to Library
-                    </Button>
-                }
             />
             {message && (
                 <Alert mt="md" color="orange">
