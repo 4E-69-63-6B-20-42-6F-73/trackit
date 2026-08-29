@@ -1,11 +1,13 @@
-import { and, desc, eq, gte, isNull, lt, notExists, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNull, lt, notExists, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { observationRelations, observations, preferences } from '../db/schema.js'
+import { healthRecords, observationRelations, observations, preferences } from '../db/schema.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import type { JournalEntry, JournalListQuery, JournalRepository } from './types.js'
+import type { JournalEntry, JournalListQuery, JournalRepository, SleepStageDetail } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+
+type HealthRecord = typeof healthRecords.$inferSelect
 
 const sourceLabel = (row: typeof observations.$inferSelect) => {
     const attributes = row.attributes as Record<string, unknown>
@@ -21,7 +23,28 @@ const sourceLabel = (row: typeof observations.$inferSelect) => {
               : 'You'
 }
 
-const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
+const sleepStages = (record?: HealthRecord): SleepStageDetail[] => {
+    if (!record || record.recordType !== 'SleepSessionRecord') return []
+    const payload = record.payload as Record<string, unknown>
+    const stages = Array.isArray(payload.stages) ? payload.stages : []
+    return stages.flatMap(stage => {
+        if (!stage || typeof stage !== 'object') return []
+        const item = stage as Record<string, unknown>
+        if (
+            typeof item.type !== 'string' ||
+            typeof item.start !== 'string' ||
+            typeof item.end !== 'string'
+        )
+            return []
+        const normalized = item.type.toLowerCase()
+        const type: SleepStageDetail['type'] = ['awake', 'rem', 'light', 'deep'].includes(normalized)
+            ? (normalized as SleepStageDetail['type'])
+            : 'unknown'
+        return [{ type, start: item.start, end: item.end }]
+    })
+}
+
+const toEntry = (row: typeof observations.$inferSelect, sourceRecord?: HealthRecord): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
     const primaryDefinitionId =
         typeof attributes.primaryDefinitionId === 'string'
@@ -43,19 +66,24 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
               (row.valueType === 'number' && row.canonicalValue !== null
                   ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
                   : ''))
+    const stages = sleepStages(sourceRecord)
     return {
         id: row.id,
+        definitionId: primaryDefinitionId,
         category: (row.category ?? projectedCategory) as JournalEntry['category'],
         title: row.title ?? row.definitionId.replaceAll('_', ' '),
         detail,
         source: sourceLabel(row),
         observedAt: row.observedAt.toISOString(),
+        startedAt: sourceRecord?.startTime.toISOString() ?? row.observedAt.toISOString(),
+        endedAt: sourceRecord?.endTime?.toISOString() ?? row.endedAt?.toISOString(),
         externalId: row.externalId ?? undefined,
         version: Number(row.version),
         createdAt: row.createdAt.toISOString(),
         updatedAt: row.updatedAt.toISOString(),
         entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
         entityId: row.id,
+        detailView: stages.length ? { kind: 'sleep', stages } : undefined,
     }
 }
 
@@ -98,7 +126,19 @@ export class PostgresJournalRepository implements JournalRepository {
             .where(and(...conditions))
             .orderBy(desc(observations.observedAt))
             .limit(Math.min(filters.limit ?? 100, 100))
-        return rows.map(toEntry).filter(entry => !filters.source || entry.source === filters.source)
+        const sourceRecordIds = [
+            ...new Set(rows.flatMap(row => (row.sourceRecordId ? [row.sourceRecordId] : []))),
+        ]
+        const sourceRecords = sourceRecordIds.length
+            ? await this.database
+                  .select()
+                  .from(healthRecords)
+                  .where(inArray(healthRecords.id, sourceRecordIds))
+            : []
+        const sourceRecordById = new Map(sourceRecords.map(record => [record.id, record]))
+        return rows
+            .map(row => toEntry(row, row.sourceRecordId ? sourceRecordById.get(row.sourceRecordId) : undefined))
+            .filter(entry => !filters.source || entry.source === filters.source)
     }
 
     async ready() {
