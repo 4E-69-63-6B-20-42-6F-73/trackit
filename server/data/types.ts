@@ -95,7 +95,6 @@ export const preferencesInputSchema = z.object({
             }
         }, 'Invalid locale')
         .optional(),
-    units: z.enum(['metric', 'imperial']).optional(),
     metricPreferences: z
         .record(
             z.string(),
@@ -116,45 +115,11 @@ export const preferencesInputSchema = z.object({
             }),
         )
         .optional(),
-    goals: z.record(z.string(), z.number().finite()).optional(),
     mcpEnabled: z.boolean().optional(),
     experience: z
         .object({
-            onboardingStep: z.number().int().min(0).max(5).default(0),
-            onboardingComplete: z.boolean().default(false),
-            dataMode: z.enum(['manual', 'health-connect', 'hybrid']).default('manual'),
-            focusAreas: z
-                .array(z.enum(['energy', 'nutrition', 'sleep', 'movement', 'body', 'collect']))
-                .max(6)
-                .default(['collect']),
-            visibleCards: z
-                .array(
-                    z.enum(['sleep', 'heart', 'energy', 'weight', 'progress', 'trend', 'journal']),
-                )
-                .max(7)
-                .default(['sleep', 'heart', 'energy', 'weight', 'progress', 'trend', 'journal']),
-            reminders: z
-                .array(
-                    z.object({
-                        id: z.string().uuid(),
-                        label: z.string().trim().min(1).max(100),
-                        kind: z.enum(['Meal', 'Water', 'Weight', 'Check-in', 'Symptom', 'Note']),
-                        time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-                        enabled: z.boolean(),
-                    }),
-                )
-                .max(20)
-                .default([]),
-            routines: z
-                .array(
-                    z.object({
-                        id: z.string().uuid(),
-                        name: z.string().trim().min(1).max(100),
-                        kinds: z.array(z.enum(['Water', 'Weight', 'Check-in', 'Symptom', 'Note'])),
-                    }),
-                )
-                .max(20)
-                .default([]),
+            onboardingStep: z.number().int().min(0).max(10).optional(),
+            onboardingComplete: z.boolean().optional(),
             dismissedWeeklyReflection: z.string().optional(),
         })
         .partial()
