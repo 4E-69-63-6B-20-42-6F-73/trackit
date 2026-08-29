@@ -2,14 +2,31 @@ import { authRequest } from './authApi'
 
 export type MaintenanceDateRange = { lastDays: number } | { from?: string; to?: string }
 
+type MaintenanceErrorBody = {
+    error?: string
+    requestId?: string
+}
+
 const postMaintenance = async <T>(path: string, range: MaintenanceDateRange) => {
     const response = await authRequest(path, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(range),
     })
-    if (!response.ok) throw new Error('Data maintenance request failed.')
-    const body = (await response.json()) as { data: T }
+    const body = (await response.json().catch(() => null)) as
+        | ({ data?: T } & MaintenanceErrorBody)
+        | null
+    if (!response.ok) {
+        const details = [
+            `HTTP ${response.status}`,
+            body?.error,
+            body?.requestId ? `request ${body.requestId}` : undefined,
+        ]
+            .filter(Boolean)
+            .join(' · ')
+        throw new Error(details || 'Data maintenance request failed.')
+    }
+    if (!body?.data) throw new Error('Data maintenance response was invalid.')
     return body.data
 }
 
