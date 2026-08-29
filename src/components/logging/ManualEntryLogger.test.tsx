@@ -200,6 +200,81 @@ describe('ManualEntryLogger', () => {
         )
     })
 
+    it('uses a severity slider, split duration fields, and tag pills for symptoms', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                {provider(
+                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Symptom" />,
+                )}
+            </MantineProvider>,
+        )
+
+        await user.type(screen.getByLabelText('Symptom'), 'Headache')
+        const slider = screen.getByRole('slider', { name: 'Symptom severity' })
+        expect(slider).toHaveAttribute('aria-valuenow', '5')
+        slider.focus()
+        await user.keyboard('{ArrowRight}{ArrowRight}')
+        expect(slider).toHaveAttribute('aria-valuenow', '7')
+        expect(screen.getByText('7 · Moderate')).toBeInTheDocument()
+
+        await user.type(screen.getByLabelText('Hours'), '1')
+        await user.type(screen.getByLabelText('Minutes'), '30')
+        const context = screen.getByLabelText('Context (optional)')
+        expect(context.tagName).toBe('TEXTAREA')
+        await user.type(context, 'After a long flight')
+
+        const tagInput = screen.getByLabelText('Tags (optional)')
+        await user.type(tagInput, 'travel,medication change{Enter}')
+        expect(screen.getByText('travel')).toBeInTheDocument()
+        expect(screen.getByText('medication change')).toBeInTheDocument()
+
+        await user.click(screen.getByRole('button', { name: 'Save symptom' }))
+
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                definitionId: 'symptom',
+                value: 7,
+                unit: 'score',
+                attributes: {
+                    description:
+                        'Severity 7 out of 10 · Duration 1 h 30 min · After a long flight · #travel · #medication change',
+                },
+            }),
+        )
+    })
+
+    it('uses a textarea and comma-created tag pills for notes', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                {provider(<ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Note" />)}
+            </MantineProvider>,
+        )
+
+        const note = screen.getByLabelText('What do you want to remember?')
+        expect(note.tagName).toBe('TEXTAREA')
+        await user.type(note, 'First line{Enter}Second line')
+
+        const tagInput = screen.getByLabelText('Tags (optional)')
+        await user.type(tagInput, 'personal,weekend,')
+        expect(screen.getByText('personal')).toBeInTheDocument()
+        expect(screen.getByText('weekend')).toBeInTheDocument()
+
+        await user.click(screen.getByRole('button', { name: 'Save note' }))
+
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                definitionId: 'note',
+                textValue: 'First line\nSecond line · #personal · #weekend',
+            }),
+        )
+    })
+
     it('records against the day selected in the current page', async () => {
         const user = userEvent.setup()
         const add = vi.fn()
