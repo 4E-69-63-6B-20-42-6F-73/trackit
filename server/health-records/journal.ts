@@ -13,13 +13,18 @@ type JournalDetailView = {
     stages: SleepStageDetail[]
 }
 
-export type HealthRecordJournalProjection = {
-    category: JournalCategory
-    title: string
-    detail: string
+export type JournalProjectedDetail = {
+    projectionVersion: 1
+    summary: string
     startedAt?: string
     endedAt?: string
     detailView?: JournalDetailView
+}
+
+export type HealthRecordJournalProjection = {
+    category: JournalCategory
+    title: string
+    detail: JournalProjectedDetail
 }
 
 const definitions: Record<string, { title: string; category: JournalCategory; metrics: string[] }> =
@@ -115,9 +120,12 @@ export function projectHealthRecordToJournal(
     return {
         category: definition.category,
         title,
-        detail: summaries.join(' · '),
-        startedAt: record.startTime.toISOString(),
-        endedAt: record.endTime?.toISOString(),
-        detailView: stages.length ? { kind: 'sleep', stages } : undefined,
+        detail: {
+            projectionVersion: 1,
+            summary: summaries.join(' · '),
+            startedAt: record.startTime.toISOString(),
+            endedAt: record.endTime?.toISOString(),
+            detailView: stages.length ? { kind: 'sleep', stages } : undefined,
+        },
     }
 }
