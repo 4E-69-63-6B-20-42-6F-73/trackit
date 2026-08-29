@@ -7,12 +7,12 @@ import { GlobalLogFab } from './components/logging/GlobalLogFab'
 import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
+import { calendarDayRangeForKey, calendarTodayKey } from './domain/calendar'
 import { nav } from './domain/data'
 import type { Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
 import { useObservationCommands } from './hooks/useObservationCommands'
 import { useServerData } from './hooks/useServerData'
-import { dayRangeInTimezone, todayKeyInTimezone } from './lib/dateContext'
 import type { CreateObservationInput } from './lib/observationApi'
 import { useLogger } from './logging/LoggingContext'
 
@@ -72,12 +72,18 @@ export default function App() {
     const [moreOpen, setMoreOpen] = useState(false)
     const timezone = preferences?.timezone ?? 'UTC'
     const routeDate = new URLSearchParams(location.search).get('date')
-    const todayDate = routeDate ?? todayKeyInTimezone(timezone)
+    const todayDate = routeDate ?? calendarTodayKey(timezone)
+    const todayRange = calendarDayRangeForKey(todayDate, timezone)
+    const journalRouteRange = routeDate ? calendarDayRangeForKey(routeDate, timezone) : null
     const journalQuery =
         page === 'Today'
-            ? { ...dayRangeInTimezone(todayDate, timezone), limit: 100 }
-            : page === 'Journal' && routeDate
-              ? { ...dayRangeInTimezone(routeDate, timezone), limit: 100 }
+            ? { from: todayRange.from.toISOString(), to: todayRange.to.toISOString(), limit: 100 }
+            : page === 'Journal' && journalRouteRange
+              ? {
+                    from: journalRouteRange.from.toISOString(),
+                    to: journalRouteRange.to.toISOString(),
+                    limit: 100,
+                }
               : { limit: page === 'Journal' ? 100 : 10 }
     const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
@@ -105,9 +111,7 @@ export default function App() {
 
     return (
         <>
-            <a className="skip-link" href="#main-content">
-                Skip to main content
-            </a>
+            <a className="skip-link" href="#main-content">Skip to main content</a>
             <Box className="app-shell">
                 <Sidebar page={page} collapsed={collapsed} toggle={() => setCollapsed(!collapsed)} />
                 <main ref={mainRef} className="main" id="main-content" tabIndex={-1}>
@@ -206,9 +210,7 @@ export default function App() {
                     <span>More</span>
                 </button>
             </nav>
-            <Suspense fallback={null}>
-                <Onboarding />
-            </Suspense>
+            <Suspense fallback={null}><Onboarding /></Suspense>
             {moreOpen && (
                 <Suspense fallback={null}>
                     <MobileMore page={page} close={() => setMoreOpen(false)} />
