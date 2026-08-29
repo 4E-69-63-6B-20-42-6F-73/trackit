@@ -1,0 +1,7 @@
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Known historical CI bootstrap placeholder"
+regexTarget = "secret"
+regexes = ['''^0123456789abcdef0123456789abcdef$''']
