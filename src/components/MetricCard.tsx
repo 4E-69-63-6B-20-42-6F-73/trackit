@@ -14,6 +14,7 @@ export function MetricCard({
     tone,
     action,
     record,
+    onOpenDetails,
     onViewTrend,
     locale,
     timezone,
@@ -29,29 +30,36 @@ export function MetricCard({
         onClick: () => void
     }
     record?: NumericObservation | null
+    onOpenDetails?: () => void
     onViewTrend?: () => void
     locale?: string
     timezone?: string
 }) {
     const [detailsOpen, setDetailsOpen] = useState(false)
+    const clickable = Boolean(record || onOpenDetails)
+    const openDetails = () => {
+        if (onOpenDetails) onOpenDetails()
+        else if (record) setDetailsOpen(true)
+    }
+
     return (
         <>
             <article
-                className={`metric-card${record ? ' metric-card-clickable' : ''}`}
-                onClick={record ? () => setDetailsOpen(true) : undefined}
+                className={`metric-card${clickable ? ' metric-card-clickable' : ''}`}
+                onClick={clickable ? openDetails : undefined}
                 onKeyDown={
-                    record
+                    clickable
                         ? event => {
                               if (event.key === 'Enter' || event.key === ' ') {
                                   event.preventDefault()
-                                  setDetailsOpen(true)
+                                  openDetails()
                               }
                           }
                         : undefined
                 }
-                role={record ? 'button' : undefined}
-                tabIndex={record ? 0 : undefined}
-                aria-label={record ? `View ${label} details` : undefined}
+                role={clickable ? 'button' : undefined}
+                tabIndex={clickable ? 0 : undefined}
+                aria-label={clickable ? `View ${label} details` : undefined}
             >
                 <div className={`metric-icon ${tone}`}>
                     <Icon size={19} stroke={1.8} />
