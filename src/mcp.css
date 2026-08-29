@@ -1,0 +1,4 @@
+.mcp-endpoint-card {
+    max-width: none;
+    margin-bottom: var(--mantine-spacing-md);
+}
