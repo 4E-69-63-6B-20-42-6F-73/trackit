@@ -102,13 +102,17 @@ describe('Journal', () => {
         vi.mocked(listJournal).mockResolvedValue(records)
     })
 
-    it('filters records and exposes owner actions', async () => {
+    it('filters records and exposes owner actions only when available', async () => {
         const update = vi.fn().mockResolvedValue(true)
         renderJournal('/?from=2026-08-16&to=2026-08-23', update)
 
         const user = userEvent.setup()
         const search = screen.getByRole('textbox', { name: 'Search journal' })
         await screen.findByText('Breakfast')
+
+        expect(screen.getByLabelText('Actions for Breakfast')).toBeInTheDocument()
+        expect(screen.queryByLabelText('Actions for Walk')).not.toBeInTheDocument()
+        expect(screen.queryByLabelText('Actions for Earlier walk')).not.toBeInTheDocument()
 
         await user.type(search, 'walk')
 

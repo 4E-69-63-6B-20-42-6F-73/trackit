@@ -28,6 +28,7 @@ export function JournalEventList({
         <Fragment>
             {events.map(event => {
                 const { icon: Icon, tone } = eventVisual(event.category)
+                const actions = event.source === 'You' ? renderActions?.(event) : null
                 return (
                     <div
                         className={`event${journalStyle ? ' roomy' : ''} event-selectable`}
@@ -54,9 +55,9 @@ export function JournalEventList({
                                 {event.detail}
                             </Text>
                         </div>
-                        {renderActions && (
+                        {actions && (
                             <div onClick={clickEvent => clickEvent.stopPropagation()}>
-                                {renderActions(event)}
+                                {actions}
                             </div>
                         )}
                     </div>
