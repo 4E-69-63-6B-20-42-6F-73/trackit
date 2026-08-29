@@ -48,7 +48,9 @@ export function ManualEntryLogger({
     const [kind] = useState<ManualEntryKind>(initialKind)
     const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
     const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
-    const [weightAmount, setWeightAmount] = useState<number | string>(weightUnit === 'lb' ? 165 : 75)
+    const [weightAmount, setWeightAmount] = useState<number | string>(
+        weightUnit === 'lb' ? 165 : 75,
+    )
     const [waterChoice, setWaterChoice] = useState<WaterChoice>('250')
     const [customWaterAmount, setCustomWaterAmount] = useState<number | string>('')
     const [energy, setEnergy] = useState<string | null>('5 · Neutral')
