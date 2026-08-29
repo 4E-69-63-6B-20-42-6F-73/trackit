@@ -48,10 +48,9 @@ export function ManualEntryLogger({
     const [kind] = useState<ManualEntryKind>(initialKind)
     const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
     const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
-    const [amount, setAmount] = useState<number | string>(
-        initialKind === 'Weight' ? (weightUnit === 'lb' ? 165 : 75) : 250,
-    )
+    const [weightAmount, setWeightAmount] = useState<number | string>(weightUnit === 'lb' ? 165 : 75)
     const [waterChoice, setWaterChoice] = useState<WaterChoice>('250')
+    const [customWaterAmount, setCustomWaterAmount] = useState<number | string>('')
     const [energy, setEnergy] = useState<string | null>('5 · Neutral')
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
@@ -66,29 +65,22 @@ export function ManualEntryLogger({
     const selectedTimestamp = () =>
         calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
 
-    const selectWaterPreset = (value: 100 | 250) => {
-        setWaterChoice(String(value) as WaterChoice)
-        setAmount(value)
-    }
-
-    const selectCustomWater = () => {
-        setWaterChoice('custom')
-        setAmount('')
-    }
-
     const submit = () => {
         setError('')
         if (!recordedAt) {
             setError('Choose a date and time for this observation.')
             return
         }
-        if (kind === 'Water' && Number(amount) < 1) {
+        if (kind === 'Water' && waterChoice === 'custom' && Number(customWaterAmount) < 1) {
             setError('Enter the amount of water you want to record.')
             return
         }
         const observedAt = selectedTimestamp()
         let input: CreateObservationInput
         if (kind === 'Water') {
+            const custom = waterChoice === 'custom'
+            const enteredAmount = custom ? Number(customWaterAmount) || 0 : Number(waterChoice)
+            const enteredUnit = custom ? waterUnit : 'ml'
             input = {
                 id: crypto.randomUUID(),
                 definitionId: 'water',
@@ -97,9 +89,11 @@ export function ManualEntryLogger({
                 title: 'Water',
                 source: 'You',
                 observedAt,
-                value: toCanonicalMetricValue('water', Number(amount) || 0, waterUnit),
+                value: custom
+                    ? toCanonicalMetricValue('water', enteredAmount, waterUnit)
+                    : enteredAmount,
                 unit: 'ml',
-                attributes: { description: `${amount || 0} ${waterUnit}` },
+                attributes: { description: `${enteredAmount} ${enteredUnit}` },
             }
         } else if (kind === 'Weight') {
             input = {
@@ -110,9 +104,9 @@ export function ManualEntryLogger({
                 title: 'Weight',
                 source: 'You',
                 observedAt,
-                value: toCanonicalMetricValue('weight', Number(amount) || 0, weightUnit),
+                value: toCanonicalMetricValue('weight', Number(weightAmount) || 0, weightUnit),
                 unit: 'kg',
-                attributes: { description: `${amount || 0} ${weightUnit}` },
+                attributes: { description: `${weightAmount || 0} ${weightUnit}` },
             }
         } else if (kind === 'Check-in') {
             input = {
@@ -209,8 +203,9 @@ export function ManualEntryLogger({
                             <Button
                                 variant={waterChoice === '100' ? 'light' : 'default'}
                                 color="trackit"
+                                aria-label="100 ml"
                                 aria-pressed={waterChoice === '100'}
-                                onClick={() => selectWaterPreset(100)}
+                                onClick={() => setWaterChoice('100')}
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                                 styles={{ label: { flexDirection: 'column', gap: 2 } }}
                             >
@@ -224,8 +219,9 @@ export function ManualEntryLogger({
                             <Button
                                 variant={waterChoice === '250' ? 'light' : 'default'}
                                 color="trackit"
+                                aria-label="250 ml"
                                 aria-pressed={waterChoice === '250'}
-                                onClick={() => selectWaterPreset(250)}
+                                onClick={() => setWaterChoice('250')}
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                                 styles={{ label: { flexDirection: 'column', gap: 2 } }}
                             >
@@ -240,7 +236,7 @@ export function ManualEntryLogger({
                                 variant={waterChoice === 'custom' ? 'light' : 'default'}
                                 color="trackit"
                                 aria-pressed={waterChoice === 'custom'}
-                                onClick={selectCustomWater}
+                                onClick={() => setWaterChoice('custom')}
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                             >
                                 Custom
@@ -250,8 +246,8 @@ export function ManualEntryLogger({
                             <NumberInput
                                 autoFocus
                                 label="Custom amount"
-                                value={amount}
-                                onChange={setAmount}
+                                value={customWaterAmount}
+                                onChange={setCustomWaterAmount}
                                 suffix={` ${waterUnit}`}
                                 step={50}
                                 min={1}
@@ -263,8 +259,8 @@ export function ManualEntryLogger({
                     <NumberInput
                         autoFocus
                         label="Weight"
-                        value={amount}
-                        onChange={setAmount}
+                        value={weightAmount}
+                        onChange={setWeightAmount}
                         decimalScale={1}
                         suffix={` ${weightUnit}`}
                         placeholder={weightUnit === 'lb' ? '165.0' : '72.4'}
@@ -364,10 +360,16 @@ export function ManualEntryLogger({
                     <Button
                         color="trackit"
                         onClick={submit}
-                        disabled={kind === 'Water' && Number(amount) < 1}
+                        disabled={
+                            kind === 'Water' &&
+                            waterChoice === 'custom' &&
+                            Number(customWaterAmount) < 1
+                        }
                     >
                         {kind === 'Water'
-                            ? `Log ${amount || 0} ${waterUnit}`
+                            ? waterChoice === 'custom'
+                                ? `Log ${customWaterAmount || 0} ${waterUnit}`
+                                : `Log ${waterChoice} ml`
                             : kind === 'Weight'
                               ? 'Save weight'
                               : kind === 'Check-in'
