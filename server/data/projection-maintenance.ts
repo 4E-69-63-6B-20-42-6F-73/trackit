@@ -3,7 +3,10 @@ import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { dailyMetrics, dailyProjectionRuns, observations, preferences } from '../db/schema.js'
-import type { MaintenanceDateRange } from './maintenance-range.js'
+import {
+    resolveMaintenanceDateRange,
+    type MaintenanceDateRange,
+} from './maintenance-range.js'
 import { markProjectionDatesDirty } from './projection-state.js'
 import { localDayRange } from './timezone.js'
 
@@ -12,12 +15,13 @@ type Database = PostgresJsDatabase<typeof schemaType>
 export class ProjectionMaintenanceService {
     constructor(private readonly database: Database) {}
 
-    async rebuild(range: MaintenanceDateRange = {}) {
+    async rebuild(input: MaintenanceDateRange = {}) {
         const [saved] = await this.database
             .select({ timezone: preferences.timezone })
             .from(preferences)
             .where(eq(preferences.id, 'owner'))
         const timezone = saved?.timezone ?? 'UTC'
+        const range = resolveMaintenanceDateRange(input, timezone)
 
         const observationConditions: SQL[] = [isNull(observations.deletedAt)]
         if (range.from)
