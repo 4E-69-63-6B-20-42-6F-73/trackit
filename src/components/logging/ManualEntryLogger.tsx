@@ -421,9 +421,7 @@ export function ManualEntryLogger({
                             value={note}
                             onChange={event => setNote(event.currentTarget.value)}
                             placeholder="What was happening around it?"
-                            autosize
-                            minRows={2}
-                            maxRows={5}
+                            rows={3}
                         />
                     </>
                 )}
@@ -434,9 +432,7 @@ export function ManualEntryLogger({
                         value={note}
                         onChange={event => setNote(event.currentTarget.value)}
                         placeholder="Write anything worth remembering"
-                        autosize
-                        minRows={3}
-                        maxRows={8}
+                        rows={4}
                     />
                 )}
                 {(kind === 'Symptom' || kind === 'Note') && (
