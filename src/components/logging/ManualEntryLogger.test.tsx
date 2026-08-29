@@ -5,6 +5,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualEntryLogger } from './ManualEntryLogger'
 import { ServerDataProvider } from '../../hooks/useServerData'
 
+Element.prototype.scrollIntoView = vi.fn()
+
 const provider = (
     children: React.ReactNode,
     metricPreferences?: { water: { displayUnit: string } },
