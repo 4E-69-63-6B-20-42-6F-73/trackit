@@ -3,7 +3,12 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { observationRelations, observations, preferences } from '../db/schema.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import type { JournalDetailView, JournalEntry, JournalListQuery, JournalRepository } from './types.js'
+import type {
+    JournalDetailView,
+    JournalEntry,
+    JournalListQuery,
+    JournalRepository,
+} from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
