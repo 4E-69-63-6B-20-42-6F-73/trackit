@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeExerciseType, normalizeHealthRecordInput } from './normalize.js'
+import {
+    normalizeExerciseType,
+    normalizeHealthRecord,
+    normalizeHealthRecordInput,
+} from './normalize.js'
 
 describe('Health record normalization', () => {
     it('maps Health Connect exercise integers to canonical exercise types', () => {
@@ -41,6 +45,23 @@ describe('Health record normalization', () => {
             segments: [],
             laps: [],
         })
+    })
+
+    it('normalizes legacy stored records from their connector', () => {
+        const normalized = normalizeHealthRecord({
+            id: 'record-id',
+            userId: 'owner',
+            connector: 'health_connect',
+            provider: 'com.example.watch',
+            recordType: 'ExerciseSessionRecord',
+            externalId: 'exercise',
+            externalVersion: 1,
+            startTime: new Date('2026-08-23T08:00:00Z'),
+            endTime: new Date('2026-08-23T08:42:00Z'),
+            payload: { exerciseType: 56 },
+        })
+
+        expect(normalized.payload).toEqual({ exerciseType: 'running' })
     })
 
     it('leaves non-exercise payloads unchanged', () => {
