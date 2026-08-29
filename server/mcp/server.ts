@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { localDayRange } from '../data/timezone.js'
 import { z } from 'zod'
@@ -39,6 +40,15 @@ const foodFields = {
     servingGrams: z.number().finite().positive().default(100),
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
 }
+
+const foodSchema = z.object(foodFields)
+const addFoodToMealPayloadSchema = z.object({
+    foodId: z.string().uuid(),
+    grams: z.number().finite().positive().max(100_000),
+    mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+    eatenAt: z.string().datetime(),
+    foodVersion: z.number().int().positive(),
+})
 
 const foodNutrients = (food: FoodRecord, grams: number) => {
     const factor = grams / 100
@@ -421,7 +431,7 @@ export function createTrackItMcpServer(
         'preview_create_food',
         {
             description:
-                'Preview a new catalog food after search_foods found no suitable match. Nutrition values are per 100 g.',
+                'Preview a new catalog food after search_foods found no suitable match. Nutrition values are per 100 g. Do not invent missing nutrition values; omit unknown values or mark nutritionQuality as estimated when values are inferred.',
             inputSchema: foodFields,
         },
         async input => {
@@ -443,10 +453,17 @@ export function createTrackItMcpServer(
                 input.name,
                 input,
             )
+            const createArguments = {
+                confirmationToken: confirmation.token,
+                idempotencyKey: randomUUID(),
+            }
             return textResult({
                 preview: input,
                 confirmationToken: confirmation.token,
                 expiresAt: confirmation.expiresAt,
+                createArguments,
+                nextStep:
+                    'Show the preview to the owner. After explicit approval, call create_food exactly once using createArguments unchanged. The confirmation token and idempotency key are already generated; never replace them.',
             })
         },
     )
@@ -455,14 +472,13 @@ export function createTrackItMcpServer(
         'create_food',
         {
             description:
-                'Create the exact catalog food previously returned by preview_create_food.',
+                'After explicit owner approval, create the food from preview_create_food using its returned createArguments unchanged. Never generate or replace the confirmation token or idempotency key.',
             inputSchema: {
-                ...foodFields,
                 confirmationToken: z.string().min(1),
                 idempotencyKey: z.string().uuid(),
             },
         },
-        async ({ confirmationToken, idempotencyKey, ...food }) => {
+        async ({ confirmationToken, idempotencyKey }) => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
             let operation
             try {
@@ -471,6 +487,17 @@ export function createTrackItMcpServer(
                     'create_food',
                     idempotencyKey,
                     async transaction => {
+                        const confirmation = await access.consumeConfirmationPayload<unknown>(
+                            client,
+                            confirmationToken,
+                            'create_food',
+                        )
+                        if (!confirmation) throw new Error('confirmation_required')
+                        const parsedFood = foodSchema.safeParse(confirmation.payload)
+                        if (!parsedFood.success || parsedFood.data.name !== confirmation.targetId) {
+                            throw new Error('confirmation_payload_invalid')
+                        }
+                        const food = parsedFood.data
                         const transactionalData = new PostgresDataRepository(transaction)
                         const duplicate = (
                             (await transactionalData.listFoods(food.name)) as FoodRecord[]
@@ -482,14 +509,6 @@ export function createTrackItMcpServer(
                                     String(food.brand ?? '').toLocaleLowerCase(),
                         )
                         if (duplicate) throw new Error(`food_exists:${duplicate.id}`)
-                        const confirmed = await access.consumeConfirmation(
-                            client,
-                            confirmationToken,
-                            'create_food',
-                            food.name,
-                            food,
-                        )
-                        if (!confirmed) throw new Error('confirmation_required')
                         const created = await transactionalData.createFood({
                             ...food,
                             catalogSource: `MCP: ${client.name}`,
@@ -499,11 +518,25 @@ export function createTrackItMcpServer(
                     },
                 )
             } catch (error) {
-                return denied(
-                    error instanceof Error && error.message.startsWith('food_exists:')
-                        ? `A matching food already exists. Use food id ${error.message.slice('food_exists:'.length)} instead.`
-                        : 'A valid unexpired food preview confirmation is required.',
-                )
+                if (error instanceof Error && error.message.startsWith('food_exists:')) {
+                    return denied(
+                        `A matching food already exists. Use food id ${error.message.slice('food_exists:'.length)} instead.`,
+                    )
+                }
+                if (error instanceof Error && error.message === 'idempotency_claim_incomplete') {
+                    return denied(
+                        'A create_food request with this idempotency key is still in progress. Retry with the same createArguments.',
+                    )
+                }
+                if (
+                    error instanceof Error &&
+                    ['confirmation_required', 'confirmation_payload_invalid'].includes(error.message)
+                ) {
+                    return denied(
+                        'The food preview confirmation is invalid, expired, already used, or from a different client. Call preview_create_food again and reuse its createArguments unchanged after approval.',
+                    )
+                }
+                return denied('Food creation failed before it could be saved. Preview the food again.')
             }
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
@@ -537,6 +570,10 @@ export function createTrackItMcpServer(
                 input.foodId,
                 preview,
             )
+            const commitArguments = {
+                confirmationToken: confirmation.token,
+                idempotencyKey: randomUUID(),
+            }
             return textResult({
                 preview: {
                     ...preview,
@@ -545,6 +582,9 @@ export function createTrackItMcpServer(
                 },
                 confirmationToken: confirmation.token,
                 expiresAt: confirmation.expiresAt,
+                commitArguments,
+                nextStep:
+                    'Show the meal preview to the owner. After explicit approval, call add_food_to_meal exactly once using commitArguments unchanged.',
             })
         },
     )
@@ -553,29 +593,35 @@ export function createTrackItMcpServer(
         'add_food_to_meal',
         {
             description:
-                'Add the exact saved food and amount previously returned by preview_add_food_to_meal.',
+                'After explicit owner approval, add the saved food from preview_add_food_to_meal using its returned commitArguments unchanged.',
             inputSchema: {
-                foodId: z.string().uuid(),
-                foodVersion: z.number().int().positive(),
-                grams: z.number().finite().positive().max(100_000),
-                mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
-                eatenAt: z.string().datetime(),
                 confirmationToken: z.string().min(1),
                 idempotencyKey: z.string().uuid(),
             },
         },
-        async input => {
+        async ({ confirmationToken, idempotencyKey }) => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
-            if (!validGrantTimestamp(client, input.eatenAt)) {
-                return denied('The meal timestamp is outside this client grant.')
-            }
             let operation
             try {
                 operation = await access.runIdempotent(
                     client,
                     'add_food_to_meal',
-                    input.idempotencyKey,
+                    idempotencyKey,
                     async transaction => {
+                        const confirmation = await access.consumeConfirmationPayload<unknown>(
+                            client,
+                            confirmationToken,
+                            'add_food_to_meal',
+                        )
+                        if (!confirmation) throw new Error('confirmation_required')
+                        const parsedInput = addFoodToMealPayloadSchema.safeParse(confirmation.payload)
+                        if (!parsedInput.success || parsedInput.data.foodId !== confirmation.targetId) {
+                            throw new Error('confirmation_payload_invalid')
+                        }
+                        const input = parsedInput.data
+                        if (!validGrantTimestamp(client, input.eatenAt)) {
+                            throw new Error('timestamp_outside_grant')
+                        }
                         const transactionalData = new PostgresDataRepository(transaction)
                         const food = ((await transactionalData.listFoods()) as FoodRecord[]).find(
                             candidate => candidate.id === input.foodId,
@@ -583,20 +629,6 @@ export function createTrackItMcpServer(
                         if (!food || food.version !== input.foodVersion) {
                             throw new Error('food_changed')
                         }
-                        const confirmed = await access.consumeConfirmation(
-                            client,
-                            input.confirmationToken,
-                            'add_food_to_meal',
-                            input.foodId,
-                            {
-                                foodId: input.foodId,
-                                grams: input.grams,
-                                mealType: input.mealType,
-                                eatenAt: input.eatenAt,
-                                foodVersion: input.foodVersion,
-                            },
-                        )
-                        if (!confirmed) throw new Error('confirmation_required')
                         const nutrients = foodNutrients(food, input.grams)
                         const meal = (await transactionalData.createMeal({
                             name: food.name,
@@ -611,11 +643,26 @@ export function createTrackItMcpServer(
                     },
                 )
             } catch (error) {
-                return denied(
-                    error instanceof Error && error.message === 'food_changed'
-                        ? 'The food changed after preview. Preview it again before adding it.'
-                        : 'A valid unexpired add-food preview confirmation is required.',
-                )
+                if (error instanceof Error && error.message === 'food_changed') {
+                    return denied('The food changed after preview. Preview it again before adding it.')
+                }
+                if (error instanceof Error && error.message === 'timestamp_outside_grant') {
+                    return denied('The meal timestamp is outside this client grant.')
+                }
+                if (error instanceof Error && error.message === 'idempotency_claim_incomplete') {
+                    return denied(
+                        'An add_food_to_meal request with this idempotency key is still in progress. Retry with the same commitArguments.',
+                    )
+                }
+                if (
+                    error instanceof Error &&
+                    ['confirmation_required', 'confirmation_payload_invalid'].includes(error.message)
+                ) {
+                    return denied(
+                        'The add-food preview confirmation is invalid, expired, already used, or from a different client. Preview it again and reuse commitArguments unchanged after approval.',
+                    )
+                }
+                return denied('Adding the food to the meal failed. Preview it again before retrying.')
             }
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
