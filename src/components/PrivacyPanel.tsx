@@ -55,9 +55,7 @@ export function PrivacyPanel() {
     const rangeLabel = () => {
         if (rangeMode === 'all') return 'all retained history'
         if (rangeMode === '30d') return 'the last 30 days'
-        return customFrom && customTo
-            ? `${customFrom} through ${customTo}`
-            : 'the selected range'
+        return customFrom && customTo ? `${customFrom} through ${customTo}` : 'the selected range'
     }
 
     const exportData = async (format: 'json' | 'csv') => {
@@ -217,12 +215,13 @@ export function PrivacyPanel() {
                         <Text fw={600}>Re-derive imported observations</Text>
                         <Text size="sm" c="dimmed" mt={4} mb="xs">
                             Recreate connector-derived canonical observations from retained provider
-                            records using TrackIt’s current derivation rules. Manual observations are
-                            not touched.
+                            records using TrackIt’s current derivation rules. Manual observations
+                            are not touched.
                         </Text>
                         <Text size="xs" c="dimmed" mb="md">
-                            This can change Journal, Today, Trends, and goal results for the selected
-                            range. Affected projections are queued for rebuild automatically.
+                            This can change Journal, Today, Trends, and goal results for the
+                            selected range. Affected projections are queued for rebuild
+                            automatically.
                         </Text>
                         <Button
                             variant="light"
@@ -277,8 +276,8 @@ export function PrivacyPanel() {
                         rules.
                     </Text>
                     <Text size="sm" c="dimmed">
-                        Provider records and manual observations remain unchanged. Any affected daily
-                        projections will be rebuilt afterward.
+                        Provider records and manual observations remain unchanged. Any affected
+                        daily projections will be rebuilt afterward.
                     </Text>
                     <Group justify="flex-end">
                         <Button variant="default" onClick={() => setConfirmRederive(false)}>
