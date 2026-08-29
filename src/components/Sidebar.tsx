@@ -4,7 +4,7 @@ import { NavLink } from 'react-router-dom'
 import { nav } from '../domain/data'
 import type { Page } from '../domain/types'
 
-const paths: Record<(typeof nav)[number]['label'], string> = {
+const paths: Partial<Record<Page, string>> = {
     Today: '/today',
     Journal: '/journal',
     Trends: '/trends',
@@ -51,7 +51,7 @@ export function Sidebar({
                             aria-current={page === label ? 'page' : undefined}
                             className={`nav-item ${page === label ? 'active' : ''}`}
                             key={label}
-                            to={paths[label]}
+                            to={paths[label] ?? '/today'}
                         >
                             <Icon size={20} stroke={1.7} />
                             {!collapsed && <span>{label}</span>}
