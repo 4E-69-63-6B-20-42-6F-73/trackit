@@ -57,7 +57,7 @@ export function GlobalLogFab() {
     return (
         <div className="global-log" ref={root}>
             {open && (
-                <div className="log-speed-dial" role="menu" aria-label="Choose what to log">
+                <div className="log-speed-dial" role="dialog" aria-label="Choose what to log">
                     <label className="log-speed-search">
                         <IconSearch size={16} aria-hidden="true" />
                         <input
@@ -72,7 +72,6 @@ export function GlobalLogFab() {
                     {filteredActions.map(({ id, label, description, icon: Icon }) => (
                         <button
                             type="button"
-                            role="menuitem"
                             key={id}
                             onClick={() => {
                                 setOpen(false)
@@ -98,7 +97,7 @@ export function GlobalLogFab() {
                 className="global-log-fab"
                 aria-label={open ? 'Close log menu' : 'Log health information'}
                 aria-expanded={open}
-                aria-haspopup="menu"
+                aria-haspopup="dialog"
                 onClick={() => {
                     setOpen(value => !value)
                     if (open) setQuery('')
