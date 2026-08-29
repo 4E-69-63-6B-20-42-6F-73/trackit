@@ -2,12 +2,7 @@ import { and, eq, gt, lt, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import {
-    healthRecords,
-    observationRelations,
-    observations,
-    preferences,
-} from '../db/schema.js'
+import { healthRecords, observationRelations, observations, preferences } from '../db/schema.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone, localDayRange, nextDate } from '../data/timezone.js'
 import type { MaintenanceDateRange } from '../data/maintenance-range.js'
@@ -146,7 +141,10 @@ export class ProviderRecordMaintenanceService {
             await this.database.transaction(async transaction => {
                 for (const stored of records) {
                     const previous = await transaction
-                        .select({ observedAt: observations.observedAt, endedAt: observations.endedAt })
+                        .select({
+                            observedAt: observations.observedAt,
+                            endedAt: observations.endedAt,
+                        })
                         .from(observations)
                         .where(eq(observations.sourceRecordId, stored.id))
                     for (const item of previous) {
