@@ -288,6 +288,7 @@ export function PrivacyPanel() {
                         <Select
                             label="Imported data category"
                             description="Limit re-derivation to reduce memory use for high-volume data."
+                            styles={{ description: { color: 'var(--mantine-color-text)' } }}
                             value={recordCategory}
                             onChange={value =>
                                 setRecordCategory((value ?? 'all') as RecordCategory)
@@ -299,8 +300,7 @@ export function PrivacyPanel() {
                             mb="md"
                         />
                         <Button
-                            variant="light"
-                            color="orange"
+                            variant="default"
                             loading={maintenanceBusy === 'observations'}
                             disabled={!rangeValid || maintenanceBusy !== null}
                             onClick={() => setConfirmRederive(true)}
