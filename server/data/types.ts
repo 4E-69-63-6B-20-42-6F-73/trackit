@@ -155,20 +155,6 @@ export const preferencesInputSchema = z.object({
                 )
                 .max(20)
                 .default([]),
-            experiments: z
-                .array(
-                    z.object({
-                        id: z.string().uuid(),
-                        question: z.string().trim().min(1).max(240),
-                        primaryMetric: z.string().trim().min(1).max(100),
-                        comparisonMetric: z.string().trim().min(1).max(100).optional(),
-                        startedAt: z.string().datetime(),
-                        endedAt: z.string().datetime().optional(),
-                        status: z.enum(['active', 'completed']).default('active'),
-                    }),
-                )
-                .max(30)
-                .default([]),
             dismissedWeeklyReflection: z.string().optional(),
         })
         .partial()
@@ -246,7 +232,7 @@ export const foodInputSchema = z.object({
     potassiumPer100g: z.number().finite().nonnegative().nullish(),
     servingName: z.string().trim().min(1).max(60).default('serving'),
     servingGrams: z.number().finite().positive().default(100),
-    favorite: z.boolean().default(false),
+    favorite: z.boolean('favorite').notNull().default(false),
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
 })
 
