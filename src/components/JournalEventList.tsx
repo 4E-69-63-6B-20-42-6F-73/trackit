@@ -56,7 +56,9 @@ export function JournalEventList({
                             </Text>
                         </div>
                         {actions && (
-                            <div onClick={clickEvent => clickEvent.stopPropagation()}>{actions}</div>
+                            <div onClick={clickEvent => clickEvent.stopPropagation()}>
+                                {actions}
+                            </div>
                         )}
                     </div>
                 )
