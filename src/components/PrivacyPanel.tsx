@@ -82,9 +82,13 @@ export function PrivacyPanel() {
                     ? `Projection rebuild queued for ${result.queuedDates} day${result.queuedDates === 1 ? '' : 's'} in ${rangeLabel()}.`
                     : `There are no projection dates to rebuild in ${rangeLabel()}.`,
             )
-        } catch {
+        } catch (error) {
             setMessageColor('orange')
-            setMessage('The projection rebuild could not be queued. Try again.')
+            setMessage(
+                error instanceof Error
+                    ? `Projection rebuild could not be queued: ${error.message}`
+                    : 'The projection rebuild could not be queued. Try again.',
+            )
         } finally {
             setMaintenanceBusy(null)
         }
@@ -102,9 +106,13 @@ export function PrivacyPanel() {
                     ? `Re-derived ${result.canonicalObservations} canonical observation${result.canonicalObservations === 1 ? '' : 's'} from ${result.sourceRecords} provider record${result.sourceRecords === 1 ? '' : 's'} in ${rangeLabel()}. ${result.queuedProjectionDates} affected projection day${result.queuedProjectionDates === 1 ? '' : 's'} queued for refresh.`
                     : `There are no retained provider records to re-derive in ${rangeLabel()}.`,
             )
-        } catch {
+        } catch (error) {
             setMessageColor('orange')
-            setMessage('Imported observations could not be re-derived. Try again.')
+            setMessage(
+                error instanceof Error
+                    ? `Imported observations could not be re-derived: ${error.message}`
+                    : 'Imported observations could not be re-derived. Try again.',
+            )
         } finally {
             setMaintenanceBusy(null)
         }
