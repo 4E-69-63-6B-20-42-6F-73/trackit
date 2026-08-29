@@ -70,14 +70,19 @@ export function Settings() {
                             </div>
                             <div>
                                 <Text fw={600}>{title}</Text>
-                                <Text size="sm" c="dimmed">{description}</Text>
+                                <Text size="sm" c="dimmed">
+                                    {description}
+                                </Text>
                             </div>
                             <IconChevronRight size={18} />
                         </NavLink>
                     ))}
                 </nav>
                 {displayed && Content && ActiveIcon ? (
-                    <section className="panel settings-detail" aria-labelledby="settings-detail-title">
+                    <section
+                        className="panel settings-detail"
+                        aria-labelledby="settings-detail-title"
+                    >
                         <Button
                             component={Link}
                             to="/settings"
@@ -90,10 +95,14 @@ export function Settings() {
                             All settings
                         </Button>
                         <div className="settings-detail-heading">
-                            <div className="settings-icon"><ActiveIcon size={20} /></div>
+                            <div className="settings-icon">
+                                <ActiveIcon size={20} />
+                            </div>
                             <div>
                                 <h2 id="settings-detail-title">{displayed.title}</h2>
-                                <Text size="sm" c="dimmed">{displayed.description}</Text>
+                                <Text size="sm" c="dimmed">
+                                    {displayed.description}
+                                </Text>
                             </div>
                         </div>
                         <Content />
