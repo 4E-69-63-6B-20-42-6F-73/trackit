@@ -31,7 +31,10 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
     useEffect(() => {
         const controller = new AbortController()
         const day = calendarDayRangeForKey(selectedKey, timezone)
-        void listMeals({ from: day.from.toISOString(), to: day.to.toISOString() }, controller.signal)
+        void listMeals(
+            { from: day.from.toISOString(), to: day.to.toISOString() },
+            controller.signal,
+        )
             .then(meals => {
                 const nutrients = meals.reduce((total, meal) => {
                     for (const key of Object.keys(total) as (keyof Nutrients)[]) {
@@ -49,7 +52,8 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                         goal.metricId === 'protein' &&
                         effectiveFrom <= selectedKey &&
                         (!effectiveTo || effectiveTo >= selectedKey) &&
-                        (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))
+                        (!goal.schedule.weekdays?.length ||
+                            goal.schedule.weekdays.includes(weekday))
                     )
                 })
                 const cumulativeProteinTarget =
