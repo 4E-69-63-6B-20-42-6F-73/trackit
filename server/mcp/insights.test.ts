@@ -68,6 +68,22 @@ const records = [
 const connect = async (clientGrant = grant) => {
     const data = {
         getPreferences: vi.fn(async () => ({ timezone: 'UTC' })),
+        listMetricCoverage: vi.fn(async () => [
+            {
+                definitionId: 'steps',
+                recordCount: 2,
+                availableFrom: '2026-01-10T08:00:00.000Z',
+                availableTo: '2026-01-10T18:00:00.000Z',
+                sources: ['health_connect'],
+            },
+            {
+                definitionId: 'weight',
+                recordCount: 2,
+                availableFrom: '2026-01-10T07:00:00.000Z',
+                availableTo: '2026-01-10T20:00:00.000Z',
+                sources: ['manual'],
+            },
+        ]),
         listObservations: vi.fn(async ({ definitionIds }: { definitionIds?: string[] }) =>
             definitionIds
                 ? records.filter(record => definitionIds.includes(record.definitionId))
@@ -83,8 +99,8 @@ const connect = async (clientGrant = grant) => {
 }
 
 describe('MCP measurement insights', () => {
-    it('discovers analyzable metrics with TrackIt aggregation semantics', async () => {
-        const { client, server } = await connect()
+    it('discovers analyzable metrics without loading observation history', async () => {
+        const { client, server, data } = await connect()
         const response = await client.callTool({ name: 'get_metric_catalog', arguments: {} })
         const payload = JSON.parse((response as { content: { text: string }[] }).content[0].text)
 
@@ -97,6 +113,7 @@ describe('MCP measurement insights', () => {
                     dailyAggregation: 'sum',
                     periodAggregation: 'sum',
                     sources: ['health_connect'],
+                    coverageBasis: 'stored_records',
                 }),
                 expect.objectContaining({
                     definitionId: 'weight',
@@ -106,6 +123,11 @@ describe('MCP measurement insights', () => {
                     periodAggregation: 'average',
                 }),
             ]),
+        )
+        expect(data.listMetricCoverage).toHaveBeenCalledTimes(1)
+        expect(data.listObservations).not.toHaveBeenCalled()
+        expect(payload.metadata.provenance).toBe(
+            'TrackIt metric catalog and compact measurement coverage',
         )
 
         await client.close()
