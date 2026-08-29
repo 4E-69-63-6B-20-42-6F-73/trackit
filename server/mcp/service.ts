@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { createHash, randomBytes } from 'node:crypto'
 import { and, count, desc, eq, gt, gte, isNull, or } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -45,6 +46,8 @@ const confirmationPayload = (token: string) => {
 }
 
 export class McpAccessService {
+    private readonly transactionContext = new AsyncLocalStorage<Database>()
+
     constructor(private readonly database: Database) {}
 
     private async clientIsActive(id: string) {
@@ -253,7 +256,10 @@ export class McpAccessService {
                 return { result: existing.result as T, duplicate: true }
             }
 
-            const result = await operation(transaction as Database)
+            const transactionalDatabase = transaction as Database
+            const result = await this.transactionContext.run(transactionalDatabase, () =>
+                operation(transactionalDatabase),
+            )
             await transaction
                 .update(mcpActionReceipts)
                 .set({ result: result as object })
@@ -290,9 +296,10 @@ export class McpAccessService {
         targetId: string,
         payload?: unknown,
     ) {
-        if (!(await this.clientIsActive(client.id))) return false
+        const database = this.transactionContext.getStore() ?? this.database
+        if (database === this.database && !(await this.clientIsActive(client.id))) return false
         const payloadHash = payload === undefined ? null : tokenHash(JSON.stringify(payload))
-        const [confirmation] = await this.database
+        const [confirmation] = await database
             .update(mcpConfirmations)
             .set({ consumedAt: new Date() })
             .where(
@@ -313,11 +320,12 @@ export class McpAccessService {
     }
 
     async consumeConfirmationPayload<T>(client: McpClient, token: string, action: string) {
-        if (!(await this.clientIsActive(client.id))) return null
+        const database = this.transactionContext.getStore() ?? this.database
+        if (database === this.database && !(await this.clientIsActive(client.id))) return null
         const payload = confirmationPayload(token)
         if (payload === null) return null
         const payloadHash = tokenHash(JSON.stringify(payload))
-        const [confirmation] = await this.database
+        const [confirmation] = await database
             .update(mcpConfirmations)
             .set({ consumedAt: new Date() })
             .where(
