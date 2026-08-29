@@ -20,6 +20,7 @@ const previousDate = (date: string) => {
 }
 
 async function insertObservationGraph(transaction: Transaction, record: CanonicalHealthRecord) {
+    const connector = record.connector ?? 'Health Connect'
     const derived = deriveRecord(record)
     const components = derived.length
         ? await transaction
@@ -43,9 +44,9 @@ async function insertObservationGraph(transaction: Transaction, record: Canonica
                       derivationVersion: projection.derivationVersion,
                       version: record.externalVersion,
                       metadata: {
-                          source: record.connector,
+                          source: connector,
                           dataOrigin: record.dataOrigin,
-                          connector: record.connector,
+                          connector,
                           provider: record.provider,
                       },
                   })),
@@ -75,13 +76,11 @@ async function insertObservationGraph(transaction: Transaction, record: Canonica
             attributes: {
                 description: journal?.detail ?? '',
                 primaryDefinitionId: derived[0]?.definitionId,
-                sourceLabel: record.dataOrigin
-                    ? `${record.connector} · ${record.dataOrigin}`
-                    : record.connector,
+                sourceLabel: record.dataOrigin ? `${connector} · ${record.dataOrigin}` : connector,
                 recordType: record.recordType,
             },
             metadata: {
-                connector: record.connector,
+                connector,
                 provider: record.provider,
                 dataOrigin: record.dataOrigin,
             },
@@ -163,6 +162,7 @@ export class ProviderRecordMaintenanceService {
                         const result = await insertObservationGraph(transaction, {
                             id: stored.id,
                             userId: stored.userId,
+                            connector: stored.connector,
                             provider: stored.provider,
                             recordType: stored.recordType,
                             externalId: stored.externalId,
