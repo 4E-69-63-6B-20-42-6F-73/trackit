@@ -3,6 +3,7 @@ import {
     IconArrowLeft,
     IconChevronRight,
     IconDatabase,
+    IconPlugConnected,
     IconShieldLock,
     IconSettings,
     IconUser,
@@ -11,6 +12,7 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { PreferencesPanel } from '../components/PreferencesPanel'
 import { PrivacyPanel } from '../components/PrivacyPanel'
 import { SecurityPanel } from '../components/SecurityPanel'
+import { ConnectionsPanel } from './Connections'
 import { PageHeader } from '../components/PageHeader'
 
 const sections = [
@@ -20,6 +22,13 @@ const sections = [
         description: 'Display name, timezone, and locale',
         icon: IconUser,
         content: PreferencesPanel,
+    },
+    {
+        slug: 'connections',
+        title: 'Connections',
+        description: 'Health Connect, devices, and MCP access',
+        icon: IconPlugConnected,
+        content: ConnectionsPanel,
     },
     {
         slug: 'data',
@@ -49,12 +58,7 @@ export function Settings() {
         <div className="page-content settings-page">
             <PageHeader
                 title="Settings"
-                description="Manage your TrackIt profile, data, and security."
-                actions={
-                    <Button component={Link} to="/connections" variant="default">
-                        Connections
-                    </Button>
-                }
+                description="Manage your TrackIt profile, connections, data, and security."
             />
             <div className={`settings-layout ${active ? 'has-active-settings' : ''}`}>
                 <nav className="panel settings-navigation" aria-label="Settings sections">
@@ -114,7 +118,7 @@ export function Settings() {
                         <Text size="sm" c="dimmed">
                             {slug
                                 ? 'This settings address does not exist. Choose a section or return to the settings overview.'
-                                : 'Profile, data ownership, and security live here. Domain libraries and metric definitions live in Library.'}
+                                : 'Profile, connections, data ownership, and security live here. Domain libraries and metric definitions live in Library.'}
                         </Text>
                         {slug && (
                             <Button component={Link} to="/settings" variant="default">
