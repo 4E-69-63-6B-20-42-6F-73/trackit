@@ -19,6 +19,9 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
     useEffect(() => {
         let active = true
         const controller = new AbortController()
+        queueMicrotask(() => {
+            if (active) setStatus('connecting')
+        })
         listJournal({ from, to, limit }, controller.signal)
             .then(records => {
                 if (!active) return
