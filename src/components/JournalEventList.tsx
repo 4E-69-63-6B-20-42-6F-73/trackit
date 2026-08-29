@@ -1,5 +1,4 @@
 import { Badge, Text } from '@mantine/core'
-import { IconChevronRight } from '@tabler/icons-react'
 import type { ReactNode } from 'react'
 import { eventVisual } from '../domain/data'
 import type { JournalEvent } from '../domain/types'
@@ -15,16 +14,18 @@ export function JournalEventList({
     showChevron?: boolean
     renderActions?: (event: JournalEvent) => ReactNode
 }) {
+    const journalStyle = roomy || showChevron
+
     return events.map(event => {
         const { icon: Icon, tone } = eventVisual(event.category)
         return (
-            <div className={`event${roomy ? ' roomy' : ''}`} key={event.id}>
+            <div className={`event${journalStyle ? ' roomy' : ''}`} key={event.id}>
                 <time>{event.time}</time>
                 <div className={`event-icon ${tone}`}>
                     <Icon size={17} />
                 </div>
                 <div className="event-copy">
-                    <Text fw={600} size={roomy ? undefined : 'sm'}>
+                    <Text fw={600} size={journalStyle ? undefined : 'sm'}>
                         {event.title}
                         {event.source !== 'You' && (
                             <Badge variant="light" color="gray" fw={500}>
@@ -37,7 +38,6 @@ export function JournalEventList({
                     </Text>
                 </div>
                 {renderActions?.(event)}
-                {showChevron && <IconChevronRight size={17} color="#a3a49e" />}
             </div>
         )
     })
