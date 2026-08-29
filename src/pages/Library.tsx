@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Alert, Button, Group, Paper, SimpleGrid, Text } from '@mantine/core'
+import { Alert, Group, Paper, SimpleGrid, Text } from '@mantine/core'
 import { IconApple, IconChartDots, IconChefHat, IconChevronRight } from '@tabler/icons-react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
@@ -40,7 +40,15 @@ export function Library() {
             )}
 
             <SimpleGrid cols={{ base: 1, sm: 3 }} mt="md" mb="lg">
-                <Paper withBorder p="md" radius="md">
+                <Paper
+                    component={Link}
+                    to="/library/foods"
+                    aria-label="Browse foods"
+                    withBorder
+                    p="md"
+                    radius="md"
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                >
                     <Group justify="space-between" align="start">
                         <IconApple size={22} />
                         <Text size="xs" c="dimmed">
@@ -53,17 +61,22 @@ export function Library() {
                     <Text size="sm" c="dimmed" mb="sm">
                         Reference foods used by meals and recipes.
                     </Text>
-                    <Button
-                        component={Link}
-                        to="/library/foods"
-                        variant="subtle"
-                        size="compact-sm"
-                        rightSection={<IconChevronRight size={14} />}
-                    >
-                        Browse foods
-                    </Button>
+                    <Group gap={4} c="teal">
+                        <Text size="sm" fw={600}>
+                            Browse foods
+                        </Text>
+                        <IconChevronRight size={14} />
+                    </Group>
                 </Paper>
-                <Paper withBorder p="md" radius="md">
+                <Paper
+                    component={Link}
+                    to="/library/recipes"
+                    aria-label="Browse recipes"
+                    withBorder
+                    p="md"
+                    radius="md"
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                >
                     <Group justify="space-between" align="start">
                         <IconChefHat size={22} />
                         <Text size="xs" c="dimmed">
@@ -76,17 +89,22 @@ export function Library() {
                     <Text size="sm" c="dimmed" mb="sm">
                         Reusable combinations with stable serving yields.
                     </Text>
-                    <Button
-                        component={Link}
-                        to="/library/recipes"
-                        variant="subtle"
-                        size="compact-sm"
-                        rightSection={<IconChevronRight size={14} />}
-                    >
-                        Browse recipes
-                    </Button>
+                    <Group gap={4} c="teal">
+                        <Text size="sm" fw={600}>
+                            Browse recipes
+                        </Text>
+                        <IconChevronRight size={14} />
+                    </Group>
                 </Paper>
-                <Paper withBorder p="md" radius="md">
+                <Paper
+                    component={Link}
+                    to="/library/metrics"
+                    aria-label="Open Metric Center"
+                    withBorder
+                    p="md"
+                    radius="md"
+                    style={{ color: 'inherit', textDecoration: 'none' }}
+                >
                     <IconChartDots size={22} />
                     <Text fw={700} mt="sm">
                         Metric Center
@@ -94,15 +112,12 @@ export function Library() {
                     <Text size="sm" c="dimmed" mb="sm">
                         Units, definitions, and how TrackIt interprets metrics.
                     </Text>
-                    <Button
-                        component={Link}
-                        to="/library/metrics"
-                        variant="subtle"
-                        size="compact-sm"
-                        rightSection={<IconChevronRight size={14} />}
-                    >
-                        Open Metric Center
-                    </Button>
+                    <Group gap={4} c="teal">
+                        <Text size="sm" fw={600}>
+                            Open Metric Center
+                        </Text>
+                        <IconChevronRight size={14} />
+                    </Group>
                 </Paper>
             </SimpleGrid>
         </div>
