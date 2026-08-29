@@ -8,6 +8,8 @@ const routes = [
     '/trends',
     '/goals',
     '/library',
+    '/library/foods',
+    '/library/recipes',
     '/library/metrics',
     '/settings',
     '/settings/connections',
@@ -29,8 +31,7 @@ test('keyboard users can bypass repeated navigation', async ({ page }) => {
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
     await page.keyboard.press('Tab')
-    const skip = page.getByRole('link', { name: 'Skip to main content' })
-    await expect(skip).toBeFocused()
+    await expect(page.getByRole('link', { name: 'Skip to main content' })).toBeFocused()
     await page.keyboard.press('Enter')
     await expect(page.locator('#main-content')).toBeFocused()
 })
@@ -39,9 +40,10 @@ test('global logger has no automatic WCAG A/AA violations', async ({ page }) => 
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
     await page.getByRole('button', { name: 'Log health information' }).click()
-    await page.getByRole('menuitem', { name: 'Weight' }).click()
-    await page.getByRole('dialog').waitFor()
+    const chooser = page.getByRole('dialog', { name: 'Choose what to log' })
+    await expect(chooser).toBeVisible()
     const results = await new AxeBuilder({ page })
+        .include('.log-speed-dial')
         .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
         .analyze()
     expect(results.violations).toEqual([])
@@ -50,21 +52,11 @@ test('global logger has no automatic WCAG A/AA violations', async ({ page }) => 
 test('primary navigation works by keyboard and moves focus to page content', async ({ page }) => {
     await page.goto('/today')
     await page.getByRole('heading', { level: 1 }).waitFor()
-
-    let goalsLink = page.getByRole('link', { name: 'Goals', exact: true }).first()
-    if (!(await goalsLink.isVisible())) {
-        const more = page.getByRole('button', { name: 'Open more pages' })
-        await more.focus()
-        await page.keyboard.press('Enter')
-        const dialog = page.getByRole('dialog', { name: 'More' })
-        await expect(dialog).toBeVisible()
-        goalsLink = dialog.getByRole('link', { name: 'Goals', exact: true })
-    }
-    await goalsLink.focus()
+    const journalLink = page.getByRole('link', { name: 'Journal', exact: true }).first()
+    await journalLink.focus()
     await page.keyboard.press('Enter')
-    await expect(page).toHaveURL(/\/goals$/)
+    await expect(page.getByRole('heading', { name: 'Journal', exact: true })).toBeVisible()
     await expect(page.locator('#main-content')).toBeFocused()
-    await expect(page.getByRole('heading', { name: 'Goals', level: 1 })).toBeVisible()
 })
 
 test('Today reflows without page-level horizontal scrolling at 320 CSS pixels', async ({

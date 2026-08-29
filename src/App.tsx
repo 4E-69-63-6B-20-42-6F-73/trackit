@@ -21,6 +21,12 @@ const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: mo
 const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
 const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: module.Goals })))
 const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
+const LibraryFoods = lazy(() =>
+    import('./pages/LibraryFoods').then(module => ({ default: module.LibraryFoods })),
+)
+const LibraryRecipes = lazy(() =>
+    import('./pages/LibraryRecipes').then(module => ({ default: module.LibraryRecipes })),
+)
 const DeviceManagement = lazy(() =>
     import('./pages/connections/devices/index').then(module => ({ default: module.Devices })),
 )
@@ -171,6 +177,8 @@ export default function App() {
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
                             <Route path="/library" element={<Library />} />
+                            <Route path="/library/foods" element={<LibraryFoods />} />
+                            <Route path="/library/recipes" element={<LibraryRecipes />} />
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
                             <Route

@@ -17,19 +17,22 @@ const initialData = {
     goals: [],
 }
 
+const renderApp = (entry: string) =>
+    render(
+        <MantineProvider>
+            <MemoryRouter initialEntries={[entry]}>
+                <ServerDataProvider initialData={initialData}>
+                    <LoggingProvider>
+                        <App />
+                    </LoggingProvider>
+                </ServerDataProvider>
+            </MemoryRouter>
+        </MantineProvider>,
+    )
+
 describe('App routing', () => {
     it('renders a bookmarkable journal route', async () => {
-        render(
-            <MantineProvider>
-                <MemoryRouter initialEntries={['/journal']}>
-                    <ServerDataProvider initialData={initialData}>
-                        <LoggingProvider>
-                            <App />
-                        </LoggingProvider>
-                    </ServerDataProvider>
-                </MemoryRouter>
-            </MantineProvider>,
-        )
+        renderApp('/journal')
 
         expect(
             await screen.findByRole('heading', { name: 'Journal' }, { timeout: 5_000 }),
@@ -38,21 +41,26 @@ describe('App routing', () => {
     })
 
     it('renders a bookmarkable goals route', async () => {
-        render(
-            <MantineProvider>
-                <MemoryRouter initialEntries={['/goals']}>
-                    <ServerDataProvider initialData={initialData}>
-                        <LoggingProvider>
-                            <App />
-                        </LoggingProvider>
-                    </ServerDataProvider>
-                </MemoryRouter>
-            </MantineProvider>,
-        )
+        renderApp('/goals')
 
         expect(
             await screen.findByRole('heading', { name: 'Goals', level: 1 }, { timeout: 5_000 }),
         ).toBeInTheDocument()
         expect(screen.getByRole('heading', { name: 'Add a goal' })).toBeInTheDocument()
+    })
+
+    it.each([
+        ['/library/foods', 'Foods'],
+        ['/library/recipes', 'Recipes'],
+    ])('renders the bookmarkable %s route', async (route, heading) => {
+        renderApp(route)
+
+        expect(
+            await screen.findByRole('heading', { name: heading, level: 1 }, { timeout: 5_000 }),
+        ).toBeInTheDocument()
+        expect(screen.getByRole('link', { name: 'Back to Library' })).toHaveAttribute(
+            'href',
+            '/library',
+        )
     })
 })
