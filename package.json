@@ -27,7 +27,7 @@
         "build:android": "cd android && gradlew.bat assembleDebug",
         "security:secrets": "node scripts/scan-secrets.mjs",
         "security:deps": "npm audit --omit=dev --audit-level=high",
-        "check": "npm run lint && npm run db:check && npm run security:secrets && npm run test",
+        "check": "npm run format:check && npm run lint && npm run db:check && npm run security:secrets && npm run test && npm run build",
         "preview": "vite preview"
     },
     "dependencies": {
@@ -74,7 +74,6 @@
         "eslint-plugin-react-refresh": "0.5.4",
         "globals": "17.11.0",
         "jsdom": "^30.0.1",
-        "prettier": "^3.9.6",
         "tsx": "^4.23.12",
         "typescript": "^6.0.3",
         "typescript-eslint": "8.67.0",
