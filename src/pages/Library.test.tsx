@@ -68,21 +68,20 @@ describe('Library', () => {
         vi.mocked(listRecipes).mockResolvedValue([recipe])
     })
 
-    it('uses dedicated subpage links for foods, recipes, and metrics', () => {
+    it('uses the full cards as dedicated subpage links', () => {
         renderPage(<Library />)
 
-        expect(screen.getByRole('link', { name: 'Browse foods' })).toHaveAttribute(
-            'href',
-            '/library/foods',
-        )
-        expect(screen.getByRole('link', { name: 'Browse recipes' })).toHaveAttribute(
-            'href',
-            '/library/recipes',
-        )
-        expect(screen.getByRole('link', { name: 'Open Metric Center' })).toHaveAttribute(
-            'href',
-            '/library/metrics',
-        )
+        const foods = screen.getByRole('link', { name: 'Browse foods' })
+        const recipes = screen.getByRole('link', { name: 'Browse recipes' })
+        const metrics = screen.getByRole('link', { name: 'Open Metric Center' })
+
+        expect(foods).toHaveAttribute('href', '/library/foods')
+        expect(foods).toHaveTextContent('Foods')
+        expect(foods).toHaveTextContent('Reference foods used by meals and recipes.')
+        expect(recipes).toHaveAttribute('href', '/library/recipes')
+        expect(recipes).toHaveTextContent('Recipes')
+        expect(metrics).toHaveAttribute('href', '/library/metrics')
+        expect(metrics).toHaveTextContent('Metric Center')
         expect(screen.queryByText('Oats')).not.toBeInTheDocument()
         expect(screen.queryByText('Porridge')).not.toBeInTheDocument()
     })
@@ -91,10 +90,9 @@ describe('Library', () => {
         renderPage(<LibraryFoods />)
 
         expect(screen.getByRole('heading', { name: 'Foods', level: 1 })).toBeInTheDocument()
-        expect(screen.getByRole('link', { name: 'Back to Library' })).toHaveAttribute(
-            'href',
-            '/library',
-        )
+        const back = screen.getByRole('link', { name: 'Back to Library' })
+        expect(back).toHaveAttribute('href', '/library')
+        expect(back.closest('.page-header-copy')).not.toBeNull()
         expect(await screen.findByText('Oats')).toBeInTheDocument()
         expect(screen.queryByText('Recipes')).not.toBeInTheDocument()
     })
@@ -103,10 +101,9 @@ describe('Library', () => {
         renderPage(<LibraryRecipes />)
 
         expect(screen.getByRole('heading', { name: 'Recipes', level: 1 })).toBeInTheDocument()
-        expect(screen.getByRole('link', { name: 'Back to Library' })).toHaveAttribute(
-            'href',
-            '/library',
-        )
+        const back = screen.getByRole('link', { name: 'Back to Library' })
+        expect(back).toHaveAttribute('href', '/library')
+        expect(back.closest('.page-header-copy')).not.toBeNull()
         expect(await screen.findByText('Porridge')).toBeInTheDocument()
         await waitFor(() =>
             expect(screen.getByRole('button', { name: 'New recipe' })).toBeEnabled(),
