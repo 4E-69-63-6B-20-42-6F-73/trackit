@@ -318,6 +318,36 @@ describe('Android device pairing and upload', () => {
             ),
         ).toHaveLength(7)
 
+        const exerciseId = 'canonical-exercise'
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            {
+                provider: 'health_connect',
+                recordType: 'ExerciseSessionRecord',
+                externalId: exerciseId,
+                externalVersion: 1,
+                startTime: '2026-08-23T09:00:00Z',
+                endTime: '2026-08-23T09:42:00Z',
+                dataOrigin: 'com.example.watch',
+                payload: { exerciseType: 56, segments: [], laps: [] },
+            },
+        ])
+        const [exercise] = await database
+            .select()
+            .from(schema.healthRecords)
+            .where(eq(schema.healthRecords.externalId, exerciseId))
+        expect(exercise.payload).toMatchObject({ exerciseType: 'running' })
+        const exerciseProjections = (await database.select().from(schema.observations)).filter(
+            observation => observation.sourceRecordId === exercise.id,
+        )
+        expect(exerciseProjections.find(item => item.valueType === 'compound')).toMatchObject({
+            title: 'Running',
+            category: 'Activity',
+        })
+        expect(exerciseProjections.find(item => item.definitionId === 'exercise')).toMatchObject({
+            canonicalValue: 42,
+            canonicalUnit: 'minutes',
+        })
+
         await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
             {
                 ...canonical,
