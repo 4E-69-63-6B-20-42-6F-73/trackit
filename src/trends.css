@@ -1,0 +1,153 @@
+.trends-revamp .trends-surface {
+    padding: 24px;
+}
+
+.trends-toolbar {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 18px;
+    margin-bottom: 24px;
+}
+
+.trends-primary-controls,
+.trends-secondary-controls,
+.trends-below-chart,
+.trends-inspector-heading,
+.trends-coverage-value {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.trends-primary-controls {
+    align-items: flex-end;
+    flex-wrap: wrap;
+}
+
+.trends-primary-controls .mantine-Select-root:first-child {
+    min-width: 250px;
+}
+
+.trends-primary-controls .mantine-Select-root:last-child {
+    width: 130px;
+}
+
+.trends-secondary-controls {
+    justify-content: flex-end;
+}
+
+.trends-summary {
+    display: grid;
+    grid-template-columns: minmax(170px, 1fr) minmax(180px, 1fr) minmax(190px, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+    padding: 16px 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--paper) 86%, var(--bg));
+}
+
+.trends-summary > div + div {
+    border-left: 1px solid var(--line);
+    padding-left: 18px;
+}
+
+.trends-coverage-value {
+    align-items: baseline;
+    flex-wrap: wrap;
+    margin-top: 4px;
+}
+
+.trend-chart {
+    margin-top: 8px;
+}
+
+.trend-chart--interactive {
+    cursor: crosshair;
+}
+
+.trend-chart-loading {
+    height: 330px;
+    border-radius: 12px;
+    background: linear-gradient(90deg, #eeece6 25%, #f6f4ef 50%, #eeece6 75%);
+    background-size: 200% 100%;
+    animation: trend-loading 1.4s ease infinite;
+}
+
+@keyframes trend-loading {
+    from {
+        background-position: 100% 0;
+    }
+    to {
+        background-position: -100% 0;
+    }
+}
+
+.trend-chart-note {
+    margin-top: 8px;
+}
+
+.trends-below-chart {
+    justify-content: space-between;
+    align-items: flex-end;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+}
+
+.trends-below-chart .trend-compare {
+    width: min(320px, 100%);
+}
+
+.trends-analysis {
+    margin-top: 14px;
+}
+
+.trends-inspector {
+    margin-top: 18px;
+    padding: 18px;
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    background: var(--bg);
+}
+
+.trends-inspector-heading {
+    justify-content: space-between;
+    align-items: flex-start;
+}
+
+.trends-footnote {
+    display: block;
+    margin-top: 18px;
+}
+
+@media (max-width: 760px) {
+    .trends-toolbar,
+    .trends-below-chart {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .trends-primary-controls,
+    .trends-secondary-controls {
+        width: 100%;
+    }
+
+    .trends-primary-controls .mantine-Select-root:first-child,
+    .trends-primary-controls .mantine-Select-root:last-child {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .trends-summary {
+        grid-template-columns: 1fr;
+    }
+
+    .trends-summary > div + div {
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-top: 12px;
+        padding-left: 0;
+    }
+}
