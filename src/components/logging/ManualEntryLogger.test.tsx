@@ -5,10 +5,19 @@ import { describe, expect, it, vi } from 'vitest'
 import { ManualEntryLogger } from './ManualEntryLogger'
 import { ServerDataProvider } from '../../hooks/useServerData'
 
-const provider = (children: React.ReactNode) => (
+const provider = (
+    children: React.ReactNode,
+    metricPreferences?: { water: { displayUnit: string } },
+) => (
     <ServerDataProvider
         initialData={{
-            preferences: { displayName: 'Owner', timezone: 'UTC', locale: 'en', units: 'metric' },
+            preferences: {
+                displayName: 'Owner',
+                timezone: 'UTC',
+                locale: 'en',
+                units: 'metric',
+                metricPreferences,
+            },
         }}
     >
         {children}
@@ -84,6 +93,70 @@ describe('ManualEntryLogger', () => {
                 value: 375,
                 unit: 'ml',
                 attributes: { description: '375 ml' },
+            }),
+        )
+    })
+
+    it('uses the Metric Center water unit for presets', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                {provider(
+                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Water" />,
+                    { water: { displayUnit: 'L' } },
+                )}
+            </MantineProvider>,
+        )
+
+        expect(screen.getByRole('button', { name: '0.1 L' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+        )
+        expect(screen.getByRole('button', { name: '0.25 L' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        )
+        expect(screen.getByRole('button', { name: 'Log 0.25 L' })).toBeEnabled()
+
+        await user.click(screen.getByRole('button', { name: '0.1 L' }))
+        await user.click(screen.getByRole('button', { name: 'Log 0.1 L' }))
+
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                definitionId: 'water',
+                value: 100,
+                unit: 'ml',
+                attributes: { description: '0.1 L' },
+            }),
+        )
+    })
+
+    it('converts custom water using the Metric Center water unit', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                {provider(
+                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Water" />,
+                    { water: { displayUnit: 'L' } },
+                )}
+            </MantineProvider>,
+        )
+
+        await user.click(screen.getByRole('button', { name: 'Custom' }))
+        const amount = screen.getByLabelText('Custom amount')
+        await user.type(amount, '0.3')
+        await user.click(screen.getByRole('button', { name: 'Log 0.3 L' }))
+
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                definitionId: 'water',
+                value: 300,
+                unit: 'ml',
+                attributes: { description: '0.3 L' },
             }),
         )
     })
