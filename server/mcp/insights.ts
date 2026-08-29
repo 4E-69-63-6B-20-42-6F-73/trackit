@@ -1,6 +1,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
-import type { DataRepository } from '../data/types.js'
+import type { DataRepository, RecordRange } from '../data/types.js'
+import type { MetricCoverage } from '../data/metric-coverage.js'
 import { aggregateDailyObservations, type NumericObservation } from '../../src/domain/health.js'
 import { metricCatalog, metricDefinition } from '../../src/domain/metricCatalog.js'
 import type { McpClient } from './service.js'
@@ -11,6 +12,16 @@ type DailyInsightPoint = {
     value: number | null
     coveredDays: number
     totalDays: number
+}
+type MeasurementInsightRepository = DataRepository & {
+    listMetricCoverage?: (range?: RecordRange) => Promise<MetricCoverage[]>
+}
+type CatalogCoverage = {
+    recordCount: number | null
+    availableFrom: string | null
+    availableTo: string | null
+    sources: string[]
+    coverageBasis: 'stored_records' | 'derived_from_inputs' | 'none'
 }
 
 const timestampSchema = z
@@ -57,23 +68,14 @@ const periodAggregation = (definitionId: string) => (isAdditive(definitionId) ? 
 
 const sourceNames = (records: NumericObservation[], definitionId: string) => {
     const definition = metricDefinition(definitionId)
-    return [
+    const sources = [
         ...new Set(
             records
                 .flatMap(record => [record.provider, record.connector])
                 .filter((value): value is string => Boolean(value)),
         ),
-    ].sort().length
-        ? [
-              ...new Set(
-                  records
-                      .flatMap(record => [record.provider, record.connector])
-                      .filter((value): value is string => Boolean(value)),
-              ),
-          ].sort()
-        : definition
-          ? [definition.source]
-          : []
+    ].sort()
+    return sources.length ? sources : definition ? [definition.source] : []
 }
 
 const resolveRange = (
@@ -166,6 +168,65 @@ const monthlyPoints = (definitionId: string, daily: DailyInsightPoint[]) => {
 const observationSource = (record: NumericObservation) =>
     record.provider ?? record.connector ?? record.sourceId ?? null
 
+const catalogCoverage = (
+    definitionId: string,
+    coverage: Map<string, MetricCoverage>,
+): CatalogCoverage => {
+    const direct = coverage.get(definitionId)
+    if (direct) {
+        return {
+            recordCount: direct.recordCount,
+            availableFrom: direct.availableFrom,
+            availableTo: direct.availableTo,
+            sources: direct.sources,
+            coverageBasis: 'stored_records',
+        }
+    }
+    const definition = metricDefinition(definitionId)
+    if (!definition?.derived) {
+        return {
+            recordCount: 0,
+            availableFrom: null,
+            availableTo: null,
+            sources: [],
+            coverageBasis: 'none',
+        }
+    }
+    const inputs = definition.derived.inputs.map(input => coverage.get(input))
+    if (inputs.some(input => !input)) {
+        return {
+            recordCount: 0,
+            availableFrom: null,
+            availableTo: null,
+            sources: [],
+            coverageBasis: 'none',
+        }
+    }
+    const resolved = inputs as MetricCoverage[]
+    const availableFrom = resolved
+        .map(input => input.availableFrom)
+        .sort((left, right) => right.localeCompare(left))[0]
+    const availableTo = resolved
+        .map(input => input.availableTo)
+        .sort((left, right) => left.localeCompare(right))[0]
+    if (availableFrom > availableTo) {
+        return {
+            recordCount: 0,
+            availableFrom: null,
+            availableTo: null,
+            sources: [],
+            coverageBasis: 'none',
+        }
+    }
+    return {
+        recordCount: null,
+        availableFrom,
+        availableTo,
+        sources: ['TrackIt'],
+        coverageBasis: 'derived_from_inputs',
+    }
+}
+
 export function registerMeasurementInsightTools(
     server: McpServer,
     client: McpClient,
@@ -190,39 +251,45 @@ export function registerMeasurementInsightTools(
             if (!canReadMeasurements()) return denied('Measurement read permission is required.')
             const range = resolveRange(client, {}, 3650)
             if (!range) return denied('No date range is available within this assistant grant.')
-            const records = (await data.listObservations(range)) as NumericObservation[]
-            const activeRecords = records.filter(record => !record.excluded)
+            const insightData = data as MeasurementInsightRepository
+            if (!insightData.listMetricCoverage)
+                return denied('Metric catalog coverage is unavailable.')
+            const [coverageRows, timezone] = await Promise.all([
+                insightData.listMetricCoverage(range),
+                ownerTimezone(),
+            ])
+            const coverage = new Map(coverageRows.map(row => [row.definitionId, row]))
             const metrics = metricCatalog
                 .map(definition => {
-                    const matching = activeRecords.filter(
-                        record => record.definitionId === definition.id,
-                    )
-                    const timestamps = matching
-                        .map(record => record.observedAt)
-                        .sort((left, right) => left.localeCompare(right))
+                    const availability = catalogCoverage(definition.id, coverage)
                     return {
                         definitionId: definition.id,
                         label: definition.name,
                         category: definition.category,
                         unit: definition.canonicalUnit,
-                        recordCount: matching.length,
-                        availableFrom: timestamps[0] ?? null,
-                        availableTo: timestamps.at(-1) ?? null,
+                        recordCount: availability.recordCount,
+                        availableFrom: availability.availableFrom,
+                        availableTo: availability.availableTo,
                         dailyAggregation: dailyAggregation(definition.id),
                         periodAggregation: periodAggregation(definition.id),
-                        sources: sourceNames(matching, definition.id),
+                        sources: availability.sources.length
+                            ? availability.sources
+                            : [definition.source],
+                        coverageBasis: availability.coverageBasis,
                     }
                 })
-                .filter(metric => includeEmpty || metric.recordCount > 0)
+                .filter(metric => includeEmpty || metric.coverageBasis !== 'none')
             return textResult({
                 metrics,
                 metadata: {
-                    timezone: await ownerTimezone(),
+                    timezone,
                     inspectedFrom: range.from,
                     inspectedTo: range.to,
                     grantedFrom: client.dateFrom?.toISOString() ?? null,
                     grantedTo: client.dateTo?.toISOString() ?? null,
-                    provenance: 'TrackIt metric catalog and effective measurement series',
+                    provenance: 'TrackIt metric catalog and compact measurement coverage',
+                    coverageNote:
+                        'Stored metric coverage is summarized in PostgreSQL. Derived metric availability is inferred from input coverage.',
                 },
             })
         },
