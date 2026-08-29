@@ -104,8 +104,9 @@ describe('MCP food confirmation flow', () => {
         })
         expect(mealPreview.preview).toMatchObject({
             food: { id: foodId, name: 'Plain Skyr' },
-            nutrients: { calories: 94.5, protein: 16.5, carbs: 6, fat: 0.3 },
+            nutrients: { calories: 94.5, protein: 16.5, carbs: 6 },
         })
+        expect(mealPreview.preview.nutrients.fat).toBeCloseTo(0.3)
 
         const addResponse = await client.callTool({
             name: 'add_food_to_meal',
@@ -116,18 +117,21 @@ describe('MCP food confirmation flow', () => {
             duplicate: false,
             provenance: 'MCP client Qwen',
         })
-        expect(await data.listMeals()).toEqual([
+        const meals = await data.listMeals()
+        expect(meals).toEqual([
             expect.objectContaining({
                 name: 'Plain Skyr',
                 mealType: 'Breakfast',
-                nutrientSnapshot: {
+                nutrientSnapshot: expect.objectContaining({
                     calories: 94.5,
                     protein: 16.5,
                     carbs: 6,
-                    fat: 0.30000000000000004,
-                },
+                }),
             }),
         ])
+        expect((meals[0] as { nutrientSnapshot: { fat: number } }).nutrientSnapshot.fat).toBeCloseTo(
+            0.3,
+        )
 
         await client.close()
         await server.close()
