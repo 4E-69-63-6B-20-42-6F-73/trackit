@@ -22,11 +22,6 @@ test('configures provider-aware source priority without exposing raw internals',
     await page.getByRole('button', { name: /Configure Steps/ }).click()
     await expect(page.getByText('Garmin')).toBeVisible()
     await expect(page.getByText('via Health Connect')).toHaveCount(2)
-    if (test.info().project.name === 'chromium')
-        await page.screenshot({
-            path: 'docs/ui-screenshots/desktop/metrics-sources.png',
-            fullPage: true,
-        })
     await expect(page.getByLabel('Move Samsung Health up')).toBeDisabled()
     await page.getByRole('combobox', { name: 'When included sources overlap' }).click()
     await page.getByRole('option', { name: 'Prefer higher-priority source' }).click()
