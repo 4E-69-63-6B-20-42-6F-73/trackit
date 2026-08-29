@@ -19,8 +19,13 @@ const previousDate = (date: string) => {
     return value.toISOString().slice(0, 10)
 }
 
+const connectorLabel = (connector?: string) => {
+    if (!connector || connector === 'health_connect') return 'Health Connect'
+    return connector
+}
+
 async function insertObservationGraph(transaction: Transaction, record: CanonicalHealthRecord) {
-    const connector = record.connector ?? 'Health Connect'
+    const connector = connectorLabel(record.connector)
     const derived = deriveRecord(record)
     const components = derived.length
         ? await transaction
