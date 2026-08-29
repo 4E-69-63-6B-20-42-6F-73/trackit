@@ -61,7 +61,11 @@ export function ConnectionsPanel() {
                         className="connection-card"
                         key={title}
                         onClick={() =>
-                            navigate(key === 'health' ? '/connections/devices' : '/connections/mcp')
+                            navigate(
+                                key === 'health'
+                                    ? '/settings/connections/devices'
+                                    : '/settings/connections/mcp',
+                            )
                         }
                     >
                         <div className={`connection-icon ${color}`}>
