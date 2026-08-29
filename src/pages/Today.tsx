@@ -130,16 +130,6 @@ export function Today({
         !health.loading &&
         events.length === 0 &&
         health.summaryMetrics.length === 0
-    const summaryTitle = health.unavailable
-        ? 'This day may be incomplete.'
-        : health.summaryMetrics.length === 0
-          ? 'Not much was recorded for this day.'
-          : 'Here’s how this day compares with your recent data.'
-    const summaryText = health.unavailable
-        ? 'Some TrackIt data could not be loaded. The values below show what is currently available.'
-        : health.summaryMetrics.length === 0
-          ? 'Journal entries and nutrition can still give this day useful context.'
-          : `TrackIt summarized ${health.summaryMetrics.length} key ${health.summaryMetrics.length === 1 ? 'metric' : 'metrics'} and added recent context where enough history exists.`
 
     return (
         <div className="page-content today-page">
@@ -212,7 +202,7 @@ export function Today({
             </section>
 
             {coldStart ? (
-                <section className="panel today-summary">
+                <section className="panel today-get-started">
                     <h2>Start building your health record</h2>
                     <Text c="dimmed" mb="lg">
                         TrackIt becomes useful as soon as it has observations. Log something
@@ -259,11 +249,6 @@ export function Today({
                             )}
                         </section>
                     )}
-
-                    <section className="panel today-summary">
-                        <h2>{summaryTitle}</h2>
-                        <Text>{summaryText}</Text>
-                    </section>
 
                     <div className="today-section-heading">
                         <div>
