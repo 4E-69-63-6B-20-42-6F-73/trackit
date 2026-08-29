@@ -1,5 +1,10 @@
 import { Alert, Text } from '@mantine/core'
 import { dailySeries, pearsonCorrelation, type NumericObservation } from '../domain/health'
+import { metricDefinition } from '../domain/metricCatalog'
+
+const label = (definitionId: string) =>
+    metricDefinition(definitionId)?.name ??
+    definitionId.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
 
 export function CorrelationNote({
     observations,
@@ -16,14 +21,15 @@ export function CorrelationNote({
     days: number
     timezone: string
 }) {
+    const included = observations.filter(record => !record.excluded)
     const left = dailySeries(
-        observations.filter(record => record.definitionId === metric),
+        included.filter(record => record.definitionId === metric),
         start,
         days,
         timezone,
     )
     const right = dailySeries(
-        observations.filter(record => record.definitionId === comparisonMetric),
+        included.filter(record => record.definitionId === comparisonMetric),
         start,
         days,
         timezone,
@@ -39,12 +45,12 @@ export function CorrelationNote({
     )
 
     return (
-        <Alert color="indigo" title={`${metric} compared with ${comparisonMetric}`}>
+        <Alert color="indigo" title={`${label(metric)} compared with ${label(comparisonMetric)}`}>
             <Text size="sm">
                 {correlation === null
                     ? 'Not enough matched observations for a correlation.'
                     : `Correlation ${correlation.toFixed(2)} across ${pairs.length} matched days.`}{' '}
-                Window: {days} days. Lag: 0 days. This association does not establish causation.
+                This is a same-day association only; it does not establish causation.
             </Text>
         </Alert>
     )
