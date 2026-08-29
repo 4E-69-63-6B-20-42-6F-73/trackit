@@ -14,7 +14,6 @@ import { useJournal } from './hooks/useJournal'
 import { useObservationCommands } from './hooks/useObservationCommands'
 import { useServerData } from './hooks/useServerData'
 import type { CreateObservationInput } from './lib/observationApi'
-import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
 const Journal = lazy(() => import('./pages/Journal').then(module => ({ default: module.Journal })))
@@ -54,7 +53,6 @@ const pagePaths: Record<Page, string> = {
 
 export default function App() {
     const navigate = useNavigate()
-    const { openLogger } = useLogger()
     const { preferences } = useServerData()
     const location = useLocation()
     const page: Page = location.pathname.startsWith('/settings')
@@ -141,7 +139,6 @@ export default function App() {
                                         }
                                         openConnections={() => navigate('/settings/connections')}
                                         openGoals={() => openPage('Goals')}
-                                        openLogger={openLogger}
                                         initialSelectedDate={routeDate}
                                     />
                                 }
