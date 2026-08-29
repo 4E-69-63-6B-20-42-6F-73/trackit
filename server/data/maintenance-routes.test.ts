@@ -30,7 +30,11 @@ describe('data maintenance routes', () => {
         const response = await app.inject({
             method: 'POST',
             url: '/api/data/rederive-observations',
-            payload: { from: '2026-08-28', to: '2026-08-29' },
+            payload: {
+                from: '2026-08-28',
+                to: '2026-08-29',
+                recordTypes: ['SleepSessionRecord'],
+            },
         })
 
         expect(response.statusCode).toBe(200)
@@ -44,6 +48,7 @@ describe('data maintenance routes', () => {
         expect(maintenance.providerRecords.rederive).toHaveBeenCalledWith({
             from: '2026-08-28',
             to: '2026-08-29',
+            recordTypes: ['SleepSessionRecord'],
         })
 
         const invalid = await app.inject({
@@ -53,6 +58,14 @@ describe('data maintenance routes', () => {
         })
         expect(invalid.statusCode).toBe(400)
         expect(invalid.json()).toEqual({ error: 'invalid_range' })
+
+        const invalidFilter = await app.inject({
+            method: 'POST',
+            url: '/api/data/rederive-observations',
+            payload: { recordTypes: [] },
+        })
+        expect(invalidFilter.statusCode).toBe(400)
+        expect(invalidFilter.json()).toEqual({ error: 'invalid_range' })
         await app.close()
     })
 
