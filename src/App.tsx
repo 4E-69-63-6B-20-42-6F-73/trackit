@@ -3,6 +3,7 @@ import { Box, Button, Center, Loader, Notification } from '@mantine/core'
 import { IconCircleCheck } from '@tabler/icons-react'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from './components/Header'
+import { GoalsPageSkeleton, JournalPageSkeleton } from './components/LoadingSkeletons'
 import { GlobalLogFab } from './components/logging/GlobalLogFab'
 import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
@@ -60,7 +61,7 @@ const pagePaths: Record<Exclude<Page, 'Settings'>, string> & { Settings: string 
 
 export default function App() {
     const navigate = useNavigate()
-    const { preferences } = useServerData()
+    const { preferences, loading: serverLoading } = useServerData()
     const location = useLocation()
     const page: Page = location.pathname.startsWith('/settings')
         ? 'Settings'
@@ -90,8 +91,16 @@ export default function App() {
                     limit: 100,
                 }
               : { limit: page === 'Journal' ? 100 : 10 }
-    const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
-        useJournal(journalQuery)
+    const {
+        events,
+        status,
+        refresh,
+        syncFailure,
+        retry,
+        hasOlder,
+        loadingOlder,
+        loadOlder,
+    } = useJournal(journalQuery)
     const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(refresh)
     const [lastAdded, setLastAdded] = useState<{ id: string; title: string } | null>(null)
     const mainRef = useRef<HTMLElement>(null)
@@ -108,11 +117,16 @@ export default function App() {
         setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
     }
 
-    const loading = (
-        <Center mih={320}>
-            <Loader role="status" color="teal" aria-label="Loading page" />
-        </Center>
-    )
+    const loading =
+        page === 'Journal' ? (
+            <JournalPageSkeleton />
+        ) : page === 'Goals' ? (
+            <GoalsPageSkeleton />
+        ) : (
+            <Center mih={320}>
+                <Loader role="status" color="teal" aria-label="Loading page" />
+            </Center>
+        )
 
     return (
         <>
@@ -159,22 +173,29 @@ export default function App() {
                             <Route
                                 path="/journal"
                                 element={
-                                    <Journal
-                                        events={events}
-                                        remove={remove}
-                                        update={(event, changes) =>
-                                            update(event.id, {
-                                                ...changes,
-                                                version: event.version ?? 1,
-                                            })
-                                        }
-                                        hasOlder={hasOlder}
-                                        loadingOlder={loadingOlder}
-                                        loadOlder={loadOlder}
-                                    />
+                                    status === 'connecting' ? (
+                                        <JournalPageSkeleton />
+                                    ) : (
+                                        <Journal
+                                            events={events}
+                                            remove={remove}
+                                            update={(event, changes) =>
+                                                update(event.id, {
+                                                    ...changes,
+                                                    version: event.version ?? 1,
+                                                })
+                                            }
+                                            hasOlder={hasOlder}
+                                            loadingOlder={loadingOlder}
+                                            loadOlder={loadOlder}
+                                        />
+                                    )
                                 }
                             />
-                            <Route path="/goals" element={<Goals />} />
+                            <Route
+                                path="/goals"
+                                element={serverLoading ? <GoalsPageSkeleton /> : <Goals />}
+                            />
                             <Route path="/trends" element={<Trends />} />
                             <Route path="/library" element={<Library />} />
                             <Route path="/library/foods" element={<LibraryFoods />} />
