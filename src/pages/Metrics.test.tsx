@@ -23,7 +23,7 @@ const renderPage = (preferences = base) =>
         </MantineProvider>,
     )
 
-describe('Metrics page', () => {
+describe('Metric Center', () => {
     beforeEach(() => {
         vi.mocked(updatePreferences).mockReset()
         vi.mocked(listMetricSources).mockResolvedValue([])
@@ -75,14 +75,13 @@ describe('Metrics page', () => {
         await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
         expect(await screen.findByRole('radio', { name: 'Pounds (lb)' })).toBeChecked()
     })
-    it('applies the imperial preset from the registry', async () => {
+    it('applies the imperial display preset from the registry', async () => {
         vi.mocked(updatePreferences).mockResolvedValue(base)
         renderPage()
         await userEvent.click(screen.getByRole('radio', { name: 'Imperial' }))
         await waitFor(() =>
             expect(updatePreferences).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    units: 'imperial',
                     metricPreferences: expect.objectContaining({
                         weight: { displayUnit: 'lb' },
                         water: { displayUnit: 'fl oz' },
@@ -90,6 +89,7 @@ describe('Metrics page', () => {
                 }),
             ),
         )
+        expect(vi.mocked(updatePreferences).mock.calls.at(-1)?.[0]).not.toHaveProperty('units')
     })
     it('shows provider-aware sources and persists overlap priority', async () => {
         vi.mocked(listMetricSources).mockResolvedValue([
@@ -104,10 +104,7 @@ describe('Metrics page', () => {
                 connector: 'Health Connect',
             },
         ])
-        vi.mocked(updatePreferences).mockImplementation(async input => ({
-            ...base,
-            ...input,
-        }))
+        vi.mocked(updatePreferences).mockImplementation(async input => ({ ...base, ...input }))
         renderPage()
         await userEvent.click(await screen.findByRole('button', { name: /Configure Steps/ }))
         expect(await screen.findByText('Garmin')).toBeInTheDocument()
