@@ -22,6 +22,27 @@ export type McpClient = {
 }
 
 const tokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
+const confirmationPrefix = 'trk_confirm_'
+
+const confirmationToken = (payload?: unknown) => {
+    if (payload === undefined) return randomBytes(24).toString('base64url')
+    return `${confirmationPrefix}${Buffer.from(
+        JSON.stringify({ nonce: randomBytes(24).toString('base64url'), payload }),
+    ).toString('base64url')}`
+}
+
+const confirmationPayload = (token: string) => {
+    if (!token.startsWith(confirmationPrefix)) return null
+    try {
+        const decoded = JSON.parse(
+            Buffer.from(token.slice(confirmationPrefix.length), 'base64url').toString('utf8'),
+        ) as { nonce?: unknown; payload?: unknown }
+        if (typeof decoded.nonce !== 'string' || !('payload' in decoded)) return null
+        return decoded.payload
+    } catch {
+        return null
+    }
+}
 
 export class McpAccessService {
     constructor(private readonly database: Database) {}
@@ -248,7 +269,7 @@ export class McpAccessService {
         payload?: unknown,
     ) {
         if (!(await this.clientIsActive(client.id))) throw new Error('inactive_mcp_client')
-        const token = randomBytes(24).toString('base64url')
+        const token = confirmationToken(payload)
         const payloadHash = payload === undefined ? undefined : tokenHash(JSON.stringify(payload))
         const expiresAt = new Date(Date.now() + 5 * 60 * 1000)
         await this.database.insert(mcpConfirmations).values({
@@ -289,6 +310,28 @@ export class McpAccessService {
             )
             .returning({ tokenHash: mcpConfirmations.tokenHash })
         return Boolean(confirmation)
+    }
+
+    async consumeConfirmationPayload<T>(client: McpClient, token: string, action: string) {
+        if (!(await this.clientIsActive(client.id))) return null
+        const payload = confirmationPayload(token)
+        if (payload === null) return null
+        const payloadHash = tokenHash(JSON.stringify(payload))
+        const [confirmation] = await this.database
+            .update(mcpConfirmations)
+            .set({ consumedAt: new Date() })
+            .where(
+                and(
+                    eq(mcpConfirmations.tokenHash, tokenHash(token)),
+                    eq(mcpConfirmations.clientId, client.id),
+                    eq(mcpConfirmations.action, action),
+                    eq(mcpConfirmations.payloadHash, payloadHash),
+                    isNull(mcpConfirmations.consumedAt),
+                    gt(mcpConfirmations.expiresAt, new Date()),
+                ),
+            )
+            .returning({ targetId: mcpConfirmations.targetId })
+        return confirmation ? { targetId: confirmation.targetId, payload: payload as T } : null
     }
 
     private async audit(
