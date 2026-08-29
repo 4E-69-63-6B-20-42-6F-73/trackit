@@ -62,6 +62,8 @@ export async function updatePreferences(input: Partial<Preferences>): Promise<Pr
     })
     if (!response.ok) throw new Error('Preferences could not be saved')
     const saved = ((await response.json()) as { data: Preferences }).data
-    window.dispatchEvent(new CustomEvent('trackit:preferences-saved', { detail: saved }))
+    window.dispatchEvent(
+        new CustomEvent('trackit:preferences-saved', { detail: saved }),
+    )
     return saved
 }
