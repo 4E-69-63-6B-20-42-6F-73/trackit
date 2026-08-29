@@ -1,21 +1,19 @@
-import { IconSettings } from '@tabler/icons-react'
+import { IconLink, IconSettings } from '@tabler/icons-react'
 import { NavLink } from 'react-router-dom'
 import { nav } from '../domain/data'
 import type { Page } from '../domain/types'
 
 const paths: Partial<Record<Page, string>> = {
-    Nutrition: '/nutrition',
-    Goals: '/goals',
-    Metrics: '/metrics',
+    Library: '/library',
     Connections: '/connections',
     Settings: '/settings',
 }
 
 export function MobileMore({ page, close }: { page: Page; close: () => void }) {
+    const library = nav.find(({ label }) => label === 'Library')!
     const links = [
-        ...nav.filter(({ label }) =>
-            ['Nutrition', 'Goals', 'Metrics', 'Connections'].includes(label),
-        ),
+        library,
+        { label: 'Connections' as const, icon: IconLink },
         { label: 'Settings' as const, icon: IconSettings },
     ]
 
@@ -31,7 +29,7 @@ export function MobileMore({ page, close }: { page: Page; close: () => void }) {
                 <div className="mobile-more-heading">
                     <div>
                         <h2 id="mobile-more-title">More</h2>
-                        <p>Nutrition, goals, connections, and settings.</p>
+                        <p>Library, connections, and settings.</p>
                     </div>
                     <button type="button" onClick={close} aria-label="Close more pages">
                         Close
