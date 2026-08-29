@@ -39,6 +39,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
     const load = useCallback(
         (signal: AbortSignal) => {
             const day = calendarDayRangeForKey(selectedKey, timezone)
+            const evaluationAt = new Date(Math.min(day.to.getTime() - 1, Date.now()))
             queueMicrotask(() => {
                 if (!signal.aborted) setLoading(true)
             })
@@ -54,7 +55,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                     },
                     signal,
                 ),
-                listGoalEvaluations(signal, day.from.toISOString()),
+                listGoalEvaluations(signal, evaluationAt.toISOString()),
             ])
                 .then(([metrics, observations, evaluations]) => {
                     setDaily(metrics)
