@@ -43,27 +43,36 @@ const clientState = (client: McpClientRecord) => {
 const expiryLabel = (expiresAt: string | null) =>
     expiresAt ? `expires ${new Date(expiresAt).toLocaleDateString()}` : 'does not expire'
 const scopeLabels: Record<string, string> = {
-    observations: 'Health data',
+    observations: 'Measurements & insights',
     meals: 'Meals',
     journal: 'Journal',
     preferences: 'Preferences',
-    'observations:write': 'Add health data',
+    'observations:write': 'Manage measurements',
     'meals:write': 'Add meals and manage foods',
     'checkins:write': 'Add check-ins',
 }
 const toolLabels: Record<string, string> = {
-    list_observations: 'Viewed health data',
+    get_metric_catalog: 'Viewed metric catalog',
+    query_measurements: 'Analyzed measurements',
+    list_measurements: 'Viewed measurements',
+    compare_measurements: 'Compared measurements',
+    list_observations: 'Viewed measurements',
     list_meals: 'Viewed meals',
-    list_journal: 'Viewed journal',
-    create_observation: 'Added health data',
+    nutrition_summary: 'Analyzed nutrition',
+    search_journal: 'Searched Journal',
+    list_journal: 'Viewed Journal',
+    log_measurement: 'Added a measurement',
+    create_observation: 'Added a measurement',
     create_meal: 'Added a meal',
     search_foods: 'Searched foods',
     create_food: 'Created a food',
     add_food_to_meal: 'Added food to a meal',
     preview_create_food: 'Previewed a new food',
     preview_add_food_to_meal: 'Previewed food for a meal',
+    log_checkin: 'Added a check-in',
     create_checkin: 'Added a check-in',
-    delete_observation: 'Deleted an observation',
+    preview_delete_observation: 'Previewed measurement deletion',
+    delete_observation: 'Deleted a measurement',
 }
 
 export function McpAccess() {
@@ -220,7 +229,8 @@ export function McpAccess() {
                         Assistant access
                     </Title>
                     <Text c="dimmed">
-                        Give compatible assistants separate, limited access to your TrackIt data.
+                        Give compatible assistants separate, limited access to analyze or change
+                        your TrackIt data.
                     </Text>
                 </div>
                 <Button
@@ -479,7 +489,7 @@ export function McpAccess() {
             <section className="mcp-activity">
                 <Text fw={700}>Recent access</Text>
                 <Text size="sm" c="dimmed" mb="sm">
-                    The latest requests made through assistant credentials.
+                    The latest analysis and data changes made through assistant credentials.
                 </Text>
                 <Card withBorder padding={0} radius="md">
                     {events.length ? (
