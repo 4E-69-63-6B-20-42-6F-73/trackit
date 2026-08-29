@@ -6,6 +6,7 @@ import {
     Modal,
     NumberInput,
     Select,
+    SimpleGrid,
     Stack,
     Text,
     TextInput,
@@ -21,6 +22,8 @@ import { useServerData } from '../../hooks/useServerData'
 import type { CreateObservationInput } from '../../lib/observationApi'
 
 export type ManualEntryKind = 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
+
+type WaterChoice = '100' | '250' | 'custom'
 
 export function ManualEntryLogger({
     opened,
@@ -48,6 +51,7 @@ export function ManualEntryLogger({
     const [amount, setAmount] = useState<number | string>(
         initialKind === 'Weight' ? (weightUnit === 'lb' ? 165 : 75) : 250,
     )
+    const [waterChoice, setWaterChoice] = useState<WaterChoice>('250')
     const [energy, setEnergy] = useState<string | null>('5 · Neutral')
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
@@ -62,10 +66,24 @@ export function ManualEntryLogger({
     const selectedTimestamp = () =>
         calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
 
+    const selectWaterPreset = (value: 100 | 250) => {
+        setWaterChoice(String(value) as WaterChoice)
+        setAmount(value)
+    }
+
+    const selectCustomWater = () => {
+        setWaterChoice('custom')
+        setAmount('')
+    }
+
     const submit = () => {
         setError('')
         if (!recordedAt) {
             setError('Choose a date and time for this observation.')
+            return
+        }
+        if (kind === 'Water' && Number(amount) < 1) {
+            setError('Enter the amount of water you want to record.')
             return
         }
         const observedAt = selectedTimestamp()
@@ -186,24 +204,59 @@ export function ManualEntryLogger({
         >
             <Stack gap="md">
                 {kind === 'Water' && (
-                    <Stack gap="xs">
-                        <Group grow>
-                            <Button variant="default" onClick={() => setAmount(250)}>
-                                250 ml
+                    <Stack gap="sm">
+                        <SimpleGrid cols={3} spacing="sm">
+                            <Button
+                                variant={waterChoice === '100' ? 'light' : 'default'}
+                                color="trackit"
+                                aria-pressed={waterChoice === '100'}
+                                onClick={() => selectWaterPreset(100)}
+                                style={{ aspectRatio: '1 / 1', height: 'auto' }}
+                                styles={{ label: { flexDirection: 'column', gap: 2 } }}
+                            >
+                                <Text size="lg" fw={700} lh={1}>
+                                    100
+                                </Text>
+                                <Text size="xs" fw={600}>
+                                    ml
+                                </Text>
                             </Button>
-                            <Button variant="default" onClick={() => setAmount(500)}>
-                                500 ml
+                            <Button
+                                variant={waterChoice === '250' ? 'light' : 'default'}
+                                color="trackit"
+                                aria-pressed={waterChoice === '250'}
+                                onClick={() => selectWaterPreset(250)}
+                                style={{ aspectRatio: '1 / 1', height: 'auto' }}
+                                styles={{ label: { flexDirection: 'column', gap: 2 } }}
+                            >
+                                <Text size="lg" fw={700} lh={1}>
+                                    250
+                                </Text>
+                                <Text size="xs" fw={600}>
+                                    ml
+                                </Text>
                             </Button>
-                        </Group>
-                        <NumberInput
-                            autoFocus
-                            label="Amount"
-                            value={amount}
-                            onChange={setAmount}
-                            suffix={` ${waterUnit}`}
-                            step={50}
-                            min={1}
-                        />
+                            <Button
+                                variant={waterChoice === 'custom' ? 'light' : 'default'}
+                                color="trackit"
+                                aria-pressed={waterChoice === 'custom'}
+                                onClick={selectCustomWater}
+                                style={{ aspectRatio: '1 / 1', height: 'auto' }}
+                            >
+                                Custom
+                            </Button>
+                        </SimpleGrid>
+                        {waterChoice === 'custom' && (
+                            <NumberInput
+                                autoFocus
+                                label="Custom amount"
+                                value={amount}
+                                onChange={setAmount}
+                                suffix={` ${waterUnit}`}
+                                step={50}
+                                min={1}
+                            />
+                        )}
                     </Stack>
                 )}
                 {kind === 'Weight' && (
@@ -308,7 +361,11 @@ export function ManualEntryLogger({
                     <Button variant="subtle" color="gray" onClick={close}>
                         Cancel
                     </Button>
-                    <Button color="trackit" onClick={submit}>
+                    <Button
+                        color="trackit"
+                        onClick={submit}
+                        disabled={kind === 'Water' && Number(amount) < 1}
+                    >
                         {kind === 'Water'
                             ? `Log ${amount || 0} ${waterUnit}`
                             : kind === 'Weight'
