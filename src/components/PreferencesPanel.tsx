@@ -40,7 +40,13 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
         setSaving(true)
         setMessage('')
         try {
-            setValue(await updatePreferences(value))
+            setValue(
+                await updatePreferences({
+                    displayName: value.displayName,
+                    timezone: value.timezone,
+                    locale: value.locale,
+                }),
+            )
             setMessage('Preferences saved.')
             onSaved?.()
         } catch {
@@ -60,7 +66,7 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             />
             <Select
                 label="Timezone"
-                description={`Browser recommendation: ${detectedTimezone}. Changing this can move records between days.`}
+                description={`Browser recommendation: ${detectedTimezone}. Changing this can move observations between days.`}
                 value={value.timezone}
                 onChange={timezone => timezone && setValue({ ...value, timezone })}
                 data={timezones}
@@ -75,9 +81,7 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                 searchable
             />
             <div className="preference-preview">
-                <Text size="xs" c="dimmed">
-                    Formatting preview
-                </Text>
+                <Text size="xs" c="dimmed">Formatting preview</Text>
                 <Text size="sm" fw={600}>
                     {new Intl.DateTimeFormat(value.locale, {
                         dateStyle: 'full',
@@ -85,21 +89,13 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                         timeZone: value.timezone,
                     }).format(new Date())}
                 </Text>
-                <Text size="sm">
-                    {new Intl.NumberFormat(value.locale, { maximumFractionDigits: 1 }).format(
-                        value.units === 'metric' ? 83.5 : 184.1,
-                    )}{' '}
-                    {value.units === 'metric' ? 'kg' : 'lb'}
-                </Text>
             </div>
             {message && (
                 <Alert color={message.endsWith('saved.') ? 'teal' : 'orange'}>{message}</Alert>
             )}
             <Button
                 loading={saving}
-                disabled={
-                    !value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()
-                }
+                disabled={!value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()}
                 onClick={() => void save()}
             >
                 Save changes
