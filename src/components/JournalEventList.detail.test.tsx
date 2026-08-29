@@ -67,7 +67,9 @@ describe('Journal entry details', () => {
         expect(
             within(dialog).queryByRole('button', { name: 'View detailed sleep' }),
         ).not.toBeInTheDocument()
-        expect(within(dialog).queryByRole('button', { name: 'Back to entry' })).not.toBeInTheDocument()
+        expect(
+            within(dialog).queryByRole('button', { name: 'Back to entry' }),
+        ).not.toBeInTheDocument()
         expect(within(dialog).queryByRole('button', { name: 'View trend' })).not.toBeInTheDocument()
     })
 })
