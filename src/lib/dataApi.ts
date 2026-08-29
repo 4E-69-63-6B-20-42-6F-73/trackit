@@ -1,13 +1,14 @@
 import { authRequest } from './authApi'
 
 export type MaintenanceDateRange = { lastDays: number } | { from?: string; to?: string }
+export type MaintenanceRederiveRequest = MaintenanceDateRange & { recordTypes?: string[] }
 
 type MaintenanceErrorBody = {
     error?: string
     requestId?: string
 }
 
-const postMaintenance = async <T>(path: string, range: MaintenanceDateRange) => {
+const postMaintenance = async <T>(path: string, range: MaintenanceDateRange | MaintenanceRederiveRequest) => {
     const response = await authRequest(path, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -34,12 +35,12 @@ export async function rebuildProjections(range: MaintenanceDateRange = {}) {
     return postMaintenance<{ queuedDates: number }>('/api/data/rebuild-projections', range)
 }
 
-export async function rederiveObservations(range: MaintenanceDateRange = {}) {
+export async function rederiveObservations(input: MaintenanceRederiveRequest = {}) {
     return postMaintenance<{
         sourceRecords: number
         canonicalObservations: number
         queuedProjectionDates: number
-    }>('/api/data/rederive-observations', range)
+    }>('/api/data/rederive-observations', input)
 }
 
 export async function deleteOwnerData(confirmation: string) {
