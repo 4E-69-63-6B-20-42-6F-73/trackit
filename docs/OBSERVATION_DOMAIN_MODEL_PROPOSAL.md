@@ -82,7 +82,7 @@ TrackIt currently has overlapping definition and fact vocabularies:
 
 - `src/domain/health.ts` defines the client-facing numeric `Observation`.
 - `src/domain/metricCatalog.ts` is the main UI metric registry and includes units, display preferences, aggregation, goals, source type, and derived-metric declarations.
-- `server/health-records/metric-registry.ts` is a second metric registry used during Health Connect derivation. It differs in categories, supported metrics, aggregation vocabulary, units, and precision. For example, Height is `cm` in the UI registry and `m` in the Health Connect registry.
+- `src/domain/observationDefinitions.ts` extends the shared Metric Center identity mechanism to non-numeric observations. Health Connect derivation uses this shared registry and its conversion rules; there is no second server metric registry.
 - `server/health-records/types.ts` defines canonical source records and `DerivedObservation`, but its `kind` distinguishes only `raw_metric` from `derived_metric` and does not model manual facts or compounds.
 - `server/journal/types.ts` defines an independently creatable and editable Journal entity with presentation fields.
 - `src/domain/types.ts` exposes `JournalEvent`, including an optional nested numeric observation, coupling the logging UI to the current dual-write flow.
@@ -726,6 +726,19 @@ This model preserves the familiar TrackIt experience while removing Journal and 
 
 ## 20. Implemented architecture and verification map
 
+The implementation enforces one command/query boundary:
+
+```text
+Commands mutate observations, source records, or reference/configuration data.
+Queries read observations or rebuildable projections.
+No projection has commands.
+```
+
+`Observation.definitionId` is the sole canonical identity for an observation. Metric semantics,
+units, formatting, and conversions resolve through the Metric Center. The legacy
+`observations.metric` column was removed by migration `0015`; migration `0016` also renames the
+derived and daily projection grouping columns to `definition_id`.
+
 | Requirement                  | Authoritative implementation                                                                                                                        | Verification evidence                                           |
 | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------- |
 | Generalized facts            | `observations` typed columns and `src/domain/observations.ts`                                                                                       | schema build and migration tests                                |
@@ -734,8 +747,8 @@ This model preserves the familiar TrackIt experience while removing Journal and 
 | Effective source resolution  | `getEffectiveMetricSeries` and `effectiveBaseMetricSeries`                                                                                          | source-policy, disabled-source, daily projection, and API tests |
 | Read-only Journal            | `PostgresJournalRepository.list`; GET-only `/api/journal`                                                                                           | app route and Journal projection tests                          |
 | Observation-native nutrition | meal roots and nutrient components; meal view adapter over roots                                                                                    | repository, lifecycle, migration, and nutrition tests           |
-| Shared definitions           | `src/domain/metricCatalog.ts`; server registry is a compatibility adapter                                                                           | catalog, aggregation, and Health Connect derivation tests       |
-| Legacy retirement            | migrations `0013` and `0014`; no legacy tables in current Drizzle schema                                                                            | fresh-schema and upgrade migration tests                        |
+| Shared definitions           | `src/domain/metricCatalog.ts` and `src/domain/observationDefinitions.ts`                                                                            | catalog, conversion, validation, and Health derivation tests    |
+| Legacy retirement            | migrations `0013`–`0016`; no legacy Journal/Meal tables or Observation/projection metric identity columns                                           | fresh-schema and upgrade migration tests                        |
 | Consumer consistency         | effective observations for Today details, Goals, Trends, MCP measurements, and daily projection; observation projections for Journal and meal views | app, goal, repository, MCP, UI, and E2E suites                  |
 | Portable data                | export schema version 2 contains observations without duplicate Journal/Meal truth                                                                  | export tests                                                    |
 
@@ -749,6 +762,10 @@ Source update      -> replace normalized graph for that external identity
 ```
 
 Journal never receives a write. UI actions shown from Journal correct or remove the underlying observation. Foods and recipes remain definitions; logged consumption is an observation graph.
+
+Meal nutrient component observations are authoritative for nutrition and metric projections. The
+root `nutrientSnapshot` is retained as a historical compatibility cache, is updated in the same
+transaction, and is not used by the server meal query when components are available.
 
 ### Authoritative read flow
 
@@ -767,4 +784,4 @@ root observation graphs -> Journal and meal-oriented projections
 
 ### Migration safety
 
-Migration `0013` preserves legacy IDs where possible and uses deterministic IDs for nutrient components. Before `0014` removes legacy storage, it checks meal roots, nutrient component counts, meal-item snapshot counts, standalone Journal facts, linked facts, and Health Connect roots. The migration is intentionally one-way; deployment must take a database backup before applying it.
+Migration `0013` preserves legacy IDs where possible and uses deterministic IDs for nutrient components. Before `0014` removes legacy storage, it checks meal roots, nutrient component counts, meal-item snapshot counts, standalone Journal facts, linked facts, and Health Connect roots. Migration `0015` maps legacy compound/event identities, fails if an observation has a missing or unknown definition, and removes the legacy column and indexes. Migration `0016` gives derived and daily projections the same definition-backed identity and migrates presentation-specific attribute names. The migrations are intentionally one-way; deployment must take a database backup before applying them.

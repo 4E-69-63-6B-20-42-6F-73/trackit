@@ -35,7 +35,6 @@ export function Metrics() {
     const [editing, setEditing] = useState<MetricDefinition | null>(null)
     const [draftUnit, setDraftUnit] = useState('')
     const [draftPrecision, setDraftPrecision] = useState<number | null>(null)
-    const [draftShowInJournal, setDraftShowInJournal] = useState(false)
     const [draftPolicy, setDraftPolicy] = useState<DeduplicationPolicy>('keep_all')
     const [draftSourcePriority, setDraftSourcePriority] = useState<string[]>([])
     const [draftDisabledSources, setDraftDisabledSources] = useState<string[]>([])
@@ -53,7 +52,7 @@ export function Metrics() {
                     provider: source.provider,
                     connector: source.connector ?? undefined,
                 }
-                ;(result[source.metric] ??= []).push(descriptor)
+                ;(result[source.definitionId] ??= []).push(descriptor)
                 return result
             }, {}),
         [sourceSummaries],
@@ -99,9 +98,6 @@ export function Metrics() {
         setEditing(metric)
         setDraftUnit(selected[metric.id].displayUnit)
         setDraftPrecision(selected[metric.id].precision ?? metric.precision)
-        setDraftShowInJournal(
-            selected[metric.id].showInJournal ?? metric.journalDefaultVisible ?? false,
-        )
         setDraftPolicy(selected[metric.id].deduplication?.policy ?? 'keep_all')
         setDraftDisabledSources(selected[metric.id].deduplication?.disabledSources ?? [])
         setDraftSourcePriority([
@@ -161,12 +157,17 @@ export function Metrics() {
                         {metricCatalog
                             .filter(metric => metric.category === category)
                             .map(metric => {
+                                const configurable =
+                                    metric.displayUnits.length > 1 ||
+                                    metric.precision > 0 ||
+                                    Boolean(metric.derived) ||
+                                    (metricSources[metric.id]?.length ?? 0) > 1
                                 return (
                                     <MetricRow
                                         key={metric.id}
                                         metric={metric}
                                         displayUnit={selected[metric.id].displayUnit}
-                                        clickable={!saving}
+                                        clickable={configurable && !saving}
                                         onClick={() => openMetric(metric)}
                                     />
                                 )
@@ -182,7 +183,7 @@ export function Metrics() {
                                 <Radio
                                     key={unit}
                                     value={unit}
-                                    label={`${unitPresentation(unit, editing.id).name} (${unitPresentation(unit, editing.id).label})`}
+                                    label={`${unitPresentation(unit).name} (${unitPresentation(unit).label})`}
                                     disabled={saving}
                                 />
                             ))}
@@ -218,17 +219,6 @@ export function Metrics() {
                             ))}
                         </Stack>
                     </Radio.Group>
-                )}
-                {editing && (
-                    <section className="metric-journal-setting">
-                        <Switch
-                            label="Show in Journal"
-                            description="Include this metric in your chronological Journal view."
-                            checked={draftShowInJournal}
-                            disabled={saving}
-                            onChange={event => setDraftShowInJournal(event.currentTarget.checked)}
-                        />
-                    </section>
                 )}
                 {editing?.derived && (
                     <section className="metric-derived-note">
@@ -380,7 +370,6 @@ export function Metrics() {
                 {editing &&
                     (editing.displayUnits.length > 1 ||
                     editing.precision > 0 ||
-                    editing.journalDefaultVisible !== undefined ||
                     (metricSources[editing.id]?.length ?? 0) > 1 ? (
                         <Group justify="flex-end" mt="xl">
                             <Button variant="default" onClick={() => setEditing(null)}>
@@ -395,7 +384,6 @@ export function Metrics() {
                                             ...selected[editing.id],
                                             displayUnit: draftUnit,
                                             precision: draftPrecision ?? editing.precision,
-                                            showInJournal: draftShowInJournal,
                                             ...((metricSources[editing.id]?.length ?? 0) > 1
                                                 ? {
                                                       deduplication: {

@@ -18,7 +18,7 @@ describe.runIf(enabled)('PostgreSQL integration', () => {
         await migrate(database, { migrationsFolder: './server/db/migrations' })
         const repository = new PostgresDataRepository(database)
         const created = (await repository.createObservation({
-            metric: 'weight',
+            definitionId: 'weight',
             value: 72.5,
             unit: 'kg',
             observedAt: '2026-08-20T08:30:00.000Z',

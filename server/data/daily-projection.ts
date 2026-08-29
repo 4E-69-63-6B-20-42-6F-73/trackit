@@ -10,8 +10,7 @@ import {
 import { aggregateDailyObservations, type Observation } from '../../src/domain/health.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
 import { localDayRange } from './timezone.js'
-import { getEffectiveBaseMetricSeries } from './effective-series.js'
-import { replaceDerivedObservationCache } from './derived-observation-cache.js'
+import { getEffectiveMetricSeries } from './effective-series.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
@@ -28,32 +27,17 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
         .where(eq(preferences.id, 'owner'))
     const timezone = saved?.timezone ?? 'UTC'
     const { from, to } = localDayRange(date, timezone)
-    const derivationInputs = await getEffectiveBaseMetricSeries(database, {
+    const effective = await getEffectiveMetricSeries(database, {
         from: from.toISOString(),
         to: to.toISOString(),
     })
-    const base = derivationInputs.filter(record => {
-        const observedAt = new Date(record.observedAt)
-        return observedAt >= from && observedAt < to
-    })
-    const resolutionVersion = saved?.metricResolutionVersion ?? 1
-    const derived = await replaceDerivedObservationCache(database, {
-        userId: 'owner',
-        date,
-        timezone,
-        resolutionVersion,
-        inputs: derivationInputs,
-    })
-    const effective = [...base, ...derived].sort((left, right) =>
-        left.observedAt.localeCompare(right.observedAt),
-    )
 
     await database
         .delete(dailyMetrics)
         .where(and(eq(dailyMetrics.userId, 'owner'), eq(dailyMetrics.date, date)))
     const byMetric = new Map<string, Observation[]>()
     for (const record of effective)
-        byMetric.set(record.metric, [...(byMetric.get(record.metric) ?? []), record])
+        byMetric.set(record.definitionId, [...(byMetric.get(record.definitionId) ?? []), record])
     for (const [metric, values] of byMetric) {
         const definition = metricDefinition(metric)
         const value = aggregateDailyObservations(values)
@@ -61,11 +45,11 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
         await database.insert(dailyMetrics).values({
             userId: 'owner',
             date,
-            metric,
+            definitionId: metric,
             value,
             unit: definition.canonicalUnit,
             derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
-            resolutionVersion,
+            resolutionVersion: saved?.metricResolutionVersion ?? 1,
             timezone,
         })
     }
@@ -75,7 +59,7 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
             userId: 'owner',
             date,
             derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
-            resolutionVersion,
+            resolutionVersion: saved?.metricResolutionVersion ?? 1,
             timezone,
             status: 'complete',
         })

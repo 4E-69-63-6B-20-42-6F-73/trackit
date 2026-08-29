@@ -111,7 +111,7 @@ export function ManualEntryLogger({
                 source: 'You',
                 observedAt: recordedAt,
                 observation: {
-                    metric: 'water',
+                    definitionId: 'water',
                     value: toCanonicalMetricValue('water', Number(amount) || 0, waterUnit),
                     unit: 'ml',
                     observedAt: recordedAt,
@@ -127,7 +127,7 @@ export function ManualEntryLogger({
                 source: 'You',
                 observedAt: recordedAt,
                 observation: {
-                    metric: 'weight',
+                    definitionId: 'weight',
                     value: toCanonicalMetricValue('weight', Number(amount) || 0, weightUnit),
                     unit: 'kg',
                     observedAt: recordedAt,
@@ -143,7 +143,7 @@ export function ManualEntryLogger({
                 source: 'You',
                 observedAt: recordedAt,
                 observation: {
-                    metric: 'energy',
+                    definitionId: 'energy',
                     value: Number(energy?.split(' ')[0]) || 5,
                     unit: 'score',
                     observedAt: recordedAt,
@@ -170,12 +170,7 @@ export function ManualEntryLogger({
                 source: 'You',
                 observedAt: recordedAt,
                 observation: {
-                    metric: `symptom_${
-                        symptom
-                            .trim()
-                            .toLowerCase()
-                            .replace(/[^a-z0-9]+/g, '_') || 'other'
-                    }`,
+                    definitionId: 'symptom',
                     value: Number(severity) || 5,
                     unit: 'score',
                     observedAt: recordedAt,

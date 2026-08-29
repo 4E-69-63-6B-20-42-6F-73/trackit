@@ -75,9 +75,9 @@ export function Trends() {
             .then(records => {
                 setAvailableMetrics(records)
                 const preferred = ['sleep', 'steps', 'weight', 'energy'].find(candidate =>
-                    records.some(record => record.metric === candidate),
+                    records.some(record => record.definitionId === candidate),
                 )
-                setMetric(preferred ?? records[0]?.metric ?? null)
+                setMetric(preferred ?? records[0]?.definitionId ?? null)
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
@@ -96,7 +96,7 @@ export function Trends() {
         void listObservations({
             from: from.toISOString(),
             to: new Date().toISOString(),
-            metrics: [metric, ...(comparisonMetric ? [comparisonMetric] : [])],
+            definitionIds: [metric, ...(comparisonMetric ? [comparisonMetric] : [])],
         })
             .then(records => {
                 setObservations(records)
@@ -107,7 +107,7 @@ export function Trends() {
     }, [comparisonMetric, metric, range])
 
     const allObservations = observations
-    const recordedMetrics = [...new Set(availableMetrics.map(record => record.metric))]
+    const recordedMetrics = [...new Set(availableMetrics.map(record => record.definitionId))]
     const unknownMetrics = recordedMetrics.filter(
         value => !metricCatalog.some(definition => definition.value === value),
     )
@@ -134,7 +134,7 @@ export function Trends() {
         return value
     }, [range])
     const metricRecords = allObservations.filter(
-        record => record.metric === metric && !record.excluded,
+        record => record.definitionId === metric && !record.excluded,
     )
     const isNutritionMetric = metricDefinition(metric)?.source === 'meal'
     const isManualMetric = metricDefinition(metric)?.source === 'manual'
@@ -173,7 +173,7 @@ export function Trends() {
     })()
     const coveredValues = points.flatMap(point => (point.value === null ? [] : [point.value]))
     const comparisonRecords = allObservations.filter(
-        record => record.metric === comparisonMetric && !record.excluded,
+        record => record.definitionId === comparisonMetric && !record.excluded,
     )
     const comparisonPoints = (granularity === 'weekly' ? weeklySeries : dailySeries)(
         comparisonRecords,
@@ -512,7 +512,7 @@ export function Trends() {
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
                             valueLabel={
                                 metric && displayUnit
-                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit, metric).label})`
+                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit).label})`
                                     : undefined
                             }
                             formatValue={value => formatDisplayValue(value, { withUnit: false })}
@@ -555,7 +555,7 @@ export function Trends() {
                     <ObservationRecords
                         observations={observations.filter(
                             record =>
-                                record.metric === metric &&
+                                record.definitionId === metric &&
                                 (!inspectedIds || inspectedIds.includes(record.id)),
                         )}
                         onToggleExcluded={observation => void toggleExcluded(observation)}

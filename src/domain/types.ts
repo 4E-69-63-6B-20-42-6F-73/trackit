@@ -14,7 +14,7 @@ export type JournalEvent = {
     observedAt?: string
     version?: number
     observation?: {
-        metric: string
+        definitionId: string
         value: number
         unit: string
         observedAt: string

@@ -127,7 +127,7 @@ export function evaluateGoal(
     const qualifying = observations.filter(
         item =>
             activeNow &&
-            item.metric === goal.metricId &&
+            item.definitionId === goal.metricId &&
             !item.excluded &&
             new Date(item.observedAt).getTime() >= bounds.start.getTime() &&
             new Date(item.observedAt).getTime() <= bounds.end.getTime() &&

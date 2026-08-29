@@ -38,7 +38,7 @@ const goal: Goal = {
 }
 const observations: Observation[] = [79, 80, 81, 80].map((value, index) => ({
     id: `weight-${index}`,
-    metric: 'weight',
+    definitionId: 'weight',
     canonicalValue: value,
     canonicalUnit: 'kg',
     originalValue: value,

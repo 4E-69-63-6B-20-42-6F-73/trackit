@@ -10,6 +10,7 @@ import { SyncStatus } from './components/SyncStatus'
 import { nav } from './domain/data'
 import type { JournalEvent, Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
+import { useObservationCommands } from './hooks/useObservationCommands'
 import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
@@ -107,8 +108,12 @@ export default function App() {
             : page === 'Journal' && selectedDay
               ? { ...dayRange(selectedDay), limit: 100 }
               : { limit: page === 'Journal' ? 100 : 10 }
-    const { events, add, remove, update, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
+    const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
+    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(
+        events,
+        refresh,
+    )
     const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
@@ -155,9 +160,12 @@ export default function App() {
                 />
                 <main ref={mainRef} className="main" id="main-content" tabIndex={-1}>
                     <Header page={page} />
-                    {syncFailure && (
+                    {(commandFailure || syncFailure) && (
                         <Box px="xl" pt="md">
-                            <SyncStatus message={syncFailure} retry={retry} />
+                            <SyncStatus
+                                message={commandFailure || syncFailure}
+                                retry={commandFailure ? retryCommand : retry}
+                            />
                         </Box>
                     )}
                     <Suspense fallback={loading}>

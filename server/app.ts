@@ -378,7 +378,7 @@ export async function createApp(
     }
 
     if (options?.dataRepository) {
-        const exports = new ExportService(options.dataRepository)
+        const exports = new ExportService(options.dataRepository, repository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
             const format = request.query.format === 'csv' ? 'csv' : 'json'
             await options.auth?.recordAudit('data.exported', 'format', format)
@@ -401,7 +401,7 @@ export async function createApp(
             '/api/data-summary',
             async (request, reply) => {
                 const category = z
-                    .enum(['observations', 'meals', 'journal'])
+                    .enum(['observations', 'meals', 'checkins'])
                     .safeParse(request.query.category)
                 if (!category.success)
                     return badRequest(request, reply, { validation: category.error })
@@ -412,7 +412,7 @@ export async function createApp(
             '/api/retention/:category',
             async (request, reply) => {
                 const category = z
-                    .enum(['observations', 'meals', 'journal'])
+                    .enum(['observations', 'meals', 'checkins'])
                     .safeParse(request.params.category)
                 const input = z
                     .object({ days: z.number().int().min(1).max(36500), enabled: z.boolean() })
@@ -433,7 +433,7 @@ export async function createApp(
             '/api/data/:category',
             async (request, reply) => {
                 const category = z
-                    .enum(['observations', 'meals', 'journal'])
+                    .enum(['observations', 'meals', 'checkins'])
                     .safeParse(request.params.category)
                 if (!category.success)
                     return badRequest(request, reply, {
@@ -477,7 +477,6 @@ export async function createApp(
                             'observations:write',
                             'meals:write',
                             'checkins:write',
-                            'journal:delete',
                         ]),
                     )
                     .min(1),
@@ -793,13 +792,13 @@ export async function createApp(
         const recordRangeSchema = z.object({
             from: z.string().datetime().optional(),
             to: z.string().datetime().optional(),
-            metrics: z
+            definitionIds: z
                 .string()
                 .transform(value => value.split(',').filter(Boolean))
                 .pipe(z.array(z.string().trim().min(1).max(100)).max(50))
                 .optional(),
         })
-        app.get<{ Querystring: { from?: string; to?: string; metrics?: string } }>(
+        app.get<{ Querystring: { from?: string; to?: string; definitionIds?: string } }>(
             '/api/observations',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)
@@ -861,16 +860,6 @@ export async function createApp(
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             return { data: updated }
         })
-        app.delete<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
-            if (!(await data.removeObservation(request.params.id)))
-                return reply.code(404).send({ error: 'not_found' })
-            await options?.auth?.recordAudit(
-                'data.record.deleted',
-                'observation',
-                request.params.id,
-            )
-            return reply.code(204).send()
-        })
         app.get<{ Querystring: { from?: string; to?: string } }>(
             '/api/meals',
             async (request, reply) => {
@@ -886,8 +875,7 @@ export async function createApp(
         app.post('/api/meals', async (request, reply) => {
             const input = mealInputSchema.safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })
-            const meal = await data.createMeal(input.data)
-            return reply.code(201).send({ data: meal })
+            return reply.code(201).send({ data: await data.createMeal(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/meals/:id', async (request, reply) => {
             const input = mealUpdateSchema.safeParse(request.body)
@@ -981,7 +969,7 @@ export async function createApp(
                     ? ((await data.listObservations({
                           from: from.toISOString(),
                           to: now.toISOString(),
-                          metrics,
+                          definitionIds: metrics,
                       })) as Observation[])
                     : []
                 return {

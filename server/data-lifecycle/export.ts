@@ -1,4 +1,5 @@
 import type { DataRepository } from '../data/types.js'
+import type { JournalRepository } from '../journal/types.js'
 
 const escapeCsv = (value: unknown) => {
     const text =
@@ -7,11 +8,16 @@ const escapeCsv = (value: unknown) => {
 }
 
 export class ExportService {
-    constructor(private readonly data: DataRepository) {}
+    constructor(
+        private readonly data: DataRepository,
+        private readonly journal: JournalRepository,
+    ) {}
 
     async snapshot() {
         const [
+            journal,
             observations,
+            meals,
             preferences,
             foods,
             recipes,
@@ -21,7 +27,9 @@ export class ExportService {
             healthRecords,
             dailyMetrics,
         ] = await Promise.all([
+            this.journal.list(),
             this.data.listRawObservations?.() ?? this.data.listObservations(),
+            this.data.listMeals(),
             this.data.getPreferences(),
             this.data.listFoods(),
             this.data.listRecipes(),
@@ -33,10 +41,12 @@ export class ExportService {
         ])
         return {
             schema: 'net.trackit.export',
-            version: 2,
+            version: 1,
             exportedAt: new Date().toISOString(),
             data: {
+                journal,
                 observations,
+                meals,
                 preferences,
                 foods,
                 recipes,

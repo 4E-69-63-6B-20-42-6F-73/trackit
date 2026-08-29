@@ -7,7 +7,7 @@ import { MetricCard } from './MetricCard'
 
 const record = {
     id: 'sleep-1',
-    metric: 'sleep',
+    definitionId: 'sleep',
     canonicalValue: 8,
     canonicalUnit: 'hours',
     originalValue: 8,

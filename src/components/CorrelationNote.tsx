@@ -17,13 +17,13 @@ export function CorrelationNote({
     timezone: string
 }) {
     const left = dailySeries(
-        observations.filter(record => record.metric === metric),
+        observations.filter(record => record.definitionId === metric),
         start,
         days,
         timezone,
     )
     const right = dailySeries(
-        observations.filter(record => record.metric === comparisonMetric),
+        observations.filter(record => record.definitionId === comparisonMetric),
         start,
         days,
         timezone,

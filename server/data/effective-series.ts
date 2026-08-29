@@ -77,7 +77,7 @@ async function cachedDerivedSeries(
             and(
                 eq(derivedObservations.userId, 'owner'),
                 inArray(derivedObservations.date, dates),
-                inArray(derivedObservations.metric, [...requestedMetrics]),
+                inArray(derivedObservations.definitionId, [...requestedMetrics]),
                 eq(derivedObservations.derivationVersion, DERIVED_OBSERVATION_CACHE_VERSION),
                 eq(derivedObservations.resolutionVersion, resolutionVersion),
                 eq(derivedObservations.timezone, timezone),
@@ -103,7 +103,7 @@ async function cachedDerivedSeries(
     return cached
         .map((row): Observation => ({
             id: row.id,
-            metric: row.metric,
+            definitionId: row.definitionId,
             canonicalValue: row.canonicalValue,
             canonicalUnit: row.canonicalUnit,
             originalValue: row.canonicalValue,
@@ -137,7 +137,7 @@ async function loadEffectiveMetricSeries(
         isNotNull(observations.originalValue),
         isNotNull(observations.originalUnit),
     ]
-    const requestedMetrics = range.metrics?.length ? new Set(range.metrics) : null
+    const requestedMetrics = range.definitionIds?.length ? new Set(range.definitionIds) : null
     const [saved] = await database
         .select({
             metricPreferences: preferences.metricPreferences,
@@ -165,7 +165,7 @@ async function loadEffectiveMetricSeries(
           )
         : null
     if (expandedMetrics?.size)
-        observationConditions.push(inArray(observations.metric, [...expandedMetrics]))
+        observationConditions.push(inArray(observations.definitionId, [...expandedMetrics]))
     if (range.from) {
         const from = new Date(range.from)
         observationConditions.push(gte(observations.observedAt, from))
@@ -183,7 +183,7 @@ async function loadEffectiveMetricSeries(
                   .where(
                       and(
                           isNull(observations.deletedAt),
-                          eq(observations.metric, 'height'),
+                          eq(observations.definitionId, 'height'),
                           lt(observations.observedAt, new Date(range.from)),
                       ),
                   )
@@ -217,8 +217,8 @@ async function loadEffectiveMetricSeries(
     return effective.filter(record => {
         const observedAt = new Date(record.observedAt)
         return (
-            (!includeDerived && record.metric === 'height') ||
-            ((!requestedMetrics || requestedMetrics.has(record.metric)) &&
+            (!includeDerived && record.definitionId === 'height') ||
+            ((!requestedMetrics || requestedMetrics.has(record.definitionId)) &&
                 (!range.from || observedAt >= new Date(range.from)) &&
                 (!range.to || observedAt < new Date(range.to)))
         )

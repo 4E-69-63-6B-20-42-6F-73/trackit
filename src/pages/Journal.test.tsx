@@ -43,7 +43,7 @@ describe('Journal', () => {
         const update = vi.fn().mockResolvedValue(true)
 
         render(
-            <MemoryRouter>
+            <MemoryRouter initialEntries={['/?from=2026-08-16&to=2026-08-23']}>
                 <MantineProvider>
                     <Journal
                         events={records}

@@ -128,7 +128,7 @@ export function createTrackItMcpServer(
                       (await data.listObservations(boundedRange())) as DatedRecord[],
                   )
                 : []
-            const metrics = [...new Set(records.map(record => String(record.metric)))]
+            const metrics = [...new Set(records.map(record => String(record.definitionId)))]
             return {
                 contents: [
                     {
@@ -257,7 +257,7 @@ export function createTrackItMcpServer(
                 client,
                 (await data.listObservations({
                     ...boundedRange(),
-                    metrics: metric ? [metric] : undefined,
+                    definitionIds: metric ? [metric] : undefined,
                 })) as DatedRecord[],
             )
             return textResult({
@@ -324,11 +324,11 @@ export function createTrackItMcpServer(
                 client,
                 (await data.listObservations({
                     ...boundedRange(),
-                    metrics: [leftMetric, rightMetric],
+                    definitionIds: [leftMetric, rightMetric],
                 })) as DatedRecord[],
             )
-            const left = records.filter(record => record.metric === leftMetric)
-            const right = records.filter(record => record.metric === rightMetric)
+            const left = records.filter(record => record.definitionId === leftMetric)
+            const right = records.filter(record => record.definitionId === rightMetric)
             return textResult({
                 left,
                 right,
@@ -604,7 +604,7 @@ export function createTrackItMcpServer(
                             nutritionQuality: food.nutritionQuality,
                             foodId: food.id,
                         })) as { id: string }
-                        return { meal, journalEntryId: meal.id }
+                        return { meal }
                     },
                 )
             } catch (error) {
@@ -623,7 +623,7 @@ export function createTrackItMcpServer(
         {
             description: 'Log one measurement with explicit write scope and machine provenance.',
             inputSchema: {
-                metric: z.string().min(1).max(100),
+                definitionId: z.string().min(1).max(100),
                 value: z.number().finite(),
                 unit: z.string().min(1).max(40),
                 observedAt: z.string().datetime(),
@@ -644,20 +644,13 @@ export function createTrackItMcpServer(
                 async transaction => {
                     const transactionalData = new PostgresDataRepository(transaction)
                     const observation = await transactionalData.createObservation({
-                        metric: input.metric,
-                        valueType: 'number',
+                        definitionId: input.definitionId,
                         value: input.value,
                         unit: input.unit,
                         observedAt: input.observedAt,
                         source: `MCP: ${client.name}`,
-                        title: input.metric,
-                        category: 'Measurements',
-                        attributes: {
-                            journalDetail: `${input.value} ${input.unit}`,
-                            sourceLabel: `MCP: ${client.name}`,
-                        },
                     })
-                    return { observation, journalEntryId: observation.id }
+                    return { observation }
                 },
             )
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
@@ -688,17 +681,14 @@ export function createTrackItMcpServer(
                 input.idempotencyKey,
                 transaction =>
                     new PostgresDataRepository(transaction).createObservation({
-                        metric: 'check_in',
-                        valueType: input.detail ? 'text' : 'event',
-                        textValue: input.detail || undefined,
+                        definitionId: 'check_in',
+                        valueType: 'text',
+                        textValue: input.detail,
                         title: input.title,
                         category: 'Check-ins',
-                        observedAt: input.observedAt,
+                        attributes: { description: input.detail },
                         source: `MCP: ${client.name}`,
-                        attributes: {
-                            journalDetail: input.detail,
-                            sourceLabel: `MCP: ${client.name}`,
-                        },
+                        observedAt: input.observedAt,
                     }),
             )
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })
@@ -706,21 +696,21 @@ export function createTrackItMcpServer(
     )
 
     server.registerTool(
-        'preview_delete_journal',
+        'preview_delete_observation',
         {
-            description: 'Preview deletion of one exact journal record.',
+            description: 'Preview deletion of the Observation behind one projected Journal row.',
             inputSchema: { id: z.string().uuid() },
         },
         async ({ id }) => {
-            if (!scoped('journal:delete') || !access) {
-                return denied('Scope journal:delete is required.')
+            if (!scoped('observations:write') || !access) {
+                return denied('Scope observations:write is required.')
             }
             const record = (await journal.list()).find(item => item.id === id)
             if (!record) return denied('Journal record not found.')
             if (!validGrantTimestamp(client, record.observedAt)) {
                 return denied('The journal record is outside this client grant.')
             }
-            const confirmation = await access.issueConfirmation(client, 'delete_journal', id)
+            const confirmation = await access.issueConfirmation(client, 'delete_observation', id)
             return textResult({
                 target: scoped('journal') ? record : { id: record.id, contentAvailable: false },
                 confirmationToken: confirmation.token,
@@ -730,15 +720,14 @@ export function createTrackItMcpServer(
     )
 
     server.registerTool(
-        'delete_journal',
+        'delete_observation',
         {
-            description:
-                'Delete one exact journal record using its short-lived confirmation token.',
+            description: 'Delete one exact Observation using its short-lived confirmation token.',
             inputSchema: { id: z.string().uuid(), confirmationToken: z.string() },
         },
         async ({ id, confirmationToken }) => {
-            if (!scoped('journal:delete') || !access) {
-                return denied('Scope journal:delete is required.')
+            if (!scoped('observations:write') || !access) {
+                return denied('Scope observations:write is required.')
             }
             const record = (await journal.list()).find(item => item.id === id)
             if (!record) return denied('Journal record not found.')
@@ -748,7 +737,7 @@ export function createTrackItMcpServer(
             const confirmed = await access.consumeConfirmation(
                 client,
                 confirmationToken,
-                'delete_journal',
+                'delete_observation',
                 id,
             )
             if (!confirmed) return denied('A valid confirmation for this exact record is required.')

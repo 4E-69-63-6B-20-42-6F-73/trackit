@@ -16,7 +16,6 @@ export type DomainObservation = {
     id: string
     definitionId: string
     definitionVersion: number
-    metric: string
     value: ObservationValue
     origin: ObservationOrigin
     state: ObservationState

@@ -29,7 +29,7 @@ describe('metric catalog', () => {
             record =>
                 ({
                     ...record,
-                    metric: 'protein',
+                    definitionId: 'protein',
                     canonicalUnit: 'g',
                     originalValue: record.canonicalValue,
                     originalUnit: 'g',
@@ -68,23 +68,5 @@ describe('metric catalog', () => {
             )
             expect(metric.goalCapabilities?.comparators).toContain(defaults.comparator)
         }
-    })
-
-    it('contains every metric emitted by Health Connect in canonical units', () => {
-        expect(metricDefinition('height')?.canonicalUnit).toBe('cm')
-        expect(metricDefinition('water')?.canonicalUnit).toBe('ml')
-        for (const metric of [
-            'distance',
-            'body_fat',
-            'blood_pressure_systolic',
-            'blood_pressure_diastolic',
-            'hrv_rmssd',
-            'oxygen_saturation',
-            'respiratory_rate',
-            'lean_body_mass',
-            'basal_metabolic_rate',
-            'vo2_max',
-        ])
-            expect(metricDefinition(metric), metric).toBeDefined()
     })
 })

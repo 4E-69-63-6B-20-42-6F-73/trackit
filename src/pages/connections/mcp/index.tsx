@@ -40,7 +40,6 @@ const scopeLabels: Record<string, string> = {
     'observations:write': 'Add health data',
     'meals:write': 'Add meals and manage foods',
     'checkins:write': 'Add check-ins',
-    'journal:delete': 'Delete journal entries',
 }
 const toolLabels: Record<string, string> = {
     list_observations: 'Viewed health data',
@@ -54,7 +53,7 @@ const toolLabels: Record<string, string> = {
     preview_create_food: 'Previewed a new food',
     preview_add_food_to_meal: 'Previewed food for a meal',
     create_checkin: 'Added a check-in',
-    delete_journal_entry: 'Deleted a journal entry',
+    delete_observation: 'Deleted an observation',
 }
 
 export function McpAccess() {

@@ -19,7 +19,6 @@ describe('data lifecycle', () => {
                 id: mealId,
                 definitionId: 'meal',
                 valueType: 'compound',
-                metric: 'meal',
                 title: 'Private meal',
                 category: 'Meals',
                 observedAt: new Date(),
@@ -27,7 +26,6 @@ describe('data lifecycle', () => {
             {
                 id: observationId,
                 definitionId: 'weight',
-                metric: 'weight',
                 canonicalValue: 80,
                 canonicalUnit: 'kg',
                 originalValue: 80,
@@ -36,9 +34,8 @@ describe('data lifecycle', () => {
             },
             {
                 id: journalId,
-                definitionId: 'journal_event',
+                definitionId: 'event',
                 valueType: 'text',
-                metric: 'journal_event',
                 textValue: 'A private note',
                 title: 'A private note',
                 category: 'Wellbeing',
@@ -51,7 +48,7 @@ describe('data lifecycle', () => {
         expect(
             (await database.select().from(schema.observations)).map(row => row.id).sort(),
         ).toEqual([observationId, journalId].sort())
-        await lifecycle.deleteCategory('journal')
+        await lifecycle.deleteCategory('checkins')
         expect((await database.select().from(schema.observations)).map(row => row.id)).toEqual([
             observationId,
         ])
@@ -62,7 +59,6 @@ describe('data lifecycle', () => {
         await database.insert(schema.observations).values({
             definitionId: 'meal',
             valueType: 'compound',
-            metric: 'meal',
             title: 'Expired private meal',
             category: 'Meals',
             observedAt: new Date('2020-01-01T12:00:00Z'),
@@ -88,7 +84,7 @@ describe('data lifecycle', () => {
         })
         expect(
             (await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).some(
-                row => (row as { metric: string }).metric === 'calories',
+                row => row.definitionId === 'calories',
             ),
         ).toBe(true)
 
@@ -97,7 +93,7 @@ describe('data lifecycle', () => {
         expect(await database.select().from(schema.projectionDirtyDates)).toHaveLength(1)
         expect(
             (await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).some(
-                row => (row as { metric: string }).metric === 'calories',
+                row => row.definitionId === 'calories',
             ),
         ).toBe(false)
         expect(await database.select().from(schema.projectionDirtyDates)).toHaveLength(0)

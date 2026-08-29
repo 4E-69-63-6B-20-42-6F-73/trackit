@@ -487,7 +487,6 @@ textarea:focus-visible,
     overflow: hidden;
 }
 .metric-derived-note,
-.metric-journal-setting,
 .metric-source-settings {
     border-top: 1px solid var(--line);
     display: grid;

@@ -37,7 +37,7 @@ describe('Metrics page', () => {
         renderPage()
         expect(screen.getByText('Resting heart rate')).toBeInTheDocument()
         expect(screen.getByText('min')).toBeInTheDocument()
-        expect(screen.getAllByText('h').length).toBeGreaterThan(0)
+        expect(screen.getByText('h')).toBeInTheDocument()
         expect(screen.getByText('steps').closest('.metric-row')).not.toHaveAttribute('disabled')
         await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
         await userEvent.click(await screen.findByRole('radio', { name: 'Pounds (lb)' }))
@@ -63,24 +63,6 @@ describe('Metrics page', () => {
                 expect.objectContaining({
                     metricPreferences: expect.objectContaining({
                         weight: expect.objectContaining({ precision: 2 }),
-                    }),
-                }),
-            ),
-        )
-    })
-    it('persists whether a metric appears in Journal', async () => {
-        vi.mocked(updatePreferences).mockResolvedValue(base)
-        renderPage()
-        await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
-        const toggle = await screen.findByLabelText(/Show in Journal/)
-        expect(toggle).toBeChecked()
-        await userEvent.click(toggle)
-        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-        await waitFor(() =>
-            expect(updatePreferences).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    metricPreferences: expect.objectContaining({
-                        weight: expect.objectContaining({ showInJournal: false }),
                     }),
                 }),
             ),
@@ -112,12 +94,12 @@ describe('Metrics page', () => {
     it('shows provider-aware sources and persists overlap priority', async () => {
         vi.mocked(listMetricSources).mockResolvedValue([
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 provider: 'Garmin',
                 connector: 'Health Connect',
             },
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 provider: 'Samsung Health',
                 connector: 'Health Connect',
             },

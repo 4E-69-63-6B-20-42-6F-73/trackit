@@ -42,7 +42,7 @@ describe('useTodayHealth effective totals', () => {
         vi.mocked(listDailyMetrics).mockResolvedValue([
             {
                 date: '2026-08-25',
-                metric: 'steps',
+                definitionId: 'steps',
                 value: 7000,
                 unit: 'count',
                 derivationVersion: 1,
@@ -51,7 +51,7 @@ describe('useTodayHealth effective totals', () => {
         vi.mocked(listObservations).mockResolvedValue([
             {
                 id: 'garmin-steps',
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 7000,
                 canonicalUnit: 'count',
                 originalValue: 7000,
@@ -81,7 +81,7 @@ describe('useTodayHealth effective totals', () => {
         expect(
             new Date(observationRange!.to!).getTime() - new Date(observationRange!.from!).getTime(),
         ).toBe(86_400_000)
-        expect(observationRange!.metrics).toEqual([
+        expect(observationRange!.definitionIds).toEqual([
             'steps',
             'water',
             'sleep',

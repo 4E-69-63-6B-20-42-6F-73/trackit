@@ -1,8 +1,9 @@
 import { metricDefinition } from './metricCatalog.js'
+import { convertMetricValue } from './metrics.js'
 
 export type Observation = {
     id: string
-    metric: string
+    definitionId: string
     canonicalValue: number
     canonicalUnit: string
     originalValue: number
@@ -27,30 +28,29 @@ export type DailyPoint = {
 }
 export type TrendGranularity = 'daily' | 'weekly'
 
+const dailyAggregation = (definitionId: string) => {
+    const definition = metricDefinition(definitionId)
+    return definition?.goalCapabilities?.aggregations.total ? 'sum' : definition?.aggregations[0]
+}
+
 export function aggregateDailyObservations(records: Observation[]) {
     if (!records.length) return null
-    const aggregation = metricDefinition(records[0].metric)?.dailyAggregation ?? 'latest'
+    const aggregation = dailyAggregation(records[0].definitionId) ?? 'latest'
     const values = records.map(record => record.canonicalValue).sort((left, right) => left - right)
     if (aggregation === 'sum') return values.reduce((sum, value) => sum + value, 0)
     if (aggregation === 'average')
         return values.reduce((sum, value) => sum + value, 0) / values.length
-    if (aggregation === 'median') {
-        const middle = Math.floor(values.length / 2)
-        return values.length % 2 ? values[middle] : (values[middle - 1] + values[middle]) / 2
-    }
     if (aggregation === 'max') return Math.max(...values)
     return [...records].sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0]
         .canonicalValue
 }
 
-export function displayValue(value: number, canonicalUnit: string, displayUnit: string) {
-    if (canonicalUnit === displayUnit) return value
-    if (canonicalUnit === 'kg' && displayUnit === 'lb') return value * 2.2046226218
-    if (canonicalUnit === 'lb' && displayUnit === 'kg') return value / 2.2046226218
-    if (canonicalUnit === 'cm' && displayUnit === 'in') return value / 2.54
-    if (canonicalUnit === 'in' && displayUnit === 'cm') return value * 2.54
-    throw new Error(`Unsupported conversion: ${canonicalUnit} to ${displayUnit}`)
-}
+export const displayValue = (
+    definitionId: string,
+    value: number,
+    canonicalUnit: string,
+    displayUnit: string,
+) => convertMetricValue(definitionId, value, canonicalUnit, displayUnit)
 
 export function dailySeries(
     observations: Observation[],
@@ -77,8 +77,7 @@ export function dailySeries(
         const ordered = [...records].sort((left, right) =>
             right.observedAt.localeCompare(left.observedAt),
         )
-        const additive =
-            records.length > 0 && metricDefinition(records[0].metric)?.dailyAggregation === 'sum'
+        const additive = records.length > 0 && dailyAggregation(records[0].definitionId) === 'sum'
         return {
             date: key,
             value: aggregateDailyObservations(records),
@@ -96,9 +95,7 @@ export function weeklySeries(
     timezone = 'UTC',
 ): DailyPoint[] {
     const daily = dailySeries(observations, start, days, timezone)
-    const additive = observations.some(
-        record => metricDefinition(record.metric)?.dailyAggregation === 'sum',
-    )
+    const additive = observations.some(record => dailyAggregation(record.definitionId) === 'sum')
     const weeks: DailyPoint[] = []
     for (let offset = 0; offset < daily.length; offset += 7) {
         const period = daily.slice(offset, offset + 7)
@@ -136,7 +133,7 @@ export function pearsonCorrelation(left: number[], right: number[]) {
 
 export function rollingBaselineDelta(
     observations: Observation[],
-    metric: string,
+    definitionId: string,
     now: Date,
     timezone: string,
     days = 30,
@@ -145,7 +142,7 @@ export function rollingBaselineDelta(
     start.setUTCHours(12, 0, 0, 0)
     start.setUTCDate(start.getUTCDate() - days + 1)
     const points = dailySeries(
-        observations.filter(record => record.metric === metric),
+        observations.filter(record => record.definitionId === definitionId),
         start,
         days,
         timezone,

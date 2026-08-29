@@ -35,14 +35,14 @@ import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone } from '../data/timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
-type Category = 'observations' | 'meals' | 'journal'
+type Category = 'observations' | 'meals' | 'checkins'
 
 const categoryCondition = (category: Category): SQL =>
     category === 'meals'
         ? eq(observations.category, 'Meals')
-        : category === 'journal'
-          ? inArray(observations.definitionId, ['check_in', 'journal_event'])
-          : notInArray(observations.definitionId, ['meal', 'check_in', 'journal_event'])
+        : category === 'checkins'
+          ? inArray(observations.definitionId, ['check_in', 'event'])
+          : notInArray(observations.definitionId, ['meal', 'check_in', 'event'])
 
 export class DataLifecycleService {
     private retentionTimer?: ReturnType<typeof setInterval>
@@ -148,7 +148,7 @@ export class DataLifecycleService {
     async applyRetention() {
         const rules = await this.listRetentionRules()
         for (const rule of rules.filter(item => item.enabled)) {
-            if (!['observations', 'meals', 'journal'].includes(rule.category)) continue
+            if (!['observations', 'meals', 'checkins'].includes(rule.category)) continue
             const cutoff = new Date(Date.now() - rule.days * 86_400_000)
             await this.database.transaction(async transaction => {
                 await this.removeObservationCategory(transaction, rule.category as Category, cutoff)
@@ -179,7 +179,7 @@ export class DataLifecycleService {
             if (category === 'meals')
                 await transaction
                     .delete(derivedObservations)
-                    .where(eq(derivedObservations.metric, 'calorie_balance'))
+                    .where(eq(derivedObservations.definitionId, 'calorie_balance'))
             await transaction.insert(auditEvents).values({
                 actor: 'owner',
                 action: 'data.category.deleted',

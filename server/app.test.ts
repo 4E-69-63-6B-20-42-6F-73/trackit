@@ -228,7 +228,16 @@ describe('journal API', () => {
             configured: async () => true,
             authenticate: async () => ({ id: 'session' }),
         }
-        const app = await createApp(new MemoryJournalRepository(), { auth: auth as never })
+        const data = {
+            createObservation: async (input: unknown) => ({
+                id: randomUUID(),
+                ...(input as object),
+            }),
+        }
+        const app = await createApp(new MemoryJournalRepository(), {
+            auth: auth as never,
+            dataRepository: data as never,
+        })
         const payload = {
             category: 'Check-ins',
             title: 'Energy',
@@ -243,8 +252,9 @@ describe('journal API', () => {
                     url: '/api/observations',
                     headers: { cookie: 'trackit_session=session' },
                     payload: {
-                        metric: 'check_in',
-                        valueType: 'event',
+                        definitionId: 'check_in',
+                        valueType: 'text',
+                        textValue: 'Check-in',
                         observedAt: payload.observedAt,
                     },
                 })
@@ -260,8 +270,9 @@ describe('journal API', () => {
                         'x-csrf-token': 'token',
                     },
                     payload: {
-                        metric: 'check_in',
-                        valueType: 'event',
+                        definitionId: 'check_in',
+                        valueType: 'text',
+                        textValue: 'Check-in',
                         observedAt: payload.observedAt,
                     },
                 })

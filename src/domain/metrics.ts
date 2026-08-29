@@ -4,7 +4,6 @@ export type DeduplicationPolicy = 'keep_all' | 'prefer_priority' | 'metric_merge
 export type MetricPreference = {
     displayUnit: string
     precision?: number
-    showInJournal?: boolean
     deduplication?: {
         policy: DeduplicationPolicy
         sourcePriority: string[]
@@ -14,7 +13,7 @@ export type MetricPreference = {
 export type MetricPreferences = Record<string, MetricPreference>
 export type UnitPresentation = { label: string; name: string }
 const unitPresentations: Record<string, UnitPresentation> = {
-    count: { label: 'count', name: 'Count' },
+    count: { label: 'steps', name: 'Steps' },
     minutes: { label: 'min', name: 'Minutes' },
     hours: { label: 'h', name: 'Hours' },
     bpm: { label: 'bpm', name: 'Beats per minute' },
@@ -31,10 +30,8 @@ const unitPresentations: Record<string, UnitPresentation> = {
     in: { label: 'in', name: 'Inches' },
     'kg/m²': { label: 'kg/m²', name: 'Body mass index' },
 }
-export const unitPresentation = (unit: string, metricId?: string): UnitPresentation =>
-    unit === 'count' && metricId === 'steps'
-        ? { label: 'steps', name: 'Steps' }
-        : (unitPresentations[unit] ?? { label: unit, name: unit })
+export const unitPresentation = (unit: string): UnitPresentation =>
+    unitPresentations[unit] ?? { label: unit, name: unit }
 const factors: Record<string, number> = {
     kg: 1,
     lb: 0.45359237,
@@ -42,6 +39,7 @@ const factors: Record<string, number> = {
     L: 1000,
     'fl oz': 29.5735295625,
     cm: 1,
+    m: 100,
     in: 2.54,
 }
 export function convertMetricValue(
@@ -52,7 +50,8 @@ export function convertMetricValue(
 ) {
     const definition = metricDefinition(metricId)
     if (!definition) throw new Error(`Unknown metric: ${metricId}`)
-    if (!definition.displayUnits.includes(fromUnit) || !definition.displayUnits.includes(toUnit))
+    const supportedInputUnits = [...definition.displayUnits, ...(definition.inputUnits ?? [])]
+    if (!supportedInputUnits.includes(fromUnit) || !definition.displayUnits.includes(toUnit))
         throw new Error(`Unsupported conversion for ${metricId}: ${fromUnit} to ${toUnit}`)
     return fromUnit === toUnit ? value : (value * factors[fromUnit]) / factors[toUnit]
 }
@@ -137,7 +136,7 @@ export function formatMetricDisplayValue(
         maximumFractionDigits: precision,
     })
     if (options?.withUnit === false) return `${sign}${formatted}`
-    const label = unitPresentation(displayUnit, metricId).label
+    const label = unitPresentation(displayUnit).label
     return `${sign}${formatted}${label === '/10' ? label : ` ${label}`}`
 }
 export function toCanonicalMetricValue(metricId: string, value: number, displayUnit: string) {

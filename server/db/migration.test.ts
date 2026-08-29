@@ -3,68 +3,6 @@ import { describe, expect, it } from 'vitest'
 import { applyTestMigrations, migrationFiles } from './test-migrations.js'
 
 describe('database migration', () => {
-    it('migrates meals and standalone Journal facts into compound observations with components', async () => {
-        const database = new PGlite()
-        const files = await migrationFiles()
-        await applyTestMigrations(
-            database,
-            files.filter(file => file < '0013_'),
-        )
-        await database.exec(`
-            insert into meals (id, name, meal_type, eaten_at, nutrient_snapshot, nutrition_quality)
-            values (
-                '00000000-0000-4000-8000-000000000201', 'Migration lunch', 'Lunch',
-                '2026-08-25T12:00:00Z', '{"calories":500,"protein":30}'::jsonb, 'estimated'
-            );
-            insert into journal_entries (
-                id, category, title, detail, source_label, observed_at
-            ) values (
-                '00000000-0000-4000-8000-000000000202', 'Check-ins', 'Felt energetic',
-                'Good focus after lunch', 'You', '2026-08-25T13:00:00Z'
-            );
-        `)
-        await applyTestMigrations(database, ['0013_generalized_observations.sql'])
-
-        const roots = await database.query<{
-            id: string
-            definition_id: string
-            value_type: string
-            title: string
-            text_value: string | null
-        }>(`
-            select id, definition_id, value_type, title, text_value
-            from observations
-            where id in (
-                '00000000-0000-4000-8000-000000000201',
-                '00000000-0000-4000-8000-000000000202'
-            ) order by id
-        `)
-        expect(roots.rows).toEqual([
-            expect.objectContaining({ definition_id: 'meal', value_type: 'compound' }),
-            expect.objectContaining({
-                definition_id: 'check_in',
-                value_type: 'text',
-                text_value: 'Good focus after lunch',
-            }),
-        ])
-        const components = await database.query<{
-            metric: string
-            canonical_value: number
-            role: string
-        }>(`
-            select child.metric, child.canonical_value, relation.role
-            from observation_relations relation
-            join observations child on child.id = relation.child_observation_id
-            where relation.parent_observation_id = '00000000-0000-4000-8000-000000000201'
-            order by child.metric
-        `)
-        expect(components.rows).toEqual([
-            { metric: 'calories', canonical_value: 500, role: 'calories' },
-            { metric: 'protein', canonical_value: 30, role: 'protein' },
-        ])
-        await database.close()
-    })
-
     it('migrates legacy goals once while preserving their meaning and schedule', async () => {
         const database = new PGlite()
         const files = await migrationFiles()
@@ -123,8 +61,6 @@ describe('database migration', () => {
             expect.arrayContaining([
                 'observations',
                 'observation_relations',
-                'derived_observations',
-                'derived_observation_inputs',
                 'owners',
                 'passkeys',
                 'preferences',
@@ -182,7 +118,7 @@ describe('database migration', () => {
         )
         await database.exec(`
             insert into observations (
-                metric, canonical_value, canonical_unit, original_value, original_unit,
+                definition_id, canonical_value, canonical_unit, original_value, original_unit,
                 observed_at, version
             ) values ('steps', 1, 'count', 1, 'count', now(), 1787238227225);
         `)
@@ -190,20 +126,15 @@ describe('database migration', () => {
             `select version::text as version from observations where version = 1787238227225`,
         )
         expect(sourceVersions.rows).toEqual([{ version: '1787238227225' }])
-        const foodResult = await database.query<{ name: string; nutrition_quality: string }>(
-            `select name, nutrition_quality from foods where name = 'Upgrade oats'`,
+        const result = await database.query<{ name: string; nutrition_quality: string }>(
+            `select name, nutrition_quality from foods where name = 'Upgrade oats'
+             union all
+             select title as name, attributes->>'nutritionQuality' as nutrition_quality
+             from observations where title = 'Upgrade breakfast'`,
         )
-        expect(foodResult.rows).toEqual([{ name: 'Upgrade oats', nutrition_quality: 'complete' }])
-        const migratedMeal = await database.query<{
-            title: string
-            definition_id: string
-            value_type: string
-        }>(`
-            select title, definition_id, value_type from observations
-            where id = '00000000-0000-4000-8000-000000000002'
-        `)
-        expect(migratedMeal.rows).toEqual([
-            { title: 'Upgrade breakfast', definition_id: 'meal', value_type: 'compound' },
+        expect(result.rows).toEqual([
+            { name: 'Upgrade oats', nutrition_quality: 'complete' },
+            { name: 'Upgrade breakfast', nutrition_quality: 'complete' },
         ])
         const recipes = await database.query<{ name: string; version: number }>(
             `select name, version from recipes where name = 'Upgrade porridge'`,

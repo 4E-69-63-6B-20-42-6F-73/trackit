@@ -141,7 +141,7 @@ describe('TrackIt MCP tools', () => {
         }
         const deleteOnly = {
             ...grant,
-            scopes: ['meals:write', 'observations:write', 'checkins:write', 'journal:delete'],
+            scopes: ['meals:write', 'observations:write', 'checkins:write'],
         }
         const server = createTrackItMcpServer(
             deleteOnly,
@@ -169,7 +169,7 @@ describe('TrackIt MCP tools', () => {
             {
                 name: 'log_measurement',
                 arguments: {
-                    metric: 'weight',
+                    definitionId: 'weight',
                     value: 80,
                     unit: 'kg',
                     observedAt: outsideTimestamp,
@@ -185,9 +185,9 @@ describe('TrackIt MCP tools', () => {
                     idempotencyKey: '30000000-0000-4000-8000-000000000003',
                 },
             },
-            { name: 'preview_delete_journal', arguments: { id: outsideId } },
+            { name: 'preview_delete_observation', arguments: { id: outsideId } },
             {
-                name: 'delete_journal',
+                name: 'delete_observation',
                 arguments: { id: outsideId, confirmationToken: 'token' },
             },
         ]
@@ -199,7 +199,7 @@ describe('TrackIt MCP tools', () => {
         expect(journal.remove).not.toHaveBeenCalled()
 
         const preview = await client.callTool({
-            name: 'preview_delete_journal',
+            name: 'preview_delete_observation',
             arguments: { id: insideId },
         })
         const previewText = (preview as { content: { text: string }[] }).content[0].text
@@ -269,7 +269,7 @@ describe('TrackIt MCP tools', () => {
         const write = await client.callTool({
             name: 'log_measurement',
             arguments: {
-                metric: 'weight',
+                definitionId: 'weight',
                 value: 80,
                 unit: 'kg',
                 observedAt: '2026-01-10T10:00:00Z',

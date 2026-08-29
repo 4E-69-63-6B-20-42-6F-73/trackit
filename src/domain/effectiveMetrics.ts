@@ -34,7 +34,7 @@ export function observationSource(record: Observation): MetricSourceDescriptor {
 const exactIdentity = (record: Observation) => {
     if (!record.externalId) return null
     const source = observationSource(record)
-    return `${record.metric}::${source.key}::${record.externalId}`
+    return `${record.definitionId}::${source.key}::${record.externalId}`
 }
 
 export function removeExactDuplicates(records: Observation[]) {
@@ -67,11 +67,11 @@ const sourceRank = (record: Observation, priority: string[]) => {
 
 function resolveOverlaps(records: Observation[], preferences?: MetricPreferences) {
     const result: Observation[] = []
-    for (const metric of new Set(records.map(record => record.metric))) {
+    for (const definitionId of new Set(records.map(record => record.definitionId))) {
         const pending = records
-            .filter(record => record.metric === metric)
+            .filter(record => record.definitionId === definitionId)
             .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
-        const config = preferences?.[metric]?.deduplication
+        const config = preferences?.[definitionId]?.deduplication
         const enabled = config?.disabledSources?.length
             ? pending.filter(
                   record => !config.disabledSources!.includes(observationSource(record).key),
@@ -126,7 +126,7 @@ function resolveOverlaps(records: Observation[], preferences?: MetricPreferences
                 )
             } else if (
                 config.policy === 'metric_merge' &&
-                ['steps', 'active_calories'].includes(metric)
+                ['steps', 'active_calories'].includes(definitionId)
             ) {
                 const winner = [...group].sort((a, b) => b.canonicalValue - a.canonicalValue)[0]
                 result.push({
@@ -146,20 +146,20 @@ function resolveOverlaps(records: Observation[], preferences?: MetricPreferences
 }
 
 const derivedObservation = (
-    metric: string,
+    definitionId: string,
     value: number,
     observedAt: string,
     inputs: Observation[],
 ): Observation => ({
-    id: `derived:${metric}:${inputs
+    id: `derived:${definitionId}:${inputs
         .map(item => item.id)
         .sort()
         .join(':')}`,
-    metric,
+    definitionId,
     canonicalValue: value,
-    canonicalUnit: metric === 'bmi' ? 'kg/m²' : 'kcal',
+    canonicalUnit: definitionId === 'bmi' ? 'kg/m²' : 'kcal',
     originalValue: value,
-    originalUnit: metric === 'bmi' ? 'kg/m²' : 'kcal',
+    originalUnit: definitionId === 'bmi' ? 'kg/m²' : 'kcal',
     observedAt,
     sourceId: null,
     provider: 'TrackIt',
@@ -172,9 +172,9 @@ const derivedObservation = (
 export function deriveMetrics(records: Observation[]) {
     const derived: Observation[] = []
     const heights = records
-        .filter(record => record.metric === 'height')
+        .filter(record => record.definitionId === 'height')
         .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
-    for (const weight of records.filter(record => record.metric === 'weight')) {
+    for (const weight of records.filter(record => record.definitionId === 'weight')) {
         const eligible = heights.filter(height => height.observedAt <= weight.observedAt)
         const height = eligible.at(-1) ?? heights.at(-1)
         if (!height || height.canonicalValue <= 0) continue
@@ -188,24 +188,20 @@ export function deriveMetrics(records: Observation[]) {
     }
     const byDay = new Map<string, { intake: Observation[]; burned: Observation[] }>()
     for (const record of records.filter(item =>
-        ['calories', 'active_calories'].includes(item.metric),
+        ['calories', 'active_calories'].includes(item.definitionId),
     )) {
         const day = record.observedAt.slice(0, 10)
         const bucket = byDay.get(day) ?? { intake: [], burned: [] }
-        bucket[record.metric === 'calories' ? 'intake' : 'burned'].push(record)
+        bucket[record.definitionId === 'calories' ? 'intake' : 'burned'].push(record)
         byDay.set(day, bucket)
     }
-    for (const bucket of byDay.values()) {
+    for (const [day, bucket] of byDay) {
         if (!bucket.intake.length || !bucket.burned.length) continue
         const inputs = [...bucket.intake, ...bucket.burned]
         const value =
             bucket.intake.reduce((sum, item) => sum + item.canonicalValue, 0) -
             bucket.burned.reduce((sum, item) => sum + item.canonicalValue, 0)
-        const observedAt = inputs.reduce(
-            (latest, input) => (input.observedAt > latest ? input.observedAt : latest),
-            inputs[0].observedAt,
-        )
-        derived.push(derivedObservation('calorie_balance', value, observedAt, inputs))
+        derived.push(derivedObservation('calorie_balance', value, `${day}T23:59:59.999Z`, inputs))
     }
     return derived
 }
@@ -218,7 +214,7 @@ export function effectiveBaseMetricSeries(raw: Observation[], preferences?: Metr
     const derivedIds = new Set(
         metricCatalog.filter(metric => metric.derived).map(metric => metric.id),
     )
-    const normalized = base.filter(record => !derivedIds.has(record.metric))
+    const normalized = base.filter(record => !derivedIds.has(record.definitionId))
     return normalized.sort((a, b) => a.observedAt.localeCompare(b.observedAt))
 }
 
@@ -233,9 +229,9 @@ export function sourcesByMetric(records: Observation[]) {
     const result: Record<string, MetricSourceDescriptor[]> = {}
     for (const record of removeExactDuplicates(records)) {
         const source = observationSource(record)
-        const current = result[record.metric] ?? []
+        const current = result[record.definitionId] ?? []
         if (!current.some(item => item.key === source.key)) current.push(source)
-        result[record.metric] = current
+        result[record.definitionId] = current
     }
     return result
 }

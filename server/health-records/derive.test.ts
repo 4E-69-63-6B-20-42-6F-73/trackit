@@ -27,7 +27,7 @@ describe('Health Connect record derivation', () => {
         expect(deriveRecord(source)).toEqual(deriveRecord(source))
         expect(source.payload.samples).toHaveLength(3)
         expect(
-            Object.fromEntries(deriveRecord(source).map(item => [item.metric, item.value])),
+            Object.fromEntries(deriveRecord(source).map(item => [item.definitionId, item.value])),
         ).toMatchObject({
             heart_rate: 230 / 3,
             heart_rate_min: 60,
@@ -48,7 +48,7 @@ describe('Health Connect record derivation', () => {
                 ],
             }),
         )
-        expect(sleep.find(item => item.metric === 'sleep_deep')?.value).toBe(2)
+        expect(sleep.find(item => item.definitionId === 'sleep_deep')?.value).toBe(2)
         expect(sleep.every(item => item.derivationVersion === 1)).toBe(true)
         const pressure = deriveRecord(
             record('BloodPressureRecord', {
@@ -57,7 +57,9 @@ describe('Health Connect record derivation', () => {
                 bodyPosition: 'sitting',
             }),
         )
-        expect(Object.fromEntries(pressure.map(item => [item.metric, item.value]))).toMatchObject({
+        expect(
+            Object.fromEntries(pressure.map(item => [item.definitionId, item.value])),
+        ).toMatchObject({
             blood_pressure_systolic: 122,
             blood_pressure_diastolic: 76,
             pulse_pressure: 46,
@@ -74,16 +76,7 @@ describe('Health Connect record derivation', () => {
         })
         expect(source.payload).toMatchObject({ exerciseType: 'running', title: 'Morning run' })
         expect(deriveRecord(source)).toMatchObject([
-            { metric: 'exercise', value: 480, unit: 'minutes' },
-        ])
-    })
-
-    it('normalizes height and hydration into the shared canonical metric units', () => {
-        expect(deriveRecord(record('HeightRecord', { meters: 1.82 }))).toMatchObject([
-            { metric: 'height', value: 182, unit: 'cm' },
-        ])
-        expect(deriveRecord(record('HydrationRecord', { liters: 0.75 }))).toMatchObject([
-            { metric: 'water', value: 750, unit: 'ml' },
+            { definitionId: 'exercise', value: 480, unit: 'minutes' },
         ])
     })
 })

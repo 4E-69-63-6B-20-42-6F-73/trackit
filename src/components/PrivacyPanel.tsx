@@ -28,8 +28,8 @@ const categories = {
         label: 'Meals and nutrition',
         impact: 'Meal history and saved nutrient snapshots; foods and recipes remain available',
     },
-    journal: {
-        label: 'Journal entries',
+    checkins: {
+        label: 'Check-ins and notes',
         impact: 'The visible timeline entries linked to manual and synced records',
     },
 } as const

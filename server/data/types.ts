@@ -1,10 +1,16 @@
 import { z } from 'zod'
 import { validateGoal } from '../../src/domain/goals.js'
+import { observationDefinition } from '../../src/domain/observationDefinitions.js'
 
 export const observationInputSchema = z
     .object({
         id: z.string().uuid().optional(),
-        metric: z.string().trim().min(1).max(100),
+        definitionId: z
+            .string()
+            .trim()
+            .min(1)
+            .max(100)
+            .refine(value => observationDefinition(value), 'Unknown observation definition'),
         valueType: z.enum(['number', 'text', 'boolean', 'category', 'event']).default('number'),
         value: z.number().finite().optional(),
         unit: z.string().trim().min(1).max(40).optional(),
@@ -19,6 +25,13 @@ export const observationInputSchema = z
         source: z.string().trim().min(1).max(120).default('You'),
     })
     .superRefine((input, context) => {
+        const definition = observationDefinition(input.definitionId)
+        if (definition && definition.valueType !== input.valueType)
+            context.addIssue({
+                code: 'custom',
+                path: ['valueType'],
+                message: `${input.definitionId} observations require ${definition.valueType} values`,
+            })
         if (input.valueType === 'number' && (input.value === undefined || !input.unit))
             context.addIssue({
                 code: 'custom',
@@ -29,7 +42,7 @@ export const observationInputSchema = z
     })
 
 /** UTC instant range. `from` is inclusive and `to` is exclusive. */
-export type RecordRange = { from?: string; to?: string; metrics?: string[] }
+export type RecordRange = { from?: string; to?: string; definitionIds?: string[] }
 
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),

@@ -8,8 +8,8 @@ import { useServerData } from './useServerData'
 import { calendarDateKey, calendarDayRange } from '../domain/calendar'
 
 const asObservation = (row: DailyMetric): Observation => ({
-    id: `daily:${row.date}:${row.metric}`,
-    metric: row.metric,
+    id: `daily:${row.date}:${row.definitionId}`,
+    definitionId: row.definitionId,
     canonicalValue: row.value,
     canonicalUnit: row.unit,
     originalValue: row.value,
@@ -50,7 +50,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                     {
                         from: day.from.toISOString(),
                         to: day.to.toISOString(),
-                        metrics: [
+                        definitionIds: [
                             'steps',
                             'water',
                             'sleep',
@@ -99,14 +99,15 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
 
     return useMemo(() => {
         const todayRows = daily.filter(row => row.date === selectedKey)
-        const dailyMetric = (metric: string) => todayRows.find(row => row.metric === metric) ?? null
+        const dailyMetric = (definitionId: string) =>
+            todayRows.find(row => row.definitionId === definitionId) ?? null
         const latestDetail = (metric: string) =>
             details
-                .filter(row => row.metric === metric && !row.excluded)
+                .filter(row => row.definitionId === metric && !row.excluded)
                 .sort((a, b) => b.observedAt.localeCompare(a.observedAt))[0] ??
             (dailyMetric(metric) ? asObservation(dailyMetric(metric)!) : null)
         const aggregateDetail = (metric: string) => {
-            const rows = details.filter(row => row.metric === metric && !row.excluded)
+            const rows = details.filter(row => row.definitionId === metric && !row.excluded)
             if (rows.length)
                 return {
                     ...rows[0],
@@ -115,7 +116,9 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             return dailyMetric(metric) ? asObservation(dailyMetric(metric)!) : null
         }
         const values = (metric: string) =>
-            daily.filter(row => row.metric === metric).sort((a, b) => a.date.localeCompare(b.date))
+            daily
+                .filter(row => row.definitionId === metric)
+                .sort((a, b) => a.date.localeCompare(b.date))
         const baseline = (metric: string) => {
             const rows = values(metric)
             const current = rows.find(row => row.date === selectedKey)
@@ -148,7 +151,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             return { key, row: sleepByDate.get(key) }
         })
         const effectiveTotal = (metric: string) => {
-            const rows = details.filter(row => row.metric === metric && !row.excluded)
+            const rows = details.filter(row => row.definitionId === metric && !row.excluded)
             return rows.length
                 ? rows.reduce((sum, row) => sum + row.canonicalValue, 0)
                 : (dailyMetric(metric)?.value ?? 0)

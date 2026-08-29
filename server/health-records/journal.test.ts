@@ -15,9 +15,9 @@ const record = (recordType: string, payload: Record<string, unknown> = {}) =>
         payload,
     }) satisfies CanonicalHealthRecord
 
-const observation = (metric: string, value: number, unit: string) =>
+const observation = (definitionId: string, value: number, unit: string) =>
     ({
-        metric,
+        definitionId,
         value,
         unit,
         kind: 'derived_metric',

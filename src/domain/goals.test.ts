@@ -24,7 +24,7 @@ const observation = (
     id = `${metric}-${observedAt}-${value}`,
 ): Observation => ({
     id,
-    metric,
+    definitionId: metric,
     canonicalValue: value,
     canonicalUnit: metric === 'weight' ? 'kg' : metric === 'steps' ? 'count' : 'ml',
     originalValue: value,
