@@ -9,6 +9,7 @@ export async function useAuthenticatedServer(
         journal?: Record<string, unknown>[]
         goals?: Record<string, unknown>[]
         observations?: Record<string, unknown>[]
+        metricSources?: Record<string, unknown>[]
         preferences?: Record<string, unknown>
     } = {},
 ) {
@@ -130,6 +131,13 @@ export async function useAuthenticatedServer(
                 status: 200,
                 contentType: 'application/json',
                 body: JSON.stringify({ data: options.observations }),
+            })
+        }
+        if (path === '/api/metric-sources' && options.metricSources) {
+            return route.fulfill({
+                status: 200,
+                contentType: 'application/json',
+                body: JSON.stringify({ data: options.metricSources }),
             })
         }
         if (
