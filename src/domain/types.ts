@@ -1,4 +1,4 @@
-export type Page = 'Today' | 'Journal' | 'Trends' | 'Goals' | 'Library' | 'Connections' | 'Settings'
+export type Page = 'Today' | 'Journal' | 'Trends' | 'Goals' | 'Library' | 'Settings'
 
 export type Category = 'Meals' | 'Activity' | 'Sleep' | 'Measurements' | 'Check-ins'
 
@@ -15,14 +15,14 @@ export type JournalDetailView = {
 
 export type JournalEvent = {
     id: string
-    definitionId?: string
+    definitionId: string
     time: string
     category: Category
     title: string
     detail: string
     source: string
     deviceName?: string
-    observedAt?: string
+    observedAt: string
     startedAt?: string
     endedAt?: string
     version?: number
