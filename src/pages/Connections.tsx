@@ -1,25 +1,19 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Alert, Badge, Button, Modal, Stack, Text } from '@mantine/core'
+import { Badge, Stack, Text } from '@mantine/core'
 import {
-    IconArrowDownRight,
     IconChevronRight,
     IconCircleCheck,
-    IconDatabase,
     IconDeviceMobile,
     IconTools,
 } from '@tabler/icons-react'
 import { PageHeader } from '../components/PageHeader'
-import { downloadExport } from '../lib/lifecycleApi'
 import { healthConnectStatus, listDevices, type HealthConnectStatus } from '../lib/deviceApi'
 import { getMcpStatus } from '../lib/mcpApi'
 
 export function Connections() {
     const navigate = useNavigate()
-    const [dialog, setDialog] = useState<'export' | null>(null)
     const [mcp, setMcp] = useState(false)
-    const [exportError, setExportError] = useState('')
-    const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
     const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
         'Not connected',
     )
@@ -38,24 +32,14 @@ export function Connections() {
             .then(status => setMcp(status.enabled))
             .catch(() => setMcp(false))
     }, [])
-    const exportData = async (format: 'json' | 'csv') => {
-        setExporting(format)
-        setExportError('')
-        try {
-            await downloadExport(format)
-        } catch {
-            setExportError('The export could not be downloaded. Try again.')
-        } finally {
-            setExporting(null)
-        }
-    }
+
     const cards = [
         {
             key: 'health' as const,
             icon: IconDeviceMobile,
             title: 'Health Connect',
             status: healthStatus,
-            desc: 'Sync sleep, activity, heart rate and body measurements securely from Android.',
+            desc: 'Receive health observations securely from paired Android devices.',
             color: 'green',
         },
         {
@@ -63,23 +47,16 @@ export function Connections() {
             icon: IconTools,
             title: 'MCP server',
             status: mcp ? 'Enabled' : 'Disabled',
-            desc: 'Let compatible assistants query selected health data through scoped, auditable access.',
+            desc: 'Give compatible assistants scoped, auditable access to selected TrackIt capabilities.',
             color: 'violet',
         },
-        {
-            key: 'export' as const,
-            icon: IconDatabase,
-            title: 'Export your data',
-            status: null,
-            desc: 'Download a portable copy of your TrackIt data for export or migration.',
-            color: 'blue',
-        },
     ]
+
     return (
         <div className="page-content connections-page">
             <PageHeader
                 title="Connections"
-                description="You decide what comes in, what goes out, and who can see it."
+                description="Manage where observations come from and which trusted clients can access TrackIt."
             />
             <div className="connection-grid">
                 {cards.map(({ key, icon: Icon, title, status, desc, color }) => (
@@ -87,12 +64,8 @@ export function Connections() {
                         type="button"
                         className="connection-card"
                         key={title}
-                        onClick={
-                            key === 'health'
-                                ? () => navigate('/connections/devices')
-                                : key === 'mcp'
-                                  ? () => navigate('/connections/mcp')
-                                  : () => setDialog('export')
+                        onClick={() =>
+                            navigate(key === 'health' ? '/connections/devices' : '/connections/mcp')
                         }
                     >
                         <div className={`connection-icon ${color}`}>
@@ -100,31 +73,26 @@ export function Connections() {
                         </div>
                         <div className="connection-title">
                             <h2>{title}</h2>
-                            {status && (
-                                <Badge
-                                    variant="light"
-                                    color={
-                                        key === 'mcp'
-                                            ? mcp
-                                                ? 'trackit'
-                                                : 'gray'
-                                            : status === 'Up to date'
-                                              ? 'trackit'
-                                              : status === 'Delayed' ||
-                                                  status === 'Device unreachable'
-                                                ? 'orange'
-                                                : status === 'Permission required'
-                                                  ? 'green'
-                                                  : 'dark'
-                                    }
-                                >
-                                    {status}
-                                </Badge>
-                            )}
+                            <Badge
+                                variant="light"
+                                color={
+                                    key === 'mcp'
+                                        ? mcp
+                                            ? 'trackit'
+                                            : 'gray'
+                                        : status === 'Up to date'
+                                          ? 'trackit'
+                                          : status === 'Delayed' || status === 'Device unreachable'
+                                            ? 'orange'
+                                            : status === 'Permission required'
+                                              ? 'green'
+                                              : 'dark'
+                                }
+                            >
+                                {status}
+                            </Badge>
                         </div>
-                        <Text c="dimmed" size="sm">
-                            {desc}
-                        </Text>
+                        <Text c="dimmed" size="sm">{desc}</Text>
                         <div className="connection-action">
                             <Text fw={650} c="trackit">
                                 {key === 'health'
@@ -145,9 +113,7 @@ export function Connections() {
                                                     : healthStatus === 'Connected'
                                                       ? 'Waiting for first sync'
                                                       : 'Connect device'
-                                    : key === 'mcp'
-                                      ? 'Manage assistants'
-                                      : 'Export data'}
+                                    : 'Manage assistants'}
                             </Text>
                             <IconChevronRight size={18} />
                         </div>
@@ -159,39 +125,15 @@ export function Connections() {
                 <div>
                     <Text fw={650}>Private by default</Text>
                     <Text size="sm" c="dimmed">
-                        TrackIt has no telemetry and sends nothing to third parties unless you
-                        explicitly connect it.
+                        TrackIt sends nothing to third parties unless you explicitly configure a connection.
                     </Text>
                 </div>
             </section>
-            <Modal
-                opened={dialog === 'export'}
-                onClose={() => setDialog(null)}
-                title="Export your data"
-                centered
-            >
-                <Stack>
-                    <Text size="sm" c="dimmed">
-                        Download a versioned copy of your journal, health, nutrition, goals, and
-                        preferences. Your server prepares the file when you request it.
-                    </Text>
-                    <Button
-                        loading={exporting === 'json'}
-                        onClick={() => void exportData('json')}
-                        leftSection={<IconArrowDownRight size={17} />}
-                    >
-                        Download JSON export
-                    </Button>
-                    <Button
-                        variant="default"
-                        loading={exporting === 'csv'}
-                        onClick={() => void exportData('csv')}
-                    >
-                        Download CSV export
-                    </Button>
-                    {exportError && <Alert color="orange">{exportError}</Alert>}
-                </Stack>
-            </Modal>
+            <Stack mt="lg" gap={0}>
+                <Text size="sm" c="dimmed">
+                    Export and deletion controls are available under Settings → Data.
+                </Text>
+            </Stack>
         </div>
     )
 }
