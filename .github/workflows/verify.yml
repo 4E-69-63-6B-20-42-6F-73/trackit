@@ -166,12 +166,13 @@ jobs:
               run: docker build --tag trackit-ci:test .
             - name: Smoke test runtime image
               run: |
+                  bootstrap_secret="$(openssl rand -hex 16)"
                   container=$(docker run --detach --network host \
                     --env HOST=127.0.0.1 \
                     --env PORT=3000 \
                     --env TRACKIT_DB_HOST=127.0.0.1 \
                     --env TRACKIT_DB_PASSWORD=trackit-ci \
-                    --env BOOTSTRAP_SECRET=0123456789abcdef0123456789abcdef \
+                    --env BOOTSTRAP_SECRET="$bootstrap_secret" \
                     trackit-ci:test)
                   trap 'docker logs "$container"; docker rm --force "$container"' EXIT
                   for attempt in $(seq 1 30); do
