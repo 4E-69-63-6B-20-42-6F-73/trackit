@@ -1,7 +1,6 @@
 name: Verify TrackIt
 
 on:
-    push:
     pull_request:
 
 permissions:
