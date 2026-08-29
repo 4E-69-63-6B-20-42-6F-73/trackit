@@ -94,10 +94,10 @@ describe('GoalsPanel', () => {
         expect(screen.getByRole('combobox', { name: 'How often?' })).toHaveValue('Every day')
         await user.click(screen.getByRole('button', { name: 'Advanced options' }))
         expect(
-            screen.getByRole('combobox', { name: 'How should TrackIt measure progress?' }),
+            await screen.findByRole('combobox', { name: 'How should TrackIt measure progress?' }),
         ).toHaveValue('7-day average')
-        expect(screen.getByRole('textbox', { name: 'Starts' })).not.toHaveValue('')
-        expect(screen.getByRole('textbox', { name: 'Ends (optional)' })).toHaveValue('')
+        expect(await screen.findByLabelText('Starts')).not.toHaveValue('')
+        expect(screen.getByLabelText('Ends (optional)')).toHaveValue('')
 
         await choose(user, 'How often?', 'Weekdays')
         await user.click(screen.getByRole('button', { name: 'Create goal' }))
@@ -108,7 +108,7 @@ describe('GoalsPanel', () => {
     it('reveals day choices only for Custom and requires at least one', async () => {
         const user = userEvent.setup()
         renderPanel()
-        await choose(user, 'How often?', 'Custom')
+        await choose(user, 'How often?', 'Custom days')
         const days = screen.getByRole('group', { name: 'Custom days' })
         expect(within(days).getByLabelText('Monday')).toBeVisible()
         for (const day of [
@@ -132,11 +132,11 @@ describe('GoalsPanel', () => {
         const user = userEvent.setup()
         renderPanel()
         await user.click(screen.getByRole('button', { name: 'Advanced options' }))
-        const startDate = screen.getByRole('textbox', { name: 'Starts' })
+        const startDate = await screen.findByLabelText('Starts')
         fireEvent.change(startDate, { target: { value: '2026-09-10' } })
         expect(startDate).toHaveValue('2026-09-10')
 
-        const endDate = screen.getByRole('textbox', { name: 'Ends (optional)' })
+        const endDate = screen.getByLabelText('Ends (optional)')
         fireEvent.change(endDate, { target: { value: '2026-09-01' } })
         await user.click(screen.getByRole('button', { name: 'Create goal' }))
         expect(await screen.findByText('End date must be on or after start date.')).toBeVisible()
@@ -171,7 +171,7 @@ describe('GoalsPanel', () => {
         await choose(user, 'What do you want to track?', 'Steps')
         await user.click(screen.getByRole('button', { name: 'Advanced options' }))
         expect(
-            screen.getByRole('combobox', { name: 'How should TrackIt measure progress?' }),
+            await screen.findByRole('combobox', { name: 'How should TrackIt measure progress?' }),
         ).toHaveValue('Daily total')
         expect(screen.getByRole('combobox', { name: 'Target' })).toHaveValue('At least')
         expect(screen.getByRole('textbox', { name: 'Value' })).toHaveValue('10000')
