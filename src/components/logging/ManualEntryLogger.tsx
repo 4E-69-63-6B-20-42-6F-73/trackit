@@ -5,6 +5,7 @@ import {
     Group,
     Modal,
     NumberInput,
+    Select,
     SimpleGrid,
     Slider,
     Stack,
@@ -26,6 +27,7 @@ import type { CreateObservationInput } from '../../lib/observationApi'
 export type ManualEntryKind = 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
 
 type WaterChoice = '100' | '250' | 'custom'
+type DurationUnit = 'minutes' | 'hours'
 
 const energyLabels = [
     '',
@@ -75,8 +77,8 @@ export function ManualEntryLogger({
     const [note, setNote] = useState('')
     const [symptom, setSymptom] = useState('')
     const [severity, setSeverity] = useState(5)
-    const [durationHours, setDurationHours] = useState<number | string>('')
-    const [durationMinutes, setDurationMinutes] = useState<number | string>('')
+    const [durationAmount, setDurationAmount] = useState<number | string>('')
+    const [durationUnit, setDurationUnit] = useState<DurationUnit>('minutes')
     const [tags, setTags] = useState<string[]>([])
     const [recordedAt, setRecordedAt] = useState(
         `${targetDate}T${selectedDate && selectedDate !== initialDay ? '12:00' : initialTime}`,
@@ -97,11 +99,12 @@ export function ManualEntryLogger({
     const customWaterStep = waterUnit === 'L' ? 0.05 : waterUnit === 'fl oz' ? 1 : 50
     const customWaterMin = waterUnit === 'L' ? 0.01 : waterUnit === 'fl oz' ? 0.1 : 1
     const customWaterPrecision = waterUnit === 'L' ? 2 : waterUnit === 'fl oz' ? 1 : 0
-    const hours = Math.max(0, Math.floor(Number(durationHours) || 0))
-    const minutes = Math.min(59, Math.max(0, Math.floor(Number(durationMinutes) || 0)))
-    const duration = [hours ? `${hours} h` : '', minutes ? `${minutes} min` : '']
-        .filter(Boolean)
-        .join(' ')
+    const durationValue = Math.max(0, Math.floor(Number(durationAmount) || 0))
+    const duration = durationValue
+        ? durationUnit === 'hours'
+            ? `${durationValue} ${durationValue === 1 ? 'hour' : 'hours'}`
+            : `${durationValue} min`
+        : ''
     const formattedTags = tags
         .map(value => value.trim())
         .filter(Boolean)
@@ -392,21 +395,24 @@ export function ManualEntryLogger({
                             </Text>
                             <SimpleGrid cols={2} spacing="sm">
                                 <NumberInput
-                                    label="Hours"
-                                    value={durationHours}
-                                    onChange={setDurationHours}
+                                    label="Amount"
+                                    value={durationAmount}
+                                    onChange={setDurationAmount}
                                     min={0}
-                                    step={1}
+                                    step={durationUnit === 'hours' ? 1 : 5}
                                     decimalScale={0}
                                 />
-                                <NumberInput
-                                    label="Minutes"
-                                    value={durationMinutes}
-                                    onChange={setDurationMinutes}
-                                    min={0}
-                                    max={59}
-                                    step={5}
-                                    decimalScale={0}
+                                <Select
+                                    label="Unit"
+                                    value={durationUnit}
+                                    onChange={value =>
+                                        setDurationUnit((value ?? 'minutes') as DurationUnit)
+                                    }
+                                    data={[
+                                        { value: 'minutes', label: 'Minutes' },
+                                        { value: 'hours', label: 'Hours' },
+                                    ]}
+                                    allowDeselect={false}
                                 />
                             </SimpleGrid>
                         </Stack>
