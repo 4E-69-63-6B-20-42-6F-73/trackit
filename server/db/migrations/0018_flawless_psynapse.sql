@@ -1,0 +1,1 @@
+ALTER TABLE "preferences" ADD COLUMN "mcp_allowed_origins" jsonb DEFAULT '[]'::jsonb NOT NULL;

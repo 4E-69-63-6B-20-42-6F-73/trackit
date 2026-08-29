@@ -17,6 +17,67 @@ class MemoryJournalRepository implements JournalRepository {
     }
 }
 
+describe('MCP browser transport', () => {
+    const createMcpApp = (allowedOrigins: string[]) =>
+        createApp(new MemoryJournalRepository(), {
+            dataRepository: {} as never,
+            mcp: {
+                allowedOrigins: vi.fn().mockResolvedValue(allowedOrigins),
+                authenticate: vi.fn().mockResolvedValue(null),
+            } as never,
+        })
+
+    it('allows an explicitly configured browser origin to preflight MCP authorization', async () => {
+        const app = await createMcpApp(['https://inference.home.bos.blue'])
+        const response = await app.inject({
+            method: 'OPTIONS',
+            url: '/mcp',
+            headers: {
+                origin: 'https://inference.home.bos.blue',
+                'access-control-request-method': 'POST',
+                'access-control-request-headers': 'authorization,content-type,mcp-protocol-version',
+            },
+        })
+
+        expect(response.statusCode).toBe(204)
+        expect(response.headers['access-control-allow-origin']).toBe(
+            'https://inference.home.bos.blue',
+        )
+        expect(response.headers['access-control-allow-methods']).toContain('POST')
+        expect(response.headers['access-control-allow-headers']).toContain('Authorization')
+        expect(response.headers.vary).toBe('Origin')
+
+        const postResponse = await app.inject({
+            method: 'POST',
+            url: '/mcp',
+            headers: {
+                origin: 'https://inference.home.bos.blue',
+                authorization: 'Bearer invalid-for-test',
+                'content-type': 'application/json',
+            },
+            payload: { jsonrpc: '2.0', id: 1, method: 'initialize', params: {} },
+        })
+        expect(postResponse.statusCode).toBe(401)
+        expect(postResponse.headers['access-control-allow-origin']).toBe(
+            'https://inference.home.bos.blue',
+        )
+        await app.close()
+    })
+
+    it('does not grant MCP access to an origin outside the allowlist', async () => {
+        const app = await createMcpApp(['https://inference.home.bos.blue'])
+        const response = await app.inject({
+            method: 'OPTIONS',
+            url: '/mcp',
+            headers: { origin: 'https://untrusted.example' },
+        })
+
+        expect(response.statusCode).toBe(403)
+        expect(response.headers['access-control-allow-origin']).toBeUndefined()
+        await app.close()
+    })
+})
+
 describe('device authentication diagnostics', () => {
     it('authenticates the exact raw JSON bytes instead of reserialized numeric values', async () => {
         const authenticateDetailed = vi.fn().mockResolvedValue({ device: { id: 'device-1' } })

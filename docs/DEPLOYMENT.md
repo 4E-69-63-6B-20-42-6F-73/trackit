@@ -29,6 +29,11 @@ comes through that trusted proxy. This lets TrackIt use the forwarded client add
 history and rate limiting; leaving it false prevents direct clients from spoofing those headers.
 For private certificate authorities, install the CA certificate on every client instead.
 
+Browser-based MCP clients need an explicit cross-origin grant. In TrackIt, open **Settings →
+Connections → Assistant access**, add the client's exact HTTPS origin under **Browser client
+origins**, and save. Changes apply immediately and do not require a server restart. Server-side MCP
+clients do not need a browser-origin grant.
+
 ## Required proxy behavior
 
 - Preserve `Host`, `X-Forwarded-Proto`, and the client address.
