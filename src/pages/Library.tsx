@@ -67,7 +67,11 @@ export function Library() {
                     </Button>
                 }
             />
-            {message && <Alert mt="md" color="orange">{message}</Alert>}
+            {message && (
+                <Alert mt="md" color="orange">
+                    {message}
+                </Alert>
+            )}
 
             <section className="panel" style={{ marginTop: '1rem' }}>
                 <Group justify="space-between" align="end" mb="md">
@@ -78,7 +82,9 @@ export function Library() {
                         </Text>
                     </div>
                     <Group gap="xs">
-                        <FoodCatalogLookup onCreated={food => setFoods(current => [food, ...current])} />
+                        <FoodCatalogLookup
+                            onCreated={food => setFoods(current => [food, ...current])}
+                        />
                         <FoodCsvImport onImported={setFoods} />
                         <Button
                             size="sm"
@@ -97,23 +103,35 @@ export function Library() {
                 />
                 <Stack gap="xs" mt="md">
                     {foods.map(food => (
-                        <button className="food-row" key={food.id} onClick={() => setEditingFood(food)}>
-                            <div className="food-icon"><IconApple size={18} /></div>
+                        <button
+                            className="food-row"
+                            key={food.id}
+                            onClick={() => setEditingFood(food)}
+                        >
+                            <div className="food-icon">
+                                <IconApple size={18} />
+                            </div>
                             <div>
-                                <Text fw={600} size="sm">{food.name}</Text>
+                                <Text fw={600} size="sm">
+                                    {food.name}
+                                </Text>
                                 <Text size="xs" c="dimmed">
                                     {food.brand ? `${food.brand} · ` : ''}
                                     {food.per100g.calories ?? '—'} kcal per 100 g
                                 </Text>
                             </div>
                             {food.nutritionQuality !== 'complete' && (
-                                <Badge size="xs" variant="light">{food.nutritionQuality}</Badge>
+                                <Badge size="xs" variant="light">
+                                    {food.nutritionQuality}
+                                </Badge>
                             )}
                         </button>
                     ))}
                     {foods.length === 0 && !message && (
                         <div className="compact-empty">
-                            <Text fw={650}>{query ? 'No matching foods' : 'Your food library is empty'}</Text>
+                            <Text fw={650}>
+                                {query ? 'No matching foods' : 'Your food library is empty'}
+                            </Text>
                             <Text size="sm" c="dimmed">
                                 Search a configured catalog, import a file, or create a food.
                             </Text>
@@ -127,7 +145,8 @@ export function Library() {
                     <div>
                         <h2>Recipes</h2>
                         <Text size="sm" c="dimmed">
-                            Reusable combinations of foods. Logged meals keep their historical nutrient snapshot.
+                            Reusable combinations of foods. Logged meals keep their historical
+                            nutrient snapshot.
                         </Text>
                     </div>
                     <Button
@@ -148,9 +167,12 @@ export function Library() {
                             onClick={() => setEditingRecipe(recipe)}
                         >
                             <div>
-                                <Text fw={600} size="sm">{recipe.name}</Text>
+                                <Text fw={600} size="sm">
+                                    {recipe.name}
+                                </Text>
                                 <Text size="xs" c="dimmed">
-                                    {recipe.servings} {recipe.servings === 1 ? 'serving' : 'servings'} ·{' '}
+                                    {recipe.servings}{' '}
+                                    {recipe.servings === 1 ? 'serving' : 'servings'} ·{' '}
                                     {Math.round(recipe.nutrientsPerServing.calories)} kcal per serving
                                 </Text>
                             </div>
@@ -159,7 +181,9 @@ export function Library() {
                     {recipes.length === 0 && (
                         <div className="compact-empty">
                             <Text fw={650}>No recipes yet</Text>
-                            <Text size="sm" c="dimmed">Create a recipe from foods in your library.</Text>
+                            <Text size="sm" c="dimmed">
+                                Create a recipe from foods in your library.
+                            </Text>
                         </div>
                     )}
                 </Stack>
@@ -182,7 +206,9 @@ export function Library() {
                     onClose={() => setEditingFood(null)}
                     onSave={async changes => {
                         const updated = await updateFood(editingFood, changes)
-                        setFoods(current => current.map(food => food.id === updated.id ? updated : food))
+                        setFoods(current =>
+                            current.map(food => (food.id === updated.id ? updated : food)),
+                        )
                     }}
                 />
             )}
