@@ -39,6 +39,19 @@ export function calendarDateKey(date: Date, timezone: string) {
     return `${value.year}-${String(value.month).padStart(2, '0')}-${String(value.day).padStart(2, '0')}`
 }
 
+export const calendarTodayKey = (timezone: string) => calendarDateKey(new Date(), timezone)
+
+export const addCalendarDays = (dateKey: string, days: number) => {
+    const value = new Date(`${dateKey}T12:00:00.000Z`)
+    value.setUTCDate(value.getUTCDate() + days)
+    return value.toISOString().slice(0, 10)
+}
+
+export const calendarDateFromKey = (dateKey: string, timezone: string) => {
+    const [year, month, day] = dateKey.split('-').map(Number)
+    return zonedDateTime(timezone, year, month, day)
+}
+
 export function calendarDayRange(date: Date, timezone: string) {
     const value = zonedParts(date, timezone)
     const from = zonedDateTime(timezone, value.year, value.month, value.day)
@@ -51,3 +64,15 @@ export function calendarDayRange(date: Date, timezone: string) {
     )
     return { from, to }
 }
+
+export const calendarDayRangeForKey = (dateKey: string, timezone: string) => {
+    const from = calendarDateFromKey(dateKey, timezone)
+    const to = calendarDateFromKey(addCalendarDays(dateKey, 1), timezone)
+    return { from, to }
+}
+
+export const formatCalendarDate = (
+    dateKey: string,
+    locale?: string,
+    options: Intl.DateTimeFormatOptions = { weekday: 'long', day: 'numeric', month: 'long' },
+) => new Date(`${dateKey}T12:00:00.000Z`).toLocaleDateString(locale, { ...options, timeZone: 'UTC' })
