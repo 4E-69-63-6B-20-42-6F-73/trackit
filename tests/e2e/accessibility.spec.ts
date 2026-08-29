@@ -9,8 +9,8 @@ const routes = [
     '/goals',
     '/library',
     '/library/metrics',
-    '/connections',
     '/settings',
+    '/settings/connections',
     '/settings/data',
 ]
 
