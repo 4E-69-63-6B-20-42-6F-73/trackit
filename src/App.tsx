@@ -193,13 +193,35 @@ export default function App() {
                             <Route path="/nutrition" element={<Navigate to="/library" replace />} />
                             <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
                             <Route
+                                path="/settings/connections/devices"
+                                element={<DeviceManagement />}
+                            />
+                            <Route
+                                path="/settings/connections/devices/new"
+                                element={<DeviceNew />}
+                            />
+                            <Route path="/settings/connections/mcp" element={<McpAccess />} />
+                            <Route path="/settings/connections/mcp/new" element={<McpNew />} />
+                            <Route
                                 path="/connections"
                                 element={<Navigate to="/settings/connections" replace />}
                             />
-                            <Route path="/connections/devices" element={<DeviceManagement />} />
-                            <Route path="/connections/devices/new" element={<DeviceNew />} />
-                            <Route path="/connections/mcp" element={<McpAccess />} />
-                            <Route path="/connections/mcp/new" element={<McpNew />} />
+                            <Route
+                                path="/connections/devices"
+                                element={<Navigate to="/settings/connections/devices" replace />}
+                            />
+                            <Route
+                                path="/connections/devices/new"
+                                element={<Navigate to="/settings/connections/devices/new" replace />}
+                            />
+                            <Route
+                                path="/connections/mcp"
+                                element={<Navigate to="/settings/connections/mcp" replace />}
+                            />
+                            <Route
+                                path="/connections/mcp/new"
+                                element={<Navigate to="/settings/connections/mcp/new" replace />}
+                            />
                             <Route
                                 path="/settings/goals"
                                 element={<Navigate to="/goals" replace />}
