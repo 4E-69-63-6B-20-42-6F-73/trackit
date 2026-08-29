@@ -27,6 +27,20 @@ describe('ManualEntryLogger', () => {
             </MantineProvider>,
         )
 
+        expect(screen.getByRole('button', { name: '100 ml' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+        )
+        expect(screen.getByRole('button', { name: '250 ml' })).toHaveAttribute(
+            'aria-pressed',
+            'true',
+        )
+        expect(screen.getByRole('button', { name: 'Custom' })).toHaveAttribute(
+            'aria-pressed',
+            'false',
+        )
+        expect(screen.queryByLabelText('Custom amount')).not.toBeInTheDocument()
+
         await user.click(screen.getByRole('button', { name: 'Log 250 ml' }))
 
         expect(add).toHaveBeenCalledWith(
@@ -35,9 +49,48 @@ describe('ManualEntryLogger', () => {
                 valueType: 'number',
                 category: 'Measurements',
                 source: 'You',
+                value: 250,
+                unit: 'ml',
             }),
         )
         expect(close).toHaveBeenCalledOnce()
+    })
+
+    it('supports 100 ml and custom water amounts', async () => {
+        const user = userEvent.setup()
+        const add = vi.fn()
+
+        render(
+            <MantineProvider>
+                {provider(
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        initialKind="Water"
+                    />,
+                )}
+            </MantineProvider>,
+        )
+
+        await user.click(screen.getByRole('button', { name: '100 ml' }))
+        expect(screen.getByRole('button', { name: 'Log 100 ml' })).toBeEnabled()
+
+        await user.click(screen.getByRole('button', { name: 'Custom' }))
+        expect(screen.getByRole('button', { name: 'Log 0 ml' })).toBeDisabled()
+
+        const amount = screen.getByLabelText('Custom amount')
+        await user.type(amount, '375')
+        await user.click(screen.getByRole('button', { name: 'Log 375 ml' }))
+
+        expect(add).toHaveBeenCalledWith(
+            expect.objectContaining({
+                definitionId: 'water',
+                value: 375,
+                unit: 'ml',
+                attributes: { description: '375 ml' },
+            }),
+        )
     })
 
     it('records against the day selected in the current page', async () => {
