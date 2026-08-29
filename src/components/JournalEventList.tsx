@@ -42,7 +42,7 @@ export function JournalEventList({
                             <Icon size={17} />
                         </div>
                         <div className="event-copy">
-                            <Text fw={600} size={journalStyle ? undefined : 'sm'}>
+                            <Text component="div" fw={600} size={journalStyle ? undefined : 'sm'}>
                                 {event.title}
                                 {event.source !== 'You' && (
                                     <Badge variant="light" color="gray" fw={500}>
