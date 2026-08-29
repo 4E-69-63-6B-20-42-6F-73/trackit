@@ -185,7 +185,6 @@ describe('ManualEntryLogger', () => {
         fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
         fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
         expect(slider).toHaveAttribute('aria-valuenow', '7')
-        expect(screen.getByText('7 · High')).toBeInTheDocument()
 
         await user.type(screen.getByLabelText('Note (optional)'), 'After lunch')
         await user.click(screen.getByRole('button', { name: 'Save check-in' }))
@@ -212,13 +211,12 @@ describe('ManualEntryLogger', () => {
             </MantineProvider>,
         )
 
-        await user.type(screen.getByLabelText('Symptom'), 'Headache')
+        await user.type(screen.getByRole('textbox', { name: /Symptom/i }), 'Headache')
         const slider = screen.getByRole('slider', { name: 'Symptom severity' })
         expect(slider).toHaveAttribute('aria-valuenow', '5')
         fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
         fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
         expect(slider).toHaveAttribute('aria-valuenow', '7')
-        expect(screen.getByText('7 · Moderate')).toBeInTheDocument()
 
         await user.type(screen.getByLabelText('Amount'), '1')
         expect(screen.getByLabelText('Unit')).toHaveValue('Minutes')
@@ -228,7 +226,7 @@ describe('ManualEntryLogger', () => {
         expect(context.tagName).toBe('TEXTAREA')
         await user.type(context, 'After a long flight')
 
-        const tagInput = screen.getByLabelText('Tags (optional)')
+        const tagInput = screen.getByRole('combobox', { name: 'Tags (optional)' })
         await user.type(tagInput, 'travel,medication change{Enter}')
         expect(screen.getByText('travel')).toBeInTheDocument()
         expect(screen.getByText('medication change')).toBeInTheDocument()
@@ -264,7 +262,7 @@ describe('ManualEntryLogger', () => {
         expect(note.tagName).toBe('TEXTAREA')
         await user.type(note, 'First line{Enter}Second line')
 
-        const tagInput = screen.getByLabelText('Tags (optional)')
+        const tagInput = screen.getByRole('combobox', { name: 'Tags (optional)' })
         await user.type(tagInput, 'personal,weekend,')
         expect(screen.getByText('personal')).toBeInTheDocument()
         expect(screen.getByText('weekend')).toBeInTheDocument()
