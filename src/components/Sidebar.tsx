@@ -1,8 +1,16 @@
-import { ActionIcon, Text } from '@mantine/core'
+import { ActionIcon } from '@mantine/core'
 import { IconActivity, IconLayoutSidebarLeftCollapse, IconSettings } from '@tabler/icons-react'
 import { NavLink } from 'react-router-dom'
 import { nav } from '../domain/data'
 import type { Page } from '../domain/types'
+
+const paths: Record<(typeof nav)[number]['label'], string> = {
+    Today: '/today',
+    Journal: '/journal',
+    Trends: '/trends',
+    Goals: '/goals',
+    Library: '/library',
+}
 
 export function Sidebar({
     page,
@@ -13,18 +21,6 @@ export function Sidebar({
     collapsed: boolean
     toggle: () => void
 }) {
-    const groups = [
-        {
-            label: 'Daily',
-            items: nav.filter(item => ['Today', 'Journal', 'Goals'].includes(item.label)),
-        },
-        {
-            label: 'Explore',
-            items: nav.filter(item => ['Nutrition', 'Trends', 'Metrics'].includes(item.label)),
-        },
-        { label: 'Data', items: nav.filter(item => item.label === 'Connections') },
-    ]
-
     return (
         <aside className={`sidebar ${collapsed ? 'collapsed' : ''}`}>
             <div className="brand">
@@ -47,24 +43,21 @@ export function Sidebar({
                     <IconLayoutSidebarLeftCollapse size={18} />
                 </ActionIcon>
             </div>
-            <nav>
-                {groups.map(group => (
-                    <div className="nav-group" key={group.label}>
-                        {!collapsed && <Text className="nav-group-label">{group.label}</Text>}
-                        {group.items.map(({ label, icon: Icon }) => (
-                            <NavLink
-                                aria-label={label}
-                                aria-current={page === label ? 'page' : undefined}
-                                className={`nav-item ${page === label ? 'active' : ''}`}
-                                key={label}
-                                to={`/${label.toLowerCase()}`}
-                            >
-                                <Icon size={20} stroke={1.7} />
-                                {!collapsed && <span>{label}</span>}
-                            </NavLink>
-                        ))}
-                    </div>
-                ))}
+            <nav aria-label="Primary navigation">
+                <div className="nav-group">
+                    {nav.map(({ label, icon: Icon }) => (
+                        <NavLink
+                            aria-label={label}
+                            aria-current={page === label ? 'page' : undefined}
+                            className={`nav-item ${page === label ? 'active' : ''}`}
+                            key={label}
+                            to={paths[label]}
+                        >
+                            <Icon size={20} stroke={1.7} />
+                            {!collapsed && <span>{label}</span>}
+                        </NavLink>
+                    ))}
+                </div>
             </nav>
             <div className="sidebar-foot">
                 <NavLink
