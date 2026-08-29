@@ -31,15 +31,6 @@ export type ExperiencePreferences = {
         name: string
         kinds: Array<'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'>
     }>
-    experiments?: Array<{
-        id: string
-        question: string
-        primaryMetric: string
-        comparisonMetric?: string
-        startedAt: string
-        endedAt?: string
-        status: 'active' | 'completed'
-    }>
     dismissedWeeklyReflection?: string
 }
 
