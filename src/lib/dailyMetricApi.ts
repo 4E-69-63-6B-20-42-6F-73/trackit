@@ -3,7 +3,7 @@ import { sharedJsonRequest } from './sharedRequest'
 
 export type DailyMetric = {
     date: string
-    metric: string
+    definitionId: string
     value: number
     unit: string
     derivationVersion: number

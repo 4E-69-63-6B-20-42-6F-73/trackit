@@ -8,8 +8,8 @@ Health Connect → Android adapters → health_records → observations → dail
 
 - `health_records` is canonical. Source identity is `(user_id, provider, external_id)` and updates are accepted only when `external_version` increases. Payload and device JSON retain record-specific data and provenance.
 - `observations` contains deterministic record projections. `source_record_id`, `derivation`, and `derivation_version` make every projection traceable and rebuildable.
-- `daily_metrics` contains UTC-date aggregates using the server metric registry. It is disposable and rebuilt alongside observations.
-- Legacy `/api/device/upload` ingestion remains available for older companion builds. Current Android builds use `/api/device/health-records`.
+- `daily_metrics` contains owner-timezone aggregates keyed by `definition_id` through the shared Metric Center. It is disposable and rebuilt from observations.
+- Legacy `/api/device/upload` ingestion remains a versioned compatibility path for older companion builds. It writes definition-backed observations with a canonical `source_id`; current Android builds use `/api/device/health-records`, which preserves source records before derivation.
 - `POST /api/health-records/rebuild` replaces all source-linked projections from canonical records. It does not alter legacy or manually entered observations.
 
 Android owns permission selection, reading, and faithful serialization only. The single `HealthRecordAdapterRegistry` drives supported record types, permissions, historical reads, change-token reads, and serialization. Formulas and aggregation policy remain on the server.
@@ -30,5 +30,7 @@ Passive interval and time-series records—including steps, heart-rate series, r
 
 Migration `0004_quiet_health_journal` soft-deletes older passive Journal projections. It does not delete canonical records or observations. A projection rebuild applies the same allowlist deterministically.
 
-Record derivation lives in `derive.ts`. Rolling calculations live separately in `derive-window.ts`
-and consume `daily_metrics`, preventing cross-record policy from leaking into source ingestion.
+Record derivation lives in `derive.ts`. It emits `definitionId`, and its unit normalization calls the
+shared Metric Center conversion rules. Rolling calculations live separately in `derive-window.ts`
+and consume definition-backed `daily_metrics`, preventing cross-record policy from leaking into
+source ingestion.

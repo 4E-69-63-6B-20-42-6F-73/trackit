@@ -1,12 +1,12 @@
 export type DailyMetricValue = {
     date: string
-    metric: string
+    definitionId: string
     value: number
     unit: string
 }
 
 export type WindowDerivedMetric = {
-    metric: string
+    definitionId: string
     value: number
     unit: string
     observedAt: string
@@ -31,11 +31,11 @@ export function deriveWindowMetrics(rows: DailyMetricValue[], asOf: Date): Windo
     const observedAt = asOf.toISOString()
     const result: WindowDerivedMetric[] = []
     const stepValues = rows
-        .filter(row => row.metric === 'steps' && row.date >= since(asOf, 7))
+        .filter(row => row.definitionId === 'steps' && row.date >= since(asOf, 7))
         .map(row => row.value)
     if (stepValues.length)
         result.push({
-            metric: 'steps_7d_average',
+            definitionId: 'steps_7d_average',
             value: mean(stepValues),
             unit: 'count',
             observedAt,
@@ -44,11 +44,11 @@ export function deriveWindowMetrics(rows: DailyMetricValue[], asOf: Date): Windo
             derivationVersion: 1,
         })
     const hrvValues = rows
-        .filter(row => row.metric === 'hrv_rmssd' && row.date >= since(asOf, 28))
+        .filter(row => row.definitionId === 'hrv_rmssd' && row.date >= since(asOf, 28))
         .map(row => row.value)
     if (hrvValues.length)
         result.push({
-            metric: 'hrv_28d_baseline',
+            definitionId: 'hrv_28d_baseline',
             value: median(hrvValues),
             unit: 'ms',
             observedAt,

@@ -35,14 +35,13 @@ export function Metrics() {
     const [editing, setEditing] = useState<MetricDefinition | null>(null)
     const [draftUnit, setDraftUnit] = useState('')
     const [draftPrecision, setDraftPrecision] = useState<number | null>(null)
-    const [draftShowInJournal, setDraftShowInJournal] = useState(false)
     const [draftPolicy, setDraftPolicy] = useState<DeduplicationPolicy>('keep_all')
     const [draftSourcePriority, setDraftSourcePriority] = useState<string[]>([])
     const [draftDisabledSources, setDraftDisabledSources] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
     const [sourceSummaries, setSourceSummaries] = useState<MetricSourceSummary[]>([])
-    const selected = normalizedMetricPreferences(preferences?.metricPreferences, preferences?.units)
+    const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
     const preset = detectUnitPreset(selected)
     const categories = useMemo(() => [...new Set(metricCatalog.map(metric => metric.category))], [])
     const metricSources = useMemo(
@@ -53,7 +52,7 @@ export function Metrics() {
                     provider: source.provider,
                     connector: source.connector ?? undefined,
                 }
-                ;(result[source.metric] ??= []).push(descriptor)
+                ;(result[source.definitionId] ??= []).push(descriptor)
                 return result
             }, {}),
         [sourceSummaries],
@@ -65,19 +64,15 @@ export function Metrics() {
             .catch(() => undefined)
         return () => controller.abort()
     }, [])
-    const save = async (
-        metricPreferences: typeof selected,
-        units = preferences?.units ?? 'metric',
-        close = true,
-    ) => {
+    const save = async (metricPreferences: typeof selected, close = true) => {
         if (!preferences) return
         setSaving(true)
         setMessage('')
         try {
-            await updatePreferences({ metricPreferences, units })
+            await updatePreferences({ metricPreferences })
             if (close) setEditing(null)
         } catch {
-            setMessage('Your unit preference could not be saved. Try again.')
+            setMessage('Your Metric Center preference could not be saved. Try again.')
         } finally {
             setSaving(false)
         }
@@ -92,16 +87,13 @@ export function Metrics() {
                     { ...selected[id], displayUnit: preference.displayUnit },
                 ]),
             ),
-            next as 'metric' | 'imperial',
+            false,
         )
     }
     const openMetric = (metric: MetricDefinition) => {
         setEditing(metric)
         setDraftUnit(selected[metric.id].displayUnit)
         setDraftPrecision(selected[metric.id].precision ?? metric.precision)
-        setDraftShowInJournal(
-            selected[metric.id].showInJournal ?? metric.journalDefaultVisible ?? false,
-        )
         setDraftPolicy(selected[metric.id].deduplication?.policy ?? 'keep_all')
         setDraftDisabledSources(selected[metric.id].deduplication?.disabledSources ?? [])
         setDraftSourcePriority([
@@ -121,18 +113,18 @@ export function Metrics() {
     return (
         <div className="page-content metrics-page">
             <PageHeader
-                title="Metrics"
-                description="Choose how measurements are shown throughout TrackIt."
+                title="Metric Center"
+                description="Configure definitions, display units, formatting, and source resolution."
             />
             <section className="panel metrics-units" aria-labelledby="unit-system-heading">
                 <Text id="unit-system-heading" fw={700}>
-                    Units
+                    Display unit presets
                 </Text>
                 <Text size="sm" c="dimmed" mb="md">
-                    Choose a preset or customize individual metrics.
+                    Apply a convenient preset or customize individual metric definitions below.
                 </Text>
                 <SegmentedControl
-                    aria-label="Unit preset"
+                    aria-label="Display unit preset"
                     value={preset}
                     onChange={applyPreset}
                     disabled={loading || saving}
@@ -161,12 +153,17 @@ export function Metrics() {
                         {metricCatalog
                             .filter(metric => metric.category === category)
                             .map(metric => {
+                                const configurable =
+                                    metric.displayUnits.length > 1 ||
+                                    metric.precision > 0 ||
+                                    Boolean(metric.derived) ||
+                                    (metricSources[metric.id]?.length ?? 0) > 1
                                 return (
                                     <MetricRow
                                         key={metric.id}
                                         metric={metric}
                                         displayUnit={selected[metric.id].displayUnit}
-                                        clickable={!saving}
+                                        clickable={configurable && !saving}
                                         onClick={() => openMetric(metric)}
                                     />
                                 )
@@ -182,7 +179,7 @@ export function Metrics() {
                                 <Radio
                                     key={unit}
                                     value={unit}
-                                    label={`${unitPresentation(unit, editing.id).name} (${unitPresentation(unit, editing.id).label})`}
+                                    label={`${unitPresentation(unit).name} (${unitPresentation(unit).label})`}
                                     disabled={saving}
                                 />
                             ))}
@@ -219,17 +216,6 @@ export function Metrics() {
                         </Stack>
                     </Radio.Group>
                 )}
-                {editing && (
-                    <section className="metric-journal-setting">
-                        <Switch
-                            label="Show in Journal"
-                            description="Include this metric in your chronological Journal view."
-                            checked={draftShowInJournal}
-                            disabled={saving}
-                            onChange={event => setDraftShowInJournal(event.currentTarget.checked)}
-                        />
-                    </section>
-                )}
                 {editing?.derived && (
                     <section className="metric-derived-note">
                         <Text fw={650} size="sm">
@@ -249,50 +235,34 @@ export function Metrics() {
                     </section>
                 )}
                 {editing && (metricSources[editing.id]?.length ?? 0) > 1 && (
-                    <section
-                        className="metric-source-settings"
-                        aria-labelledby="metric-data-sources"
-                    >
+                    <section className="metric-source-settings" aria-labelledby="metric-data-sources">
                         <div>
                             <Text id="metric-data-sources" fw={650}>
                                 Data sources
                             </Text>
                             <Text size="sm" c="dimmed">
-                                Choose which sources contribute to {editing.name}, goals, trends,
-                                and derived metrics.
+                                Choose which sources contribute to {editing.name}, goals, trends, and derived metrics.
                             </Text>
                         </div>
                         <div className="metric-source-list">
                             <div className="metric-source-list-heading" aria-hidden="true">
                                 <span />
                                 <span />
-                                <Text size="xs" c="dimmed">
-                                    Included
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                    Priority
-                                </Text>
+                                <Text size="xs" c="dimmed">Included</Text>
+                                <Text size="xs" c="dimmed">Priority</Text>
                             </div>
                             {draftSourcePriority.map((key, index) => {
-                                const source = metricSources[editing.id].find(
-                                    item => item.key === key,
-                                )
+                                const source = metricSources[editing.id].find(item => item.key === key)
                                 if (!source) return null
                                 const included = !draftDisabledSources.includes(key)
                                 const sourceName = metricSourceDisplayName(source.provider)
                                 return (
                                     <div className="metric-source-row" key={key}>
-                                        <Text size="sm" c="dimmed" aria-hidden="true">
-                                            {index + 1}
-                                        </Text>
+                                        <Text size="sm" c="dimmed" aria-hidden="true">{index + 1}</Text>
                                         <div>
-                                            <Text size="sm" fw={600}>
-                                                {sourceName}
-                                            </Text>
+                                            <Text size="sm" fw={600}>{sourceName}</Text>
                                             <Text size="xs" c="dimmed">
-                                                {source.connector
-                                                    ? `via ${source.connector}`
-                                                    : 'Direct entry'}
+                                                {source.connector ? `via ${source.connector}` : 'Direct entry'}
                                                 {!included && ' · Excluded'}
                                             </Text>
                                         </div>
@@ -312,12 +282,7 @@ export function Metrics() {
                                         <Group gap={4} wrap="nowrap" justify="flex-end">
                                             <ActionIcon
                                                 variant="subtle"
-                                                disabled={
-                                                    draftPolicy !== 'prefer_priority' ||
-                                                    !included ||
-                                                    index === 0 ||
-                                                    saving
-                                                }
+                                                disabled={draftPolicy !== 'prefer_priority' || !included || index === 0 || saving}
                                                 aria-label={`Move ${sourceName} up`}
                                                 onClick={() => moveSource(index, -1)}
                                             >
@@ -345,22 +310,12 @@ export function Metrics() {
                             label="When included sources overlap"
                             value={draftPolicy}
                             disabled={saving}
-                            onChange={value =>
-                                value && setDraftPolicy(value as DeduplicationPolicy)
-                            }
+                            onChange={value => value && setDraftPolicy(value as DeduplicationPolicy)}
                             data={[
                                 { value: 'keep_all', label: 'Keep all records' },
-                                {
-                                    value: 'prefer_priority',
-                                    label: 'Prefer higher-priority source',
-                                },
+                                { value: 'prefer_priority', label: 'Prefer higher-priority source' },
                                 ...(['steps', 'active_calories'].includes(editing.id)
-                                    ? [
-                                          {
-                                              value: 'metric_merge',
-                                              label: 'Merge overlapping records',
-                                          },
-                                      ]
+                                    ? [{ value: 'metric_merge', label: 'Merge overlapping records' }]
                                     : []),
                             ]}
                         />
@@ -372,20 +327,16 @@ export function Metrics() {
                                   : 'All included records contribute. Priority is not currently used.'}
                         </Text>
                         <Text size="xs" c="dimmed">
-                            Excluding a source affects {editing.name} only. Original records are
-                            always retained.
+                            Excluding a source affects {editing.name} only. Original records are always retained.
                         </Text>
                     </section>
                 )}
                 {editing &&
                     (editing.displayUnits.length > 1 ||
                     editing.precision > 0 ||
-                    editing.journalDefaultVisible !== undefined ||
                     (metricSources[editing.id]?.length ?? 0) > 1 ? (
                         <Group justify="flex-end" mt="xl">
-                            <Button variant="default" onClick={() => setEditing(null)}>
-                                Cancel
-                            </Button>
+                            <Button variant="default" onClick={() => setEditing(null)}>Cancel</Button>
                             <Button
                                 loading={saving}
                                 onClick={() =>
@@ -395,7 +346,6 @@ export function Metrics() {
                                             ...selected[editing.id],
                                             displayUnit: draftUnit,
                                             precision: draftPrecision ?? editing.precision,
-                                            showInJournal: draftShowInJournal,
                                             ...((metricSources[editing.id]?.length ?? 0) > 1
                                                 ? {
                                                       deduplication: {

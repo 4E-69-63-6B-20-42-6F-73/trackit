@@ -1,25 +1,26 @@
 import { describe, expect, it } from 'vitest'
-import type { Observation } from './health'
+import type { NumericObservation } from './health'
 import { effectiveMetricSeries, observationSource, removeExactDuplicates } from './effectiveMetrics'
 
 const record = (
-    overrides: Partial<Observation> & Pick<Observation, 'id' | 'metric' | 'canonicalValue'>,
-): Observation => ({
+    overrides: Partial<NumericObservation> &
+        Pick<NumericObservation, 'id' | 'definitionId' | 'canonicalValue'>,
+): NumericObservation => ({
     canonicalUnit:
-        overrides.metric === 'height'
+        overrides.definitionId === 'height'
             ? 'cm'
-            : overrides.metric.includes('calories')
+            : overrides.definitionId.includes('calories')
               ? 'kcal'
-              : overrides.metric === 'steps'
+              : overrides.definitionId === 'steps'
                 ? 'count'
                 : 'kg',
     originalValue: overrides.canonicalValue,
     originalUnit:
-        overrides.metric === 'height'
+        overrides.definitionId === 'height'
             ? 'cm'
-            : overrides.metric.includes('calories')
+            : overrides.definitionId.includes('calories')
               ? 'kcal'
-              : overrides.metric === 'steps'
+              : overrides.definitionId === 'steps'
                 ? 'count'
                 : 'kg',
     observedAt: '2026-08-24T08:00:00.000Z',
@@ -32,7 +33,7 @@ describe('effective metric series', () => {
     it('removes replayed external records but retains legitimate identical readings', () => {
         const replay = record({
             id: 'new',
-            metric: 'steps',
+            definitionId: 'steps',
             canonicalValue: 4200,
             externalId: 'activity-1',
             version: 2,
@@ -43,7 +44,7 @@ describe('effective metric series', () => {
             replay,
             record({
                 id: 'other',
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 4200,
                 metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
             }),
@@ -60,7 +61,7 @@ describe('effective metric series', () => {
             observationSource(
                 record({
                     id: '1',
-                    metric: 'steps',
+                    definitionId: 'steps',
                     canonicalValue: 1,
                     metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
                 }),
@@ -75,14 +76,14 @@ describe('effective metric series', () => {
     it('uses source priority only for overlapping records', () => {
         const garmin = record({
             id: 'garmin',
-            metric: 'steps',
+            definitionId: 'steps',
             canonicalValue: 4200,
             endedAt: '2026-08-24T09:00:00.000Z',
             metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
         })
         const samsung = record({
             id: 'samsung',
-            metric: 'steps',
+            definitionId: 'steps',
             canonicalValue: 4180,
             endedAt: '2026-08-24T09:00:00.000Z',
             metadata: { source: 'Health Connect', dataOrigin: 'Samsung Health' },
@@ -104,7 +105,7 @@ describe('effective metric series', () => {
         })
         expect(
             effective
-                .filter(item => item.metric === 'steps')
+                .filter(item => item.definitionId === 'steps')
                 .map(item => item.id)
                 .sort(),
         ).toEqual(['garmin', 'later'])
@@ -114,13 +115,13 @@ describe('effective metric series', () => {
         const raw = [
             record({
                 id: 'garmin',
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 4200,
                 metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
             }),
             record({
                 id: 'samsung',
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 4180,
                 metadata: { source: 'Health Connect', dataOrigin: 'Samsung Health' },
             }),
@@ -135,9 +136,9 @@ describe('effective metric series', () => {
                 },
             },
         })
-        expect(effective.filter(item => item.metric === 'steps').map(item => item.id)).toEqual([
-            'samsung',
-        ])
+        expect(
+            effective.filter(item => item.definitionId === 'steps').map(item => item.id),
+        ).toEqual(['samsung'])
         expect(raw).toHaveLength(2)
     })
 
@@ -145,22 +146,24 @@ describe('effective metric series', () => {
         const effective = effectiveMetricSeries([
             record({
                 id: 'height',
-                metric: 'height',
+                definitionId: 'height',
                 canonicalValue: 180,
                 observedAt: '2026-08-20T08:00:00.000Z',
             }),
-            record({ id: 'weight', metric: 'weight', canonicalValue: 81 }),
+            record({ id: 'weight', definitionId: 'weight', canonicalValue: 81 }),
         ])
-        const bmi = effective.find(item => item.metric === 'bmi')!
+        const bmi = effective.find(item => item.definitionId === 'bmi')!
         expect(bmi.canonicalValue).toBeCloseTo(25)
         expect(bmi.metadata?.inputRecordIds).toEqual(['weight', 'height'])
     })
 
     it('derives daily calorie balance from effective intake and expenditure', () => {
         const effective = effectiveMetricSeries([
-            record({ id: 'food', metric: 'calories', canonicalValue: 2200 }),
-            record({ id: 'burn', metric: 'active_calories', canonicalValue: 600 }),
+            record({ id: 'food', definitionId: 'calories', canonicalValue: 2200 }),
+            record({ id: 'burn', definitionId: 'active_calories', canonicalValue: 600 }),
         ])
-        expect(effective.find(item => item.metric === 'calorie_balance')?.canonicalValue).toBe(1600)
+        expect(
+            effective.find(item => item.definitionId === 'calorie_balance')?.canonicalValue,
+        ).toBe(1600)
     })
 })

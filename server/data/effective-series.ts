@@ -13,7 +13,7 @@ import {
     effectiveBaseMetricSeries,
     effectiveMetricSeries,
 } from '../../src/domain/effectiveMetrics.js'
-import type { Observation } from '../../src/domain/health.js'
+import type { NumericObservation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
 import type { RecordRange } from './types.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
@@ -29,7 +29,7 @@ async function cachedDerivedSeries(
     requestedMetrics: Set<string> | null,
     resolutionVersion: number,
     timezone: string,
-): Promise<Observation[] | null> {
+): Promise<NumericObservation[] | null> {
     if (
         !requestedMetrics?.size ||
         !range.from ||
@@ -77,7 +77,7 @@ async function cachedDerivedSeries(
             and(
                 eq(derivedObservations.userId, 'owner'),
                 inArray(derivedObservations.date, dates),
-                inArray(derivedObservations.metric, [...requestedMetrics]),
+                inArray(derivedObservations.definitionId, [...requestedMetrics]),
                 eq(derivedObservations.derivationVersion, DERIVED_OBSERVATION_CACHE_VERSION),
                 eq(derivedObservations.resolutionVersion, resolutionVersion),
                 eq(derivedObservations.timezone, timezone),
@@ -101,9 +101,9 @@ async function cachedDerivedSeries(
             input.inputObservationId,
         ])
     return cached
-        .map((row): Observation => ({
+        .map((row): NumericObservation => ({
             id: row.id,
-            metric: row.metric,
+            definitionId: row.definitionId,
             canonicalValue: row.canonicalValue,
             canonicalUnit: row.canonicalUnit,
             originalValue: row.canonicalValue,
@@ -137,7 +137,7 @@ async function loadEffectiveMetricSeries(
         isNotNull(observations.originalValue),
         isNotNull(observations.originalUnit),
     ]
-    const requestedMetrics = range.metrics?.length ? new Set(range.metrics) : null
+    const requestedMetrics = range.definitionIds?.length ? new Set(range.definitionIds) : null
     const [saved] = await database
         .select({
             metricPreferences: preferences.metricPreferences,
@@ -165,7 +165,7 @@ async function loadEffectiveMetricSeries(
           )
         : null
     if (expandedMetrics?.size)
-        observationConditions.push(inArray(observations.metric, [...expandedMetrics]))
+        observationConditions.push(inArray(observations.definitionId, [...expandedMetrics]))
     if (range.from) {
         const from = new Date(range.from)
         observationConditions.push(gte(observations.observedAt, from))
@@ -183,7 +183,7 @@ async function loadEffectiveMetricSeries(
                   .where(
                       and(
                           isNull(observations.deletedAt),
-                          eq(observations.metric, 'height'),
+                          eq(observations.definitionId, 'height'),
                           lt(observations.observedAt, new Date(range.from)),
                       ),
                   )
@@ -197,7 +197,7 @@ async function loadEffectiveMetricSeries(
             .where(and(...observationConditions)),
         priorHeightQuery,
     ])
-    const normalize = (record: (typeof records)[number]): Observation => ({
+    const normalize = (record: (typeof records)[number]): NumericObservation => ({
         ...record,
         canonicalValue: record.canonicalValue!,
         canonicalUnit: record.canonicalUnit!,
@@ -217,8 +217,8 @@ async function loadEffectiveMetricSeries(
     return effective.filter(record => {
         const observedAt = new Date(record.observedAt)
         return (
-            (!includeDerived && record.metric === 'height') ||
-            ((!requestedMetrics || requestedMetrics.has(record.metric)) &&
+            (!includeDerived && record.definitionId === 'height') ||
+            ((!requestedMetrics || requestedMetrics.has(record.definitionId)) &&
                 (!range.from || observedAt >= new Date(range.from)) &&
                 (!range.to || observedAt < new Date(range.to)))
         )

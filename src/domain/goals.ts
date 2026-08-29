@@ -1,4 +1,4 @@
-import type { Observation } from './health.js'
+import type { NumericObservation } from './health.js'
 import {
     metricDefinition,
     type GoalAggregation,
@@ -116,7 +116,7 @@ export function validateGoal(goal: Omit<Goal, 'id'> | Goal): string[] {
 }
 export function evaluateGoal(
     goal: Goal,
-    observations: Observation[],
+    observations: NumericObservation[],
     now = new Date(),
     timezone = 'UTC',
 ): GoalEvaluation {
@@ -127,7 +127,7 @@ export function evaluateGoal(
     const qualifying = observations.filter(
         item =>
             activeNow &&
-            item.metric === goal.metricId &&
+            item.definitionId === goal.metricId &&
             !item.excluded &&
             new Date(item.observedAt).getTime() >= bounds.start.getTime() &&
             new Date(item.observedAt).getTime() <= bounds.end.getTime() &&

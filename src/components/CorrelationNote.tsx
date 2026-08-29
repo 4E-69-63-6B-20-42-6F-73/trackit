@@ -1,5 +1,5 @@
 import { Alert, Text } from '@mantine/core'
-import { dailySeries, pearsonCorrelation, type Observation } from '../domain/health'
+import { dailySeries, pearsonCorrelation, type NumericObservation } from '../domain/health'
 
 export function CorrelationNote({
     observations,
@@ -9,7 +9,7 @@ export function CorrelationNote({
     days,
     timezone,
 }: {
-    observations: Observation[]
+    observations: NumericObservation[]
     metric: string
     comparisonMetric: string
     start: Date
@@ -17,13 +17,13 @@ export function CorrelationNote({
     timezone: string
 }) {
     const left = dailySeries(
-        observations.filter(record => record.metric === metric),
+        observations.filter(record => record.definitionId === metric),
         start,
         days,
         timezone,
     )
     const right = dailySeries(
-        observations.filter(record => record.metric === comparisonMetric),
+        observations.filter(record => record.definitionId === comparisonMetric),
         start,
         days,
         timezone,

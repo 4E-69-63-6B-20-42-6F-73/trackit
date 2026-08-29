@@ -36,17 +36,16 @@ async function insertHealthObservationGraph(
               .values(
                   projections.map(projection => ({
                       userId: record.userId,
-                      definitionId: projection.metric,
+                      definitionId: projection.definitionId,
                       valueType: 'number',
                       origin: 'external',
-                      metric: projection.metric,
                       canonicalValue: projection.value,
                       canonicalUnit: projection.unit,
                       originalValue: projection.value,
                       originalUnit: projection.unit,
                       observedAt: projection.observedAt!,
                       endedAt: projection.endedAt,
-                      externalId: `${record.externalId}:${projection.metric}:v${projection.derivationVersion}`,
+                      externalId: `${record.externalId}:${projection.definitionId}:v${projection.derivationVersion}`,
                       kind: projection.kind,
                       sourceRecordId: record.id,
                       derivation: projection.derivation,
@@ -60,7 +59,7 @@ async function insertHealthObservationGraph(
                       },
                   })),
               )
-              .returning({ id: observations.id, metric: observations.metric })
+              .returning({ id: observations.id, definitionId: observations.definitionId })
         : []
     const journal = projectHealthRecordToJournal(record, projections)
     const observedAt =
@@ -72,10 +71,9 @@ async function insertHealthObservationGraph(
         .values({
             id: record.id,
             userId: record.userId,
-            definitionId: record.recordType,
+            definitionId: 'health_record',
             valueType: 'compound',
             origin: 'external',
-            metric: 'health_record',
             title: journal?.title,
             category: journal?.category,
             observedAt,
@@ -83,8 +81,8 @@ async function insertHealthObservationGraph(
             sourceRecordId: record.id,
             externalId: record.externalId,
             attributes: {
-                journalDetail: journal?.detail ?? '',
-                primaryMetric: projections[0]?.metric,
+                description: journal?.detail ?? '',
+                primaryDefinitionId: projections[0]?.definitionId,
                 sourceLabel: record.dataOrigin
                     ? `Health Connect · ${record.dataOrigin}`
                     : 'Health Connect',
@@ -104,7 +102,7 @@ async function insertHealthObservationGraph(
                 parentObservationId: root.id,
                 childObservationId: component.id,
                 kind: 'component',
-                role: component.metric,
+                role: component.definitionId,
                 ordinal,
             })),
         )
@@ -460,7 +458,9 @@ export class DeviceService {
                     await transaction
                         .insert(observations)
                         .values({
-                            metric: record.metric,
+                            definitionId: record.metric,
+                            valueType: 'number',
+                            origin: 'external',
                             canonicalValue: record.value,
                             canonicalUnit: record.unit,
                             originalValue: record.value,
@@ -500,7 +500,9 @@ export class DeviceService {
                 await transaction
                     .insert(observations)
                     .values({
-                        metric: record.metric,
+                        definitionId: record.metric,
+                        valueType: 'number',
+                        origin: 'external',
                         canonicalValue: record.value,
                         canonicalUnit: record.unit,
                         originalValue: record.value,

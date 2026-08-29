@@ -33,13 +33,12 @@ import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
 import type { DeviceService, DeviceUploadRecord } from './devices/service.js'
 import type { CanonicalHealthRecordInput } from './health-records/types.js'
-import type { BackupService } from './backup/service.js'
-import type { DataLifecycleService } from './data-lifecycle/service.js'
+import type { DataDeletionService } from './data-lifecycle/deletion.js'
 import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
 import { config } from './config.js'
 import { evaluateGoal, type Goal } from '../src/domain/goals.js'
-import type { Observation } from '../src/domain/health.js'
+import type { NumericObservation } from '../src/domain/health.js'
 
 export async function createApp(
     repository: JournalRepository,
@@ -49,8 +48,7 @@ export async function createApp(
         auth?: AuthService
         mcp?: McpAccessService
         devices?: DeviceService
-        backup?: BackupService
-        lifecycle?: DataLifecycleService
+        deletion?: DataDeletionService
         trustProxy?: boolean
         bootstrapSecret?: string
         database?: PostgresJsDatabase<typeof schemaType>
@@ -351,34 +349,8 @@ export async function createApp(
     app.get('/api/health', async () => ({ status: 'ok' }))
     app.get('/api/openapi.json', async () => openApiContract)
 
-    if (options?.backup) {
-        const backup = options.backup
-        app.get('/api/backups', async () => ({
-            configured: backup.configured(),
-            data: await backup.list(),
-        }))
-        app.post('/api/backups', async (_request, reply) => {
-            if (!backup.configured()) return reply.code(409).send({ error: 'backup_key_missing' })
-            const record = await backup.create()
-            await options.auth?.recordAudit('backup.created', 'backup', record.id)
-            return reply.code(201).send({ data: record })
-        })
-        app.post<{ Params: { filename: string } }>(
-            '/api/backups/:filename/verify',
-            async (request, reply) => {
-                await backup.verify(request.params.filename)
-                await options.auth?.recordAudit(
-                    'backup.verified',
-                    'backup',
-                    request.params.filename,
-                )
-                return reply.code(204).send()
-            },
-        )
-    }
-
     if (options?.dataRepository) {
-        const exports = new ExportService(options.dataRepository)
+        const exports = new ExportService(options.dataRepository, repository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
             const format = request.query.format === 'csv' ? 'csv' : 'json'
             await options.auth?.recordAudit('data.exported', 'format', format)
@@ -394,54 +366,31 @@ export async function createApp(
         })
     }
 
-    if (options?.lifecycle) {
-        const lifecycle = options.lifecycle
-        app.get('/api/retention', async () => ({ data: await lifecycle.listRetentionRules() }))
+    if (options?.deletion) {
+        const deletion = options.deletion
         app.get<{ Querystring: { category?: string } }>(
             '/api/data-summary',
             async (request, reply) => {
                 const category = z
-                    .enum(['observations', 'meals', 'journal'])
+                    .enum(['observations', 'meals', 'checkins'])
                     .safeParse(request.query.category)
                 if (!category.success)
                     return badRequest(request, reply, { validation: category.error })
-                return { data: await lifecycle.categorySummary(category.data) }
-            },
-        )
-        app.put<{ Params: { category: string } }>(
-            '/api/retention/:category',
-            async (request, reply) => {
-                const category = z
-                    .enum(['observations', 'meals', 'journal'])
-                    .safeParse(request.params.category)
-                const input = z
-                    .object({ days: z.number().int().min(1).max(36500), enabled: z.boolean() })
-                    .safeParse(request.body)
-                if (!category.success)
-                    return badRequest(request, reply, { validation: category.error })
-                if (!input.success) return badRequest(request, reply, { validation: input.error })
-                return {
-                    data: await lifecycle.setRetentionRule(
-                        category.data,
-                        input.data.days,
-                        input.data.enabled,
-                    ),
-                }
+                return { data: await deletion.categorySummary(category.data) }
             },
         )
         app.delete<{ Params: { category: string } }>(
             '/api/data/:category',
             async (request, reply) => {
                 const category = z
-                    .enum(['observations', 'meals', 'journal'])
+                    .enum(['observations', 'meals', 'checkins'])
                     .safeParse(request.params.category)
                 if (!category.success)
                     return badRequest(request, reply, {
                         error: 'invalid_category',
                         validation: category.error,
                     })
-                await options.backup?.purge()
-                await lifecycle.deleteCategory(category.data)
+                await deletion.deleteCategory(category.data)
                 return reply.code(204).send()
             },
         )
@@ -454,8 +403,7 @@ export async function createApp(
                     error: 'confirmation_required',
                     validation: input.error,
                 })
-            await options.backup?.purge()
-            await lifecycle.deleteOwnerData()
+            await deletion.deleteOwnerData()
             reply.clearCookie(sessionCookie, { path: '/' })
             reply.clearCookie(csrfCookie, { path: '/' })
             return reply.code(204).send()
@@ -477,7 +425,6 @@ export async function createApp(
                             'observations:write',
                             'meals:write',
                             'checkins:write',
-                            'journal:delete',
                         ]),
                     )
                     .min(1),
@@ -793,13 +740,13 @@ export async function createApp(
         const recordRangeSchema = z.object({
             from: z.string().datetime().optional(),
             to: z.string().datetime().optional(),
-            metrics: z
+            definitionIds: z
                 .string()
                 .transform(value => value.split(',').filter(Boolean))
                 .pipe(z.array(z.string().trim().min(1).max(100)).max(50))
                 .optional(),
         })
-        app.get<{ Querystring: { from?: string; to?: string; metrics?: string } }>(
+        app.get<{ Querystring: { from?: string; to?: string; definitionIds?: string } }>(
             '/api/observations',
             async (request, reply) => {
                 const range = recordRangeSchema.safeParse(request.query)
@@ -861,16 +808,6 @@ export async function createApp(
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
             return { data: updated }
         })
-        app.delete<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
-            if (!(await data.removeObservation(request.params.id)))
-                return reply.code(404).send({ error: 'not_found' })
-            await options?.auth?.recordAudit(
-                'data.record.deleted',
-                'observation',
-                request.params.id,
-            )
-            return reply.code(204).send()
-        })
         app.get<{ Querystring: { from?: string; to?: string } }>(
             '/api/meals',
             async (request, reply) => {
@@ -886,8 +823,7 @@ export async function createApp(
         app.post('/api/meals', async (request, reply) => {
             const input = mealInputSchema.safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })
-            const meal = await data.createMeal(input.data)
-            return reply.code(201).send({ data: meal })
+            return reply.code(201).send({ data: await data.createMeal(input.data) })
         })
         app.patch<{ Params: { id: string } }>('/api/meals/:id', async (request, reply) => {
             const input = mealUpdateSchema.safeParse(request.body)
@@ -981,8 +917,8 @@ export async function createApp(
                     ? ((await data.listObservations({
                           from: from.toISOString(),
                           to: now.toISOString(),
-                          metrics,
-                      })) as Observation[])
+                          definitionIds: metrics,
+                      })) as NumericObservation[])
                     : []
                 return {
                     data: Object.fromEntries(

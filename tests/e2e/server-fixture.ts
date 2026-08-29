@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { evaluateGoal, type Goal } from '../../src/domain/goals'
-import type { Observation } from '../../src/domain/health'
+import type { NumericObservation } from '../../src/domain/health'
 
 /** Authenticates through a server response; no application data is stored in the browser. */
 export async function useAuthenticatedServer(
@@ -15,23 +15,6 @@ export async function useAuthenticatedServer(
     await page.route('**/api/**', route => {
         const path = new URL(route.request().url()).pathname
         if (path.startsWith('/api/journal') && options.journal) {
-            const request = route.request()
-            if (request.method() === 'POST') {
-                const input = JSON.parse(request.postData() ?? '{}') as Record<string, unknown>
-                const saved = { ...input, version: 1, source: input.source ?? 'You' }
-                options.journal.unshift(saved)
-                return route.fulfill({
-                    status: 201,
-                    contentType: 'application/json',
-                    body: JSON.stringify({ data: saved }),
-                })
-            }
-            if (request.method() === 'DELETE') {
-                const id = path.split('/').at(-1)
-                const index = options.journal.findIndex(record => record.id === id)
-                if (index >= 0) options.journal.splice(index, 1)
-                return route.fulfill({ status: 204, body: '' })
-            }
             return route.fulfill({
                 status: 200,
                 contentType: 'application/json',
@@ -80,7 +63,7 @@ export async function useAuthenticatedServer(
                     String(goal.id),
                     evaluateGoal(
                         goal as Goal,
-                        (options.observations ?? []) as unknown as Observation[],
+                        (options.observations ?? []) as unknown as NumericObservation[],
                         now,
                         timezone,
                     ),
@@ -124,11 +107,42 @@ export async function useAuthenticatedServer(
             return route.fulfill({ status: 204, body: '' })
         }
         if (path === '/api/observations' && options.observations) {
+            if (route.request().method() === 'POST') {
+                const input = route.request().postDataJSON() as Record<string, unknown>
+                const saved = { ...input, version: 1 }
+                options.observations.unshift(saved)
+                options.journal?.unshift({
+                    id: input.id,
+                    category: input.category,
+                    title: input.title,
+                    detail: input.textValue ?? '',
+                    source: input.source ?? 'You',
+                    observedAt: input.observedAt,
+                    version: 1,
+                })
+                return route.fulfill({
+                    status: 201,
+                    contentType: 'application/json',
+                    body: JSON.stringify({ data: saved }),
+                })
+            }
             return route.fulfill({
                 status: 200,
                 contentType: 'application/json',
                 body: JSON.stringify({ data: options.observations }),
             })
+        }
+        if (
+            path.startsWith('/api/observations/') &&
+            options.observations &&
+            route.request().method() === 'DELETE'
+        ) {
+            const id = path.split('/').at(-1)
+            const observationIndex = options.observations.findIndex(record => record.id === id)
+            if (observationIndex >= 0) options.observations.splice(observationIndex, 1)
+            const journalIndex = options.journal?.findIndex(record => record.id === id) ?? -1
+            if (journalIndex >= 0) options.journal?.splice(journalIndex, 1)
+            return route.fulfill({ status: 204, body: '' })
         }
         if (path === '/api/data-summary') {
             return route.fulfill({
@@ -139,7 +153,6 @@ export async function useAuthenticatedServer(
                         count: 0,
                         oldest: null,
                         newest: null,
-                        lastRetentionRun: null,
                     },
                 }),
             })

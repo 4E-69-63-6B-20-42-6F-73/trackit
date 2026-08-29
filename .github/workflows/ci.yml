@@ -1,7 +1,6 @@
 name: Verify TrackIt
 
 on:
-    push:
     pull_request:
 
 permissions:
@@ -29,8 +28,6 @@ jobs:
         env:
             DATABASE_URL: postgres://trackit:trackit-ci@127.0.0.1:5432/trackit
             TRACKIT_DB_PASSWORD: trackit-ci
-            BACKUP_DIR: ${{ github.workspace }}/backup-fixtures
-            BACKUP_ENCRYPTION_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
             TRACKIT_POSTGRES_INTEGRATION: 'true'
 
         steps:
@@ -64,24 +61,6 @@ jobs:
 
             - name: End-to-end tests
               run: npm run test:e2e
-
-            - name: Install PostgreSQL 17 client tools
-              run: |
-                  sudo apt-get update
-                  sudo apt-get install --yes postgresql-common
-                  sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-                  sudo apt-get update
-                  sudo apt-get install --yes postgresql-client-17
-
-                  echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
-
-                  /usr/lib/postgresql/17/bin/psql --version
-                  /usr/lib/postgresql/17/bin/pg_dump --version
-                  /usr/lib/postgresql/17/bin/pg_restore --version
-
-            # Lets disable it for now until we reworked it.
-            # - name: Backup and clean restore drill
-            #   run: bash scripts/restore-drill.sh
 
             - name: Build runtime container
               run: docker build --tag trackit-ci:test .

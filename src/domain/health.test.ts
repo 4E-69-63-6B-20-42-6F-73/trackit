@@ -5,12 +5,12 @@ import {
     pearsonCorrelation,
     rollingBaselineDelta,
     weeklySeries,
-    type Observation,
+    type NumericObservation,
 } from './health'
 
-const observation = (id: string, observedAt: string, value: number): Observation => ({
+const observation = (id: string, observedAt: string, value: number): NumericObservation => ({
     id,
-    metric: 'weight',
+    definitionId: 'weight',
     canonicalValue: value,
     canonicalUnit: 'kg',
     originalValue: value,
@@ -23,7 +23,7 @@ const observation = (id: string, observedAt: string, value: number): Observation
 describe('health calculations', () => {
     it('converts display units without changing canonical input', () => {
         const value = 80
-        expect(displayValue(value, 'kg', 'lb')).toBeCloseTo(176.37, 2)
+        expect(displayValue('weight', value, 'kg', 'lb')).toBeCloseTo(176.37, 2)
         expect(value).toBe(80)
     })
 
@@ -40,8 +40,8 @@ describe('health calculations', () => {
 
     it('sums additive records and uses the latest scalar record reproducibly', () => {
         const records = [
-            { ...observation('one', '2026-08-20T08:00:00Z', 1000), metric: 'steps' },
-            { ...observation('two', '2026-08-20T09:00:00Z', 2500), metric: 'steps' },
+            { ...observation('one', '2026-08-20T08:00:00Z', 1000), definitionId: 'steps' },
+            { ...observation('two', '2026-08-20T09:00:00Z', 2500), definitionId: 'steps' },
         ]
         expect(dailySeries(records, new Date('2026-08-20T12:00:00Z'), 1)[0].value).toBe(3500)
         expect(
@@ -81,7 +81,7 @@ describe('health calculations', () => {
                 totalDays: 7,
             },
         ])
-        const steps = scalar.map(record => ({ ...record, metric: 'steps' }))
+        const steps = scalar.map(record => ({ ...record, definitionId: 'steps' }))
         expect(weeklySeries(steps, start, 7, 'Europe/Amsterdam')[0].value).toBe(158)
     })
 

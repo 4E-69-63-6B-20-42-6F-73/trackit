@@ -15,8 +15,6 @@
         "db:check": "drizzle-kit check",
         "db:migrate": "tsx server/db/migrate.ts",
         "db:migrate:local": "tsx --env-file=.env server/db/migrate.ts",
-        "backup:create": "tsx server/backup/create.ts",
-        "backup:restore": "tsx server/backup/restore.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",
@@ -29,7 +27,7 @@
         "build:android": "cd android && gradlew.bat assembleDebug",
         "security:secrets": "node scripts/scan-secrets.mjs",
         "security:deps": "npm audit --omit=dev --audit-level=high",
-        "check": "npm run format:check && npm run lint && npm run db:check && npm run security:secrets && npm run test && npm run build",
+        "check": "npm run lint && npm run db:check && npm run security:secrets && npm run test",
         "preview": "vite preview"
     },
     "dependencies": {

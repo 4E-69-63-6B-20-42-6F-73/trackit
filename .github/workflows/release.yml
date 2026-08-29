@@ -27,8 +27,6 @@ jobs:
                     --health-retries 10
         env:
             DATABASE_URL: postgres://trackit:trackit-ci@127.0.0.1:5432/trackit
-            BACKUP_DIR: ${{ github.workspace }}/backup-fixtures
-            BACKUP_ENCRYPTION_KEY: AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=
             TRACKIT_POSTGRES_INTEGRATION: 'true'
         steps:
             - uses: actions/checkout@v5
@@ -48,10 +46,6 @@ jobs:
             - run: npx playwright install --with-deps chromium firefox webkit
             - run: npm run test:e2e
             - run: npm run db:migrate
-            - name: Install PostgreSQL client tools
-              run: sudo apt-get update && sudo apt-get install --yes postgresql-client
-            - name: Backup and clean restore release gate
-              run: bash scripts/restore-drill.sh
             - name: Build and scan runtime container
               run: docker build --tag trackit-release-gate:test .
             - uses: aquasecurity/trivy-action@v0.36.0

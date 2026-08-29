@@ -8,18 +8,18 @@ import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
 import { nav } from './domain/data'
-import type { JournalEvent, Page } from './domain/types'
+import type { Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
+import { useObservationCommands } from './hooks/useObservationCommands'
+import type { CreateObservationInput } from './lib/observationApi'
 import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
 const Journal = lazy(() => import('./pages/Journal').then(module => ({ default: module.Journal })))
-const Nutrition = lazy(() =>
-    import('./pages/Nutrition').then(module => ({ default: module.Nutrition })),
-)
 const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: module.Trends })))
 const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
 const Goals = lazy(() => import('./pages/Goals').then(module => ({ default: module.Goals })))
+const Library = lazy(() => import('./pages/Library').then(module => ({ default: module.Library })))
 const Connections = lazy(() =>
     import('./pages/Connections').then(module => ({ default: module.Connections })),
 )
@@ -44,24 +44,16 @@ const MobileMore = lazy(() =>
 const Onboarding = lazy(() =>
     import('./components/Onboarding').then(module => ({ default: module.Onboarding })),
 )
-const ReminderPrompt = lazy(() =>
-    import('./components/ReminderPrompt').then(module => ({ default: module.ReminderPrompt })),
-)
 
 const pagePaths: Record<Page, string> = {
     Today: '/today',
-    Nutrition: '/nutrition',
     Journal: '/journal',
-    Goals: '/goals',
     Trends: '/trends',
-    Metrics: '/metrics',
+    Goals: '/goals',
+    Library: '/library',
     Connections: '/connections',
     Settings: '/settings',
 }
-
-const pathPages = Object.fromEntries(
-    Object.entries(pagePaths).map(([page, path]) => [path, page]),
-) as Record<string, Page>
 
 const localDateKey = (date: Date) =>
     `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
@@ -87,11 +79,19 @@ export default function App() {
     const navigate = useNavigate()
     const { openLogger } = useLogger()
     const location = useLocation()
-    const page = location.pathname.startsWith('/settings')
+    const page: Page = location.pathname.startsWith('/settings')
         ? 'Settings'
         : location.pathname.startsWith('/connections')
           ? 'Connections'
-          : (pathPages[location.pathname] ?? 'Today')
+          : location.pathname.startsWith('/library')
+            ? 'Library'
+            : location.pathname.startsWith('/journal')
+              ? 'Journal'
+              : location.pathname.startsWith('/trends')
+                ? 'Trends'
+                : location.pathname.startsWith('/goals')
+                  ? 'Goals'
+                  : 'Today'
     const [selectedDay, setSelectedDay] = useState<string | null>(() => localDateKey(new Date()))
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
@@ -107,9 +107,10 @@ export default function App() {
             : page === 'Journal' && selectedDay
               ? { ...dayRange(selectedDay), limit: 100 }
               : { limit: page === 'Journal' ? 100 : 10 }
-    const { events, add, remove, update, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
+    const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
-    const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
+    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(refresh)
+    const [lastAdded, setLastAdded] = useState<{ id: string; title: string } | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
 
@@ -119,21 +120,9 @@ export default function App() {
     }, [location.pathname])
 
     const openPage = (nextPage: Page) => navigate(pagePaths[nextPage])
-    const duplicate = (event: JournalEvent) => {
-        const copy = {
-            ...event,
-            id: crypto.randomUUID(),
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            source: 'You',
-            version: undefined,
-        }
-        add(copy, true)
-        setLastAdded(copy)
-    }
-    const addQuick = (event: JournalEvent, allowDuplicate = false) => {
-        if (!add(event, allowDuplicate)) return false
-        setLastAdded(event)
-        return true
+    const addQuick = (input: CreateObservationInput) => {
+        add(input)
+        setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
     }
 
     const loading = (
@@ -155,9 +144,12 @@ export default function App() {
                 />
                 <main ref={mainRef} className="main" id="main-content" tabIndex={-1}>
                     <Header page={page} />
-                    {syncFailure && (
+                    {(commandFailure || syncFailure) && (
                         <Box px="xl" pt="md">
-                            <SyncStatus message={syncFailure} retry={retry} />
+                            <SyncStatus
+                                message={commandFailure || syncFailure}
+                                retry={commandFailure ? retryCommand : retry}
+                            />
                         </Box>
                     )}
                     <Suspense fallback={loading}>
@@ -185,26 +177,24 @@ export default function App() {
                                     <Journal
                                         events={events}
                                         remove={remove}
-                                        duplicate={duplicate}
-                                        update={update}
+                                        update={(event, changes) =>
+                                            update(event.id, {
+                                                ...changes,
+                                                version: event.version ?? 1,
+                                            })
+                                        }
                                         hasOlder={hasOlder}
                                         loadingOlder={loadingOlder}
                                         loadOlder={loadOlder}
                                     />
                                 }
                             />
-                            <Route
-                                path="/nutrition"
-                                element={
-                                    <Nutrition
-                                        selectedDate={selectedDay}
-                                        onSelectedDateChange={setSelectedDay}
-                                    />
-                                }
-                            />
                             <Route path="/goals" element={<Goals />} />
                             <Route path="/trends" element={<Trends />} />
-                            <Route path="/metrics" element={<Metrics />} />
+                            <Route path="/library" element={<Library />} />
+                            <Route path="/library/metrics" element={<Metrics />} />
+                            <Route path="/nutrition" element={<Navigate to="/library" replace />} />
+                            <Route path="/metrics" element={<Navigate to="/library/metrics" replace />} />
                             <Route path="/connections" element={<Connections />} />
                             <Route path="/connections/devices" element={<DeviceManagement />} />
                             <Route path="/connections/devices/new" element={<DeviceNew />} />
@@ -222,20 +212,7 @@ export default function App() {
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
                 {nav
-                    .filter(({ label }) => ['Today', 'Journal'].includes(label))
-                    .map(({ label, icon: Icon }) => (
-                        <NavLink
-                            className={page === label ? 'active' : ''}
-                            aria-current={page === label ? 'page' : undefined}
-                            to={pagePaths[label]}
-                            key={label}
-                        >
-                            <Icon size={21} />
-                            <span>{label}</span>
-                        </NavLink>
-                    ))}
-                {nav
-                    .filter(({ label }) => label === 'Trends')
+                    .filter(({ label }) => ['Today', 'Journal', 'Trends', 'Goals'].includes(label))
                     .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
@@ -248,11 +225,7 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={
-                        ['Nutrition', 'Goals', 'Metrics', 'Connections', 'Settings'].includes(page)
-                            ? 'active'
-                            : ''
-                    }
+                    className={['Library', 'Connections', 'Settings'].includes(page) ? 'active' : ''}
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"
@@ -265,7 +238,6 @@ export default function App() {
             </nav>
             <Suspense fallback={null}>
                 <Onboarding />
-                <ReminderPrompt open={openLogger} />
             </Suspense>
             {moreOpen && (
                 <Suspense fallback={null}>
@@ -274,9 +246,9 @@ export default function App() {
             )}
             <LoggerHost
                 add={addQuick}
-                selectedDate={['Today', 'Journal', 'Nutrition'].includes(page) ? selectedDay : null}
+                selectedDate={['Today', 'Journal'].includes(page) ? selectedDay : null}
             />
-            {!['Goals', 'Metrics', 'Connections'].includes(page) && <GlobalLogFab />}
+            {!['Connections'].includes(page) && <GlobalLogFab />}
             {lastAdded && (
                 <Notification
                     className="record-feedback"

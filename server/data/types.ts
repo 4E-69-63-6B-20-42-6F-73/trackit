@@ -1,10 +1,16 @@
 import { z } from 'zod'
 import { validateGoal } from '../../src/domain/goals.js'
+import { observationDefinition } from '../../src/domain/observationDefinitions.js'
 
 export const observationInputSchema = z
     .object({
         id: z.string().uuid().optional(),
-        metric: z.string().trim().min(1).max(100),
+        definitionId: z
+            .string()
+            .trim()
+            .min(1)
+            .max(100)
+            .refine(value => observationDefinition(value), 'Unknown observation definition'),
         valueType: z.enum(['number', 'text', 'boolean', 'category', 'event']).default('number'),
         value: z.number().finite().optional(),
         unit: z.string().trim().min(1).max(40).optional(),
@@ -19,6 +25,13 @@ export const observationInputSchema = z
         source: z.string().trim().min(1).max(120).default('You'),
     })
     .superRefine((input, context) => {
+        const definition = observationDefinition(input.definitionId)
+        if (definition && definition.valueType !== input.valueType)
+            context.addIssue({
+                code: 'custom',
+                path: ['valueType'],
+                message: `${input.definitionId} observations require ${definition.valueType} values`,
+            })
         if (input.valueType === 'number' && (input.value === undefined || !input.unit))
             context.addIssue({
                 code: 'custom',
@@ -29,7 +42,7 @@ export const observationInputSchema = z
     })
 
 /** UTC instant range. `from` is inclusive and `to` is exclusive. */
-export type RecordRange = { from?: string; to?: string; metrics?: string[] }
+export type RecordRange = { from?: string; to?: string; definitionIds?: string[] }
 
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),
@@ -82,7 +95,6 @@ export const preferencesInputSchema = z.object({
             }
         }, 'Invalid locale')
         .optional(),
-    units: z.enum(['metric', 'imperial']).optional(),
     metricPreferences: z
         .record(
             z.string(),
@@ -103,59 +115,11 @@ export const preferencesInputSchema = z.object({
             }),
         )
         .optional(),
-    goals: z.record(z.string(), z.number().finite()).optional(),
     mcpEnabled: z.boolean().optional(),
     experience: z
         .object({
-            onboardingStep: z.number().int().min(0).max(5).default(0),
-            onboardingComplete: z.boolean().default(false),
-            dataMode: z.enum(['manual', 'health-connect', 'hybrid']).default('manual'),
-            focusAreas: z
-                .array(z.enum(['energy', 'nutrition', 'sleep', 'movement', 'body', 'collect']))
-                .max(6)
-                .default(['collect']),
-            visibleCards: z
-                .array(
-                    z.enum(['sleep', 'heart', 'energy', 'weight', 'progress', 'trend', 'journal']),
-                )
-                .max(7)
-                .default(['sleep', 'heart', 'energy', 'weight', 'progress', 'trend', 'journal']),
-            reminders: z
-                .array(
-                    z.object({
-                        id: z.string().uuid(),
-                        label: z.string().trim().min(1).max(100),
-                        kind: z.enum(['Meal', 'Water', 'Weight', 'Check-in', 'Symptom', 'Note']),
-                        time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/),
-                        enabled: z.boolean(),
-                    }),
-                )
-                .max(20)
-                .default([]),
-            routines: z
-                .array(
-                    z.object({
-                        id: z.string().uuid(),
-                        name: z.string().trim().min(1).max(100),
-                        kinds: z.array(z.enum(['Water', 'Weight', 'Check-in', 'Symptom', 'Note'])),
-                    }),
-                )
-                .max(20)
-                .default([]),
-            experiments: z
-                .array(
-                    z.object({
-                        id: z.string().uuid(),
-                        question: z.string().trim().min(1).max(240),
-                        primaryMetric: z.string().trim().min(1).max(100),
-                        comparisonMetric: z.string().trim().min(1).max(100).optional(),
-                        startedAt: z.string().datetime(),
-                        endedAt: z.string().datetime().optional(),
-                        status: z.enum(['active', 'completed']).default('active'),
-                    }),
-                )
-                .max(30)
-                .default([]),
+            onboardingStep: z.number().int().min(0).max(10).optional(),
+            onboardingComplete: z.boolean().optional(),
             dismissedWeeklyReflection: z.string().optional(),
         })
         .partial()

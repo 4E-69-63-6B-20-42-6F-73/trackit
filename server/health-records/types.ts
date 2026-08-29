@@ -23,7 +23,7 @@ export type CanonicalHealthRecord = Omit<CanonicalHealthRecordInput, 'startTime'
 }
 
 export type DerivedObservation = {
-    metric: string
+    definitionId: string
     value: number
     unit: string
     observedAt?: Date

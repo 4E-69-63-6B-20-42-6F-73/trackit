@@ -27,6 +27,8 @@ import {
 import { dateKeyInTimezone, datesThrough, localDayRange } from './timezone.js'
 import { getEffectiveMetricSeries } from './effective-series.js'
 import { markProjectionDatesDirty } from './projection-state.js'
+import { observationDefinition } from '../../src/domain/observationDefinitions.js'
+import { convertMetricValue } from '../../src/domain/metrics.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -35,17 +37,20 @@ type MealAttributes = {
     nutrientSnapshot: Record<string, number>
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
     favorite: boolean
-    primaryMetric: 'calories'
+    primaryDefinitionId: 'calories'
 }
 
-const mealFromObservation = (record: typeof observations.$inferSelect) => {
+const mealFromObservation = (
+    record: typeof observations.$inferSelect,
+    nutrientSnapshot?: Record<string, number>,
+) => {
     const attributes = record.attributes as Partial<MealAttributes>
     return {
         id: record.id,
         name: record.title ?? 'Meal',
         mealType: attributes.mealType ?? 'Snack',
         eatenAt: record.observedAt,
-        nutrientSnapshot: attributes.nutrientSnapshot ?? {},
+        nutrientSnapshot: nutrientSnapshot ?? attributes.nutrientSnapshot ?? {},
         nutritionQuality: attributes.nutritionQuality ?? 'complete',
         favorite: attributes.favorite ?? false,
         sourceId: record.sourceId,
@@ -249,10 +254,10 @@ export class PostgresDataRepository implements DataRepository {
             end
         )`
         return this.database
-            .selectDistinct({ metric: observations.metric, provider, connector })
+            .selectDistinct({ definitionId: observations.definitionId, provider, connector })
             .from(observations)
             .where(isNull(observations.deletedAt))
-            .orderBy(observations.metric, provider, connector)
+            .orderBy(observations.definitionId, provider, connector)
     }
 
     constructor(private readonly database: Database) {}
@@ -278,7 +283,7 @@ export class PostgresDataRepository implements DataRepository {
 
     async createObservation(input: {
         id?: string
-        metric: string
+        definitionId: string
         valueType?: 'number' | 'text' | 'boolean' | 'category' | 'event'
         value?: number
         unit?: string
@@ -291,16 +296,30 @@ export class PostgresDataRepository implements DataRepository {
         observedAt: string
         source: string
     }) {
+        const definition = observationDefinition(input.definitionId)
+        const valueType = input.valueType ?? 'number'
+        if (!definition) throw new Error(`Unknown observation definition: ${input.definitionId}`)
+        if (definition.valueType !== valueType)
+            throw new Error(`${input.definitionId} observations require ${definition.valueType}`)
+        const canonicalValue =
+            valueType === 'number' && input.value !== undefined && input.unit && definition.metric
+                ? convertMetricValue(
+                      input.definitionId,
+                      input.value,
+                      input.unit,
+                      definition.metric.canonicalUnit,
+                  )
+                : input.value
+        const canonicalUnit = definition.metric?.canonicalUnit ?? input.unit
         const [record] = await this.database
             .insert(observations)
             .values({
                 id: input.id,
-                definitionId: input.metric,
-                valueType: input.valueType ?? 'number',
+                definitionId: input.definitionId,
+                valueType,
                 origin: 'manual',
-                metric: input.metric,
-                canonicalValue: input.value,
-                canonicalUnit: input.unit,
+                canonicalValue,
+                canonicalUnit,
                 originalValue: input.value,
                 originalUnit: input.unit,
                 textValue: input.textValue,
@@ -364,7 +383,7 @@ export class PostgresDataRepository implements DataRepository {
                         ? undefined
                         : {
                               ...(before?.attributes as Record<string, unknown> | undefined),
-                              journalDetail: input.detail,
+                              description: input.detail,
                           },
                 observedAt: input.observedAt ? new Date(input.observedAt) : undefined,
                 version: input.version + 1,
@@ -419,7 +438,33 @@ export class PostgresDataRepository implements DataRepository {
             .from(observations)
             .where(and(...conditions))
             .orderBy(desc(observations.observedAt))
-        return records.map(mealFromObservation)
+        if (!records.length) return []
+        const components = await this.database
+            .select({
+                parentId: observationRelations.parentObservationId,
+                definitionId: observations.definitionId,
+                value: observations.canonicalValue,
+            })
+            .from(observationRelations)
+            .innerJoin(observations, eq(observationRelations.childObservationId, observations.id))
+            .where(
+                and(
+                    inArray(
+                        observationRelations.parentObservationId,
+                        records.map(record => record.id),
+                    ),
+                    eq(observationRelations.kind, 'component'),
+                    isNull(observations.deletedAt),
+                ),
+            )
+        const nutrients = new Map<string, Record<string, number>>()
+        for (const component of components) {
+            if (component.value === null) continue
+            const values = nutrients.get(component.parentId) ?? {}
+            values[component.definitionId] = component.value
+            nutrients.set(component.parentId, values)
+        }
+        return records.map(record => mealFromObservation(record, nutrients.get(record.id)))
     }
 
     async createMeal(input: {
@@ -439,7 +484,7 @@ export class PostgresDataRepository implements DataRepository {
                 nutrientSnapshot: input.nutrients,
                 favorite: input.favorite,
                 nutritionQuality: input.nutritionQuality,
-                primaryMetric: 'calories',
+                primaryDefinitionId: 'calories',
             }
             const [root] = await transaction
                 .insert(observations)
@@ -448,7 +493,6 @@ export class PostgresDataRepository implements DataRepository {
                     definitionId: 'meal',
                     valueType: 'compound',
                     origin: 'manual',
-                    metric: 'meal',
                     title: input.name,
                     category: 'Meals',
                     observedAt: new Date(input.eatenAt),
@@ -474,7 +518,6 @@ export class PostgresDataRepository implements DataRepository {
                             definitionId: component.metric,
                             valueType: 'number',
                             origin: 'manual',
-                            metric: component.metric,
                             canonicalValue: component.value,
                             canonicalUnit: component.unit,
                             originalValue: component.value,
@@ -540,7 +583,7 @@ export class PostgresDataRepository implements DataRepository {
                 nutrientSnapshot: input.nutrients ?? previous.nutrientSnapshot ?? {},
                 favorite: input.favorite ?? previous.favorite ?? false,
                 nutritionQuality: input.nutritionQuality ?? previous.nutritionQuality ?? 'complete',
-                primaryMetric: 'calories',
+                primaryDefinitionId: 'calories',
             }
             const [record] = await transaction
                 .update(observations)
@@ -593,7 +636,6 @@ export class PostgresDataRepository implements DataRepository {
                                 definitionId: component.metric,
                                 valueType: 'number',
                                 origin: 'manual',
-                                metric: component.metric,
                                 canonicalValue: component.value,
                                 canonicalUnit: component.unit,
                                 originalValue: component.value,

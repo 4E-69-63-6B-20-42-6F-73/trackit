@@ -1,8 +1,8 @@
 import { Button, Group, Stack, Text } from '@mantine/core'
-import type { Observation } from '../domain/health'
+import type { NumericObservation } from '../domain/health'
 import { formatMetricValue, friendlySourceName } from '../domain/formatting'
 
-function sourceLabel(observation: Observation) {
+function sourceLabel(observation: NumericObservation) {
     const origin = observation.metadata?.dataOrigin
     if (typeof origin === 'string') return friendlySourceName(origin)
     if (observation.sourceId) return `source ${observation.sourceId}`
@@ -14,8 +14,8 @@ export function ObservationRecords({
     onToggleExcluded,
     showAll = false,
 }: {
-    observations: Observation[]
-    onToggleExcluded: (observation: Observation) => void
+    observations: NumericObservation[]
+    onToggleExcluded: (observation: NumericObservation) => void
     showAll?: boolean
 }) {
     if (!observations.length) return null

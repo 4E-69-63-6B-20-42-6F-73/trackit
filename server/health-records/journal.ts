@@ -25,7 +25,7 @@ const definitions: Record<string, { title: string; category: JournalCategory; me
         BodyFatRecord: { title: 'Body fat', category: 'Measurements', metrics: ['body_fat'] },
         HeightRecord: { title: 'Height', category: 'Measurements', metrics: ['height'] },
         Vo2MaxRecord: { title: 'VO₂ max', category: 'Measurements', metrics: ['vo2_max'] },
-        HydrationRecord: { title: 'Hydration', category: 'Measurements', metrics: ['water'] },
+        HydrationRecord: { title: 'Hydration', category: 'Measurements', metrics: ['hydration'] },
         LeanBodyMassRecord: {
             title: 'Lean body mass',
             category: 'Measurements',
@@ -46,7 +46,7 @@ const humanizeExerciseType = (value: unknown) =>
 
 const format = (observation: DerivedObservation) => {
     const precision = ['hours', 'kg', 'm', '%', 'L'].includes(observation.unit) ? 1 : 0
-    return `${metricLabel(observation.metric)} ${observation.value.toFixed(precision)} ${observation.unit}`
+    return `${metricLabel(observation.definitionId)} ${observation.value.toFixed(precision)} ${observation.unit}`
 }
 
 /**
@@ -61,7 +61,9 @@ export function projectHealthRecordToJournal(
     const definition = definitions[record.recordType]
     if (!definition || !observations.length) return null
     const summaries = definition.metrics
-        .flatMap(metric => observations.find(observation => observation.metric === metric) ?? [])
+        .flatMap(
+            metric => observations.find(observation => observation.definitionId === metric) ?? [],
+        )
         .map(format)
     if (!summaries.length) return null
     const title =

@@ -12,13 +12,6 @@ const configSchema = z.object({
         .default('false')
         .transform(value => value === 'true'),
     API_RATE_LIMIT_MAX: z.coerce.number().int().min(60).max(10_000).default(600),
-    BACKUPS_ENABLED: z
-        .enum(['true', 'false'])
-        .default('false')
-        .transform(value => value === 'true'),
-    BACKUP_DIR: z.string().default('./backups'),
-    BACKUP_INTERVAL_HOURS: z.coerce.number().positive().default(24),
-    BACKUP_ENCRYPTION_KEY: z.string().optional(),
     BOOTSTRAP_SECRET: z.string().min(32).optional(),
     TRACKIT_DB_HOST: z.string().default(process.env.NODE_ENV === 'production' ? 'db' : 'localhost'),
     TRACKIT_DB_PORT: z.coerce.number().int().positive().default(5432),

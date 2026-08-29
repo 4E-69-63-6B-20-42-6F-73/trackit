@@ -487,7 +487,6 @@ textarea:focus-visible,
     overflow: hidden;
 }
 .metric-derived-note,
-.metric-journal-setting,
 .metric-source-settings {
     border-top: 1px solid var(--line);
     display: grid;
@@ -1131,24 +1130,6 @@ textarea:focus-visible,
     display: grid;
     gap: 12px;
     grid-template-columns: 1fr 1fr;
-}
-.experiment-link {
-    background: #fffefa;
-    border: 1px solid #cbded8;
-    border-radius: 10px;
-    color: var(--ink);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    padding: 10px 12px;
-    text-align: left;
-}
-.experiment-link span {
-    color: var(--teal);
-    font-size: 10px;
-    font-weight: 750;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
 }
 .trend-confidence-note {
     margin-bottom: 12px;

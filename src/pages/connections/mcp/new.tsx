@@ -23,7 +23,6 @@ const scopes = [
     { value: 'observations:write', label: 'Add health data', group: 'Change data' },
     { value: 'meals:write', label: 'Add meals and manage foods', group: 'Change data' },
     { value: 'checkins:write', label: 'Add check-ins', group: 'Change data' },
-    { value: 'journal:delete', label: 'Delete journal entries', group: 'Change data' },
 ]
 
 const defaultExpiryDate = () => {
@@ -219,7 +218,7 @@ export function McpNew() {
                                                     checked={selectedScopes.includes(scope.value)}
                                                     onChange={event =>
                                                         setSelectedScopes(current =>
-                                                            event.target.checked
+                                                            event.currentTarget.checked
                                                                 ? [...current, scope.value]
                                                                 : current.filter(
                                                                       value =>

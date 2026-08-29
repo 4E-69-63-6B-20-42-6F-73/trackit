@@ -14,12 +14,12 @@
 ## Install and upgrade
 
 Copy `.env.example` to `.env`, replace the database password, set the public HTTPS origin, and run
-`npm start`. Create and verify an encrypted backup before every upgrade. Pull the desired release,
-review `CHANGELOG.md`, then use `scripts/proxmox-deploy.sh` for a health-gated build and activation;
+`npm start`. Pull the desired release, review `CHANGELOG.md`, then use
+`scripts/proxmox-deploy.sh` for a health-gated build and activation;
 migrations run automatically before traffic is served. Configure the reverse proxy retry window
 from `DEPLOYMENT.md` so safe reads wait through the short container replacement.
-Never downgrade the database schema in place. Roll back by stopping the stack, restoring the
-pre-upgrade archive into a clean database, and starting the previous application image.
+Never downgrade the database schema in place. Infrastructure operators are responsible for any
+database snapshot and recovery policy outside TrackIt.
 
 ## Troubleshooting
 
@@ -33,25 +33,21 @@ pre-upgrade archive into a clean database, and starting the previous application
   localhost.
 - Android rejects cleartext and invalid certificates intentionally. Install a private CA on the
   device instead of disabling validation.
-- Backup failures surface in Settings. Confirm `TRACKIT_BACKUP_KEY`, write access to `/backups`, and
-  available disk space.
 
 ## Release artifacts
 
 Release builds publish a multi-architecture OCI container archive (amd64 and arm64) and signed
 Android APK with SHA-256 checksum files. Keep the
 Compose file, `.env.example`, migration directory, changelog, and support matrix alongside every
-release. A release is not supported until clean install, previous-version upgrade, backup verify,
-clean restore, accessibility, and five-year history tests pass.
+release. A release is not supported until clean install, previous-version upgrade, accessibility,
+and five-year history tests pass.
 
 The `trackit-<version>-selfhost.tar.gz` artifact contains the complete Docker build context. Unpack
 it, copy `.env.example` to `.env`, configure the required values, and run `npm start`; no source
 checkout is required. Verify every downloaded artifact against `SHA256SUMS` before use.
 
-CI creates and restores five years of representative observations and Journal records, verifies
-their counts and the recorded restore diagnostic, and scans the built runtime container for high
-and critical vulnerabilities. The pre-upgrade backup plus clean-database restore is also the
-supported application rollback drill; database schemas are never downgraded in place.
+CI exercises representative observations and Journal records and scans the built runtime container
+for high and critical vulnerabilities. Database schemas are never downgraded in place.
 
 Tagged release builds require the protected `ANDROID_KEYSTORE_BASE64`,
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD` repository secrets.

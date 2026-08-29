@@ -49,8 +49,6 @@ const actionLabel = (action: string) =>
         'auth.session_revoke': 'Session revoked',
         'data.record.deleted': 'Journal record deleted',
         'data.exported': 'Data export downloaded',
-        'backup.created': 'Encrypted backup created',
-        'backup.verified': 'Backup verified',
     })[action] ?? action.replaceAll('.', ' ').replace(/^./, letter => letter.toUpperCase())
 
 export function SecurityPanel() {
@@ -108,8 +106,7 @@ export function SecurityPanel() {
         if (auditFilter === 'all') return true
         if (auditFilter === 'authentication') return event.action.startsWith('auth.')
         if (auditFilter === 'data') return event.action.startsWith('data.')
-        if (auditFilter === 'backup') return event.action.startsWith('backup.')
-        return event.action.startsWith('retention.')
+        return true
     })
 
     return (
@@ -179,8 +176,6 @@ export function SecurityPanel() {
                         { value: 'all', label: 'All activity' },
                         { value: 'authentication', label: 'Sign-ins & sessions' },
                         { value: 'data', label: 'Data changes' },
-                        { value: 'backup', label: 'Backups' },
-                        { value: 'retention', label: 'Retention' },
                     ]}
                 />
             </Group>

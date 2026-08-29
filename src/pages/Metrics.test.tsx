@@ -23,7 +23,7 @@ const renderPage = (preferences = base) =>
         </MantineProvider>,
     )
 
-describe('Metrics page', () => {
+describe('Metric Center', () => {
     beforeEach(() => {
         vi.mocked(updatePreferences).mockReset()
         vi.mocked(listMetricSources).mockResolvedValue([])
@@ -37,7 +37,7 @@ describe('Metrics page', () => {
         renderPage()
         expect(screen.getByText('Resting heart rate')).toBeInTheDocument()
         expect(screen.getByText('min')).toBeInTheDocument()
-        expect(screen.getAllByText('h').length).toBeGreaterThan(0)
+        expect(screen.getByText('h')).toBeInTheDocument()
         expect(screen.getByText('steps').closest('.metric-row')).not.toHaveAttribute('disabled')
         await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
         await userEvent.click(await screen.findByRole('radio', { name: 'Pounds (lb)' }))
@@ -68,24 +68,6 @@ describe('Metrics page', () => {
             ),
         )
     })
-    it('persists whether a metric appears in Journal', async () => {
-        vi.mocked(updatePreferences).mockResolvedValue(base)
-        renderPage()
-        await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
-        const toggle = await screen.findByLabelText(/Show in Journal/)
-        expect(toggle).toBeChecked()
-        await userEvent.click(toggle)
-        await userEvent.click(screen.getByRole('button', { name: 'Save' }))
-        await waitFor(() =>
-            expect(updatePreferences).toHaveBeenCalledWith(
-                expect.objectContaining({
-                    metricPreferences: expect.objectContaining({
-                        weight: expect.objectContaining({ showInJournal: false }),
-                    }),
-                }),
-            ),
-        )
-    })
     it('restores a persisted custom unit', async () => {
         renderPage({ ...base, metricPreferences: { weight: { displayUnit: 'lb' } } })
         expect(screen.getAllByText('Custom')).not.toHaveLength(0)
@@ -93,14 +75,13 @@ describe('Metrics page', () => {
         await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
         expect(await screen.findByRole('radio', { name: 'Pounds (lb)' })).toBeChecked()
     })
-    it('applies the imperial preset from the registry', async () => {
+    it('applies the imperial display preset from the registry', async () => {
         vi.mocked(updatePreferences).mockResolvedValue(base)
         renderPage()
         await userEvent.click(screen.getByRole('radio', { name: 'Imperial' }))
         await waitFor(() =>
             expect(updatePreferences).toHaveBeenCalledWith(
                 expect.objectContaining({
-                    units: 'imperial',
                     metricPreferences: expect.objectContaining({
                         weight: { displayUnit: 'lb' },
                         water: { displayUnit: 'fl oz' },
@@ -108,24 +89,22 @@ describe('Metrics page', () => {
                 }),
             ),
         )
+        expect(vi.mocked(updatePreferences).mock.calls.at(-1)?.[0]).not.toHaveProperty('units')
     })
     it('shows provider-aware sources and persists overlap priority', async () => {
         vi.mocked(listMetricSources).mockResolvedValue([
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 provider: 'Garmin',
                 connector: 'Health Connect',
             },
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 provider: 'Samsung Health',
                 connector: 'Health Connect',
             },
         ])
-        vi.mocked(updatePreferences).mockImplementation(async input => ({
-            ...base,
-            ...input,
-        }))
+        vi.mocked(updatePreferences).mockImplementation(async input => ({ ...base, ...input }))
         renderPage()
         await userEvent.click(await screen.findByRole('button', { name: /Configure Steps/ }))
         expect(await screen.findByText('Garmin')).toBeInTheDocument()

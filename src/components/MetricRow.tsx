@@ -17,9 +17,7 @@ export function MetricRow({
         <>
             <span className="metric-row-name">{metric.name}</span>
             <span className="metric-row-value">
-                <span className="metric-row-unit">
-                    {unitPresentation(displayUnit, metric.id).label}
-                </span>
+                <span className="metric-row-unit">{unitPresentation(displayUnit).label}</span>
                 {clickable && <IconChevronRight aria-hidden="true" size={17} />}
             </span>
         </>
@@ -30,7 +28,7 @@ export function MetricRow({
             className="metric-row metric-row-clickable"
             type="button"
             onClick={onClick}
-            aria-label={`Configure ${metric.name}, current unit ${unitPresentation(displayUnit, metric.id).name}`}
+            aria-label={`Configure ${metric.name}, current unit ${unitPresentation(displayUnit).name}`}
         >
             {content}
         </button>

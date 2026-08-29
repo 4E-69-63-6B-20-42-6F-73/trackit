@@ -39,18 +39,12 @@ const records: JournalEvent[] = [
 
 describe('Journal', () => {
     it('filters records and exposes owner actions', async () => {
-        const duplicate = vi.fn()
         const update = vi.fn().mockResolvedValue(true)
 
         render(
-            <MemoryRouter>
+            <MemoryRouter initialEntries={['/?from=2026-08-16&to=2026-08-23']}>
                 <MantineProvider>
-                    <Journal
-                        events={records}
-                        remove={vi.fn()}
-                        duplicate={duplicate}
-                        update={update}
-                    />
+                    <Journal events={records} remove={vi.fn()} update={update} />
                 </MantineProvider>
             </MemoryRouter>,
         )
@@ -64,15 +58,6 @@ describe('Journal', () => {
         expect(screen.getByText('Walk')).toBeInTheDocument()
 
         await user.clear(search)
-
-        await user.click(await screen.findByLabelText('Actions for Breakfast'))
-        await user.click(await screen.findByText('Log a copy'))
-
-        expect(duplicate).toHaveBeenCalledWith(records[0])
-
-        await waitFor(() => {
-            expect(screen.queryByText('Log a copy')).not.toBeInTheDocument()
-        })
 
         await user.click(await screen.findByLabelText('Actions for Breakfast'))
         await user.click(await screen.findByText('Edit'))
@@ -106,7 +91,6 @@ describe('Journal', () => {
                     <Journal
                         events={records}
                         remove={vi.fn()}
-                        duplicate={vi.fn()}
                         update={vi.fn().mockResolvedValue(true)}
                     />
                 </MantineProvider>
@@ -134,7 +118,6 @@ describe('Journal', () => {
                     <Journal
                         events={records}
                         remove={vi.fn()}
-                        duplicate={vi.fn()}
                         update={vi.fn().mockResolvedValue(true)}
                     />
                 </MantineProvider>

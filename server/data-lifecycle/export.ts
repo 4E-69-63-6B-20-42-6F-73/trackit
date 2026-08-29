@@ -1,4 +1,5 @@
 import type { DataRepository } from '../data/types.js'
+import type { JournalRepository } from '../journal/types.js'
 
 const escapeCsv = (value: unknown) => {
     const text =
@@ -7,7 +8,12 @@ const escapeCsv = (value: unknown) => {
 }
 
 export class ExportService {
-    constructor(private readonly data: DataRepository) {}
+    // Keep the projection repository parameter temporarily so the app wiring remains stable;
+    // exports intentionally do not serialize Journal as a second source of truth.
+    constructor(
+        private readonly data: DataRepository,
+        _journal: JournalRepository,
+    ) {}
 
     async snapshot() {
         const [

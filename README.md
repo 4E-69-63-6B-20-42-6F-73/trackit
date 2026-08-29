@@ -1,8 +1,41 @@
 # TrackIt
 
-A privacy-first, self-hosted health and nutrition dashboard.
+TrackIt is a privacy-first, self-hosted health tracking application. It captures observations from
+you and connected sources, then turns them into Today, Journal, Trends, and Goals.
 
-This is project is currently in ALPHA. The fundaments are there, but expect some friction here and there.
+The project is currently in alpha.
+
+## Product model
+
+```text
+Capture
+    Log observations
+    Health Connect -> source records -> observations
+
+Understand
+    Today
+    Journal
+    Trends
+    Goals
+
+Library
+    Foods
+    Recipes
+    Metric Center
+
+Connections
+    Health Connect / devices
+    MCP
+
+Settings
+    Profile
+    Data export / deletion
+    Security
+```
+
+Observations are the canonical health facts. Journal, Today, Trends, daily metrics, and goal progress
+are projections/read models. Foods, recipes, goals, metric definitions, and connection settings are
+reference/configuration data.
 
 ## Development
 
@@ -12,7 +45,7 @@ Install dependencies:
 npm install
 ```
 
-Dont forget create .env (See .env.example).
+Copy `.env.example` to `.env` and configure the required values.
 
 ### Development database
 
@@ -22,21 +55,13 @@ Start PostgreSQL in Docker:
 npm run dev:db
 ```
 
-PostgreSQL is exposed only on localhost and uses port `5432` by default.
-
-The local API defaults to:
+PostgreSQL is exposed only on localhost and uses port `5432` by default. The local API defaults to:
 
 ```text
 postgres://trackit:trackit@localhost:5432/trackit
 ```
 
-If port `5432` is already in use, choose another host port:
-
-```bash
-POSTGRES_PORT=5433 npm run dev:db
-```
-
-and configure `DATABASE_PASSWORD` accordingly:
+If port `5432` is already in use, choose another host port and update the database configuration.
 
 ### API
 
@@ -56,112 +81,22 @@ Start the Vite development server:
 npm run dev:web
 ```
 
-`npm run dev` is an alias for `npm run dev:web`.
-
-A typical local development setup therefore uses three terminals:
-
-```bash
-npm run dev:db
-```
-
-```bash
-npm run dev:api
-```
-
-```bash
-npm run dev:web
-```
+`npm run dev` is currently an alias for `npm run dev:web`, so a typical local setup uses separate
+terminals for `dev:db`, `dev:api`, and `dev:web`.
 
 ## Database migrations
 
-Trackit uses Drizzle Kit to generate and track PostgreSQL migrations.
+TrackIt uses Drizzle Kit to generate and track PostgreSQL migrations. SQL migrations and Drizzle
+metadata under `server/db/migrations/meta/` are one migration history and must be committed together.
 
-The migration directory contains both SQL migrations and Drizzle metadata:
-
-```text
-server/db/migrations/
-├── 0000_....sql
-├── 0001_....sql
-└── meta/
-    ├── _journal.json
-    ├── 0000_snapshot.json
-    └── 0001_snapshot.json
-```
-
-The files under `meta/` are part of the migration history and must be committed together with the SQL migrations.
-
-### Creating a migration
-
-First update:
-
-```text
-server/db/schema.ts
-```
-
-Then generate the migration:
-
-```bash
-npm run db:generate
-```
-
-To give the migration a descriptive name:
-
-```bash
-npm run db:generate -- --name=devices_configured_at
-```
-
-Commit all generated files, including:
-
-- the generated `.sql` migration
-- `meta/_journal.json`
-- the generated `meta/*_snapshot.json`
-
-Do not manually create numbered migration SQL files.
-
-Drizzle Kit uses its snapshots to determine what changed between schema versions. A manually-created SQL migration may update the database correctly while leaving Drizzle's schema history unchanged. The next generated migration can then incorrectly contain changes that were already made by previous migrations.
-
-### Checking migration consistency
-
-Run:
-
-```bash
-npm run db:check
-```
-
-This validates the generated Drizzle migration metadata.
-
-It is also included in the full project check:
-
-```bash
-npm run check
-```
-
-Run `npm run check` before opening a pull request.
-
-### Applying migrations
-
-The API applies pending migrations during startup, so normal development only requires:
-
-```bash
-npm run dev:api
-```
-
-Migrations can also be invoked explicitly with:
-
-```bash
-npm run db:migrate
-```
-
-### Migration workflow
-
-For normal schema changes:
+For a normal schema change:
 
 ```text
 edit server/db/schema.ts
         ↓
-npm run db:generate
+npm run db:generate -- --name=<descriptive_name>
         ↓
-review generated SQL
+review generated SQL and metadata
         ↓
 npm run db:check
         ↓
@@ -170,31 +105,38 @@ npm run check
 commit SQL + journal + snapshot
 ```
 
-Never commit a generated SQL migration without its corresponding Drizzle metadata.
+Do not manually create numbered migration SQL files. Drizzle snapshots are used to determine future
+schema changes; hand-authored numbered migrations can leave the migration history inconsistent.
+
+The API applies pending migrations during startup. Migrations can also be invoked explicitly with:
+
+```bash
+npm run db:migrate
+```
 
 ## Project checks
 
-Run the complete validation suite with:
+Run the complete local validation suite with:
 
 ```bash
 npm run check
 ```
 
-This checks:
+This runs formatting, linting, migration consistency, secret scanning, unit tests, and the production
+build. Pull-request CI additionally runs PostgreSQL integration/migration checks, Playwright E2E
+coverage, container smoke/security checks, and Android validation.
 
-1. formatting
-2. linting
-3. Drizzle migration consistency
-4. committed secrets
-5. tests
-6. production build
-
-Individual development commands are also available:
+Useful individual commands:
 
 ```bash
 npm run format:check
 npm run lint
 npm run db:check
 npm run test
+npm run test:e2e
 npm run build
+npm run test:android
 ```
+
+See `docs/METRIC_DATA_ARCHITECTURE.md` for the current observation/metric model and
+`docs/DATA_EXPORT_AND_DELETION.md` for data-ownership behavior.

@@ -58,12 +58,11 @@ export const observations = pgTable(
     {
         id: uuid('id').primaryKey().defaultRandom(),
         userId: text('user_id').notNull().default('owner'),
-        definitionId: text('definition_id').notNull().default('metric'),
+        definitionId: text('definition_id').notNull(),
         definitionVersion: integer('definition_version').notNull().default(1),
         valueType: text('value_type').notNull().default('number'),
         origin: text('origin').notNull().default('manual'),
         state: text('state').notNull().default('active'),
-        metric: text('metric').notNull(),
         canonicalValue: doublePrecision('canonical_value'),
         canonicalUnit: text('canonical_unit'),
         originalValue: doublePrecision('original_value'),
@@ -94,12 +93,11 @@ export const observations = pgTable(
     },
     table => [
         uniqueIndex('observation_external_source_idx').on(table.sourceId, table.externalId),
-        uniqueIndex('observation_record_metric_idx').on(
+        uniqueIndex('observation_record_definition_idx').on(
             table.sourceRecordId,
-            table.metric,
+            table.definitionId,
             table.derivationVersion,
         ),
-        index('observation_metric_observed_idx').on(table.metric, table.observedAt),
         index('observation_definition_observed_idx').on(table.definitionId, table.observedAt),
         index('observation_category_observed_idx').on(table.category, table.observedAt),
     ],
@@ -139,7 +137,7 @@ export const derivedObservations = pgTable(
         id: text('id').primaryKey(),
         userId: text('user_id').notNull().default('owner'),
         date: text('date').notNull(),
-        metric: text('metric').notNull(),
+        definitionId: text('definition_id').notNull(),
         canonicalValue: doublePrecision('canonical_value').notNull(),
         canonicalUnit: text('canonical_unit').notNull(),
         observedAt: timestamp('observed_at', { withTimezone: true }).notNull(),
@@ -153,7 +151,10 @@ export const derivedObservations = pgTable(
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
     table => [
-        index('derived_observation_metric_observed_idx').on(table.metric, table.observedAt),
+        index('derived_observation_definition_observed_idx').on(
+            table.definitionId,
+            table.observedAt,
+        ),
         index('derived_observation_materialization_idx').on(
             table.userId,
             table.date,
@@ -190,7 +191,7 @@ export const dailyMetrics = pgTable(
     {
         userId: text('user_id').notNull().default('owner'),
         date: text('date').notNull(),
-        metric: text('metric').notNull(),
+        definitionId: text('definition_id').notNull(),
         value: doublePrecision('value').notNull(),
         unit: text('unit').notNull(),
         derivationVersion: integer('derivation_version').notNull(),
@@ -199,7 +200,9 @@ export const dailyMetrics = pgTable(
         createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
         updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
     },
-    table => [uniqueIndex('daily_metric_identity_idx').on(table.userId, table.date, table.metric)],
+    table => [
+        uniqueIndex('daily_metric_identity_idx').on(table.userId, table.date, table.definitionId),
+    ],
 )
 
 export const dailyProjectionRuns = pgTable(
@@ -397,25 +400,6 @@ export const syncCursors = pgTable(
     },
     table => [uniqueIndex('sync_cursor_device_type_idx').on(table.deviceId, table.recordType)],
 )
-
-export const backupRuns = pgTable('backup_runs', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    filename: text('filename').notNull(),
-    status: text('status').notNull(),
-    encrypted: boolean('encrypted').notNull().default(true),
-    sizeBytes: integer('size_bytes'),
-    diagnostic: text('diagnostic'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    verifiedAt: timestamp('verified_at', { withTimezone: true }),
-})
-
-export const retentionRules = pgTable('retention_rules', {
-    category: text('category').primaryKey(),
-    days: integer('days').notNull(),
-    enabled: boolean('enabled').notNull().default(false),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
 
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),

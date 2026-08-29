@@ -2,13 +2,10 @@ import {
     Alert,
     Badge,
     Button,
-    Group,
     Menu,
-    Modal,
     SegmentedControl,
     Select,
     Text,
-    TextInput,
 } from '@mantine/core'
 import {
     IconAdjustments,
@@ -26,7 +23,7 @@ import { PageHeader } from '../components/PageHeader'
 import {
     dailySeries,
     weeklySeries,
-    type Observation,
+    type NumericObservation,
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
@@ -38,17 +35,16 @@ import {
 } from '../domain/metrics'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
-import { updatePreferences } from '../lib/preferencesApi'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
 
 const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
 
 const metricLabel = (metric: string) =>
-    metricDefinition(metric)?.label ??
+    metricDefinition(metric)?.name ??
     metric.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
 export function Trends() {
     const navigate = useNavigate()
-    const [observations, setObservations] = useState<Observation[]>([])
+    const [observations, setObservations] = useState<NumericObservation[]>([])
     const [availableMetrics, setAvailableMetrics] = useState<DailyMetric[]>([])
     const [range, setRange] = useState<keyof typeof ranges>('7 days')
     const [metric, setMetric] = useState<string | null>(null)
@@ -62,8 +58,6 @@ export function Trends() {
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
     const { preferences } = useServerData()
     const [actionError, setActionError] = useState('')
-    const [experimentOpen, setExperimentOpen] = useState(false)
-    const [experimentQuestion, setExperimentQuestion] = useState('')
 
     useEffect(() => {
         const from = new Date()
@@ -75,9 +69,9 @@ export function Trends() {
             .then(records => {
                 setAvailableMetrics(records)
                 const preferred = ['sleep', 'steps', 'weight', 'energy'].find(candidate =>
-                    records.some(record => record.metric === candidate),
+                    records.some(record => record.definitionId === candidate),
                 )
-                setMetric(preferred ?? records[0]?.metric ?? null)
+                setMetric(preferred ?? records[0]?.definitionId ?? null)
             })
             .catch(() => setError(true))
             .finally(() => setLoading(false))
@@ -96,7 +90,7 @@ export function Trends() {
         void listObservations({
             from: from.toISOString(),
             to: new Date().toISOString(),
-            metrics: [metric, ...(comparisonMetric ? [comparisonMetric] : [])],
+            definitionIds: [metric, ...(comparisonMetric ? [comparisonMetric] : [])],
         })
             .then(records => {
                 setObservations(records)
@@ -107,16 +101,16 @@ export function Trends() {
     }, [comparisonMetric, metric, range])
 
     const allObservations = observations
-    const recordedMetrics = [...new Set(availableMetrics.map(record => record.metric))]
+    const recordedMetrics = [...new Set(availableMetrics.map(record => record.definitionId))]
     const unknownMetrics = recordedMetrics.filter(
-        value => !metricCatalog.some(definition => definition.value === value),
+        value => !metricCatalog.some(definition => definition.id === value),
     )
     const metricOptions = [
-        ...Array.from(new Set(metricCatalog.map(definition => definition.group))).map(group => ({
+        ...Array.from(new Set(metricCatalog.map(definition => definition.category))).map(group => ({
             group,
             items: metricCatalog
-                .filter(definition => definition.group === group)
-                .map(definition => ({ value: definition.value, label: definition.label })),
+                .filter(definition => definition.category === group)
+                .map(definition => ({ value: definition.id, label: definition.name })),
         })),
         ...(unknownMetrics.length
             ? [
@@ -134,7 +128,7 @@ export function Trends() {
         return value
     }, [range])
     const metricRecords = allObservations.filter(
-        record => record.metric === metric && !record.excluded,
+        record => record.definitionId === metric && !record.excluded,
     )
     const isNutritionMetric = metricDefinition(metric)?.source === 'meal'
     const isManualMetric = metricDefinition(metric)?.source === 'manual'
@@ -173,7 +167,7 @@ export function Trends() {
     })()
     const coveredValues = points.flatMap(point => (point.value === null ? [] : [point.value]))
     const comparisonRecords = allObservations.filter(
-        record => record.metric === comparisonMetric && !record.excluded,
+        record => record.definitionId === comparisonMetric && !record.excluded,
     )
     const comparisonPoints = (granularity === 'weekly' ? weeklySeries : dailySeries)(
         comparisonRecords,
@@ -200,7 +194,7 @@ export function Trends() {
               ? 'Partial coverage'
               : 'Low coverage'
 
-    const toggleExcluded = async (observation: Observation) => {
+    const toggleExcluded = async (observation: NumericObservation) => {
         try {
             const updated = await setObservationExcluded(observation, !observation.excluded)
             setObservations(current =>
@@ -297,30 +291,7 @@ export function Trends() {
                                     {question.label}
                                 </Button>
                             ))}
-                            <Button
-                                size="compact-sm"
-                                variant="light"
-                                onClick={() => setExperimentOpen(true)}
-                            >
-                                Start a personal experiment
-                            </Button>
                         </div>
-                        {(preferences?.experience?.experiments ?? [])
-                            .filter(item => item.status === 'active')
-                            .map(experiment => (
-                                <button
-                                    className="experiment-link"
-                                    key={experiment.id}
-                                    onClick={() => {
-                                        setMetric(experiment.primaryMetric)
-                                        setComparisonMetric(experiment.comparisonMetric ?? null)
-                                        setShowCompare(Boolean(experiment.comparisonMetric))
-                                    }}
-                                >
-                                    <span>Active experiment</span>
-                                    <strong>{experiment.question}</strong>
-                                </button>
-                            ))}
                     </div>
                     <div className="trend-primary-controls">
                         <Select
@@ -391,10 +362,10 @@ export function Trends() {
                             value={comparisonMetric}
                             onChange={setComparisonMetric}
                             data={metricCatalog
-                                .filter(definition => definition.value !== metric)
+                                .filter(definition => definition.id !== metric)
                                 .map(definition => ({
-                                    value: definition.value,
-                                    label: definition.label,
+                                    value: definition.id,
+                                    label: definition.name,
                                 }))}
                             placeholder="Choose a second metric"
                         />
@@ -512,7 +483,7 @@ export function Trends() {
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
                             valueLabel={
                                 metric && displayUnit
-                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit, metric).label})`
+                                    ? `${metricLabel(metric)} (${unitPresentation(displayUnit).label})`
                                     : undefined
                             }
                             formatValue={value => formatDisplayValue(value, { withUnit: false })}
@@ -555,68 +526,12 @@ export function Trends() {
                     <ObservationRecords
                         observations={observations.filter(
                             record =>
-                                record.metric === metric &&
+                                record.definitionId === metric &&
                                 (!inspectedIds || inspectedIds.includes(record.id)),
                         )}
                         onToggleExcluded={observation => void toggleExcluded(observation)}
                         showAll={Boolean(inspectedIds)}
                     />
-                    <Modal
-                        opened={experimentOpen}
-                        onClose={() => setExperimentOpen(false)}
-                        title="Start a personal experiment"
-                        centered
-                    >
-                        <Text size="sm" c="dimmed" mb="md">
-                            Track a question over time without treating an association as medical
-                            advice or proof of cause.
-                        </Text>
-                        <TextInput
-                            label="Question"
-                            value={experimentQuestion}
-                            onChange={event => setExperimentQuestion(event.currentTarget.value)}
-                            placeholder="For example, do I report more energy after longer sleep?"
-                        />
-                        <Group justify="flex-end" mt="lg">
-                            <Button variant="default" onClick={() => setExperimentOpen(false)}>
-                                Cancel
-                            </Button>
-                            <Button
-                                disabled={!experimentQuestion.trim() || !metric}
-                                onClick={async () => {
-                                    if (!preferences || !metric) return
-                                    const experience = preferences.experience ?? {}
-                                    try {
-                                        await updatePreferences({
-                                            experience: {
-                                                ...experience,
-                                                experiments: [
-                                                    ...(experience.experiments ?? []),
-                                                    {
-                                                        id: crypto.randomUUID(),
-                                                        question: experimentQuestion.trim(),
-                                                        primaryMetric: metric,
-                                                        comparisonMetric:
-                                                            comparisonMetric ?? undefined,
-                                                        startedAt: new Date().toISOString(),
-                                                        status: 'active',
-                                                    },
-                                                ],
-                                            },
-                                        })
-                                        setExperimentQuestion('')
-                                        setExperimentOpen(false)
-                                    } catch {
-                                        setActionError(
-                                            'The experiment could not be saved to your server.',
-                                        )
-                                    }
-                                }}
-                            >
-                                Start experiment
-                            </Button>
-                        </Group>
-                    </Modal>
                 </section>
             )}
         </div>

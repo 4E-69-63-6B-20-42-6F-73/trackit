@@ -1,120 +1,126 @@
-# Metric Data Architecture
+# Metric and observation architecture
 
-## Objective
+## Core model
 
-TrackIt must expose one consistent, efficient metric series to Today, Goals, Trends, MCP, and future consumers while retaining immutable source records for audit and export.
+TrackIt has one canonical application fact model: **Observations**.
 
 ```text
-Raw source records
-    -> canonical observations
-    -> exact identity resolution
-    -> source enablement and overlap policy
-    -> effective observations
-    -> derived metrics
-    -> versioned projections
-    -> bounded consumer APIs
+Manual capture --------------------> Observations
+External source -> source records -> Observations
+
+Observations + configuration ------> projections
 ```
 
-## Architectural invariants
+Commands may mutate observations, source records, and reference/configuration data. Queries read
+observations and projections. Product projections do not have domain commands.
 
-- Raw imported records are never deleted by deduplication.
-- Connector, provider, origin, and external identity remain distinguishable.
-- `/api/observations` returns only effective observations.
-- Normal consumers cannot select the raw series.
-- Canonical observations remain authoritative; projections are disposable.
-- Daily boundaries use the user's IANA timezone.
-- Projection replacement is atomic.
-- Projection freshness depends only on resolution semantics, not unrelated preferences.
-- Derived metrics use the same effective inputs as every other consumer.
-- Consumer queries are bounded by time and, where practical, metric.
+Journal, Today, Trends, daily metrics, and goal progress are read models over observations and
+configuration. Foods, recipes, goals, metric definitions, source configuration, and saved trend
+views are reference/configuration data rather than health facts.
 
-## Implementation plan and status
+## Definition identity
 
-### Phase 1 - Existing effective-series foundation
+`definitionId` is the canonical semantic identity of an observation. Metric Center owns the numeric
+semantics associated with metric definitions, including:
 
-- [x] Preserve raw Health Connect records and external identities.
-- [x] Resolve exact duplicates, disabled sources, overlaps, and source priority.
-- [x] Keep `/api/observations` effective-only.
-- [x] Replace Metrics Center raw-history loading with `/api/metric-sources`.
-- [x] Add BMI and calorie-balance definitions.
-- [x] Add a daily projection cache for compact Today history.
-- [x] Correct daily cache algorithm-version semantics.
+- canonical unit;
+- supported display/input units;
+- conversion behavior;
+- formatting precision;
+- supported aggregation/comparison behavior;
+- source-resolution configuration where applicable.
 
-### Phase 2 - Projection correctness
+The same observation-definition mechanism also covers non-numeric facts such as meals, notes,
+symptoms, and events. Conversion simply does not apply to those definitions.
 
-- [x] Replace daily projection rows atomically.
-- [x] Calculate daily boundaries in the user's timezone.
-- [x] Add a dedicated metric resolution version.
-- [x] Add projection indexes for user, date, metric, and active observation ranges.
-- [x] Rebuild stale or missing projection dates deterministically.
+A second stored `metric` identity must not be introduced. Projections and goal/trend configuration
+should reference definition identity.
 
-### Phase 3 - Server-owned effective metric service
+## Source records and provenance
 
-- [x] Centralize observation normalization and source resolution in one server service.
-- [x] Integrate meal nutrient observations before derived metric calculation.
-- [x] Resolve BMI height dependencies across date boundaries.
-- [x] Make Goals, Trends, Today, and MCP consume the same server-owned result.
+Imported provider records are retained as source records for idempotency, provider fidelity,
+tombstones, traceability, and re-derivation. They are ingestion evidence, not a competing application
+truth model.
 
-### Phase 4 - Bounded and efficient consumers
+```text
+Health Connect record
+      ↓
+source record
+      ↓
+normalized observation(s)
+```
 
-- [x] Add metric filters to effective observation queries.
-- [x] Require or enforce safe query bounds for interactive consumers.
-- [x] Use daily projections to discover Trends metrics and load detail only for the selected range.
-- [x] Evaluate goal status server-side from bounded effective inputs.
-- [x] Push MCP date and metric filters into repository queries.
+Application consumers do not query raw provider records as an alternative health history. Source
+resolution selects the effective observation series without destroying imported evidence.
 
-### Phase 5 - Operational hardening
+## Compound observations
 
-- [x] Avoid synchronous full-history rebuilds on preference writes.
-- [x] Use resolution-version invalidation with durable dirty-date processing and bounded read repair.
-- [x] Record projection algorithm and resolution versions.
-- [x] Add cache consistency and query-volume tests.
-- [x] Document recovery and rebuild procedures.
+A meaningful compound event has one root observation and related component observations. Meals use
+this pattern: the meal is a root observation and nutrient values are definition-backed numeric
+components connected through observation relations. Foods and recipes remain reusable reference data.
 
-## Current consumer map
+Meal logging is therefore a specialized manual Observation capture flow, not a parallel canonical
+Meal store.
 
-| Consumer              | Authoritative source                                                         |
-| --------------------- | ---------------------------------------------------------------------------- |
-| Today current details | Metric-filtered effective observations for the selected local day            |
-| Today history         | Versioned effective daily projection                                         |
-| Goals                 | Server-evaluated goals over one bounded effective-series query               |
-| Trends                | Daily projection for discovery, then bounded effective detail for charting   |
-| Metrics Center        | Aggregated metric-source summary; it does not load observation history       |
-| MCP                   | Date- and metric-bounded effective metric service                            |
-| Export                | Raw records and projections; raw access remains an explicit internal pathway |
+## Derived observations and projections
 
-## Validation requirements
+System-derived values are rebuildable. Materialized derived observations and daily projection tables
+exist to make reads efficient, but they do not become an additional command model.
 
-- Two overlapping 7,000-step providers with one disabled produce 7,000 everywhere.
-- Changing source priority invalidates only metric projections.
-- A local-day observation is assigned consistently across DST boundaries.
-- Projection failure cannot leave a partially rebuilt date.
-- BMI uses the latest eligible effective height even when recorded on an earlier date.
-- Calorie balance uses effective expenditure and canonical meal intake.
-- Goals, Trends, Today, and MCP agree for the same metric and time window.
-- Interactive APIs do not load unbounded observation history.
+Daily projection materialization is versioned, timezone-aware, and replaceable. Dirty-date state
+tracks projection work after canonical mutations. Projection failure must never require deleting
+source records or canonical observations.
 
-## Change log
+## Effective numeric series
 
-- 2026-08-25: Created the living architecture plan after the effective-series and daily-cache review. Phase 1 reflects the implemented baseline; remaining phases are active work.
-- 2026-08-25: Made daily replacement transactional and timezone-aware, added semantic resolution versions and active-observation indexes, centralized server effective-series construction with meal nutrients and cross-day BMI context, removed client-side meal/effective-series reconstruction, bounded the observations API and MCP reads, and added metric filtering.
-- 2026-08-25: Changed Trends to discover metrics through compact daily projections and request detail only for selected metrics and ranges. Preference writes now increment the resolution version and return without rebuilding full history; bounded reads repair stale projection dates lazily.
-- 2026-08-25: Moved goal evaluation to `/api/goals/evaluations`, using one bounded, metric-filtered effective-series query for all goals. Added DST boundary, cross-day BMI, meal-backed calorie balance, source-resolution cache, and bounded-query coverage.
-- 2026-08-25: Standardized effective queries on half-open ranges, added durable dirty-date and completed-materialization records, moved Health Connect projection work out of ingestion transactions, and made lifecycle deletions invalidate affected owner-local dates.
+Numeric consumers use one effective-series resolution path:
 
-## Projection recovery
+```text
+canonical numeric observations
+    -> source enablement / exact deduplication / overlap policy
+    -> effective observations
+    -> derived calculations
+    -> projections and consumers
+```
 
-Daily projections are disposable. `daily_projection_runs` records completion even for an empty day; `projection_dirty_dates` durably records mutation work. A row is stale when its derivation version, metric resolution version, or timezone differs from current preferences. The background worker drains dirty dates, while `/api/daily-metrics` repairs only stale or dirty dates in the requested range through atomic date replacement. A full Health Connect rebuild remains available through `/api/health-records/rebuild`; raw `health_records`, observations, and meals remain authoritative. Never repair projection failures by deleting raw records.
+Today, Goals, Trends, Metric Center source summaries, MCP metric reads, and daily materialization must
+agree on the same resolution semantics.
 
-## Final re-audit
+## Product mapping
 
-The completed read path is `raw records -> exact deduplication -> provider-aware overlap resolution -> metric policy and source priority -> effective series -> derived metrics -> projections and consumers`. Interactive consumers no longer reconstruct this pipeline independently, and the public observations API cannot return raw observations.
+```text
+Capture
+    Log -> observations
+    Health Connect -> source records -> observations
 
-The current design is appropriate for TrackIt's single-owner deployment. Its deliberate scale boundaries are:
+Understand
+    Today -> projection
+    Journal -> projection
+    Trends -> projection
+    Goals -> goal configuration + progress projection
 
-- Preference-version changes can still add bounded repair latency before the worker encounters a date; source-ingestion and lifecycle mutations already use the durable dirty-date worker.
-- Source identity remains available in observation metadata and is accelerated by expression indexes. Normalize it into dedicated columns only when query volume justifies the migration.
-- Historical BMI context reads a bounded set of recent height observations. Replace this with a per-source window query if the number of simultaneous height providers grows substantially.
-- Interval overlap resolution scales with concurrently active intervals. A pathological set of thousands of long, mutually overlapping records can still be quadratic and should trigger a database/window-based resolver.
+Library
+    Foods -> reference data
+    Recipes -> reference data
+    Metric Center -> observation/metric definition configuration
 
-These are documented capacity triggers, not correctness gaps. Atomic replacement, semantic invalidation, owner-timezone boundaries, canonical units, effective-only consumers, and raw-record preservation are enforced in the current implementation.
+Connections
+    Health Connect / devices -> ingestion configuration
+    MCP -> scoped access configuration
+
+Settings
+    Profile -> timezone / locale
+    Data -> export / delete
+    Security -> authentication / sessions / recovery
+```
+
+## Invariants
+
+1. Observation is the canonical health fact.
+2. `definitionId` is its semantic identity.
+3. Source records are ingestion evidence, not application truth.
+4. Projections are rebuildable read models and do not have product commands.
+5. Metric Center owns numeric units and conversions.
+6. Meals are compound observations; foods and recipes are reference data.
+7. Goal progress is derived from goal configuration plus observation/projection data.
+8. Export and explicit deletion are supported; automatic retention and managed backups are not.

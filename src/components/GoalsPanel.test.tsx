@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { evaluateGoal, type Goal } from '../domain/goals'
-import type { Observation } from '../domain/health'
+import type { NumericObservation } from '../domain/health'
 import type { Preferences } from '../lib/preferencesApi'
 import { createGoal, deleteGoal, listGoalEvaluations, updateGoal } from '../lib/goalApi'
 import { GoalsPanel } from './GoalsPanel'
@@ -36,9 +36,9 @@ const goal: Goal = {
     effectiveTo: null,
     schedule: {},
 }
-const observations: Observation[] = [79, 80, 81, 80].map((value, index) => ({
+const observations: NumericObservation[] = [79, 80, 81, 80].map((value, index) => ({
     id: `weight-${index}`,
-    metric: 'weight',
+    definitionId: 'weight',
     canonicalValue: value,
     canonicalUnit: 'kg',
     originalValue: value,

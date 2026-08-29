@@ -42,7 +42,7 @@ class FiveYearData implements DataRepository {
         ).toISOString()
         return {
             id: index,
-            metric: 'steps',
+            definitionId: 'steps',
             observedAt,
             eatenAt: observedAt,
             nutrientSnapshot: { calories: 2000, protein: 100 },

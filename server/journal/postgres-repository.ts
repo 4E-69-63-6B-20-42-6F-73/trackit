@@ -23,9 +23,11 @@ const sourceLabel = (row: typeof observations.$inferSelect) => {
 
 const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
-    const primaryMetric =
-        typeof attributes.primaryMetric === 'string' ? attributes.primaryMetric : row.metric
-    const metricCategory = metricDefinition(primaryMetric)?.category
+    const primaryDefinitionId =
+        typeof attributes.primaryDefinitionId === 'string'
+            ? attributes.primaryDefinitionId
+            : row.definitionId
+    const metricCategory = metricDefinition(primaryDefinitionId)?.category
     const projectedCategory =
         metricCategory === 'Activity'
             ? 'Activity'
@@ -35,8 +37,8 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
                 ? 'Meals'
                 : 'Measurements'
     const detail =
-        typeof attributes.journalDetail === 'string'
-            ? attributes.journalDetail
+        typeof attributes.description === 'string'
+            ? attributes.description
             : (row.textValue ??
               (row.valueType === 'number' && row.canonicalValue !== null
                   ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
@@ -44,7 +46,7 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     return {
         id: row.id,
         category: (row.category ?? projectedCategory) as JournalEntry['category'],
-        title: row.title ?? row.metric.replaceAll('_', ' '),
+        title: row.title ?? row.definitionId.replaceAll('_', ' '),
         detail,
         source: sourceLabel(row),
         observedAt: row.observedAt.toISOString(),
@@ -72,7 +74,7 @@ export class PostgresJournalRepository implements JournalRepository {
             )
         const preference = sql<string | null>`(
             SELECT ${preferences.metricPreferences}
-                -> COALESCE(${observations.attributes}->>'primaryMetric', ${observations.metric})
+                -> COALESCE(${observations.attributes}->>'primaryDefinitionId', ${observations.definitionId})
                 ->> 'showInJournal'
             FROM ${preferences}
             WHERE ${preferences.id} = 'owner'

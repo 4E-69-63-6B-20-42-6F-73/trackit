@@ -18,6 +18,3 @@ Older companion builds must be upgraded before syncing.
 
 Journal entries use independent IDs and optional `entityType`/`entityId` linkage. Callers must not
 assume a meal or observation shares its UUID with its journal representation.
-
-Backups retain the `TRKITB01` AES-256-GCM format. Creation now streams `pg_dump` into encryption and
-never writes plaintext into the backup volume.

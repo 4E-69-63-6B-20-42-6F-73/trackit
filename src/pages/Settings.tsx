@@ -3,14 +3,11 @@ import {
     IconArrowLeft,
     IconChevronRight,
     IconDatabase,
-    IconDashboard,
-    IconSettings,
     IconShieldLock,
+    IconSettings,
     IconUser,
 } from '@tabler/icons-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { BackupPanel } from '../components/BackupPanel'
-import { ExperiencePanel } from '../components/ExperiencePanel'
 import { PreferencesPanel } from '../components/PreferencesPanel'
 import { PrivacyPanel } from '../components/PrivacyPanel'
 import { SecurityPanel } from '../components/SecurityPanel'
@@ -18,39 +15,25 @@ import { PageHeader } from '../components/PageHeader'
 
 const sections = [
     {
-        slug: 'experience',
-        title: 'Dashboard & reminders',
-        description: 'Focus areas, routines and calm reminders',
-        icon: IconDashboard,
-        content: ExperiencePanel,
-    },
-    {
         slug: 'profile',
-        title: 'Profile & units',
-        description: 'Timezone, locale and measurement units',
+        title: 'Profile',
+        description: 'Display name, timezone, and locale',
         icon: IconUser,
         content: PreferencesPanel,
     },
     {
-        slug: 'privacy',
-        title: 'Privacy & retention',
-        description: 'Data categories, retention and deletion',
+        slug: 'data',
+        title: 'Data',
+        description: 'Export and deliberate deletion',
         icon: IconDatabase,
         content: PrivacyPanel,
     },
     {
         slug: 'security',
         title: 'Security',
-        description: 'Sessions and access history',
+        description: 'Authentication, sessions, recovery, and access history',
         icon: IconShieldLock,
         content: SecurityPanel,
-    },
-    {
-        slug: 'system',
-        title: 'System',
-        description: 'Backups and restore verification',
-        icon: IconSettings,
-        content: BackupPanel,
     },
 ] as const
 
@@ -66,7 +49,12 @@ export function Settings() {
         <div className="page-content settings-page">
             <PageHeader
                 title="Settings"
-                description="Manage your TrackIt preferences, data, and installation."
+                description="Manage your TrackIt profile, data, and security."
+                actions={
+                    <Button component={Link} to="/connections" variant="default">
+                        Connections
+                    </Button>
+                }
             />
             <div className={`settings-layout ${active ? 'has-active-settings' : ''}`}>
                 <nav className="panel settings-navigation" aria-label="Settings sections">
@@ -126,7 +114,7 @@ export function Settings() {
                         <Text size="sm" c="dimmed">
                             {slug
                                 ? 'This settings address does not exist. Choose a section or return to the settings overview.'
-                                : 'Each settings area has its own URL, so you can bookmark it and use the browser back button normally.'}
+                                : 'Profile, data ownership, and security live here. Domain libraries and metric definitions live in Library.'}
                         </Text>
                         {slug && (
                             <Button component={Link} to="/settings" variant="default">

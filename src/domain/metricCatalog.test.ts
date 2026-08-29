@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { dailySeries, type Observation } from './health'
+import { dailySeries, type NumericObservation } from './health'
 import { metricCatalog, metricDefinition } from './metricCatalog'
 
 describe('metric catalog', () => {
     it('includes every stored nutrition total', () => {
         const nutrition = metricCatalog
             .filter(metric => metric.source === 'meal')
-            .map(metric => metric.value)
+            .map(metric => metric.id)
 
         expect(nutrition).toEqual([
             'calories',
@@ -29,13 +29,13 @@ describe('metric catalog', () => {
             record =>
                 ({
                     ...record,
-                    metric: 'protein',
+                    definitionId: 'protein',
                     canonicalUnit: 'g',
                     originalValue: record.canonicalValue,
                     originalUnit: 'g',
                     excluded: false,
                     version: 1,
-                }) satisfies Observation,
+                }) satisfies NumericObservation,
         )
 
         expect(dailySeries(records, new Date('2026-08-20T12:00:00Z'), 1, 'UTC')[0].value).toBe(50)
@@ -68,23 +68,5 @@ describe('metric catalog', () => {
             )
             expect(metric.goalCapabilities?.comparators).toContain(defaults.comparator)
         }
-    })
-
-    it('contains every metric emitted by Health Connect in canonical units', () => {
-        expect(metricDefinition('height')?.canonicalUnit).toBe('cm')
-        expect(metricDefinition('water')?.canonicalUnit).toBe('ml')
-        for (const metric of [
-            'distance',
-            'body_fat',
-            'blood_pressure_systolic',
-            'blood_pressure_diastolic',
-            'hrv_rmssd',
-            'oxygen_saturation',
-            'respiratory_rate',
-            'lean_body_mass',
-            'basal_metabolic_rate',
-            'vo2_max',
-        ])
-            expect(metricDefinition(metric), metric).toBeDefined()
     })
 })

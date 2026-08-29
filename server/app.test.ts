@@ -75,6 +75,25 @@ describe('device authentication diagnostics', () => {
 })
 
 describe('journal API', () => {
+    it('has no managed backup or retention API while explicit deletion remains available', async () => {
+        const deleteCategory = vi.fn().mockResolvedValue(undefined)
+        const app = await createApp(new MemoryJournalRepository(), {
+            deletion: {
+                categorySummary: vi.fn(),
+                deleteCategory,
+                deleteOwnerData: vi.fn(),
+            } as never,
+        })
+
+        expect((await app.inject({ method: 'GET', url: '/api/backups' })).statusCode).toBe(404)
+        expect((await app.inject({ method: 'GET', url: '/api/retention' })).statusCode).toBe(404)
+        expect(
+            (await app.inject({ method: 'DELETE', url: '/api/data/observations' })).statusCode,
+        ).toBe(204)
+        expect(deleteCategory).toHaveBeenCalledWith('observations')
+        await app.close()
+    })
+
     it('validates and forwards bounded journal ranges', async () => {
         const repository = new MemoryJournalRepository()
         const app = await createApp(repository)
@@ -228,7 +247,16 @@ describe('journal API', () => {
             configured: async () => true,
             authenticate: async () => ({ id: 'session' }),
         }
-        const app = await createApp(new MemoryJournalRepository(), { auth: auth as never })
+        const data = {
+            createObservation: async (input: unknown) => ({
+                id: randomUUID(),
+                ...(input as object),
+            }),
+        }
+        const app = await createApp(new MemoryJournalRepository(), {
+            auth: auth as never,
+            dataRepository: data as never,
+        })
         const payload = {
             category: 'Check-ins',
             title: 'Energy',
@@ -243,8 +271,9 @@ describe('journal API', () => {
                     url: '/api/observations',
                     headers: { cookie: 'trackit_session=session' },
                     payload: {
-                        metric: 'check_in',
-                        valueType: 'event',
+                        definitionId: 'check_in',
+                        valueType: 'text',
+                        textValue: 'Check-in',
                         observedAt: payload.observedAt,
                     },
                 })
@@ -260,8 +289,9 @@ describe('journal API', () => {
                         'x-csrf-token': 'token',
                     },
                     payload: {
-                        metric: 'check_in',
-                        valueType: 'event',
+                        definitionId: 'check_in',
+                        valueType: 'text',
+                        textValue: 'Check-in',
                         observedAt: payload.observedAt,
                     },
                 })

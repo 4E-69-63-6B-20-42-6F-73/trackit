@@ -89,7 +89,7 @@ describe('MCP client access', () => {
         await service.setEnabled(true)
         const issued = await service.issue({
             name: 'Writer',
-            scopes: ['checkins:write', 'journal:delete'],
+            scopes: ['checkins:write', 'observations:write'],
             expiresAt: new Date(Date.now() + 60_000).toISOString(),
         })
         const authenticated = (await service.authenticate(issued.token))!
@@ -142,14 +142,14 @@ describe('MCP client access', () => {
 
         const confirmation = await service.issueConfirmation(
             authenticated,
-            'delete_journal',
+            'delete_observation',
             'record-one',
         )
         expect(
             await service.consumeConfirmation(
                 authenticated,
                 confirmation.token,
-                'delete_journal',
+                'delete_observation',
                 'record-two',
             ),
         ).toBe(false)
@@ -157,7 +157,7 @@ describe('MCP client access', () => {
             await service.consumeConfirmation(
                 authenticated,
                 confirmation.token,
-                'delete_journal',
+                'delete_observation',
                 'record-one',
             ),
         ).toBe(true)
@@ -165,14 +165,14 @@ describe('MCP client access', () => {
             await service.consumeConfirmation(
                 authenticated,
                 confirmation.token,
-                'delete_journal',
+                'delete_observation',
                 'record-one',
             ),
         ).toBe(false)
 
         const revokedConfirmation = await service.issueConfirmation(
             authenticated,
-            'delete_journal',
+            'delete_observation',
             'record-after-revocation',
         )
         await service.revoke(authenticated.id)
@@ -180,7 +180,7 @@ describe('MCP client access', () => {
             await service.consumeConfirmation(
                 authenticated,
                 revokedConfirmation.token,
-                'delete_journal',
+                'delete_observation',
                 'record-after-revocation',
             ),
         ).toBe(false)

@@ -1,10 +1,10 @@
 import { readFile, readdir } from 'node:fs/promises'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
+import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { PostgresDataRepository } from './postgres-repository.js'
-import { rebuildEffectiveDailyMetric } from './daily-projection.js'
 
 async function migratedDatabase() {
     const client = new PGlite()
@@ -18,11 +18,40 @@ async function migratedDatabase() {
 }
 
 describe('metric source summaries', () => {
+    it('validates definitions and canonicalizes numeric commands through Metric Center', async () => {
+        const { client, database } = await migratedDatabase()
+        const repository = new PostgresDataRepository(database as never)
+        const observation = await repository.createObservation({
+            definitionId: 'weight',
+            value: 176.369809744,
+            unit: 'lb',
+            observedAt: '2026-08-25T08:00:00.000Z',
+            source: 'You',
+        })
+        expect(observation).toMatchObject({
+            definitionId: 'weight',
+            canonicalUnit: 'kg',
+            originalValue: 176.369809744,
+            originalUnit: 'lb',
+        })
+        expect(observation.canonicalValue).toBeCloseTo(80)
+        await expect(
+            repository.createObservation({
+                definitionId: 'invented_metric',
+                value: 1,
+                unit: 'count',
+                observedAt: '2026-08-25T09:00:00.000Z',
+                source: 'You',
+            }),
+        ).rejects.toThrow(/unknown observation definition/i)
+        await client.close()
+    })
+
     it('uses an exclusive upper boundary for observations and meals', async () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 100,
                 canonicalUnit: 'count',
                 originalValue: 100,
@@ -30,7 +59,7 @@ describe('metric source summaries', () => {
                 observedAt: new Date('2026-08-25T23:59:59.999Z'),
             },
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 200,
                 canonicalUnit: 'count',
                 originalValue: 200,
@@ -42,7 +71,6 @@ describe('metric source summaries', () => {
             {
                 definitionId: 'meal',
                 valueType: 'compound',
-                metric: 'meal',
                 title: 'Before midnight',
                 category: 'Meals',
                 observedAt: new Date('2026-08-25T23:59:59.999Z'),
@@ -51,7 +79,6 @@ describe('metric source summaries', () => {
             {
                 definitionId: 'meal',
                 valueType: 'compound',
-                metric: 'meal',
                 title: 'At midnight',
                 category: 'Meals',
                 observedAt: new Date('2026-08-26T00:00:00.000Z'),
@@ -72,7 +99,7 @@ describe('metric source summaries', () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 4200,
                 canonicalUnit: 'count',
                 originalValue: 4200,
@@ -81,7 +108,7 @@ describe('metric source summaries', () => {
                 metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
             },
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 4300,
                 canonicalUnit: 'count',
                 originalValue: 4300,
@@ -91,7 +118,7 @@ describe('metric source summaries', () => {
                 version: 1787185408646,
             },
             {
-                metric: 'weight',
+                definitionId: 'weight',
                 canonicalValue: 80,
                 canonicalUnit: 'kg',
                 originalValue: 80,
@@ -103,8 +130,8 @@ describe('metric source summaries', () => {
 
         const repository = new PostgresDataRepository(database as never)
         expect(await repository.listMetricSources()).toEqual([
-            { metric: 'steps', provider: 'Garmin', connector: 'Health Connect' },
-            { metric: 'weight', provider: 'You', connector: null },
+            { definitionId: 'steps', provider: 'Garmin', connector: 'Health Connect' },
+            { definitionId: 'weight', provider: 'You', connector: null },
         ])
         await client.close()
     })
@@ -113,7 +140,7 @@ describe('metric source summaries', () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
             {
-                metric: 'height',
+                definitionId: 'height',
                 canonicalValue: 180,
                 canonicalUnit: 'cm',
                 originalValue: 180,
@@ -121,7 +148,7 @@ describe('metric source summaries', () => {
                 observedAt: new Date('2026-08-01T08:00:00Z'),
             },
             {
-                metric: 'weight',
+                definitionId: 'weight',
                 canonicalValue: 81,
                 canonicalUnit: 'kg',
                 originalValue: 81,
@@ -129,7 +156,7 @@ describe('metric source summaries', () => {
                 observedAt: new Date('2026-08-25T08:00:00Z'),
             },
             {
-                metric: 'active_calories',
+                definitionId: 'active_calories',
                 canonicalValue: 600,
                 canonicalUnit: 'kcal',
                 originalValue: 600,
@@ -137,73 +164,29 @@ describe('metric source summaries', () => {
                 observedAt: new Date('2026-08-25T18:00:00Z'),
             },
         ])
-        const repository = new PostgresDataRepository(database as never)
-        await repository.createMeal({
-            name: 'Daily intake',
-            mealType: 'Dinner',
-            eatenAt: '2026-08-25T19:00:00Z',
-            nutrients: { calories: 2200 },
-            favorite: false,
-            nutritionQuality: 'complete',
+        await database.insert(schema.observations).values({
+            definitionId: 'calories',
+            valueType: 'number',
+            category: 'Meals',
+            canonicalValue: 2200,
+            canonicalUnit: 'kcal',
+            originalValue: 2200,
+            originalUnit: 'kcal',
+            observedAt: new Date('2026-08-25T19:00:00Z'),
         })
+        const repository = new PostgresDataRepository(database as never)
         const records = (await repository.listObservations({
             from: '2026-08-25T00:00:00.000Z',
             to: '2026-08-26T00:00:00.000Z',
-            metrics: ['bmi', 'calorie_balance'],
-        })) as Array<{ metric: string; canonicalValue: number }>
+            definitionIds: ['bmi', 'calorie_balance'],
+        })) as Array<{ definitionId: string; canonicalValue: number }>
 
-        expect(records.find(record => record.metric === 'bmi')?.canonicalValue).toBeCloseTo(25)
-        expect(records.find(record => record.metric === 'calorie_balance')?.canonicalValue).toBe(
-            1600,
+        expect(records.find(record => record.definitionId === 'bmi')?.canonicalValue).toBeCloseTo(
+            25,
         )
-        await client.close()
-    })
-
-    it('materializes derived observations with lineage and serves the valid cache', async () => {
-        const { client, database } = await migratedDatabase()
-        const [height, weight] = await database
-            .insert(schema.observations)
-            .values([
-                {
-                    metric: 'height',
-                    canonicalValue: 180,
-                    canonicalUnit: 'cm',
-                    originalValue: 180,
-                    originalUnit: 'cm',
-                    observedAt: new Date('2026-08-20T07:00:00Z'),
-                },
-                {
-                    metric: 'weight',
-                    canonicalValue: 81,
-                    canonicalUnit: 'kg',
-                    originalValue: 81,
-                    originalUnit: 'kg',
-                    observedAt: new Date('2026-08-25T08:00:00Z'),
-                },
-            ])
-            .returning()
-        await rebuildEffectiveDailyMetric(database as never, '2026-08-25')
-
-        const [cached] = await database.select().from(schema.derivedObservations)
-        expect(cached).toMatchObject({
-            metric: 'bmi',
-            canonicalUnit: 'kg/m²',
-            derivationVersion: 1,
-            resolutionVersion: 1,
-        })
-        const lineage = await database.select().from(schema.derivedObservationInputs)
-        expect(lineage.map(input => input.inputObservationId).sort()).toEqual(
-            [height.id, weight.id].sort(),
-        )
-
-        const repository = new PostgresDataRepository(database as never)
-        const [record] = (await repository.listObservations({
-            from: '2026-08-25T00:00:00.000Z',
-            to: '2026-08-26T00:00:00.000Z',
-            metrics: ['bmi'],
-        })) as Array<{ metadata: { cached?: boolean; inputRecordIds?: string[] } }>
-        expect(record.metadata).toMatchObject({ cached: true })
-        expect(record.metadata.inputRecordIds?.sort()).toEqual([height.id, weight.id].sort())
+        expect(
+            records.find(record => record.definitionId === 'calorie_balance')?.canonicalValue,
+        ).toBe(1600)
         await client.close()
     })
 
@@ -211,7 +194,7 @@ describe('metric source summaries', () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 7000,
                 canonicalUnit: 'count',
                 originalValue: 7000,
@@ -220,7 +203,7 @@ describe('metric source summaries', () => {
                 metadata: { source: 'Health Connect', dataOrigin: 'Garmin' },
             },
             {
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 7000,
                 canonicalUnit: 'count',
                 originalValue: 7000,
@@ -247,7 +230,7 @@ describe('metric source summaries', () => {
             [
                 expect.objectContaining({
                     date: '2026-08-25',
-                    metric: 'steps',
+                    definitionId: 'steps',
                     value: 7000,
                     derivationVersion: 2,
                 }),
@@ -276,7 +259,7 @@ describe('metric source summaries', () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values(
             ['2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'].map(date => ({
-                metric: 'steps',
+                definitionId: 'steps',
                 canonicalValue: 100,
                 canonicalUnit: 'count',
                 originalValue: 100,
@@ -292,7 +275,11 @@ describe('metric source summaries', () => {
         })
 
         expect(rows).toEqual([
-            expect.objectContaining({ date: '2026-08-25', metric: 'steps', value: 100 }),
+            expect.objectContaining({
+                date: '2026-08-25',
+                definitionId: 'steps',
+                value: 100,
+            }),
         ])
         expect(
             (await database.select().from(schema.projectionDirtyDates))
@@ -314,7 +301,8 @@ describe('nutrition snapshot persistence', () => {
             const migration = await readFile(`${migrationDirectory}/${filename}`, 'utf8')
             await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
         }
-        const repository = new PostgresDataRepository(drizzle(client, { schema }) as never)
+        const database = drizzle(client, { schema })
+        const repository = new PostgresDataRepository(database as never)
         const food = (await repository.createFood({
             name: 'Snapshot oats',
             caloriesPer100g: 100,
@@ -343,7 +331,7 @@ describe('nutrition snapshot persistence', () => {
             favorite: false,
             nutritionQuality: 'complete',
         }))!
-        await repository.createMeal({
+        const historical = await repository.createMeal({
             name: 'Historical oats',
             mealType: 'Breakfast',
             eatenAt: '2026-08-20T08:00:00Z',
@@ -352,6 +340,18 @@ describe('nutrition snapshot persistence', () => {
             nutritionQuality: 'complete',
             foodId: food.id,
         })
+        await database
+            .update(schema.observations)
+            .set({
+                attributes: {
+                    mealType: 'Breakfast',
+                    nutrientSnapshot: { calories: 9999 },
+                    favorite: false,
+                    nutritionQuality: 'complete',
+                    primaryDefinitionId: 'calories',
+                },
+            })
+            .where(eq(schema.observations.id, historical!.id))
         const ranked = (await repository.listFoods()) as {
             id: string
             lastUsedAt: Date | null
@@ -370,6 +370,7 @@ describe('nutrition snapshot persistence', () => {
             nutrientSnapshot: Record<string, number>
         }[]
         expect(historicalMeal.nutrientSnapshot.calories).toBe(100)
+        expect(historicalMeal.nutrientSnapshot.protein).toBe(10)
 
         const retryId = '10000000-0000-4000-8000-000000000099'
         const retryMeal = {
