@@ -1,6 +1,7 @@
 import { MantineProvider } from '@mantine/core'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { Today } from './Today'
 import { ServerDataProvider } from '../hooks/useServerData'
@@ -40,20 +41,22 @@ describe('Today', () => {
     it('renders active daily goal progress and opens trends', async () => {
         const openTrends = vi.fn()
         render(
-            <MantineProvider>
-                <ServerDataProvider
-                    initialData={{
-                        preferences: {
-                            displayName: 'Owner',
-                            timezone: 'UTC',
-                            locale: 'en',
-                            units: 'metric',
-                        },
-                    }}
-                >
-                    <Today events={[]} openJournal={vi.fn()} openTrends={openTrends} />
-                </ServerDataProvider>
-            </MantineProvider>,
+            <MemoryRouter>
+                <MantineProvider>
+                    <ServerDataProvider
+                        initialData={{
+                            preferences: {
+                                displayName: 'Owner',
+                                timezone: 'UTC',
+                                locale: 'en',
+                                units: 'metric',
+                            },
+                        }}
+                    >
+                        <Today events={[]} openJournal={vi.fn()} openTrends={openTrends} />
+                    </ServerDataProvider>
+                </MantineProvider>
+            </MemoryRouter>,
         )
 
         expect(

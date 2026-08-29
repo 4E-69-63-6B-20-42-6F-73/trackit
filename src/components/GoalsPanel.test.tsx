@@ -1,6 +1,7 @@
 import { MantineProvider } from '@mantine/core'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { evaluateGoal, type Goal } from '../domain/goals'
@@ -49,11 +50,13 @@ const observations: NumericObservation[] = [79, 80, 81, 80].map((value, index) =
 }))
 const renderPanel = (goals: Goal[] = [], savedPreferences = preferences) =>
     render(
-        <MantineProvider>
-            <ServerDataProvider initialData={{ preferences: savedPreferences, goals }}>
-                <GoalsPanel />
-            </ServerDataProvider>
-        </MantineProvider>,
+        <MemoryRouter>
+            <MantineProvider>
+                <ServerDataProvider initialData={{ preferences: savedPreferences, goals }}>
+                    <GoalsPanel />
+                </ServerDataProvider>
+            </MantineProvider>
+        </MemoryRouter>,
     )
 const choose = async (user: ReturnType<typeof userEvent.setup>, label: string, option: string) => {
     await user.click(screen.getByRole('combobox', { name: label }))

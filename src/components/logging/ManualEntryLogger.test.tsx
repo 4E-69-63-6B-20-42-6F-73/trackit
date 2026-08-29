@@ -58,7 +58,7 @@ describe('ManualEntryLogger', () => {
             </MantineProvider>,
         )
 
-        expect(screen.getByText(/Record this for .+20/)).toBeInTheDocument()
+        expect(screen.getByText('Recording for Thu, Aug 20, 2026')).toBeInTheDocument()
         await user.click(screen.getByRole('button', { name: 'Save weight' }))
 
         const saved = add.mock.calls[0][0]

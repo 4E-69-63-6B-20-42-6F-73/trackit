@@ -1,6 +1,7 @@
 import { MantineProvider } from '@mantine/core'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import { JournalEventList } from './JournalEventList'
 
@@ -41,9 +42,11 @@ const sleepEvent = {
 describe('Journal entry details', () => {
     it('opens a general detail view and then a detailed sleep view', async () => {
         render(
-            <MantineProvider>
-                <JournalEventList events={[sleepEvent]} roomy />
-            </MantineProvider>,
+            <MemoryRouter>
+                <MantineProvider>
+                    <JournalEventList events={[sleepEvent]} roomy />
+                </MantineProvider>
+            </MemoryRouter>,
         )
 
         await userEvent.click(screen.getByRole('button', { name: /sleep session/i }))
