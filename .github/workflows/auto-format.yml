@@ -37,10 +37,8 @@ jobs:
                     '*.md' '*.css' '*.scss' '*.yaml' '*.yml' \
                     | xargs -0 -r npx --yes prettier@3.9.6 --write
             - name: Commit formatting
-              id: commit
               run: |
                   if git diff --quiet; then
-                    echo "changed=false" >> "$GITHUB_OUTPUT"
                     exit 0
                   fi
                   git config user.name "github-actions[bot]"
@@ -48,9 +46,7 @@ jobs:
                   git add --all
                   git commit -m "Format with Prettier"
                   git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
-                  echo "changed=true" >> "$GITHUB_OUTPUT"
-            - name: Verify formatted head
-              if: steps.commit.outputs.changed == 'true'
+            - name: Verify pull request head
               env:
                   GH_TOKEN: ${{ github.token }}
               run: gh workflow run ci.yml --ref "${{ github.event.pull_request.head.ref }}"
