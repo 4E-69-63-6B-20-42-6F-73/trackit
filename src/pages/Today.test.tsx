@@ -37,8 +37,35 @@ vi.mock('../hooks/useTodayHealth', () => ({
     }),
 }))
 
+vi.mock('../hooks/useDailyNutrition', () => ({
+    useDailyNutrition: () => ({
+        nutrients: { calories: 640, protein: 42, carbs: 70, fat: 18, fiber: 9 },
+        mealCount: 1,
+        loading: false,
+        unavailable: false,
+        proteinGoal: 120,
+        hasProteinGoal: true,
+        nutritionQuality: 'complete',
+    }),
+}))
+
+vi.mock('../lib/journalApi', () => ({
+    listJournal: vi.fn().mockResolvedValue([
+        {
+            id: 'history',
+            definitionId: 'steps',
+            time: '12:00',
+            category: 'Activity',
+            title: 'Steps',
+            detail: '4,321 steps',
+            source: 'Health Connect',
+            observedAt: '2026-08-25T12:00:00.000Z',
+        },
+    ]),
+}))
+
 describe('Today', () => {
-    it('renders active daily goal progress and opens trends', async () => {
+    it('renders active daily goal progress without the summary panel', async () => {
         const openTrends = vi.fn()
         render(
             <MemoryRouter>
@@ -64,6 +91,10 @@ describe('Today', () => {
         ).toBeCloseTo(54.0125)
         expect(screen.getByText(/4,?321.*target.*8,?000/i)).toBeInTheDocument()
         expect(screen.getByText('No key observations recorded')).toBeInTheDocument()
+        expect(screen.queryByText('Not much was recorded for this day.')).not.toBeInTheDocument()
+        expect(screen.getAllByText('Nutrition')).toHaveLength(1)
+        expect(screen.getByText('640 kcal')).toBeInTheDocument()
+        expect(screen.getByText('42 / 120 g')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Check in now' })).not.toBeInTheDocument()
         expect(screen.queryByText('No sleep trend yet')).not.toBeInTheDocument()
         await userEvent.click(screen.getByRole('button', { name: 'View all trends' }))
