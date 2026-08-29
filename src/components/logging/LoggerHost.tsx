@@ -1,13 +1,14 @@
 import type { CreateObservationInput } from '../../lib/observationApi'
 import { useLogger } from '../../logging/LoggingContext'
 import type { LogActionId } from '../../logging/logActions'
-import { ManualEntryLogger, type ManualEntryKind } from './ManualEntryLogger'
 import { FoodLogger } from './FoodLogger'
+import { ManualEntryLogger, type ManualEntryKind } from './ManualEntryLogger'
 
 const kinds: Record<Exclude<LogActionId, 'food'>, ManualEntryKind> = {
     water: 'Water',
     weight: 'Weight',
     energy: 'Check-in',
+    symptom: 'Symptom',
     journal: 'Note',
 }
 
