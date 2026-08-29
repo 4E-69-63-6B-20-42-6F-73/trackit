@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ManualEntryLogger } from './ManualEntryLogger'
@@ -182,8 +182,8 @@ describe('ManualEntryLogger', () => {
         expect(screen.getByText('Neutral')).toBeInTheDocument()
         expect(screen.getByText('High')).toBeInTheDocument()
 
-        slider.focus()
-        await user.keyboard('{ArrowRight}{ArrowRight}')
+        fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
+        fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
         expect(slider).toHaveAttribute('aria-valuenow', '7')
         expect(screen.getByText('7 · High')).toBeInTheDocument()
 
@@ -215,8 +215,8 @@ describe('ManualEntryLogger', () => {
         await user.type(screen.getByLabelText('Symptom'), 'Headache')
         const slider = screen.getByRole('slider', { name: 'Symptom severity' })
         expect(slider).toHaveAttribute('aria-valuenow', '5')
-        slider.focus()
-        await user.keyboard('{ArrowRight}{ArrowRight}')
+        fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
+        fireEvent.keyDown(slider, { key: 'ArrowRight', code: 'ArrowRight' })
         expect(slider).toHaveAttribute('aria-valuenow', '7')
         expect(screen.getByText('7 · Moderate')).toBeInTheDocument()
 
