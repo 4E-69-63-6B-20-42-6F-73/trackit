@@ -2,7 +2,7 @@ import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { IconArrowUpRight } from '@tabler/icons-react'
 import type { IconMoon } from '@tabler/icons-react'
 import { useState } from 'react'
-import type { Observation } from '../domain/health'
+import type { NumericObservation } from '../domain/health'
 import { friendlySourceName } from '../domain/formatting'
 
 export function MetricCard({
@@ -25,7 +25,7 @@ export function MetricCard({
         label: string
         onClick: () => void
     }
-    record?: Observation | null
+    record?: NumericObservation | null
 }) {
     const [detailsOpen, setDetailsOpen] = useState(false)
     return (

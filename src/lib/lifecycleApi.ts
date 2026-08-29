@@ -1,48 +1,9 @@
 import { authRequest } from './authApi'
 
-export type BackupRecord = {
-    id: string
-    filename: string
-    status: string
-    sizeBytes: number | null
-    diagnostic: string | null
-    createdAt: string
-    verifiedAt: string | null
-}
-
-export async function listBackups() {
-    const response = await authRequest('/api/backups')
-    if (!response.ok) throw new Error('Backups unavailable')
-    return (await response.json()) as { configured: boolean; data: BackupRecord[] }
-}
-
-export async function createBackup() {
-    const response = await authRequest('/api/backups', { method: 'POST' })
-    if (!response.ok) throw new Error('Configure an external backup encryption key first.')
-    return ((await response.json()) as { data: BackupRecord }).data
-}
-
-export async function verifyBackup(filename: string) {
-    const response = await authRequest(`/api/backups/${encodeURIComponent(filename)}/verify`, {
-        method: 'POST',
-    })
-    if (!response.ok) throw new Error('Backup verification failed.')
-}
-
-export async function setRetention(category: string, days: number, enabled: boolean) {
-    const response = await authRequest(`/api/retention/${category}`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ days, enabled }),
-    })
-    if (!response.ok) throw new Error('Retention rule could not be saved.')
-}
-
 export type DataCategorySummary = {
     count: number
     oldest: string | null
     newest: string | null
-    lastRetentionRun: string | null
 }
 export async function getDataCategorySummary(category: string): Promise<DataCategorySummary> {
     const response = await authRequest(`/api/data-summary?category=${encodeURIComponent(category)}`)

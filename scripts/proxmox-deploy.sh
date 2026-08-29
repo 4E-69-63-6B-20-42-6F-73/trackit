@@ -103,7 +103,6 @@ run_docker() {
 if [ ! -f .env ]; then
     umask 077
     database_password="$(openssl rand -hex 32)"
-    backup_key="$(openssl rand -base64 32 | tr -d '\n')"
     bootstrap_secret="$(openssl rand -hex 32)"
     {
         echo "TRACKIT_ORIGIN=$1"
@@ -112,12 +111,9 @@ if [ ! -f .env ]; then
         echo "TRACKIT_DB_PASSWORD=$database_password"
         echo "TRACKIT_BOOTSTRAP_SECRET=$bootstrap_secret"
         echo "TRACKIT_TRUST_PROXY=true"
-        echo "TRACKIT_BACKUPS_ENABLED=true"
-        echo "TRACKIT_BACKUP_KEY=$backup_key"
     } > .env
-    echo "Created .env with unique database and backup secrets."
+    echo "Created .env with a unique database secret."
     echo "Use this one-time owner setup secret: $bootstrap_secret"
-    echo "Copy BACKUP_KEY somewhere outside this server before relying on backups."
 else
     echo "Using the existing .env file."
     if ! grep -q '^TRACKIT_BOOTSTRAP_SECRET=' .env; then

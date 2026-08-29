@@ -10,22 +10,13 @@ import { PostgresDataRepository } from './data/postgres-repository.js'
 import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { McpAccessService } from './mcp/service.js'
 import { DeviceService } from './devices/service.js'
-import { BackupService } from './backup/service.js'
-import { DataLifecycleService } from './data-lifecycle/service.js'
+import { DataDeletionService } from './data-lifecycle/deletion.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
 import { ProjectionWorker } from './data/projection-state.js'
 
 await migrate(db, { migrationsFolder: './server/db/migrations' })
 
-const backup = new BackupService(
-    db,
-    config.DATABASE_URL,
-    config.BACKUP_DIR,
-    config.BACKUP_ENCRYPTION_KEY,
-)
-if (config.BACKUPS_ENABLED) backup.start(config.BACKUP_INTERVAL_HOURS)
-const lifecycle = new DataLifecycleService(db)
-lifecycle.start()
+const deletion = new DataDeletionService(db)
 const projections = new ProjectionWorker(db)
 projections.start()
 
@@ -35,8 +26,7 @@ const app = await createApp(new PostgresJournalRepository(db), {
     auth: new AuthService(db),
     mcp: new McpAccessService(db),
     devices: new DeviceService(db, config.WEB_ORIGIN),
-    backup,
-    lifecycle,
+    deletion,
     trustProxy: config.TRUST_PROXY,
     bootstrapSecret: config.BOOTSTRAP_SECRET,
     database: db,
@@ -66,7 +56,6 @@ await app.listen({ host: config.HOST, port: config.PORT })
 
 const shutdown = async () => {
     projections.stop()
-    lifecycle.stop()
     await app.close()
     await sql.end()
 }

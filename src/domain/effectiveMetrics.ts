@@ -1,5 +1,5 @@
 import { metricCatalog } from './metricCatalog.js'
-import type { Observation } from './health.js'
+import type { NumericObservation } from './health.js'
 import type { MetricPreferences } from './metrics.js'
 
 const sourcePart = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null)
@@ -18,7 +18,7 @@ export function metricSourceDisplayName(provider: string) {
     return provider
 }
 
-export function observationSource(record: Observation): MetricSourceDescriptor {
+export function observationSource(record: NumericObservation): MetricSourceDescriptor {
     const provider =
         record.provider ??
         sourcePart(record.metadata?.dataOrigin) ??
@@ -31,15 +31,15 @@ export function observationSource(record: Observation): MetricSourceDescriptor {
     return { key: `${connector ?? 'direct'}::${provider}`, provider, connector }
 }
 
-const exactIdentity = (record: Observation) => {
+const exactIdentity = (record: NumericObservation) => {
     if (!record.externalId) return null
     const source = observationSource(record)
     return `${record.definitionId}::${source.key}::${record.externalId}`
 }
 
-export function removeExactDuplicates(records: Observation[]) {
-    const selected = new Map<string, Observation>()
-    const withoutIdentity: Observation[] = []
+export function removeExactDuplicates(records: NumericObservation[]) {
+    const selected = new Map<string, NumericObservation>()
+    const withoutIdentity: NumericObservation[] = []
     for (const record of records) {
         const identity = exactIdentity(record)
         if (!identity) {
@@ -52,7 +52,7 @@ export function removeExactDuplicates(records: Observation[]) {
     return [...withoutIdentity, ...selected.values()]
 }
 
-const overlaps = (left: Observation, right: Observation) => {
+const overlaps = (left: NumericObservation, right: NumericObservation) => {
     const leftStart = new Date(left.observedAt).getTime()
     const rightStart = new Date(right.observedAt).getTime()
     const leftEnd = new Date(left.endedAt ?? left.observedAt).getTime()
@@ -60,13 +60,13 @@ const overlaps = (left: Observation, right: Observation) => {
     return leftStart <= rightEnd && rightStart <= leftEnd
 }
 
-const sourceRank = (record: Observation, priority: string[]) => {
+const sourceRank = (record: NumericObservation, priority: string[]) => {
     const index = priority.indexOf(observationSource(record).key)
     return index < 0 ? Number.MAX_SAFE_INTEGER : index
 }
 
-function resolveOverlaps(records: Observation[], preferences?: MetricPreferences) {
-    const result: Observation[] = []
+function resolveOverlaps(records: NumericObservation[], preferences?: MetricPreferences) {
+    const result: NumericObservation[] = []
     for (const definitionId of new Set(records.map(record => record.definitionId))) {
         const pending = records
             .filter(record => record.definitionId === definitionId)
@@ -109,7 +109,7 @@ function resolveOverlaps(records: Observation[], preferences?: MetricPreferences
             }
             active.push(index)
         }
-        const groups = new Map<number, Observation[]>()
+        const groups = new Map<number, NumericObservation[]>()
         pending.forEach((record, index) =>
             groups.set(find(index), [...(groups.get(find(index)) ?? []), record]),
         )
@@ -149,8 +149,8 @@ const derivedObservation = (
     definitionId: string,
     value: number,
     observedAt: string,
-    inputs: Observation[],
-): Observation => ({
+    inputs: NumericObservation[],
+): NumericObservation => ({
     id: `derived:${definitionId}:${inputs
         .map(item => item.id)
         .sort()
@@ -169,8 +169,8 @@ const derivedObservation = (
     version: 1,
 })
 
-export function deriveMetrics(records: Observation[]) {
-    const derived: Observation[] = []
+export function deriveMetrics(records: NumericObservation[]) {
+    const derived: NumericObservation[] = []
     const heights = records
         .filter(record => record.definitionId === 'height')
         .sort((a, b) => a.observedAt.localeCompare(b.observedAt))
@@ -186,7 +186,7 @@ export function deriveMetrics(records: Observation[]) {
             ]),
         )
     }
-    const byDay = new Map<string, { intake: Observation[]; burned: Observation[] }>()
+    const byDay = new Map<string, { intake: NumericObservation[]; burned: NumericObservation[] }>()
     for (const record of records.filter(item =>
         ['calories', 'active_calories'].includes(item.definitionId),
     )) {
@@ -206,7 +206,10 @@ export function deriveMetrics(records: Observation[]) {
     return derived
 }
 
-export function effectiveBaseMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
+export function effectiveBaseMetricSeries(
+    raw: NumericObservation[],
+    preferences?: MetricPreferences,
+) {
     const base = resolveOverlaps(
         removeExactDuplicates(raw.filter(record => !record.excluded)),
         preferences,
@@ -218,14 +221,14 @@ export function effectiveBaseMetricSeries(raw: Observation[], preferences?: Metr
     return normalized.sort((a, b) => a.observedAt.localeCompare(b.observedAt))
 }
 
-export function effectiveMetricSeries(raw: Observation[], preferences?: MetricPreferences) {
+export function effectiveMetricSeries(raw: NumericObservation[], preferences?: MetricPreferences) {
     const normalized = effectiveBaseMetricSeries(raw, preferences)
     return [...normalized, ...deriveMetrics(normalized)].sort((a, b) =>
         a.observedAt.localeCompare(b.observedAt),
     )
 }
 
-export function sourcesByMetric(records: Observation[]) {
+export function sourcesByMetric(records: NumericObservation[]) {
     const result: Record<string, MetricSourceDescriptor[]> = {}
     for (const record of removeExactDuplicates(records)) {
         const source = observationSource(record)

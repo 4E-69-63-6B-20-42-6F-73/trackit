@@ -3,14 +3,14 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { derivedObservationInputs, derivedObservations } from '../db/schema.js'
 import { deriveMetrics } from '../../src/domain/effectiveMetrics.js'
-import type { Observation } from '../../src/domain/health.js'
+import type { NumericObservation } from '../../src/domain/health.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 
 export const DERIVED_OBSERVATION_CACHE_VERSION = 1
 
-const inputIds = (observation: Observation) => {
+const inputIds = (observation: NumericObservation) => {
     const value = observation.metadata?.inputRecordIds
     return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
 }
@@ -23,7 +23,7 @@ export async function replaceDerivedObservationCache(
         date: string
         timezone: string
         resolutionVersion: number
-        inputs: Observation[]
+        inputs: NumericObservation[]
     },
 ) {
     const derived = deriveMetrics(options.inputs)

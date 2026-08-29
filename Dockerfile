@@ -18,8 +18,8 @@ COPY --chown=node:node --from=build /app/dist ./dist-seed
 COPY --chown=node:node --from=build /app/build ./build
 COPY --chown=node:node --from=build /app/server/db/migrations ./server/db/migrations
 COPY --chown=node:node scripts/container-entrypoint.sh ./container-entrypoint.sh
-RUN mkdir -p /backups /app/dist \
-    && chown node:node /backups /app/dist \
+RUN mkdir -p /app/dist \
+    && chown node:node /app/dist \
     && chmod 755 /app/container-entrypoint.sh
 USER node
 EXPOSE 3000

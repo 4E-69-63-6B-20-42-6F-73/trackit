@@ -1,7 +1,7 @@
 import { metricDefinition } from './metricCatalog.js'
 import { convertMetricValue } from './metrics.js'
 
-export type Observation = {
+export type NumericObservation = {
     id: string
     definitionId: string
     canonicalValue: number
@@ -33,7 +33,7 @@ const dailyAggregation = (definitionId: string) => {
     return definition?.goalCapabilities?.aggregations.total ? 'sum' : definition?.aggregations[0]
 }
 
-export function aggregateDailyObservations(records: Observation[]) {
+export function aggregateDailyObservations(records: NumericObservation[]) {
     if (!records.length) return null
     const aggregation = dailyAggregation(records[0].definitionId) ?? 'latest'
     const values = records.map(record => record.canonicalValue).sort((left, right) => left - right)
@@ -53,7 +53,7 @@ export const displayValue = (
 ) => convertMetricValue(definitionId, value, canonicalUnit, displayUnit)
 
 export function dailySeries(
-    observations: Observation[],
+    observations: NumericObservation[],
     start: Date,
     days: number,
     timezone = 'UTC',
@@ -64,7 +64,7 @@ export function dailySeries(
         month: '2-digit',
         day: '2-digit',
     })
-    const buckets = new Map<string, Observation[]>()
+    const buckets = new Map<string, NumericObservation[]>()
     for (const observation of observations.filter(record => !record.excluded)) {
         const key = formatter.format(new Date(observation.observedAt))
         buckets.set(key, [...(buckets.get(key) ?? []), observation])
@@ -89,7 +89,7 @@ export function dailySeries(
 }
 
 export function weeklySeries(
-    observations: Observation[],
+    observations: NumericObservation[],
     start: Date,
     days: number,
     timezone = 'UTC',
@@ -132,7 +132,7 @@ export function pearsonCorrelation(left: number[], right: number[]) {
 }
 
 export function rollingBaselineDelta(
-    observations: Observation[],
+    observations: NumericObservation[],
     definitionId: string,
     now: Date,
     timezone: string,

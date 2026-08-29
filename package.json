@@ -15,8 +15,6 @@
         "db:check": "drizzle-kit check",
         "db:migrate": "tsx server/db/migrate.ts",
         "db:migrate:local": "tsx --env-file=.env server/db/migrate.ts",
-        "backup:create": "tsx server/backup/create.ts",
-        "backup:restore": "tsx server/backup/restore.ts",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
         "format": "prettier --write .",

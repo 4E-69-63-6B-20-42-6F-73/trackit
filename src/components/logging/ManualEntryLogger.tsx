@@ -1,43 +1,25 @@
 import { useState } from 'react'
-import {
-    Button,
-    Alert,
-    Group,
-    Modal,
-    NumberInput,
-    Select,
-    Stack,
-    Text,
-    TextInput,
-} from '@mantine/core'
-import { IconSearch } from '@tabler/icons-react'
-import type { JournalEvent } from '../domain/types'
-import { useServerData } from '../hooks/useServerData'
-import { displayUnitFor, toCanonicalMetricValue } from '../domain/metrics'
+import { Button, Group, Modal, NumberInput, Select, Stack, Text, TextInput } from '@mantine/core'
+import { useServerData } from '../../hooks/useServerData'
+import { displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
+import type { CreateObservationInput } from '../../lib/observationApi'
 
-export type ManualEntryKind = 'Meal' | 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
+export type ManualEntryKind = 'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'
 
 export function ManualEntryLogger({
     opened,
     close,
     add,
     initialKind,
-    recentEvents = [],
     selectedDate,
 }: {
     opened: boolean
     close: () => void
-    add: (event: JournalEvent, allowDuplicate?: boolean) => boolean | void
+    add: (input: CreateObservationInput) => void
     initialKind: ManualEntryKind
-    recentEvents?: JournalEvent[]
     selectedDate?: string | null
 }) {
     const [kind, setKind] = useState<ManualEntryKind>(initialKind)
-    const hour = new Date().getHours()
-    const [meal, setMeal] = useState(
-        hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack',
-    )
-    const [description, setDescription] = useState('')
     const { preferences } = useServerData()
     const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
     const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
@@ -50,7 +32,6 @@ export function ManualEntryLogger({
     const [severity, setSeverity] = useState<number | string>(5)
     const [duration, setDuration] = useState('')
     const [tags, setTags] = useState('')
-    const [duplicate, setDuplicate] = useState<JournalEvent | null>(null)
     const routines = preferences?.experience?.routines ?? []
     const [routineQueue, setRoutineQueue] = useState<ManualEntryKind[]>([])
     const [activeRoutine, setActiveRoutine] = useState('')
@@ -69,14 +50,8 @@ export function ManualEntryLogger({
               day: 'numeric',
           })
         : 'today'
-    const finish = (event: JournalEvent, allowDuplicate = false) => {
-        const result = allowDuplicate ? add(event, true) : add(event)
-        if (result === false) {
-            setDuplicate(event)
-            return
-        }
-        setDuplicate(null)
-        setDescription('')
+    const finish = (input: CreateObservationInput) => {
+        add(input)
         setNote('')
         if (routineQueue.length > 0) {
             const [next, ...remaining] = routineQueue
@@ -88,112 +63,94 @@ export function ManualEntryLogger({
         }
     }
     const submit = () => {
-        const time = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
         const recordedAt = selectedTimestamp()
-        let event: JournalEvent
-        if (kind === 'Meal')
-            event = {
+        let input: CreateObservationInput
+        if (kind === 'Water')
+            input = {
                 id: crypto.randomUUID(),
-                time,
-                category: 'Meals',
-                title: meal,
-                detail: description || 'Meal logged',
-                source: 'You',
-                observedAt: recordedAt,
-            }
-        else if (kind === 'Water')
-            event = {
-                id: crypto.randomUUID(),
-                time,
+                definitionId: 'water',
+                valueType: 'number',
                 category: 'Measurements',
                 title: 'Water',
-                detail: `${amount || 0} ${waterUnit}`,
                 source: 'You',
                 observedAt: recordedAt,
-                observation: {
-                    definitionId: 'water',
-                    value: toCanonicalMetricValue('water', Number(amount) || 0, waterUnit),
-                    unit: 'ml',
-                    observedAt: recordedAt,
-                },
+                value: toCanonicalMetricValue('water', Number(amount) || 0, waterUnit),
+                unit: 'ml',
+                attributes: { description: `${amount || 0} ${waterUnit}` },
             }
         else if (kind === 'Weight')
-            event = {
+            input = {
                 id: crypto.randomUUID(),
-                time,
+                definitionId: 'weight',
+                valueType: 'number',
                 category: 'Measurements',
                 title: 'Weight',
-                detail: `${amount || 0} ${weightUnit}`,
                 source: 'You',
                 observedAt: recordedAt,
-                observation: {
-                    definitionId: 'weight',
-                    value: toCanonicalMetricValue('weight', Number(amount) || 0, weightUnit),
-                    unit: 'kg',
-                    observedAt: recordedAt,
-                },
+                value: toCanonicalMetricValue('weight', Number(amount) || 0, weightUnit),
+                unit: 'kg',
+                attributes: { description: `${amount || 0} ${weightUnit}` },
             }
         else if (kind === 'Check-in')
-            event = {
+            input = {
                 id: crypto.randomUUID(),
-                time,
+                definitionId: 'energy',
+                valueType: 'number',
                 category: 'Check-ins',
                 title: 'Energy check-in',
-                detail: `${energy?.split(' ')[0] || 5} out of 10${note ? ` · ${note}` : ''}`,
                 source: 'You',
                 observedAt: recordedAt,
-                observation: {
-                    definitionId: 'energy',
-                    value: Number(energy?.split(' ')[0]) || 5,
-                    unit: 'score',
-                    observedAt: recordedAt,
+                value: Number(energy?.split(' ')[0]) || 5,
+                unit: 'score',
+                attributes: {
+                    description: `${energy?.split(' ')[0] || 5} out of 10${note ? ` · ${note}` : ''}`,
                 },
             }
         else if (kind === 'Symptom')
-            event = {
+            input = {
                 id: crypto.randomUUID(),
-                time,
+                definitionId: 'symptom',
+                valueType: 'number',
                 category: 'Check-ins',
                 title: symptom.trim() || 'Symptom',
-                detail: [
-                    `Severity ${Number(severity) || 5} out of 10`,
-                    duration.trim() && `Duration ${duration.trim()}`,
-                    note.trim(),
-                    ...tags
-                        .split(',')
-                        .map(value => value.trim())
-                        .filter(Boolean)
-                        .map(value => `#${value.replace(/^#/, '')}`),
-                ]
-                    .filter(Boolean)
-                    .join(' Â· '),
                 source: 'You',
                 observedAt: recordedAt,
-                observation: {
-                    definitionId: 'symptom',
-                    value: Number(severity) || 5,
-                    unit: 'score',
-                    observedAt: recordedAt,
+                value: Number(severity) || 5,
+                unit: 'score',
+                attributes: {
+                    description: [
+                        `Severity ${Number(severity) || 5} out of 10`,
+                        duration.trim() && `Duration ${duration.trim()}`,
+                        note.trim(),
+                        ...tags
+                            .split(',')
+                            .map(value => value.trim())
+                            .filter(Boolean)
+                            .map(value => `#${value.replace(/^#/, '')}`),
+                    ]
+                        .filter(Boolean)
+                        .join(' · '),
                 },
             }
         else
-            event = {
+            input = {
                 id: crypto.randomUUID(),
-                time,
+                definitionId: 'note',
+                valueType: 'text',
                 category: 'Check-ins',
                 title: 'Note',
-                detail: [
+                textValue: [
                     note.trim() || 'Personal note',
                     ...tags
                         .split(',')
                         .map(value => value.trim())
                         .filter(Boolean)
                         .map(value => `#${value.replace(/^#/, '')}`),
-                ].join(' Â· '),
+                ].join(' · '),
                 source: 'You',
                 observedAt: recordedAt,
             }
-        finish(event)
+        finish(input)
     }
     return (
         <Modal
@@ -214,60 +171,6 @@ export function ManualEntryLogger({
             }
         >
             <Stack gap="md">
-                {duplicate && (
-                    <Alert color="orange" title="This may already be logged">
-                        An identical entry was added in the last two minutes.
-                        <Group mt="sm" gap="xs">
-                            <Button size="xs" variant="default" onClick={() => setDuplicate(null)}>
-                                Review entry
-                            </Button>
-                            <Button
-                                size="xs"
-                                color="orange"
-                                onClick={() => finish(duplicate, true)}
-                            >
-                                Log anyway
-                            </Button>
-                        </Group>
-                    </Alert>
-                )}
-                {recentEvents.length > 0 && (
-                    <div>
-                        <Text size="sm" fw={650} mb={6}>
-                            Recent actions
-                        </Text>
-                        <Group gap="xs">
-                            {recentEvents.slice(0, 3).map(event => (
-                                <Button
-                                    key={event.id}
-                                    size="compact-sm"
-                                    variant="default"
-                                    onClick={() =>
-                                        finish({
-                                            ...event,
-                                            id: crypto.randomUUID(),
-                                            time: new Date().toLocaleTimeString([], {
-                                                hour: '2-digit',
-                                                minute: '2-digit',
-                                            }),
-                                            source: 'You',
-                                            version: undefined,
-                                            observedAt: selectedTimestamp(),
-                                            observation: event.observation
-                                                ? {
-                                                      ...event.observation,
-                                                      observedAt: selectedTimestamp(),
-                                                  }
-                                                : undefined,
-                                        })
-                                    }
-                                >
-                                    Repeat {event.title}
-                                </Button>
-                            ))}
-                        </Group>
-                    </div>
-                )}
                 {routines.length > 0 && (
                     <div>
                         <Text size="sm" fw={650} mb={6}>
@@ -297,23 +200,6 @@ export function ManualEntryLogger({
                             </Text>
                         )}
                     </div>
-                )}
-                {kind === 'Meal' && (
-                    <>
-                        <Select
-                            label="Meal"
-                            value={meal}
-                            onChange={value => setMeal(value || 'Meal')}
-                            data={['Breakfast', 'Lunch', 'Dinner', 'Snack']}
-                        />
-                        <TextInput
-                            label="What did you have?"
-                            value={description}
-                            onChange={e => setDescription(e.currentTarget.value)}
-                            placeholder="Search foods or describe a meal"
-                            leftSection={<IconSearch size={16} />}
-                        />
-                    </>
                 )}
                 {kind === 'Water' && (
                     <Stack gap="xs">
@@ -445,9 +331,7 @@ export function ManualEntryLogger({
                                 ? 'Save check-in'
                                 : kind === 'Symptom'
                                   ? 'Save symptom'
-                                  : kind === 'Note'
-                                    ? 'Save note'
-                                    : 'Save meal'}
+                                  : 'Save note'}
                     </Button>
                 </Group>
             </Stack>

@@ -1,21 +1,9 @@
-import {
-    Alert,
-    Button,
-    Group,
-    Modal,
-    NumberInput,
-    Select,
-    Stack,
-    Switch,
-    Text,
-    TextInput,
-} from '@mantine/core'
+import { Alert, Button, Group, Modal, Select, Stack, Text, TextInput } from '@mantine/core'
 import { useEffect, useState } from 'react'
 import {
     deleteCategory,
     deleteOwnerData,
     getDataCategorySummary,
-    setRetention,
     type DataCategorySummary,
 } from '../lib/lifecycleApi'
 
@@ -36,8 +24,6 @@ const categories = {
 
 export function PrivacyPanel() {
     const [category, setCategory] = useState<string | null>('observations')
-    const [days, setDays] = useState<number | string>(365)
-    const [enabled, setEnabled] = useState(false)
     const [confirmation, setConfirmation] = useState('')
     const [message, setMessage] = useState('')
     const [pendingCategory, setPendingCategory] = useState<string | null>(null)
@@ -54,21 +40,6 @@ export function PrivacyPanel() {
             active = false
         }
     }, [category])
-
-    const save = async () => {
-        if (!category) return
-        setBusy(true)
-        try {
-            await setRetention(category, Number(days), enabled)
-            setMessage(
-                'Retention rule saved. It applies to live data; backup retention is managed separately.',
-            )
-        } catch {
-            setMessage('The retention rule could not be saved. Try again.')
-        } finally {
-            setBusy(false)
-        }
-    }
 
     const removeCategory = async () => {
         if (!pendingCategory) return
@@ -100,8 +71,8 @@ export function PrivacyPanel() {
     return (
         <Stack>
             <Text size="sm" c="dimmed">
-                Retention removes records from the live database. Rotate old backup archives on the
-                same schedule so deleted data cannot be restored later.
+                Review what TrackIt stores, export a portable copy, or deliberately delete selected
+                data. TrackIt does not automatically remove records.
             </Text>
             <Select
                 label="Category"
@@ -113,10 +84,8 @@ export function PrivacyPanel() {
                 }))}
             />
             {category && (
-                <Alert color="blue" title="What this rule affects">
-                    {categories[category as keyof typeof categories].impact}. Changes do not restore
-                    records already removed. TrackIt-managed backups are purged for immediate
-                    deletion.
+                <Alert color="blue" title="What deletion affects">
+                    {categories[category as keyof typeof categories].impact}.
                 </Alert>
             )}
             {summary && (
@@ -133,24 +102,8 @@ export function PrivacyPanel() {
                             ? ` to ${new Date(summary.newest).toLocaleDateString()}`
                             : ''}
                     </Text>
-                    <Text size="sm" c="dimmed">
-                        Last retention run:{' '}
-                        {summary.lastRetentionRun
-                            ? new Date(summary.lastRetentionRun).toLocaleString()
-                            : 'Never recorded'}{' '}
-                        · next run follows the server schedule
-                    </Text>
                 </div>
             )}
-            <NumberInput label="Keep for" suffix=" days" min={1} value={days} onChange={setDays} />
-            <Switch
-                label="Enable automatic retention"
-                checked={enabled}
-                onChange={event => setEnabled(event.currentTarget.checked)}
-            />
-            <Button loading={busy} onClick={() => void save()}>
-                Save retention rule
-            </Button>
             <Button color="red" variant="light" onClick={() => setPendingCategory(category)}>
                 Delete{' '}
                 {category
@@ -187,7 +140,7 @@ export function PrivacyPanel() {
                                   pendingCategory as keyof typeof categories
                               ].impact.toLowerCase()
                             : 'this category'}{' '}
-                        from the live database and purges TrackIt-managed backup archives.
+                        from the live database.
                     </Alert>
                     <Group justify="flex-end">
                         <Button variant="default" onClick={() => setPendingCategory(null)}>

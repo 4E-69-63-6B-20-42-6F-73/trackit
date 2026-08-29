@@ -13,10 +13,4 @@ export type JournalEvent = {
     deviceName?: string
     observedAt?: string
     version?: number
-    observation?: {
-        definitionId: string
-        value: number
-        unit: string
-        observedAt: string
-    }
 }

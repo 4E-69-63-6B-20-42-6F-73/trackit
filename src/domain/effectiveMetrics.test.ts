@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Observation } from './health'
+import type { NumericObservation } from './health'
 import { effectiveMetricSeries, observationSource, removeExactDuplicates } from './effectiveMetrics'
 
 const record = (
-    overrides: Partial<Observation> & Pick<Observation, 'id' | 'definitionId' | 'canonicalValue'>,
-): Observation => ({
+    overrides: Partial<NumericObservation> &
+        Pick<NumericObservation, 'id' | 'definitionId' | 'canonicalValue'>,
+): NumericObservation => ({
     canonicalUnit:
         overrides.definitionId === 'height'
             ? 'cm'

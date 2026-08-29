@@ -1,20 +1,13 @@
 import { useState } from 'react'
-import type { JournalEvent } from '../domain/types'
 import {
-    createObservationFromEvent,
+    createObservation,
     deleteObservation,
-    updateObservationFromEvent,
+    updateObservation,
+    type CreateObservationInput,
+    type UpdateObservationInput,
 } from '../lib/observationApi'
 
-const timestamp = (event: JournalEvent) => {
-    if (event.observedAt) return new Date(event.observedAt)
-    const date = new Date()
-    const [hours, minutes] = event.time.split(':').map(Number)
-    date.setHours(hours, minutes, 0, 0)
-    return date
-}
-
-export function useObservationCommands(events: JournalEvent[], refresh: () => void) {
+export function useObservationCommands(refresh: () => void) {
     const [failure, setFailure] = useState<{ message: string; retry: () => Promise<void> } | null>(
         null,
     )
@@ -30,28 +23,15 @@ export function useObservationCommands(events: JournalEvent[], refresh: () => vo
             return false
         }
     }
-    const add = (event: JournalEvent, allowDuplicate = false) => {
-        const eventTime = timestamp(event)
-        const duplicate = events.some(
-            item =>
-                item.category === event.category &&
-                item.title.trim().toLowerCase() === event.title.trim().toLowerCase() &&
-                item.detail.trim().toLowerCase() === event.detail.trim().toLowerCase() &&
-                Math.abs(timestamp(item).getTime() - eventTime.getTime()) <= 2 * 60 * 1000,
-        )
-        if (duplicate && !allowDuplicate) return false
+    const add = (input: CreateObservationInput) => {
         void run(
-            () => createObservationFromEvent(event),
+            () => createObservation(input),
             'The observation was not saved. Reconnect and retry.',
         )
-        return true
     }
-    const update = (
-        event: JournalEvent,
-        changes: Pick<JournalEvent, 'title' | 'detail' | 'time'>,
-    ) =>
+    const update = (id: string, input: UpdateObservationInput) =>
         run(
-            () => updateObservationFromEvent(event, changes),
+            () => updateObservation(id, input),
             'The observation edit was not saved. Reconnect and retry.',
         )
     const remove = (id: string) => {

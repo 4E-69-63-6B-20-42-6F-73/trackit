@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { dailySeries, type Observation } from './health'
+import { dailySeries, type NumericObservation } from './health'
 import { metricCatalog, metricDefinition } from './metricCatalog'
 
 describe('metric catalog', () => {
     it('includes every stored nutrition total', () => {
         const nutrition = metricCatalog
             .filter(metric => metric.source === 'meal')
-            .map(metric => metric.value)
+            .map(metric => metric.id)
 
         expect(nutrition).toEqual([
             'calories',
@@ -35,7 +35,7 @@ describe('metric catalog', () => {
                     originalUnit: 'g',
                     excluded: false,
                     version: 1,
-                }) satisfies Observation,
+                }) satisfies NumericObservation,
         )
 
         expect(dailySeries(records, new Date('2026-08-20T12:00:00Z'), 1, 'UTC')[0].value).toBe(50)

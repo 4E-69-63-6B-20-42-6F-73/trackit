@@ -26,7 +26,7 @@ import { PageHeader } from '../components/PageHeader'
 import {
     dailySeries,
     weeklySeries,
-    type Observation,
+    type NumericObservation,
     type TrendGranularity,
 } from '../domain/health'
 import { metricCatalog, metricDefinition } from '../domain/metricCatalog'
@@ -44,11 +44,11 @@ import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/tren
 const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
 
 const metricLabel = (metric: string) =>
-    metricDefinition(metric)?.label ??
+    metricDefinition(metric)?.name ??
     metric.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
 export function Trends() {
     const navigate = useNavigate()
-    const [observations, setObservations] = useState<Observation[]>([])
+    const [observations, setObservations] = useState<NumericObservation[]>([])
     const [availableMetrics, setAvailableMetrics] = useState<DailyMetric[]>([])
     const [range, setRange] = useState<keyof typeof ranges>('7 days')
     const [metric, setMetric] = useState<string | null>(null)
@@ -109,14 +109,14 @@ export function Trends() {
     const allObservations = observations
     const recordedMetrics = [...new Set(availableMetrics.map(record => record.definitionId))]
     const unknownMetrics = recordedMetrics.filter(
-        value => !metricCatalog.some(definition => definition.value === value),
+        value => !metricCatalog.some(definition => definition.id === value),
     )
     const metricOptions = [
-        ...Array.from(new Set(metricCatalog.map(definition => definition.group))).map(group => ({
+        ...Array.from(new Set(metricCatalog.map(definition => definition.category))).map(group => ({
             group,
             items: metricCatalog
-                .filter(definition => definition.group === group)
-                .map(definition => ({ value: definition.value, label: definition.label })),
+                .filter(definition => definition.category === group)
+                .map(definition => ({ value: definition.id, label: definition.name })),
         })),
         ...(unknownMetrics.length
             ? [
@@ -200,7 +200,7 @@ export function Trends() {
               ? 'Partial coverage'
               : 'Low coverage'
 
-    const toggleExcluded = async (observation: Observation) => {
+    const toggleExcluded = async (observation: NumericObservation) => {
         try {
             const updated = await setObservationExcluded(observation, !observation.excluded)
             setObservations(current =>
@@ -391,10 +391,10 @@ export function Trends() {
                             value={comparisonMetric}
                             onChange={setComparisonMetric}
                             data={metricCatalog
-                                .filter(definition => definition.value !== metric)
+                                .filter(definition => definition.id !== metric)
                                 .map(definition => ({
-                                    value: definition.value,
-                                    label: definition.label,
+                                    value: definition.id,
+                                    label: definition.name,
                                 }))}
                             placeholder="Choose a second metric"
                         />

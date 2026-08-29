@@ -2,7 +2,6 @@ import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { describe, expect, it } from 'vitest'
 import { createApp } from './app.js'
-import { DataLifecycleService } from './data-lifecycle/service.js'
 import { PostgresDataRepository } from './data/postgres-repository.js'
 import * as schema from './db/schema.js'
 import { applyTestMigrations } from './db/test-migrations.js'
@@ -42,26 +41,6 @@ describe('transactional linked writes', () => {
         expect(response.statusCode).toBe(500)
         expect(await database.select().from(schema.observations)).toHaveLength(0)
         await app.close()
-        await client.close()
-    })
-
-    it('rolls back retention deletion when its audit insert fails', async () => {
-        const client = new PGlite()
-        await applyTestMigrations(client)
-        const database = drizzle(client, { schema })
-        await database.insert(schema.observations).values({
-            definitionId: 'meal',
-            valueType: 'compound',
-            title: 'Retained after failure',
-            category: 'Meals',
-            observedAt: new Date('2020-01-01T12:00:00Z'),
-            attributes: { mealType: 'Lunch', nutrientSnapshot: {} },
-        })
-        const lifecycle = new DataLifecycleService(database as never)
-        await lifecycle.setRetentionRule('meals', 1, true)
-        await client.exec(failInsert('audit_events', 'retention.applied'))
-        await expect(lifecycle.applyRetention()).rejects.toThrow()
-        expect(await database.select().from(schema.observations)).toHaveLength(1)
         await client.close()
     })
 })

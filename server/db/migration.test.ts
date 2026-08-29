@@ -78,8 +78,6 @@ describe('database migration', () => {
                 'pairing_codes',
                 'device_upload_batches',
                 'sync_cursors',
-                'backup_runs',
-                'retention_rules',
                 'mcp_action_receipts',
                 'mcp_confirmations',
                 'recovery_codes',

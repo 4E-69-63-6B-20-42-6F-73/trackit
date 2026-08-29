@@ -5,10 +5,10 @@ import {
     pearsonCorrelation,
     rollingBaselineDelta,
     weeklySeries,
-    type Observation,
+    type NumericObservation,
 } from './health'
 
-const observation = (id: string, observedAt: string, value: number): Observation => ({
+const observation = (id: string, observedAt: string, value: number): NumericObservation => ({
     id,
     definitionId: 'weight',
     canonicalValue: value,

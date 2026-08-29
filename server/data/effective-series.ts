@@ -13,7 +13,7 @@ import {
     effectiveBaseMetricSeries,
     effectiveMetricSeries,
 } from '../../src/domain/effectiveMetrics.js'
-import type { Observation } from '../../src/domain/health.js'
+import type { NumericObservation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
 import type { RecordRange } from './types.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
@@ -29,7 +29,7 @@ async function cachedDerivedSeries(
     requestedMetrics: Set<string> | null,
     resolutionVersion: number,
     timezone: string,
-): Promise<Observation[] | null> {
+): Promise<NumericObservation[] | null> {
     if (
         !requestedMetrics?.size ||
         !range.from ||
@@ -101,7 +101,7 @@ async function cachedDerivedSeries(
             input.inputObservationId,
         ])
     return cached
-        .map((row): Observation => ({
+        .map((row): NumericObservation => ({
             id: row.id,
             definitionId: row.definitionId,
             canonicalValue: row.canonicalValue,
@@ -197,7 +197,7 @@ async function loadEffectiveMetricSeries(
             .where(and(...observationConditions)),
         priorHeightQuery,
     ])
-    const normalize = (record: (typeof records)[number]): Observation => ({
+    const normalize = (record: (typeof records)[number]): NumericObservation => ({
         ...record,
         canonicalValue: record.canonicalValue!,
         canonicalUnit: record.canonicalUnit!,

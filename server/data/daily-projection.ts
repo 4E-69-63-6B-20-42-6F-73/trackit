@@ -7,7 +7,7 @@ import {
     preferences,
     projectionDirtyDates,
 } from '../db/schema.js'
-import { aggregateDailyObservations, type Observation } from '../../src/domain/health.js'
+import { aggregateDailyObservations, type NumericObservation } from '../../src/domain/health.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
 import { localDayRange } from './timezone.js'
 import { getEffectiveMetricSeries } from './effective-series.js'
@@ -35,7 +35,7 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
     await database
         .delete(dailyMetrics)
         .where(and(eq(dailyMetrics.userId, 'owner'), eq(dailyMetrics.date, date)))
-    const byMetric = new Map<string, Observation[]>()
+    const byMetric = new Map<string, NumericObservation[]>()
     for (const record of effective)
         byMetric.set(record.definitionId, [...(byMetric.get(record.definitionId) ?? []), record])
     for (const [metric, values] of byMetric) {

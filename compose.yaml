@@ -11,9 +11,6 @@ services:
             WEB_ORIGIN: ${TRACKIT_ORIGIN:-http://localhost:3000}
             TRUST_PROXY: ${TRACKIT_TRUST_PROXY:-false}
             API_RATE_LIMIT_MAX: ${TRACKIT_API_RATE_LIMIT_MAX:-600}
-            BACKUPS_ENABLED: ${TRACKIT_BACKUPS_ENABLED:-false}
-            BACKUP_ENCRYPTION_KEY: ${TRACKIT_BACKUP_KEY:-}
-            BACKUP_DIR: /backups
             BOOTSTRAP_SECRET: ${TRACKIT_BOOTSTRAP_SECRET:?Set TRACKIT_BOOTSTRAP_SECRET in .env}
         ports:
             - '${TRACKIT_BIND_ADDRESS:-127.0.0.1}:${TRACKIT_PORT:-3000}:3000'
@@ -26,7 +23,6 @@ services:
             timeout: 5s
             retries: 10
         volumes:
-            - trackit-backups:/backups
             - trackit-assets:/app/dist
 
     db:
@@ -46,5 +42,4 @@ services:
 
 volumes:
     trackit-data:
-    trackit-backups:
     trackit-assets:

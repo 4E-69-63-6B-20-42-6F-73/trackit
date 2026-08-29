@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test'
 import { evaluateGoal, type Goal } from '../../src/domain/goals'
-import type { Observation } from '../../src/domain/health'
+import type { NumericObservation } from '../../src/domain/health'
 
 /** Authenticates through a server response; no application data is stored in the browser. */
 export async function useAuthenticatedServer(
@@ -63,7 +63,7 @@ export async function useAuthenticatedServer(
                     String(goal.id),
                     evaluateGoal(
                         goal as Goal,
-                        (options.observations ?? []) as unknown as Observation[],
+                        (options.observations ?? []) as unknown as NumericObservation[],
                         now,
                         timezone,
                     ),
@@ -153,7 +153,6 @@ export async function useAuthenticatedServer(
                         count: 0,
                         oldest: null,
                         newest: null,
-                        lastRetentionRun: null,
                     },
                 }),
             })

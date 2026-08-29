@@ -8,9 +8,10 @@ import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
 import { nav } from './domain/data'
-import type { JournalEvent, Page } from './domain/types'
+import type { Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
 import { useObservationCommands } from './hooks/useObservationCommands'
+import type { CreateObservationInput } from './lib/observationApi'
 import { useLogger } from './logging/LoggingContext'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
@@ -110,11 +111,8 @@ export default function App() {
               : { limit: page === 'Journal' ? 100 : 10 }
     const { events, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
         useJournal(journalQuery)
-    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(
-        events,
-        refresh,
-    )
-    const [lastAdded, setLastAdded] = useState<JournalEvent | null>(null)
+    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(refresh)
+    const [lastAdded, setLastAdded] = useState<{ id: string; title: string } | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
 
@@ -124,21 +122,9 @@ export default function App() {
     }, [location.pathname])
 
     const openPage = (nextPage: Page) => navigate(pagePaths[nextPage])
-    const duplicate = (event: JournalEvent) => {
-        const copy = {
-            ...event,
-            id: crypto.randomUUID(),
-            time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            source: 'You',
-            version: undefined,
-        }
-        add(copy, true)
-        setLastAdded(copy)
-    }
-    const addQuick = (event: JournalEvent, allowDuplicate = false) => {
-        if (!add(event, allowDuplicate)) return false
-        setLastAdded(event)
-        return true
+    const addQuick = (input: CreateObservationInput) => {
+        add(input)
+        setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
     }
 
     const loading = (
@@ -193,8 +179,12 @@ export default function App() {
                                     <Journal
                                         events={events}
                                         remove={remove}
-                                        duplicate={duplicate}
-                                        update={update}
+                                        update={(event, changes) =>
+                                            update(event.id, {
+                                                ...changes,
+                                                version: event.version ?? 1,
+                                            })
+                                        }
                                         hasOlder={hasOlder}
                                         loadingOlder={loadingOlder}
                                         loadOlder={loadOlder}

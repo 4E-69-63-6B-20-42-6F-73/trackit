@@ -36,20 +36,10 @@ export type MetricDefinition = {
     goalCapabilities?: GoalCapabilities
     goalDefaults?: GoalDefaults
     source: MetricSource
-    value: string
-    label: string
-    unit: string
-    group: MetricCategory
     derived?: DerivedMetricDefinition
 }
-type DefinitionInput = Omit<MetricDefinition, 'value' | 'label' | 'unit' | 'group'>
-const define = (d: DefinitionInput): MetricDefinition => ({
-    ...d,
-    value: d.id,
-    label: d.name,
-    unit: d.canonicalUnit,
-    group: d.category,
-})
+type DefinitionInput = MetricDefinition
+const define = (definition: DefinitionInput): MetricDefinition => definition
 const comparisons = ['gte', 'lte', 'between'] as const
 const aggregations = ['latest', 'average', 'min', 'max'] as const
 const goalComparators = ['gte', 'lte', 'between'] as const

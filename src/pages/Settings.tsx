@@ -4,12 +4,11 @@ import {
     IconChevronRight,
     IconDatabase,
     IconDashboard,
-    IconSettings,
     IconShieldLock,
+    IconSettings,
     IconUser,
 } from '@tabler/icons-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
-import { BackupPanel } from '../components/BackupPanel'
 import { ExperiencePanel } from '../components/ExperiencePanel'
 import { PreferencesPanel } from '../components/PreferencesPanel'
 import { PrivacyPanel } from '../components/PrivacyPanel'
@@ -33,8 +32,8 @@ const sections = [
     },
     {
         slug: 'privacy',
-        title: 'Privacy & retention',
-        description: 'Data categories, retention and deletion',
+        title: 'Privacy & data',
+        description: 'Data export and deliberate deletion',
         icon: IconDatabase,
         content: PrivacyPanel,
     },
@@ -44,13 +43,6 @@ const sections = [
         description: 'Sessions and access history',
         icon: IconShieldLock,
         content: SecurityPanel,
-    },
-    {
-        slug: 'system',
-        title: 'System',
-        description: 'Backups and restore verification',
-        icon: IconSettings,
-        content: BackupPanel,
     },
 ] as const
 

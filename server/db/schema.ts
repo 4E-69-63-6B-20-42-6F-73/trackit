@@ -401,25 +401,6 @@ export const syncCursors = pgTable(
     table => [uniqueIndex('sync_cursor_device_type_idx').on(table.deviceId, table.recordType)],
 )
 
-export const backupRuns = pgTable('backup_runs', {
-    id: uuid('id').primaryKey().defaultRandom(),
-    filename: text('filename').notNull(),
-    status: text('status').notNull(),
-    encrypted: boolean('encrypted').notNull().default(true),
-    sizeBytes: integer('size_bytes'),
-    diagnostic: text('diagnostic'),
-    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    completedAt: timestamp('completed_at', { withTimezone: true }),
-    verifiedAt: timestamp('verified_at', { withTimezone: true }),
-})
-
-export const retentionRules = pgTable('retention_rules', {
-    category: text('category').primaryKey(),
-    days: integer('days').notNull(),
-    enabled: boolean('enabled').notNull().default(false),
-    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
-})
-
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),
     metricId: text('metric').notNull(),

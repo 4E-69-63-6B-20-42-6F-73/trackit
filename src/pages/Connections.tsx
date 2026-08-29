@@ -71,7 +71,7 @@ export function Connections() {
             icon: IconDatabase,
             title: 'Export your data',
             status: null,
-            desc: 'Download a portable copy of your TrackIt data for backup or migration.',
+            desc: 'Download a portable copy of your TrackIt data for export or migration.',
             color: 'blue',
         },
     ]

@@ -75,6 +75,25 @@ describe('device authentication diagnostics', () => {
 })
 
 describe('journal API', () => {
+    it('has no managed backup or retention API while explicit deletion remains available', async () => {
+        const deleteCategory = vi.fn().mockResolvedValue(undefined)
+        const app = await createApp(new MemoryJournalRepository(), {
+            deletion: {
+                categorySummary: vi.fn(),
+                deleteCategory,
+                deleteOwnerData: vi.fn(),
+            } as never,
+        })
+
+        expect((await app.inject({ method: 'GET', url: '/api/backups' })).statusCode).toBe(404)
+        expect((await app.inject({ method: 'GET', url: '/api/retention' })).statusCode).toBe(404)
+        expect(
+            (await app.inject({ method: 'DELETE', url: '/api/data/observations' })).statusCode,
+        ).toBe(204)
+        expect(deleteCategory).toHaveBeenCalledWith('observations')
+        await app.close()
+    })
+
     it('validates and forwards bounded journal ranges', async () => {
         const repository = new MemoryJournalRepository()
         const app = await createApp(repository)

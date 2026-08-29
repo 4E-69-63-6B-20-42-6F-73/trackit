@@ -1,7 +1,7 @@
-import type { JournalEvent } from '../../domain/types'
+import type { CreateObservationInput } from '../../lib/observationApi'
 import { useLogger } from '../../logging/LoggingContext'
 import type { LogActionId } from '../../logging/logActions'
-import { ManualEntryLogger, type ManualEntryKind } from '../QuickAdd'
+import { ManualEntryLogger, type ManualEntryKind } from './ManualEntryLogger'
 import { FoodLogger } from './FoodLogger'
 
 const kinds: Record<Exclude<LogActionId, 'food'>, ManualEntryKind> = {
@@ -15,7 +15,7 @@ export function LoggerHost({
     add,
     selectedDate,
 }: {
-    add: (event: JournalEvent, allowDuplicate?: boolean) => boolean | void
+    add: (input: CreateObservationInput) => void
     selectedDate?: string | null
 }) {
     const { activeLogger, closeLogger } = useLogger()

@@ -33,13 +33,12 @@ import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
 import type { DeviceService, DeviceUploadRecord } from './devices/service.js'
 import type { CanonicalHealthRecordInput } from './health-records/types.js'
-import type { BackupService } from './backup/service.js'
-import type { DataLifecycleService } from './data-lifecycle/service.js'
+import type { DataDeletionService } from './data-lifecycle/deletion.js'
 import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
 import { config } from './config.js'
 import { evaluateGoal, type Goal } from '../src/domain/goals.js'
-import type { Observation } from '../src/domain/health.js'
+import type { NumericObservation } from '../src/domain/health.js'
 
 export async function createApp(
     repository: JournalRepository,
@@ -49,8 +48,7 @@ export async function createApp(
         auth?: AuthService
         mcp?: McpAccessService
         devices?: DeviceService
-        backup?: BackupService
-        lifecycle?: DataLifecycleService
+        deletion?: DataDeletionService
         trustProxy?: boolean
         bootstrapSecret?: string
         database?: PostgresJsDatabase<typeof schemaType>
@@ -351,32 +349,6 @@ export async function createApp(
     app.get('/api/health', async () => ({ status: 'ok' }))
     app.get('/api/openapi.json', async () => openApiContract)
 
-    if (options?.backup) {
-        const backup = options.backup
-        app.get('/api/backups', async () => ({
-            configured: backup.configured(),
-            data: await backup.list(),
-        }))
-        app.post('/api/backups', async (_request, reply) => {
-            if (!backup.configured()) return reply.code(409).send({ error: 'backup_key_missing' })
-            const record = await backup.create()
-            await options.auth?.recordAudit('backup.created', 'backup', record.id)
-            return reply.code(201).send({ data: record })
-        })
-        app.post<{ Params: { filename: string } }>(
-            '/api/backups/:filename/verify',
-            async (request, reply) => {
-                await backup.verify(request.params.filename)
-                await options.auth?.recordAudit(
-                    'backup.verified',
-                    'backup',
-                    request.params.filename,
-                )
-                return reply.code(204).send()
-            },
-        )
-    }
-
     if (options?.dataRepository) {
         const exports = new ExportService(options.dataRepository, repository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
@@ -394,9 +366,8 @@ export async function createApp(
         })
     }
 
-    if (options?.lifecycle) {
-        const lifecycle = options.lifecycle
-        app.get('/api/retention', async () => ({ data: await lifecycle.listRetentionRules() }))
+    if (options?.deletion) {
+        const deletion = options.deletion
         app.get<{ Querystring: { category?: string } }>(
             '/api/data-summary',
             async (request, reply) => {
@@ -405,28 +376,7 @@ export async function createApp(
                     .safeParse(request.query.category)
                 if (!category.success)
                     return badRequest(request, reply, { validation: category.error })
-                return { data: await lifecycle.categorySummary(category.data) }
-            },
-        )
-        app.put<{ Params: { category: string } }>(
-            '/api/retention/:category',
-            async (request, reply) => {
-                const category = z
-                    .enum(['observations', 'meals', 'checkins'])
-                    .safeParse(request.params.category)
-                const input = z
-                    .object({ days: z.number().int().min(1).max(36500), enabled: z.boolean() })
-                    .safeParse(request.body)
-                if (!category.success)
-                    return badRequest(request, reply, { validation: category.error })
-                if (!input.success) return badRequest(request, reply, { validation: input.error })
-                return {
-                    data: await lifecycle.setRetentionRule(
-                        category.data,
-                        input.data.days,
-                        input.data.enabled,
-                    ),
-                }
+                return { data: await deletion.categorySummary(category.data) }
             },
         )
         app.delete<{ Params: { category: string } }>(
@@ -440,8 +390,7 @@ export async function createApp(
                         error: 'invalid_category',
                         validation: category.error,
                     })
-                await options.backup?.purge()
-                await lifecycle.deleteCategory(category.data)
+                await deletion.deleteCategory(category.data)
                 return reply.code(204).send()
             },
         )
@@ -454,8 +403,7 @@ export async function createApp(
                     error: 'confirmation_required',
                     validation: input.error,
                 })
-            await options.backup?.purge()
-            await lifecycle.deleteOwnerData()
+            await deletion.deleteOwnerData()
             reply.clearCookie(sessionCookie, { path: '/' })
             reply.clearCookie(csrfCookie, { path: '/' })
             return reply.code(204).send()
@@ -970,7 +918,7 @@ export async function createApp(
                           from: from.toISOString(),
                           to: now.toISOString(),
                           definitionIds: metrics,
-                      })) as Observation[])
+                      })) as NumericObservation[])
                     : []
                 return {
                     data: Object.fromEntries(

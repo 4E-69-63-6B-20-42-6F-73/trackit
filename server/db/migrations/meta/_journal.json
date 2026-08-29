@@ -120,6 +120,13 @@
             "when": 1787689000000,
             "tag": "0016_projection_definition_identity",
             "breakpoints": true
+        },
+        {
+            "idx": 17,
+            "version": "7",
+            "when": 1787981570171,
+            "tag": "0017_remove_managed_backup_retention",
+            "breakpoints": true
         }
     ]
 }

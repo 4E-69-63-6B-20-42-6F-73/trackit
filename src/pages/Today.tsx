@@ -38,14 +38,14 @@ import { JournalEventList } from '../components/JournalEventList'
 import { MetricCard } from '../components/MetricCard'
 import { WeeklyReflection } from '../components/WeeklyReflection'
 import type { LogActionId } from '../logging/logActions'
-import { displayValue, type Observation } from '../domain/health'
+import { displayValue, type NumericObservation } from '../domain/health'
 import { formatMetric, type MetricPreferences } from '../domain/metrics'
 import type { JournalEvent } from '../domain/types'
 import { useTodayHealth } from '../hooks/useTodayHealth'
 import { updatePreferences, type DashboardCard } from '../lib/preferencesApi'
 
 const reading = (
-    record: Observation | null,
+    record: NumericObservation | null,
     metricPreferences?: MetricPreferences,
     empty = 'No reading today',
 ) => {
@@ -54,7 +54,7 @@ const reading = (
 }
 
 const rollingAverageChange = (
-    current: Observation,
+    current: NumericObservation,
     baseline: { baseline: number; sampleSize: number; unit: string } | null,
     units: 'metric' | 'imperial' = 'metric',
 ) => {

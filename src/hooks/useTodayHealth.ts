@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { Observation } from '../domain/health'
+import type { NumericObservation } from '../domain/health'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { listObservations } from '../lib/observationApi'
 import { listGoalEvaluations } from '../lib/goalApi'
@@ -7,7 +7,7 @@ import type { GoalEvaluation } from '../domain/goals'
 import { useServerData } from './useServerData'
 import { calendarDateKey, calendarDayRange } from '../domain/calendar'
 
-const asObservation = (row: DailyMetric): Observation => ({
+const asObservation = (row: DailyMetric): NumericObservation => ({
     id: `daily:${row.date}:${row.definitionId}`,
     definitionId: row.definitionId,
     canonicalValue: row.value,
@@ -27,7 +27,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         unavailable: sharedUnavailable,
     } = useServerData()
     const [daily, setDaily] = useState<DailyMetric[]>([])
-    const [details, setDetails] = useState<Observation[]>([])
+    const [details, setDetails] = useState<NumericObservation[]>([])
     const [goalEvaluations, setGoalEvaluations] = useState<Record<string, GoalEvaluation>>({})
     const [loading, setLoading] = useState(true)
     const [unavailable, setUnavailable] = useState(false)

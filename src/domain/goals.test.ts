@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Observation } from './health'
+import type { NumericObservation } from './health'
 import { evaluateGoal, goalPeriodBounds, validateGoal, type Goal } from './goals'
 import { convertMetricValue } from './metrics'
 
@@ -22,7 +22,7 @@ const observation = (
     observedAt: string,
     metric = 'weight',
     id = `${metric}-${observedAt}-${value}`,
-): Observation => ({
+): NumericObservation => ({
     id,
     definitionId: metric,
     canonicalValue: value,

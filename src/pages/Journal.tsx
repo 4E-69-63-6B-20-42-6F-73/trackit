@@ -32,7 +32,6 @@ const localDateKey = (date: Date) =>
 export function Journal({
     events,
     remove,
-    duplicate,
     update,
     onSelectedDateChange,
     hasOlder = false,
@@ -42,11 +41,7 @@ export function Journal({
 }: {
     events: JournalEvent[]
     remove: (id: string) => void
-    duplicate: (event: JournalEvent) => void
-    update: (
-        event: JournalEvent,
-        changes: Pick<JournalEvent, 'title' | 'detail' | 'time'>,
-    ) => Promise<boolean>
+    update: (event: JournalEvent, changes: { title: string; detail: string }) => Promise<boolean>
     onSelectedDateChange?: (date: string | null) => void
     hasOlder?: boolean
     loadingOlder?: boolean
@@ -445,9 +440,6 @@ export function Journal({
                                         </ActionIcon>
                                     </Menu.Target>
                                     <Menu.Dropdown>
-                                        <Menu.Item onClick={() => duplicate(event)}>
-                                            Log a copy
-                                        </Menu.Item>
                                         {event.source === 'You' && (
                                             <>
                                                 <Menu.Item onClick={() => beginEdit(event)}>
@@ -531,7 +523,6 @@ export function Journal({
                                 await update(editing, {
                                     title: draftTitle,
                                     detail: draftDetail,
-                                    time: editing.time,
                                 })
                             )
                                 setEditing(null)
