@@ -219,8 +219,9 @@ describe('ManualEntryLogger', () => {
         expect(slider).toHaveAttribute('aria-valuenow', '7')
 
         await user.type(screen.getByLabelText('Amount'), '1')
-        expect(screen.getByLabelText('Unit')).toHaveValue('Minutes')
-        await user.click(screen.getByLabelText('Unit'))
+        const unit = screen.getByRole('combobox', { name: 'Unit' })
+        expect(unit).toHaveValue('Minutes')
+        await user.click(unit)
         await user.click(screen.getByRole('option', { name: 'Hours' }))
         const context = screen.getByLabelText('Context (optional)')
         expect(context.tagName).toBe('TEXTAREA')
