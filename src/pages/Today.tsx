@@ -9,7 +9,7 @@ import {
     IconScale,
     IconSparkles,
 } from '@tabler/icons-react'
-import { useEffect, type ComponentType } from 'react'
+import { useEffect, useState } from 'react'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { JournalEventList } from '../components/JournalEventList'
 import { MetricCard } from '../components/MetricCard'
@@ -23,7 +23,7 @@ const localDateKey = (date: Date) =>
 
 const metricVisual: Record<
     Exclude<MetricCategory, 'Nutrition'>,
-    { icon: ComponentType<{ size?: number; stroke?: number }>; tone: string }
+    { icon: typeof IconMoon; tone: string }
 > = {
     Activity: { icon: IconActivity, tone: 'green' },
     Body: { icon: IconScale, tone: 'blue' },
@@ -63,6 +63,17 @@ const goalTargetLabel = (
               locale,
           )}`
 
+type TodayProps = {
+    events: JournalEvent[]
+    openJournal: () => void
+    openTrends: () => void
+    openConnections?: () => void
+    openGoals?: () => void
+    onSelectedDateChange?: (date: string) => void
+    initialSelectedDate?: string | null
+    [key: string]: unknown
+}
+
 export function Today({
     events,
     openJournal,
@@ -71,16 +82,8 @@ export function Today({
     openGoals,
     onSelectedDateChange,
     initialSelectedDate,
-}: {
-    events: JournalEvent[]
-    openJournal: () => void
-    openTrends: () => void
-    openConnections?: () => void
-    openGoals?: () => void
-    onSelectedDateChange?: (date: string) => void
-    initialSelectedDate?: string | null
-}) {
-    const [selectedDate, setSelectedDate] = React.useState(() =>
+}: TodayProps) {
+    const [selectedDate, setSelectedDate] = useState(() =>
         initialSelectedDate ? new Date(`${initialSelectedDate}T12:00:00`) : new Date(),
     )
     const health = useTodayHealth(selectedDate)
