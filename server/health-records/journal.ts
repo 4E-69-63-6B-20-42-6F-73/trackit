@@ -71,8 +71,6 @@ const format = (observation: DerivedObservation) => {
 const normalizedSleepStages = (record: CanonicalHealthRecord): SleepStageDetail[] => {
     if (record.recordType !== 'SleepSessionRecord') return []
 
-    // Provider-aware normalization belongs at this ingestion/projection boundary. Future connectors
-    // can map their source semantics here without leaking provider records into Journal/read models.
     const stages = Array.isArray(record.payload.stages) ? record.payload.stages : []
     return stages.flatMap(stage => {
         if (!stage || typeof stage !== 'object') return []
@@ -93,11 +91,6 @@ const normalizedSleepStages = (record: CanonicalHealthRecord): SleepStageDetail[
     })
 }
 
-/**
- * Provider-aware projection boundary. Source records are interpreted here and normalized into
- * observation-backed Journal semantics. Downstream Journal/read-model code must never need the
- * provider record itself.
- */
 export function projectHealthRecordToJournal(
     record: CanonicalHealthRecord,
     observations: DerivedObservation[],
