@@ -142,9 +142,7 @@ export function NewFoodModal({
                     </Button>
                     <Button
                         loading={saving}
-                        disabled={
-                            !name.trim() || !servingName.trim() || Number(servingGrams) <= 0
-                        }
+                        disabled={!name.trim() || !servingName.trim() || Number(servingGrams) <= 0}
                         onClick={() => void save()}
                     >
                         Create food
