@@ -5,18 +5,34 @@
 TrackIt has one canonical application fact model: **Observations**.
 
 ```text
-Manual capture --------------------> Observations
-External source -> source records -> Observations
+Plan intent ------------------------> manual capture -> Observations
+Manual capture -------------------------------------> Observations
+External source -> source records ------------------> Observations
 
-Observations + configuration ------> projections
+Observations + configuration -----------------------> projections
 ```
 
-Commands may mutate observations, source records, and reference/configuration data. Queries read
-observations and projections. Product projections do not have domain commands.
+Commands may mutate observations, plan intent, source records, and reference/configuration data.
+Queries read observations, plan intent, and projections. Product projections do not have domain
+commands.
 
 Journal, Today, Trends, daily metrics, and goal progress are read models over observations and
-configuration. Foods, recipes, goals, metric definitions, source configuration, and saved trend
-views are reference/configuration data rather than health facts.
+configuration. Plan items are dated user intent rather than health facts. Foods, recipes, goals,
+metric definitions, source configuration, and saved trend views are reference/configuration data.
+
+## Planning intent
+
+Plan items describe what the owner intends to do. They are directly editable command-model data and
+must not be represented as observations or projections before the planned action actually happens.
+A plan item may reference domain-specific configuration, such as a food or recipe for a planned meal.
+
+Fulfilling a planned meal is a capture command. It atomically creates the canonical compound meal
+observation and links that observation to the plan item. The visible `logged` state is derived from
+that active linked observation. If the observation is deleted, the plan must not remain a competing
+record that claims the meal happened.
+
+Skipping, moving, editing, or deleting a plan item changes intent only and does not affect health
+metrics, Journal, Trends, or goal evaluation.
 
 ## Definition identity
 
@@ -89,12 +105,15 @@ agree on the same resolution semantics.
 ## Product mapping
 
 ```text
+Plan
+    Meals -> dated intent + library references; logging -> observations
+
 Capture
     Log -> observations
     Health Connect -> source records -> observations
 
 Understand
-    Today -> projection
+    Today -> projection + relevant plan intent
     Journal -> projection
     Trends -> projection
     Goals -> goal configuration + progress projection
@@ -118,9 +137,11 @@ Settings
 
 1. Observation is the canonical health fact.
 2. `definitionId` is its semantic identity.
-3. Source records are ingestion evidence, not application truth.
-4. Projections are rebuildable read models and do not have product commands.
-5. Metric Center owns numeric units and conversions.
-6. Meals are compound observations; foods and recipes are reference data.
-7. Goal progress is derived from goal configuration plus observation/projection data.
-8. Export and explicit deletion are supported; automatic retention and managed backups are not.
+3. Plan items are user intent and never contribute to health metrics until captured as observations.
+4. A fulfilled plan item derives its logged state from an active linked observation.
+5. Source records are ingestion evidence, not application truth.
+6. Projections are rebuildable read models and do not have product commands.
+7. Metric Center owns numeric units and conversions.
+8. Meals are compound observations; foods and recipes are reference data.
+9. Goal progress is derived from goal configuration plus observation/projection data.
+10. Export and explicit deletion are supported; automatic retention and managed backups are not.
