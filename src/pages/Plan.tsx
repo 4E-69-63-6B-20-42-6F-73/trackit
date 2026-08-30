@@ -88,7 +88,7 @@ export function Plan() {
     const routeDate = params.get('date') ?? todayKey
     const weekStart = weekStartKey(routeDate)
     const dates = useMemo(() => weekDateKeys(weekStart), [weekStart])
-    const [selectedDate, setSelectedDate] = useState(routeDate)
+    const selectedDate = dates.includes(routeDate) ? routeDate : dates[0]
     const [items, setItems] = useState<MealPlanItem[]>([])
     const [foods, setFoods] = useState<Food[]>([])
     const [recipes, setRecipes] = useState<RecipeRecord[]>([])
@@ -98,35 +98,30 @@ export function Plan() {
     const [logState, setLogState] = useState<LogState | null>(null)
     const [busy, setBusy] = useState(false)
 
-    useEffect(() => {
-        if (!dates.includes(selectedDate)) setSelectedDate(dates[0])
-    }, [dates, selectedDate])
-
-    const refresh = useCallback(async () => {
-        setLoading(true)
-        try {
-            const [nextItems, nextFoods, nextRecipes] = await Promise.all([
+    const refresh = useCallback(
+        () =>
+            Promise.all([
                 listPlanItems({ from: dates[0], to: dates[6] }),
                 searchFoods(''),
                 listRecipes(),
             ])
-            setItems(nextItems)
-            setFoods(nextFoods)
-            setRecipes(nextRecipes)
-            setMessage('')
-        } catch {
-            setMessage('Your meal plan could not be loaded from the server.')
-        } finally {
-            setLoading(false)
-        }
-    }, [dates])
+                .then(([nextItems, nextFoods, nextRecipes]) => {
+                    setItems(nextItems)
+                    setFoods(nextFoods)
+                    setRecipes(nextRecipes)
+                    setMessage('')
+                })
+                .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
+                .finally(() => setLoading(false)),
+        [dates],
+    )
 
     useEffect(() => {
         void refresh()
     }, [refresh])
 
     const navigateDate = (date: string) => {
-        setSelectedDate(date)
+        setLoading(true)
         const next = new URLSearchParams(params)
         if (date === todayKey) next.delete('date')
         else next.set('date', date)
@@ -286,7 +281,10 @@ export function Plan() {
                                   }).toUpperCase()}
                         </Text>
                         <Text fw={700} size="lg">
-                            {formatCalendarDate(date, locale, { month: 'short', day: 'numeric' })}
+                            {formatCalendarDate(date, locale, {
+                                month: 'short',
+                                day: 'numeric',
+                            })}
                         </Text>
                     </div>
                     <Badge variant="light" color={dayItems.length ? 'teal' : 'gray'} size="sm">
@@ -394,9 +392,7 @@ export function Plan() {
                                                             )}
                                                             {status === 'planned' && (
                                                                 <Menu.Item
-                                                                    leftSection={
-                                                                        <IconX size={15} />
-                                                                    }
+                                                                    leftSection={<IconX size={15} />}
                                                                     onClick={() =>
                                                                         void mutate(() =>
                                                                             setPlanMealSkipped(
@@ -429,9 +425,7 @@ export function Plan() {
                                                             <Menu.Divider />
                                                             <Menu.Item
                                                                 color="red"
-                                                                leftSection={
-                                                                    <IconTrash size={15} />
-                                                                }
+                                                                leftSection={<IconTrash size={15} />}
                                                                 onClick={() =>
                                                                     void mutate(() =>
                                                                         deletePlanMeal(item),
@@ -524,10 +518,14 @@ export function Plan() {
                             >
                                 <Stack gap={0} align="center">
                                     <Text size="xs">
-                                        {formatCalendarDate(date, locale, { weekday: 'short' })}
+                                        {formatCalendarDate(date, locale, {
+                                            weekday: 'short',
+                                        })}
                                     </Text>
                                     <Text fw={700} size="sm">
-                                        {formatCalendarDate(date, locale, { day: 'numeric' })}
+                                        {formatCalendarDate(date, locale, {
+                                            day: 'numeric',
+                                        })}
                                     </Text>
                                 </Stack>
                             </Button>
@@ -573,7 +571,8 @@ export function Plan() {
                                 label="Meal"
                                 value={editor.mealType}
                                 onChange={value =>
-                                    value && setEditor({ ...editor, mealType: value as MealType })
+                                    value &&
+                                    setEditor({ ...editor, mealType: value as MealType })
                                 }
                                 data={mealTypes}
                             />
@@ -635,18 +634,16 @@ export function Plan() {
                         )}
                         <Divider />
                         <Group justify="flex-end">
-                            <Button
-                                variant="default"
-                                onClick={() => setEditor(null)}
-                                disabled={busy}
-                            >
+                            <Button variant="default" onClick={() => setEditor(null)} disabled={busy}>
                                 Cancel
                             </Button>
                             <Button
                                 color="trackit"
                                 loading={busy}
                                 disabled={
-                                    !editor.selection || !editor.date || Number(editor.amount) <= 0
+                                    !editor.selection ||
+                                    !editor.date ||
+                                    Number(editor.amount) <= 0
                                 }
                                 onClick={() => void saveEditor()}
                             >
@@ -689,11 +686,7 @@ export function Plan() {
                             }
                         />
                         <Group justify="flex-end">
-                            <Button
-                                variant="default"
-                                onClick={() => setLogState(null)}
-                                disabled={busy}
-                            >
+                            <Button variant="default" onClick={() => setLogState(null)} disabled={busy}>
                                 Cancel
                             </Button>
                             <Button color="trackit" loading={busy} onClick={() => void saveLog()}>
