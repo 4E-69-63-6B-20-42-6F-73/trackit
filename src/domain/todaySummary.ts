@@ -16,10 +16,7 @@ export const isTodayHeadlineMetric = (definition: MetricDefinition) =>
     !['steps', 'active_calories'].includes(definition.id) &&
     !detailMetricIds.has(definition.id)
 
-export const compareTodayHeadlineMetrics = (
-    left: MetricDefinition,
-    right: MetricDefinition,
-) => {
+export const compareTodayHeadlineMetrics = (left: MetricDefinition, right: MetricDefinition) => {
     const leftPriority = headlinePriority.get(left.id)
     const rightPriority = headlinePriority.get(right.id)
 
@@ -29,12 +26,8 @@ export const compareTodayHeadlineMetrics = (
         if (leftPriority !== rightPriority) return leftPriority - rightPriority
     }
 
-    const leftCategory = categoryOrder.indexOf(
-        left.category as (typeof categoryOrder)[number],
-    )
-    const rightCategory = categoryOrder.indexOf(
-        right.category as (typeof categoryOrder)[number],
-    )
+    const leftCategory = categoryOrder.indexOf(left.category as (typeof categoryOrder)[number])
+    const rightCategory = categoryOrder.indexOf(right.category as (typeof categoryOrder)[number])
     const leftRank = leftCategory === -1 ? categoryOrder.length : leftCategory
     const rightRank = rightCategory === -1 ? categoryOrder.length : rightCategory
 

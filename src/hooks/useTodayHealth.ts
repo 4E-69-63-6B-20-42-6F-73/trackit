@@ -156,9 +156,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 const definition = metricDefinition(row.definitionId)
                 return definition && isTodayHeadlineMetric(definition) ? [{ row, definition }] : []
             })
-            .sort((left, right) =>
-                compareTodayHeadlineMetrics(left.definition, right.definition),
-            )
+            .sort((left, right) => compareTodayHeadlineMetrics(left.definition, right.definition))
             .slice(0, 4)
             .map(({ row, definition }) => ({
                 definition,

@@ -16,7 +16,9 @@ describe('Today headline metrics', () => {
             'weight',
         ]
             .map(id => metricDefinition(id))
-            .filter((definition): definition is NonNullable<typeof definition> => Boolean(definition))
+            .filter((definition): definition is NonNullable<typeof definition> =>
+                Boolean(definition),
+            )
 
         const selected = definitions
             .filter(isTodayHeadlineMetric)
