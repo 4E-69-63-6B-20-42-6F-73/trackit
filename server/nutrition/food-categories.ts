@@ -10,10 +10,11 @@ type Database = PostgresJsDatabase<typeof schemaType>
 
 const categoryIdSchema = z.string().regex(/^[a-z0-9-]{1,60}$/)
 const membershipSchema = z.object({ categoryIds: z.array(categoryIdSchema).max(20) })
+const defaultCategoryRows = () => defaultFoodCategories.map(category => ({ ...category }))
 
 export function registerFoodCategoryRoutes(app: FastifyInstance, database: Database) {
     app.get('/api/food-categories', async () => {
-        await database.insert(foodCategories).values(defaultFoodCategories).onConflictDoNothing()
+        await database.insert(foodCategories).values(defaultCategoryRows()).onConflictDoNothing()
         const [categories, memberships] = await Promise.all([
             database
                 .select()
@@ -43,7 +44,7 @@ export function registerFoodCategoryRoutes(app: FastifyInstance, database: Datab
             .limit(1)
         if (!food) return reply.code(404).send({ error: 'food_not_found' })
 
-        await database.insert(foodCategories).values(defaultFoodCategories).onConflictDoNothing()
+        await database.insert(foodCategories).values(defaultCategoryRows()).onConflictDoNothing()
         if (categoryIds.length) {
             const existing = await database
                 .select({ id: foodCategories.id })
