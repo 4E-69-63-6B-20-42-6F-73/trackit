@@ -20,8 +20,7 @@ const scheduleOwnerId = 'owner:plan-schedule'
 const recurringScheduleKind = 'meal_schedule_rule'
 const recurringOccurrencePrefix = 'meal_schedule_occurrence:'
 
-const recurringOccurrenceKind = (scheduleId: string) =>
-    `${recurringOccurrencePrefix}${scheduleId}`
+const recurringOccurrenceKind = (scheduleId: string) => `${recurringOccurrencePrefix}${scheduleId}`
 
 const dateKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const scheduledTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
@@ -105,11 +104,7 @@ const referenceExists = async (database: Database, reference: PlanReference) => 
     )
 }
 
-async function materializeRecurringPlanItems(
-    database: Database,
-    fromDate: string,
-    toDate: string,
-) {
+async function materializeRecurringPlanItems(database: Database, fromDate: string, toDate: string) {
     if (fromDate > toDate) return
     const schedules = await database
         .select({

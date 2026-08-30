@@ -766,7 +766,11 @@ export function Plan() {
                                         >
                                             <Group gap={6} wrap="wrap">
                                                 {weekdayOptions.map(day => (
-                                                    <Chip key={day.value} value={day.value} size="xs">
+                                                    <Chip
+                                                        key={day.value}
+                                                        value={day.value}
+                                                        size="xs"
+                                                    >
                                                         {day.label}
                                                     </Chip>
                                                 ))}
@@ -776,11 +780,15 @@ export function Plan() {
                                             {editor.weekdays.length
                                                 ? `Repeats every ${scheduleDaysLabel(
                                                       editor.weekdays.map(Number),
-                                                  )}, starting ${formatCalendarDate(editor.date, locale, {
-                                                      month: 'short',
-                                                      day: 'numeric',
-                                                      year: 'numeric',
-                                                  })}.`
+                                                  )}, starting ${formatCalendarDate(
+                                                      editor.date,
+                                                      locale,
+                                                      {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                          year: 'numeric',
+                                                      },
+                                                  )}.`
                                                 : 'Choose at least one day.'}
                                         </Text>
                                     </div>
@@ -897,7 +905,8 @@ export function Plan() {
                                     <div>
                                         <Text fw={700}>{schedule.meal.reference.name}</Text>
                                         <Text size="sm" c="dimmed">
-                                            {formatScheduleAmount(schedule)} · {schedule.meal.mealType}
+                                            {formatScheduleAmount(schedule)} ·{' '}
+                                            {schedule.meal.mealType}
                                         </Text>
                                         <Text size="sm" c="dimmed" mt={4}>
                                             Every {scheduleDaysLabel(schedule.weekdays)}

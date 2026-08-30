@@ -311,9 +311,9 @@ describe('meal planning routes', () => {
             method: 'GET',
             url: '/api/plan-items?from=2026-08-31&to=2026-09-06',
         })
-        expect(afterRemoval.json().data.map((item: { scheduledDate: string }) => item.scheduledDate)).toEqual([
-            '2026-09-03',
-        ])
+        expect(
+            afterRemoval.json().data.map((item: { scheduledDate: string }) => item.scheduledDate),
+        ).toEqual(['2026-09-03'])
 
         const stopped = await app.inject({
             method: 'DELETE',
