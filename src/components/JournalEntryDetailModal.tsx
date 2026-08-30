@@ -256,7 +256,6 @@ export function JournalEntryDetailModal({
     const eventId = event?.id
 
     useEffect(() => {
-        setDetailEvent(null)
         if (!eventId) return
         const controller = new AbortController()
         void getJournalEntry(eventId, controller.signal)
