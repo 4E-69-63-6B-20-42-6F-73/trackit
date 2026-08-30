@@ -1,4 +1,14 @@
-import { Alert, Button, Group, Modal, NumberInput, SimpleGrid, Stack, Text, TextInput } from '@mantine/core'
+import {
+    Alert,
+    Button,
+    Group,
+    Modal,
+    NumberInput,
+    SimpleGrid,
+    Stack,
+    Text,
+    TextInput,
+} from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useState } from 'react'
 import type { Food, Nutrients } from '../domain/nutrition'
