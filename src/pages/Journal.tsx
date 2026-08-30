@@ -24,7 +24,9 @@ import {
 import { useSearchParams } from 'react-router-dom'
 import { JournalEventList } from '../components/JournalEventList'
 import { JournalMealEditModal } from '../components/JournalMealEditModal'
+import { JournalPageSkeleton } from '../components/LoadingSkeletons'
 import { PageHeader } from '../components/PageHeader'
+import { SyncStatus } from '../components/SyncStatus'
 import {
     addCalendarDays,
     calendarDateKey,
@@ -33,25 +35,18 @@ import {
     formatCalendarDate,
 } from '../domain/calendar'
 import type { Category, JournalEvent } from '../domain/types'
+import { useJournal } from '../hooks/useJournal'
 import { useServerData } from '../hooks/useServerData'
-import { listJournal } from '../lib/journalApi'
+import { getJournalEntry } from '../lib/journalApi'
 
 const categories = ['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const
 
 export function Journal({
-    events,
     remove,
     update,
-    hasOlder = false,
-    loadingOlder = false,
-    loadOlder,
 }: {
-    events: JournalEvent[]
     remove: (id: string) => void
     update: (event: JournalEvent, changes: { title: string; detail: string }) => Promise<boolean>
-    hasOlder?: boolean
-    loadingOlder?: boolean
-    loadOlder?: () => Promise<void>
 }) {
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
@@ -67,55 +62,36 @@ export function Journal({
     const [selectedDate, setSelectedDate] = useState<string | null>(params.get('date'))
     const [rangeFrom, setRangeFrom] = useState(params.get('from') ?? '')
     const [rangeTo, setRangeTo] = useState(params.get('to') ?? '')
-    const [boundedEvents, setBoundedEvents] = useState<JournalEvent[] | null>(null)
     const [editing, setEditing] = useState<JournalEvent | null>(null)
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
-    const [observationRefreshKey, setObservationRefreshKey] = useState(0)
 
-    const hasBoundedFilter = Boolean(selectedDate || rangeFrom || rangeTo || category !== 'All')
-
-    useEffect(() => {
-        const refresh = () => setObservationRefreshKey(key => key + 1)
-        window.addEventListener('trackit:observations-changed', refresh)
-        return () => window.removeEventListener('trackit:observations-changed', refresh)
-    }, [])
-
-    useEffect(() => {
-        if (!hasBoundedFilter) return
-        let active = true
-        const selectedRange = selectedDate ? calendarDayRangeForKey(selectedDate, timezone) : null
-        const from = selectedRange
-            ? selectedRange.from.toISOString()
-            : rangeFrom
-              ? calendarDayRangeForKey(rangeFrom, timezone).from.toISOString()
-              : undefined
-        const to = selectedRange
-            ? selectedRange.to.toISOString()
-            : rangeTo
-              ? calendarDayRangeForKey(rangeTo, timezone).to.toISOString()
-              : undefined
-        void listJournal({
-            from,
-            to,
-            category: category === 'All' ? undefined : category,
-            limit: 100,
-        })
-            .then(records => active && setBoundedEvents(records))
-            .catch(() => active && setBoundedEvents(null))
-        return () => {
-            active = false
-        }
-    }, [
-        category,
-        hasBoundedFilter,
-        observationRefreshKey,
-        rangeFrom,
-        rangeTo,
-        selectedDate,
-        timezone,
-    ])
+    const selectedRange = selectedDate ? calendarDayRangeForKey(selectedDate, timezone) : null
+    const from = selectedRange
+        ? selectedRange.from.toISOString()
+        : rangeFrom
+          ? calendarDayRangeForKey(rangeFrom, timezone).from.toISOString()
+          : undefined
+    const to = selectedRange
+        ? selectedRange.to.toISOString()
+        : rangeTo
+          ? calendarDayRangeForKey(rangeTo, timezone).to.toISOString()
+          : undefined
+    const {
+        events: availableEvents,
+        status,
+        syncFailure,
+        retry,
+        hasOlder,
+        loadingOlder,
+        loadOlder,
+    } = useJournal({
+        from,
+        to,
+        category: category === 'All' ? undefined : category,
+        limit: 100,
+    })
 
     useEffect(() => {
         const next = new URLSearchParams()
@@ -129,7 +105,6 @@ export function Journal({
         setParams(next, { replace: true })
     }, [category, device, query, rangeFrom, rangeTo, selectedDate, setParams, source])
 
-    const availableEvents = hasBoundedFilter ? (boundedEvents ?? []) : events
     const shown = useMemo(
         () =>
             availableEvents.filter(event => {
@@ -191,10 +166,11 @@ export function Journal({
         ).map(([, group]) => group)
     }, [locale, shown, timezone, todayKey])
 
-    const beginEdit = (event: JournalEvent) => {
-        setEditing(event)
-        setDraftTitle(event.title)
-        setDraftDetail(event.detail)
+    const beginEdit = async (event: JournalEvent) => {
+        const editable = event.definitionId === 'meal' ? await getJournalEntry(event.id) : event
+        setEditing(editable)
+        setDraftTitle(editable.title)
+        setDraftDetail(editable.detail)
     }
     const moveDay = (days: number) => {
         const current = selectedDate ?? todayKey
@@ -224,12 +200,15 @@ export function Journal({
         Number(Boolean(source)) +
         Number(Boolean(device))
 
+    if (status === 'connecting' && availableEvents.length === 0) return <JournalPageSkeleton />
+
     return (
         <div className="page-content journal-page">
             <PageHeader
                 title="Journal"
                 description="Your observations in chronological order, with their recorded source and detail intact."
             />
+            {syncFailure && <SyncStatus message={syncFailure} retry={retry} />}
             <div className="journal-toolbar">
                 <TextInput
                     className="journal-search"
@@ -454,7 +433,7 @@ export function Journal({
                                     <Menu.Dropdown>
                                         {event.source === 'You' && (
                                             <>
-                                                <Menu.Item onClick={() => beginEdit(event)}>
+                                                <Menu.Item onClick={() => void beginEdit(event)}>
                                                     Edit
                                                 </Menu.Item>
                                                 <Menu.Item
@@ -565,13 +544,7 @@ export function Journal({
                     <Button
                         color="red"
                         onClick={() => {
-                            if (deleting) {
-                                remove(deleting.id)
-                                setBoundedEvents(
-                                    current =>
-                                        current?.filter(event => event.id !== deleting.id) ?? null,
-                                )
-                            }
+                            if (deleting) remove(deleting.id)
                             setDeleting(null)
                         }}
                     >
