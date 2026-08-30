@@ -529,7 +529,9 @@ export function FoodLogger({
                                     label="Time"
                                     value={recordedTime}
                                     onChange={event =>
-                                        setRecordedAt(`${recordedDate}T${event.currentTarget.value}`)
+                                        setRecordedAt(
+                                            `${recordedDate}T${event.currentTarget.value}`,
+                                        )
                                     }
                                 />
                             </SimpleGrid>
@@ -651,7 +653,9 @@ export function FoodLogger({
                                     <span>protein</span>
                                 </div>
                                 <div>
-                                    <strong>{Math.round((nutrients?.carbs ?? 0) * 10) / 10} g</strong>
+                                    <strong>
+                                        {Math.round((nutrients?.carbs ?? 0) * 10) / 10} g
+                                    </strong>
                                     <span>carbs</span>
                                 </div>
                                 <div>
@@ -757,7 +761,9 @@ export function FoodLogger({
                                                 inputMode="numeric"
                                                 value={barcode}
                                                 leftSection={<IconBarcode size={17} />}
-                                                onChange={event => setBarcode(event.currentTarget.value)}
+                                                onChange={event =>
+                                                    setBarcode(event.currentTarget.value)
+                                                }
                                                 onKeyDown={event =>
                                                     event.key === 'Enter' && void runBarcodeLookup()
                                                 }
@@ -821,8 +827,9 @@ export function FoodLogger({
                                                             <strong>{food.name}</strong>
                                                             <small>
                                                                 {food.brand || 'No brand'} ·{' '}
-                                                                {Math.round(preview.calories ?? 0)} kcal
-                                                                per {food.servingGrams} g serving
+                                                                {Math.round(preview.calories ?? 0)}{' '}
+                                                                kcal per {food.servingGrams} g
+                                                                serving
                                                             </small>
                                                         </span>
                                                         <span>Save & choose</span>
