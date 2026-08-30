@@ -13,6 +13,7 @@ import { registerMcpBrowserCors } from './mcp/browser-cors.js'
 import { DeviceService } from './devices/service.js'
 import { DataDeletionService } from './data-lifecycle/deletion.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
+import { registerFoodLibraryRoutes } from './nutrition/food-library.js'
 import { ProjectionWorker } from './data/projection-state.js'
 import { ProjectionMaintenanceService } from './data/projection-maintenance.js'
 import { registerDataMaintenanceRoutes } from './data/maintenance-routes.js'
@@ -43,6 +44,7 @@ const app = await createApp(new PostgresJournalRepository(db), {
 })
 
 registerMcpBrowserCors(app, mcp)
+registerFoodLibraryRoutes(app, db)
 
 await registerDataMaintenanceRoutes(app, {
     projections: projectionMaintenance,
