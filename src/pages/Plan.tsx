@@ -300,15 +300,17 @@ export function Plan() {
                                     <Text size="xs" fw={700} c="dimmed">
                                         {mealType.toUpperCase()}
                                     </Text>
-                                    <ActionIcon
-                                        variant="subtle"
-                                        color="gray"
-                                        size="sm"
-                                        aria-label={`Add ${mealType.toLowerCase()}`}
-                                        onClick={() => openNew(date, mealType)}
-                                    >
-                                        <IconPlus size={15} />
-                                    </ActionIcon>
+                                    {slotItems.length > 0 && (
+                                        <ActionIcon
+                                            variant="subtle"
+                                            color="gray"
+                                            size="sm"
+                                            aria-label={`Add ${mealType.toLowerCase()}`}
+                                            onClick={() => openNew(date, mealType)}
+                                        >
+                                            <IconPlus size={15} />
+                                        </ActionIcon>
+                                    )}
                                 </Group>
                                 <Stack gap={6}>
                                     {slotItems.map(item => {
@@ -469,7 +471,7 @@ export function Plan() {
         <div className="page-content simple-page">
             <PageHeader
                 title="Plan"
-                description="Shape the week before it becomes part of your health record. Planned meals only affect nutrition after you log them as eaten."
+                description="Plan meals ahead. They become part of your health record only when logged."
             />
 
             <Group justify="space-between" mt="md" mb="md" align="center">
@@ -547,7 +549,7 @@ export function Plan() {
             ) : compact ? (
                 dayCard(selectedDate)
             ) : (
-                <SimpleGrid cols={{ base: 1, md: 3, xl: 7 }} spacing="sm" align="start">
+                <SimpleGrid cols={{ base: 1, md: 3, xl: 7 }} spacing="sm">
                     {dates.map(dayCard)}
                 </SimpleGrid>
             )}
