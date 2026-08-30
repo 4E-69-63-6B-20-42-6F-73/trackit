@@ -35,6 +35,7 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     title: entry.title,
     detail: entry.detail,
     source: friendlySourceName(entry.source),
+    sourceRaw: entry.source,
     deviceName: entry.deviceName,
     observedAt: entry.observedAt,
     startedAt: entry.startedAt,
