@@ -75,7 +75,8 @@ type LogState = {
     amount: number | string
 }
 
-const referenceValue = (item: MealPlanItem) => `${item.meal.reference.type}:${item.meal.reference.id}`
+const referenceValue = (item: MealPlanItem) =>
+    `${item.meal.reference.type}:${item.meal.reference.id}`
 
 export function Plan() {
     const [params, setParams] = useSearchParams()
@@ -173,7 +174,9 @@ export function Plan() {
             setEditor({ ...editor, selection: null })
             return
         }
-        const food = value.startsWith('food:') ? foods.find(item => item.id === value.slice(5)) : null
+        const food = value.startsWith('food:')
+            ? foods.find(item => item.id === value.slice(5))
+            : null
         setEditor({
             ...editor,
             selection: value,
@@ -243,7 +246,10 @@ export function Plan() {
         setBusy(true)
         try {
             await logPlannedMeal(logState.item, {
-                eatenAt: calendarLocalDateTimeToInstant(logState.recordedAt, timezone).toISOString(),
+                eatenAt: calendarLocalDateTimeToInstant(
+                    logState.recordedAt,
+                    timezone,
+                ).toISOString(),
                 amount,
             })
             setLogState(null)
@@ -273,7 +279,11 @@ export function Plan() {
                 <Group justify="space-between" align="flex-start" mb="md">
                     <div>
                         <Text size="xs" fw={700} c={isToday ? 'teal' : 'dimmed'}>
-                            {isToday ? 'TODAY' : formatCalendarDate(date, locale, { weekday: 'short' }).toUpperCase()}
+                            {isToday
+                                ? 'TODAY'
+                                : formatCalendarDate(date, locale, {
+                                      weekday: 'short',
+                                  }).toUpperCase()}
                         </Text>
                         <Text fw={700} size="lg">
                             {formatCalendarDate(date, locale, { month: 'short', day: 'numeric' })}
@@ -311,9 +321,17 @@ export function Plan() {
                                                 withBorder
                                                 radius="md"
                                                 p="sm"
-                                                bg={status === 'skipped' ? 'var(--mantine-color-gray-0)' : undefined}
+                                                bg={
+                                                    status === 'skipped'
+                                                        ? 'var(--mantine-color-gray-0)'
+                                                        : undefined
+                                                }
                                             >
-                                                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                                                <Group
+                                                    justify="space-between"
+                                                    align="flex-start"
+                                                    wrap="nowrap"
+                                                >
                                                     <Box style={{ minWidth: 0 }}>
                                                         <Group gap={6} wrap="nowrap">
                                                             <Text fw={650} size="sm" lineClamp={1}>
@@ -323,14 +341,23 @@ export function Plan() {
                                                                 <Badge
                                                                     size="xs"
                                                                     variant="light"
-                                                                    color={status === 'logged' ? 'teal' : 'gray'}
+                                                                    color={
+                                                                        status === 'logged'
+                                                                            ? 'teal'
+                                                                            : 'gray'
+                                                                    }
                                                                 >
-                                                                    {status === 'logged' ? 'Logged' : 'Skipped'}
+                                                                    {status === 'logged'
+                                                                        ? 'Logged'
+                                                                        : 'Skipped'}
                                                                 </Badge>
                                                             )}
                                                         </Group>
                                                         <Text size="xs" c="dimmed">
-                                                            {formatPlanAmount(item)} · {item.meal.reference.type === 'recipe' ? 'Recipe' : 'Food'}
+                                                            {formatPlanAmount(item)} ·{' '}
+                                                            {item.meal.reference.type === 'recipe'
+                                                                ? 'Recipe'
+                                                                : 'Food'}
                                                         </Text>
                                                     </Box>
                                                     <Menu position="bottom-end" shadow="md">
@@ -347,7 +374,9 @@ export function Plan() {
                                                         <Menu.Dropdown>
                                                             {status === 'planned' && (
                                                                 <Menu.Item
-                                                                    leftSection={<IconCheck size={15} />}
+                                                                    leftSection={
+                                                                        <IconCheck size={15} />
+                                                                    }
                                                                     onClick={() => openLog(item)}
                                                                 >
                                                                     Log as eaten
@@ -355,7 +384,9 @@ export function Plan() {
                                                             )}
                                                             {status !== 'logged' && (
                                                                 <Menu.Item
-                                                                    leftSection={<IconEdit size={15} />}
+                                                                    leftSection={
+                                                                        <IconEdit size={15} />
+                                                                    }
                                                                     onClick={() => openEdit(item)}
                                                                 >
                                                                     Edit or move
@@ -363,16 +394,34 @@ export function Plan() {
                                                             )}
                                                             {status === 'planned' && (
                                                                 <Menu.Item
-                                                                    leftSection={<IconX size={15} />}
-                                                                    onClick={() => void mutate(() => setPlanMealSkipped(item, true))}
+                                                                    leftSection={
+                                                                        <IconX size={15} />
+                                                                    }
+                                                                    onClick={() =>
+                                                                        void mutate(() =>
+                                                                            setPlanMealSkipped(
+                                                                                item,
+                                                                                true,
+                                                                            ),
+                                                                        )
+                                                                    }
                                                                 >
                                                                     Skip
                                                                 </Menu.Item>
                                                             )}
                                                             {status === 'skipped' && (
                                                                 <Menu.Item
-                                                                    leftSection={<IconRestore size={15} />}
-                                                                    onClick={() => void mutate(() => setPlanMealSkipped(item, false))}
+                                                                    leftSection={
+                                                                        <IconRestore size={15} />
+                                                                    }
+                                                                    onClick={() =>
+                                                                        void mutate(() =>
+                                                                            setPlanMealSkipped(
+                                                                                item,
+                                                                                false,
+                                                                            ),
+                                                                        )
+                                                                    }
                                                                 >
                                                                     Restore
                                                                 </Menu.Item>
@@ -380,8 +429,14 @@ export function Plan() {
                                                             <Menu.Divider />
                                                             <Menu.Item
                                                                 color="red"
-                                                                leftSection={<IconTrash size={15} />}
-                                                                onClick={() => void mutate(() => deletePlanMeal(item))}
+                                                                leftSection={
+                                                                    <IconTrash size={15} />
+                                                                }
+                                                                onClick={() =>
+                                                                    void mutate(() =>
+                                                                        deletePlanMeal(item),
+                                                                    )
+                                                                }
                                                             >
                                                                 Remove from plan
                                                             </Menu.Item>
@@ -498,7 +553,9 @@ export function Plan() {
             <Modal
                 opened={Boolean(editor)}
                 onClose={() => !busy && setEditor(null)}
-                title={<Text fw={700}>{editor?.item ? 'Edit planned meal' : 'Add to meal plan'}</Text>}
+                title={
+                    <Text fw={700}>{editor?.item ? 'Edit planned meal' : 'Add to meal plan'}</Text>
+                }
                 size="lg"
             >
                 {editor && (
@@ -508,12 +565,16 @@ export function Plan() {
                                 type="date"
                                 label="Day"
                                 value={editor.date}
-                                onChange={event => setEditor({ ...editor, date: event.currentTarget.value })}
+                                onChange={event =>
+                                    setEditor({ ...editor, date: event.currentTarget.value })
+                                }
                             />
                             <Select
                                 label="Meal"
                                 value={editor.mealType}
-                                onChange={value => value && setEditor({ ...editor, mealType: value as MealType })}
+                                onChange={value =>
+                                    value && setEditor({ ...editor, mealType: value as MealType })
+                                }
                                 data={mealTypes}
                             />
                         </SimpleGrid>
@@ -524,8 +585,14 @@ export function Plan() {
                             value={editor.selection}
                             onChange={chooseReference}
                             data={[
-                                ...recipes.map(recipe => ({ value: `recipe:${recipe.id}`, label: `Recipe · ${recipe.name}` })),
-                                ...foods.map(food => ({ value: `food:${food.id}`, label: `Food · ${food.name}` })),
+                                ...recipes.map(recipe => ({
+                                    value: `recipe:${recipe.id}`,
+                                    label: `Recipe · ${recipe.name}`,
+                                })),
+                                ...foods.map(food => ({
+                                    value: `food:${food.id}`,
+                                    label: `Food · ${food.name}`,
+                                })),
                             ]}
                             nothingFoundMessage="No saved food or recipe found"
                         />
@@ -543,22 +610,44 @@ export function Plan() {
                                     Planned nutrition preview
                                 </Text>
                                 <SimpleGrid cols={4}>
-                                    <Text size="sm"><strong>{Math.round(preview.calories ?? 0)}</strong><br /><small>kcal</small></Text>
-                                    <Text size="sm"><strong>{Math.round(preview.protein ?? 0)} g</strong><br /><small>protein</small></Text>
-                                    <Text size="sm"><strong>{Math.round(preview.carbs ?? 0)} g</strong><br /><small>carbs</small></Text>
-                                    <Text size="sm"><strong>{Math.round(preview.fat ?? 0)} g</strong><br /><small>fat</small></Text>
+                                    <Text size="sm">
+                                        <strong>{Math.round(preview.calories ?? 0)}</strong>
+                                        <br />
+                                        <small>kcal</small>
+                                    </Text>
+                                    <Text size="sm">
+                                        <strong>{Math.round(preview.protein ?? 0)} g</strong>
+                                        <br />
+                                        <small>protein</small>
+                                    </Text>
+                                    <Text size="sm">
+                                        <strong>{Math.round(preview.carbs ?? 0)} g</strong>
+                                        <br />
+                                        <small>carbs</small>
+                                    </Text>
+                                    <Text size="sm">
+                                        <strong>{Math.round(preview.fat ?? 0)} g</strong>
+                                        <br />
+                                        <small>fat</small>
+                                    </Text>
                                 </SimpleGrid>
                             </Paper>
                         )}
                         <Divider />
                         <Group justify="flex-end">
-                            <Button variant="default" onClick={() => setEditor(null)} disabled={busy}>
+                            <Button
+                                variant="default"
+                                onClick={() => setEditor(null)}
+                                disabled={busy}
+                            >
                                 Cancel
                             </Button>
                             <Button
                                 color="trackit"
                                 loading={busy}
-                                disabled={!editor.selection || !editor.date || Number(editor.amount) <= 0}
+                                disabled={
+                                    !editor.selection || !editor.date || Number(editor.amount) <= 0
+                                }
                                 onClick={() => void saveEditor()}
                             >
                                 {editor.item ? 'Save changes' : 'Add to plan'}
@@ -578,7 +667,8 @@ export function Plan() {
                         <div>
                             <Text fw={700}>{logState.item.meal.reference.name}</Text>
                             <Text size="sm" c="dimmed">
-                                Planned for {logState.item.meal.mealType.toLowerCase()}. Adjust what actually happened before logging.
+                                Planned for {logState.item.meal.mealType.toLowerCase()}. Adjust what
+                                actually happened before logging.
                             </Text>
                         </div>
                         <NumberInput
@@ -594,10 +684,16 @@ export function Plan() {
                             label="Date and time"
                             description={`Interpreted in ${timezone}.`}
                             value={logState.recordedAt}
-                            onChange={event => setLogState({ ...logState, recordedAt: event.currentTarget.value })}
+                            onChange={event =>
+                                setLogState({ ...logState, recordedAt: event.currentTarget.value })
+                            }
                         />
                         <Group justify="flex-end">
-                            <Button variant="default" onClick={() => setLogState(null)} disabled={busy}>
+                            <Button
+                                variant="default"
+                                onClick={() => setLogState(null)}
+                                disabled={busy}
+                            >
                                 Cancel
                             </Button>
                             <Button color="trackit" loading={busy} onClick={() => void saveLog()}>

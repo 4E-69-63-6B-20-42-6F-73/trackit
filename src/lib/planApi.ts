@@ -51,7 +51,8 @@ export async function updatePlanMeal(
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ version: item.version, ...changes }),
     })
-    if (response.status === 409) throw new Error('This plan changed elsewhere. Refresh and try again.')
+    if (response.status === 409)
+        throw new Error('This plan changed elsewhere. Refresh and try again.')
     if (!response.ok) throw new Error('Could not update this planned meal.')
     return ((await response.json()) as { data: MealPlanItem }).data
 }
@@ -62,7 +63,8 @@ export async function setPlanMealSkipped(item: MealPlanItem, skipped: boolean) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ version: item.version, skipped }),
     })
-    if (response.status === 409) throw new Error('This plan changed elsewhere. Refresh and try again.')
+    if (response.status === 409)
+        throw new Error('This plan changed elsewhere. Refresh and try again.')
     if (!response.ok) throw new Error('Could not update this planned meal.')
     return ((await response.json()) as { data: MealPlanItem }).data
 }
@@ -87,6 +89,8 @@ export async function deletePlanMeal(item: MealPlanItem) {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ version: item.version }),
     })
-    if (response.status === 409) throw new Error('This plan changed elsewhere. Refresh and try again.')
-    if (!response.ok && response.status !== 404) throw new Error('Could not remove this planned meal.')
+    if (response.status === 409)
+        throw new Error('This plan changed elsewhere. Refresh and try again.')
+    if (!response.ok && response.status !== 404)
+        throw new Error('Could not remove this planned meal.')
 }

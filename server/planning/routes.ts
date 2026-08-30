@@ -110,7 +110,9 @@ const toPlanRecord = (row: Awaited<ReturnType<ReturnType<typeof planQuery>['limi
         reference: {
             type: row.referenceType as 'food' | 'recipe',
             id: (row.referenceType === 'food' ? row.foodId : row.recipeId)!,
-            name: (row.referenceType === 'food' ? row.foodName : row.recipeName) ?? 'Unavailable item',
+            name:
+                (row.referenceType === 'food' ? row.foodName : row.recipeName) ??
+                'Unavailable item',
         },
         amount: row.amount,
         unit: row.unit as 'g' | 'serving',
@@ -123,7 +125,11 @@ async function mealNutrition(
     amount: number,
 ): Promise<{ name: string; nutrients: Nutrients; quality: NutritionQuality }> {
     if (reference.type === 'food') {
-        const [food] = await database.select().from(foods).where(eq(foods.id, reference.id)).limit(1)
+        const [food] = await database
+            .select()
+            .from(foods)
+            .where(eq(foods.id, reference.id))
+            .limit(1)
         if (!food) throw new Error('reference_not_found')
         const factor = amount / 100
         const nutrients = Object.fromEntries(
@@ -160,13 +166,16 @@ async function mealNutrition(
         const factor = (item.grams / 100 / recipe.servings) * amount
         for (const [key, field] of nutrientColumns) {
             const value = food[field]
-            totals[key] = totals[key] === null || value === null ? null : totals[key]! + value * factor
+            totals[key] =
+                totals[key] === null || value === null ? null : totals[key]! + value * factor
         }
     }
     const nutrients = Object.fromEntries(
         Object.entries(totals).filter((entry): entry is [string, number] => entry[1] !== null),
     )
-    const quality: NutritionQuality = items.some(({ food }) => food.nutritionQuality === 'incomplete')
+    const quality: NutritionQuality = items.some(
+        ({ food }) => food.nutritionQuality === 'incomplete',
+    )
         ? 'incomplete'
         : items.some(({ food }) => food.nutritionQuality === 'estimated')
           ? 'estimated'
@@ -175,22 +184,27 @@ async function mealNutrition(
 }
 
 export function registerPlanRoutes(app: FastifyInstance, database: Database) {
-    app.get<{ Querystring: { from?: string; to?: string } }>('/api/plan-items', async (request, reply) => {
-        const range = z
-            .object({ from: dateKeySchema.optional(), to: dateKeySchema.optional() })
-            .safeParse(request.query)
-        if (!range.success) return reply.code(400).send({ error: 'invalid_range' })
-        const conditions = [isNull(planItems.deletedAt), eq(planItems.userId, 'owner')]
-        if (range.data.from) conditions.push(gte(planItems.scheduledDate, range.data.from))
-        if (range.data.to) conditions.push(lte(planItems.scheduledDate, range.data.to))
-        const rows = await planQuery(database).where(and(...conditions)).orderBy(
-            planItems.scheduledDate,
-            plannedMeals.mealType,
-            planItems.position,
-            planItems.createdAt,
-        )
-        return { data: rows.map(toPlanRecord) }
-    })
+    app.get<{ Querystring: { from?: string; to?: string } }>(
+        '/api/plan-items',
+        async (request, reply) => {
+            const range = z
+                .object({ from: dateKeySchema.optional(), to: dateKeySchema.optional() })
+                .safeParse(request.query)
+            if (!range.success) return reply.code(400).send({ error: 'invalid_range' })
+            const conditions = [isNull(planItems.deletedAt), eq(planItems.userId, 'owner')]
+            if (range.data.from) conditions.push(gte(planItems.scheduledDate, range.data.from))
+            if (range.data.to) conditions.push(lte(planItems.scheduledDate, range.data.to))
+            const rows = await planQuery(database)
+                .where(and(...conditions))
+                .orderBy(
+                    planItems.scheduledDate,
+                    plannedMeals.mealType,
+                    planItems.position,
+                    planItems.createdAt,
+                )
+            return { data: rows.map(toPlanRecord) }
+        },
+    )
 
     app.post('/api/plan-items', async (request, reply) => {
         const parsed = createSchema.safeParse(request.body)
@@ -198,8 +212,16 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
         const input = parsed.data
         const referenceExists =
             input.reference.type === 'food'
-                ? await database.select({ id: foods.id }).from(foods).where(eq(foods.id, input.reference.id)).limit(1)
-                : await database.select({ id: recipes.id }).from(recipes).where(eq(recipes.id, input.reference.id)).limit(1)
+                ? await database
+                      .select({ id: foods.id })
+                      .from(foods)
+                      .where(eq(foods.id, input.reference.id))
+                      .limit(1)
+                : await database
+                      .select({ id: recipes.id })
+                      .from(recipes)
+                      .where(eq(recipes.id, input.reference.id))
+                      .limit(1)
         if (!referenceExists.length) return reply.code(404).send({ error: 'reference_not_found' })
 
         const record = await database.transaction(async transaction => {
@@ -241,9 +263,18 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
         if (input.reference) {
             const referenceExists =
                 input.reference.type === 'food'
-                    ? await database.select({ id: foods.id }).from(foods).where(eq(foods.id, input.reference.id)).limit(1)
-                    : await database.select({ id: recipes.id }).from(recipes).where(eq(recipes.id, input.reference.id)).limit(1)
-            if (!referenceExists.length) return reply.code(404).send({ error: 'reference_not_found' })
+                    ? await database
+                          .select({ id: foods.id })
+                          .from(foods)
+                          .where(eq(foods.id, input.reference.id))
+                          .limit(1)
+                    : await database
+                          .select({ id: recipes.id })
+                          .from(recipes)
+                          .where(eq(recipes.id, input.reference.id))
+                          .limit(1)
+            if (!referenceExists.length)
+                return reply.code(404).send({ error: 'reference_not_found' })
         }
 
         const updated = await database.transaction(async transaction => {
@@ -293,7 +324,9 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
             return plan
         })
         if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-        const [record] = await planQuery(database).where(eq(planItems.id, request.params.id)).limit(1)
+        const [record] = await planQuery(database)
+            .where(eq(planItems.id, request.params.id))
+            .limit(1)
         return { data: toPlanRecord(record) }
     })
 
@@ -322,7 +355,9 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
             )
             .returning()
         if (!record) return reply.code(409).send({ error: 'version_conflict' })
-        const [updated] = await planQuery(database).where(eq(planItems.id, request.params.id)).limit(1)
+        const [updated] = await planQuery(database)
+            .where(eq(planItems.id, request.params.id))
+            .limit(1)
         return { data: toPlanRecord(updated) }
     })
 
@@ -350,7 +385,11 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                         ? { type: 'food' as const, id: current.foodId! }
                         : { type: 'recipe' as const, id: current.recipeId! }
                 const actualAmount = input.amount ?? current.amount
-                const nutrition = await mealNutrition(transaction as Database, reference, actualAmount)
+                const nutrition = await mealNutrition(
+                    transaction as Database,
+                    reference,
+                    actualAmount,
+                )
                 const observationId = randomUUID()
                 const mealType = current.mealType as MealType
                 const attributes = {
@@ -383,13 +422,15 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                     })
                     .returning()
 
-                const components = Object.entries(nutrition.nutrients).map(([metric, value], ordinal) => ({
-                    id: randomUUID(),
-                    metric,
-                    value,
-                    unit: nutrientUnit(metric),
-                    ordinal,
-                }))
+                const components = Object.entries(nutrition.nutrients).map(
+                    ([metric, value], ordinal) => ({
+                        id: randomUUID(),
+                        metric,
+                        value,
+                        unit: nutrientUnit(metric),
+                        ordinal,
+                    }),
+                )
                 if (components.length) {
                     await transaction.insert(observations).values(
                         components.map(component => ({
