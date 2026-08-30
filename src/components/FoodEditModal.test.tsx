@@ -68,7 +68,7 @@ describe('FoodEditModal', () => {
             'aria-expanded',
             'true',
         )
-        expect(screen.getByLabelText('Saturated fat')).toBeVisible()
+        await waitFor(() => expect(screen.getByLabelText('Saturated fat')).toBeVisible())
         expect(screen.getByLabelText('Sodium')).toBeVisible()
         expect(screen.getByLabelText('Potassium')).toBeVisible()
     })

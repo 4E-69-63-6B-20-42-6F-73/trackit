@@ -84,4 +84,50 @@ describe('Journal observation projection preferences', () => {
         ])
         await client.close()
     })
+
+    it('projects meal size and nutrition from the historical meal snapshot', async () => {
+        const client = new PGlite()
+        await applyTestMigrations(client)
+        const database = drizzle(client, { schema })
+        const data = new PostgresDataRepository(database as never)
+        const journal = new PostgresJournalRepository(database as never)
+
+        await data.createMeal({
+            name: 'Plain Skyr',
+            mealType: 'Dinner',
+            eatenAt: '2026-08-25T19:15:00.000Z',
+            nutrients: {
+                calories: 94.5,
+                protein: 16.5,
+                carbs: 6,
+                fat: 0.3,
+                sodium: 120,
+            },
+            favorite: false,
+            nutritionQuality: 'estimated',
+            serving: { amount: 150, unit: 'g' },
+        })
+
+        expect(await journal.list()).toEqual([
+            expect.objectContaining({
+                title: 'Plain Skyr',
+                detail: '150 g · 94.5 kcal',
+                category: 'Meals',
+                detailView: {
+                    kind: 'meal',
+                    mealType: 'Dinner',
+                    serving: { amount: 150, unit: 'g' },
+                    nutrients: {
+                        calories: 94.5,
+                        protein: 16.5,
+                        carbs: 6,
+                        fat: 0.3,
+                        sodium: 120,
+                    },
+                    nutritionQuality: 'estimated',
+                },
+            }),
+        ])
+        await client.close()
+    })
 })

@@ -8,10 +8,23 @@ export type SleepStageDetail = {
     end: string
 }
 
-export type JournalDetailView = {
-    kind: 'sleep'
-    stages: SleepStageDetail[]
+export type MealServingDetail = {
+    amount: number
+    unit: 'g' | 'serving'
 }
+
+export type JournalDetailView =
+    | {
+          kind: 'sleep'
+          stages: SleepStageDetail[]
+      }
+    | {
+          kind: 'meal'
+          mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
+          serving?: MealServingDetail
+          nutrients: Record<string, number>
+          nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+      }
 
 export type JournalEvent = {
     id: string

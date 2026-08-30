@@ -35,6 +35,7 @@ export type MealRecord = {
     favorite: boolean
     version: number
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+    serving?: { amount: number; unit: 'g' | 'serving' }
 }
 
 export type RecipeRecord = {
@@ -267,6 +268,7 @@ export async function logMeal(
     nutritionQuality: 'complete' | 'estimated' | 'incomplete' = 'complete',
     foodId?: string,
     eatenAt = new Date().toISOString(),
+    serving?: { amount: number; unit: 'g' | 'serving' },
 ) {
     const response = await authRequest('/api/meals', {
         method: 'POST',
@@ -280,6 +282,7 @@ export async function logMeal(
             nutritionQuality,
             favorite: false,
             foodId,
+            serving,
         }),
     })
     if (!response.ok) throw new Error('Could not log meal')
@@ -295,6 +298,7 @@ export async function updateMeal(
         nutrients: Record<string, number>
         favorite: boolean
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+        serving: { amount: number; unit: 'g' | 'serving' } | null
     }>,
 ) {
     const response = await authRequest(`/api/meals/${id}`, {

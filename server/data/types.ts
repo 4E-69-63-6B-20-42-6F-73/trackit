@@ -44,6 +44,11 @@ export const observationInputSchema = z
 /** UTC instant range. `from` is inclusive and `to` is exclusive. */
 export type RecordRange = { from?: string; to?: string; definitionIds?: string[] }
 
+const mealServingSchema = z.object({
+    amount: z.number().finite().positive(),
+    unit: z.enum(['g', 'serving']),
+})
+
 export const mealInputSchema = z.object({
     id: z.string().uuid().optional(),
     name: z.string().trim().min(1).max(160),
@@ -53,6 +58,7 @@ export const mealInputSchema = z.object({
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
     favorite: z.boolean().default(false),
     foodId: z.string().uuid().optional(),
+    serving: mealServingSchema.optional(),
 })
 
 export const mealUpdateSchema = z.object({
@@ -62,6 +68,7 @@ export const mealUpdateSchema = z.object({
     nutrients: z.record(z.string(), z.number().finite()).optional(),
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).optional(),
     favorite: z.boolean().optional(),
+    serving: mealServingSchema.nullable().optional(),
     version: z.number().int().positive(),
 })
 
@@ -172,6 +179,7 @@ export const observationUpdateSchema = z.object({
     excluded: z.boolean().optional(),
     title: z.string().trim().min(1).max(160).optional(),
     textValue: z.string().max(2000).optional(),
+    detail: z.string().max(2000).optional(),
     observedAt: z.string().datetime().optional(),
     version: z.number().int().positive(),
 })

@@ -91,7 +91,15 @@ export function FoodLogger({
     }, [amount, selection])
 
     const save = async () => {
-        if (!selection || !nutrients || !recordedAt) return
+        const consumedAmount = Number(amount)
+        if (
+            !selection ||
+            !nutrients ||
+            !recordedAt ||
+            !Number.isFinite(consumedAmount) ||
+            consumedAmount <= 0
+        )
+            return
         setBusy(true)
         setError('')
         try {
@@ -107,6 +115,10 @@ export function FoodLogger({
                 quality,
                 selection.kind === 'food' ? selection.food.id : undefined,
                 calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),
+                {
+                    amount: consumedAmount,
+                    unit: selection.kind === 'food' ? 'g' : 'serving',
+                },
             )
             window.dispatchEvent(new Event('trackit:nutrition-changed'))
             close()

@@ -40,6 +40,35 @@ const sleepEvent = {
     },
 }
 
+const mealEvent = {
+    id: 'meal-entry',
+    definitionId: 'calories',
+    time: '19:15',
+    category: 'Meals' as const,
+    title: 'Plain Skyr',
+    detail: '150 g · 95 kcal',
+    source: 'You',
+    observedAt: '2026-08-29T19:15:00.000Z',
+    version: 1,
+    detailView: {
+        kind: 'meal' as const,
+        mealType: 'Dinner' as const,
+        serving: { amount: 150, unit: 'g' as const },
+        nutrients: {
+            calories: 95,
+            protein: 16.5,
+            carbs: 6,
+            fat: 0.3,
+            fiber: 0,
+            sugar: 6,
+            saturatedFat: 0.1,
+            sodium: 120,
+            potassium: 240,
+        },
+        nutritionQuality: 'estimated' as const,
+    },
+}
+
 const preferences = {
     displayName: 'Owner',
     timezone: 'UTC',
@@ -71,5 +100,29 @@ describe('Journal entry details', () => {
             within(dialog).queryByRole('button', { name: 'Back to entry' }),
         ).not.toBeInTheDocument()
         expect(within(dialog).queryByRole('button', { name: 'View trend' })).not.toBeInTheDocument()
+    })
+
+    it('shows meal size and energy in the Journal row and full nutrition in details', async () => {
+        render(
+            <MemoryRouter>
+                <MantineProvider>
+                    <ServerDataProvider initialData={{ preferences }}>
+                        <JournalEventList events={[mealEvent]} roomy />
+                    </ServerDataProvider>
+                </MantineProvider>
+            </MemoryRouter>,
+        )
+
+        expect(screen.getByText('150 g · 95 kcal')).toBeInTheDocument()
+        await userEvent.click(screen.getByRole('button', { name: /plain skyr/i }))
+        const dialog = await screen.findByRole('dialog')
+        expect(within(dialog).getByText('Dinner')).toBeInTheDocument()
+        expect(within(dialog).getByText('150 g')).toBeInTheDocument()
+        expect(within(dialog).getByText('95 kcal')).toBeInTheDocument()
+        expect(within(dialog).getByText('16.5 g')).toBeInTheDocument()
+        expect(within(dialog).getByText('120 mg')).toBeInTheDocument()
+        expect(within(dialog).getByText('240 mg')).toBeInTheDocument()
+        expect(within(dialog).getByText('Estimated nutrition')).toBeInTheDocument()
+        expect(within(dialog).getByText('You')).toBeInTheDocument()
     })
 })

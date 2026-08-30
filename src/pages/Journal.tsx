@@ -23,6 +23,7 @@ import {
 } from '@tabler/icons-react'
 import { useSearchParams } from 'react-router-dom'
 import { JournalEventList } from '../components/JournalEventList'
+import { JournalMealEditModal } from '../components/JournalMealEditModal'
 import { PageHeader } from '../components/PageHeader'
 import {
     addCalendarDays,
@@ -71,8 +72,15 @@ export function Journal({
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
+    const [observationRefreshKey, setObservationRefreshKey] = useState(0)
 
     const hasBoundedFilter = Boolean(selectedDate || rangeFrom || rangeTo || category !== 'All')
+
+    useEffect(() => {
+        const refresh = () => setObservationRefreshKey(key => key + 1)
+        window.addEventListener('trackit:observations-changed', refresh)
+        return () => window.removeEventListener('trackit:observations-changed', refresh)
+    }, [])
 
     useEffect(() => {
         if (!hasBoundedFilter) return
@@ -99,7 +107,15 @@ export function Journal({
         return () => {
             active = false
         }
-    }, [category, hasBoundedFilter, rangeFrom, rangeTo, selectedDate, timezone])
+    }, [
+        category,
+        hasBoundedFilter,
+        observationRefreshKey,
+        rangeFrom,
+        rangeTo,
+        selectedDate,
+        timezone,
+    ])
 
     useEffect(() => {
         const next = new URLSearchParams()
@@ -493,8 +509,13 @@ export function Journal({
                 )}
             </section>
 
+            <JournalMealEditModal
+                event={editing?.detailView?.kind === 'meal' ? editing : null}
+                onClose={() => setEditing(null)}
+                onSaved={() => setEditing(null)}
+            />
             <Modal
-                opened={Boolean(editing)}
+                opened={Boolean(editing && editing.detailView?.kind !== 'meal')}
                 onClose={() => setEditing(null)}
                 title="Edit entry"
                 centered
