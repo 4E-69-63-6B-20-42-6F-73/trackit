@@ -8,6 +8,9 @@ The project is currently in alpha.
 ## Product model
 
 ```text
+Plan
+    Meals -> dated intentions -> observations when logged
+
 Capture
     Log observations
     Health Connect -> source records -> observations
@@ -34,8 +37,9 @@ Settings
 ```
 
 Observations are the canonical health facts. Journal, Today, Trends, daily metrics, and goal progress
-are projections/read models. Foods, recipes, goals, metric definitions, and connection settings are
-reference/configuration data.
+are projections/read models. Plan items are user intent and do not become health facts until they are
+logged. Foods, recipes, goals, metric definitions, and connection settings are reference/configuration
+data.
 
 ## Development
 
@@ -92,7 +96,7 @@ metadata under `server/db/migrations/meta/` are one migration history and must b
 For a normal schema change:
 
 ```text
-edit server/db/schema.ts
+edit the relevant schema file
         ↓
 npm run db:generate -- --name=<descriptive_name>
         ↓

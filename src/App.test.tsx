@@ -40,6 +40,15 @@ describe('App routing', () => {
         expect(screen.getByText('Your journal is ready')).toBeInTheDocument()
     })
 
+    it('renders a bookmarkable plan route', async () => {
+        renderApp('/plan?date=2026-09-02')
+
+        expect(
+            await screen.findByRole('heading', { name: 'Plan', level: 1 }, { timeout: 5_000 }),
+        ).toBeInTheDocument()
+        expect(screen.getByText('Meals are intentions until they are logged.')).toBeInTheDocument()
+    })
+
     it('renders a bookmarkable goals route', async () => {
         renderApp('/goals')
 

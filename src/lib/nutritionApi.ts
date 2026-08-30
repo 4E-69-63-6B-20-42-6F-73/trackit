@@ -246,14 +246,24 @@ export async function deleteFood(food: Food) {
         const body = (await response.json()) as {
             error?: string
             recipes?: Array<{ id: string; name: string }>
+            plannedMeals?: number
         }
         if (body.error === 'food_in_use') {
             const names = body.recipes?.map(recipe => recipe.name).filter(Boolean) ?? []
-            throw new Error(
-                names.length
-                    ? `This food is used by ${names.join(', ')}. Remove it from those recipes before deleting it.`
-                    : 'This food is used by a recipe. Remove it from the recipe before deleting it.',
-            )
+            const planCount = body.plannedMeals ?? 0
+            if (names.length && planCount)
+                throw new Error(
+                    `This food is used by ${names.join(', ')} and ${planCount} planned ${planCount === 1 ? 'meal' : 'meals'}. Remove those references before deleting it.`,
+                )
+            if (names.length)
+                throw new Error(
+                    `This food is used by ${names.join(', ')}. Remove it from those recipes before deleting it.`,
+                )
+            if (planCount)
+                throw new Error(
+                    `This food is used by ${planCount} planned ${planCount === 1 ? 'meal' : 'meals'}. Remove it from your plan before deleting it.`,
+                )
+            throw new Error('This food is still in use. Remove its references before deleting it.')
         }
         throw new Error('Food changed elsewhere. Reload and try again.')
     }

@@ -1,5 +1,11 @@
-import { Badge, Button, Group, Progress, SimpleGrid, Stack, Text } from '@mantine/core'
+import { useEffect, useState } from 'react'
+import { Badge, Button, Divider, Group, Progress, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Link } from 'react-router-dom'
+import { calendarDateKey } from '../domain/calendar'
+import { formatPlanAmount, planStatus, type MealPlanItem } from '../domain/planning'
 import { useDailyNutrition } from '../hooks/useDailyNutrition'
+import { useServerData } from '../hooks/useServerData'
+import { listPlanItems } from '../lib/planApi'
 import { NutritionSkeleton } from './LoadingSkeletons'
 
 export function DailyNutritionPanel({
@@ -9,6 +15,10 @@ export function DailyNutritionPanel({
     openGoals?: () => void
     selectedDate: Date
 }) {
+    const { preferences } = useServerData()
+    const timezone = preferences?.timezone ?? 'UTC'
+    const dateKey = calendarDateKey(selectedDate, timezone)
+    const [plannedMeals, setPlannedMeals] = useState<MealPlanItem[]>([])
     const {
         nutrients,
         mealCount,
@@ -19,10 +29,84 @@ export function DailyNutritionPanel({
         nutritionQuality,
     } = useDailyNutrition(selectedDate)
 
+    useEffect(() => {
+        let active = true
+        const refresh = () =>
+            void listPlanItems({ from: dateKey, to: dateKey })
+                .then(items => active && setPlannedMeals(items))
+                .catch(() => active && setPlannedMeals([]))
+        refresh()
+        window.addEventListener('trackit:plan-changed', refresh)
+        return () => {
+            active = false
+            window.removeEventListener('trackit:plan-changed', refresh)
+        }
+    }, [dateKey])
+
     if (loading) return <NutritionSkeleton />
 
     return (
         <Stack gap="md">
+            <Group justify="space-between" align="center">
+                <div>
+                    <Text fw={650}>Meal plan</Text>
+                    <Text size="xs" c="dimmed">
+                        Intentions for this day. They count only after they are logged.
+                    </Text>
+                </div>
+                <Button
+                    component={Link}
+                    to={`/plan?date=${dateKey}`}
+                    variant="subtle"
+                    color="trackit"
+                    size="compact-sm"
+                >
+                    Open plan
+                </Button>
+            </Group>
+            {plannedMeals.length ? (
+                <Stack gap={6}>
+                    {plannedMeals.map(item => {
+                        const status = planStatus(item)
+                        return (
+                            <Group key={item.id} justify="space-between" gap="sm" wrap="nowrap">
+                                <div>
+                                    <Text size="sm" fw={650}>
+                                        {item.meal.mealType} · {item.meal.reference.name}
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        {formatPlanAmount(item)}
+                                    </Text>
+                                </div>
+                                <Badge
+                                    size="xs"
+                                    variant="light"
+                                    color={
+                                        status === 'logged'
+                                            ? 'teal'
+                                            : status === 'skipped'
+                                              ? 'gray'
+                                              : 'blue'
+                                    }
+                                >
+                                    {status === 'logged'
+                                        ? 'Logged'
+                                        : status === 'skipped'
+                                          ? 'Skipped'
+                                          : 'Planned'}
+                                </Badge>
+                            </Group>
+                        )
+                    })}
+                </Stack>
+            ) : (
+                <Text size="sm" c="dimmed">
+                    No meals planned for this day.
+                </Text>
+            )}
+
+            <Divider />
+
             <Group justify="space-between" align="flex-start">
                 <div>
                     <Text size="xs" c="dimmed">

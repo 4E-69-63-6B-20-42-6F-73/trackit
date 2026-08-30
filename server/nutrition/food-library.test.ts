@@ -5,10 +5,11 @@ import Fastify from 'fastify'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { applyTestMigrations } from '../db/test-migrations.js'
+import { planItems, plannedMeals } from '../planning/schema.js'
 import { registerFoodLibraryRoutes } from './food-library.js'
 
 describe('food library deletion', () => {
-    it('deletes unreferenced foods and blocks foods that recipes still use', async () => {
+    it('deletes unreferenced foods and blocks foods that recipes or meal plans still use', async () => {
         const databaseClient = new PGlite()
         await applyTestMigrations(databaseClient)
         const database = drizzle(databaseClient, { schema })
@@ -23,6 +24,7 @@ describe('food library deletion', () => {
             .insert(schema.foods)
             .values({ name: 'Rolled oats' })
             .returning()
+        const [planned] = await database.insert(schema.foods).values({ name: 'Banana' }).returning()
         const [recipe] = await database
             .insert(schema.recipes)
             .values({ name: 'Overnight oats' })
@@ -31,6 +33,18 @@ describe('food library deletion', () => {
             recipeId: recipe.id,
             foodId: inUse.id,
             grams: 80,
+        })
+        const [plan] = await database
+            .insert(planItems)
+            .values({ kind: 'meal', scheduledDate: '2026-09-02' })
+            .returning()
+        await database.insert(plannedMeals).values({
+            planItemId: plan.id,
+            mealType: 'Snack',
+            referenceType: 'food',
+            foodId: planned.id,
+            amount: 120,
+            unit: 'g',
         })
 
         const stale = await app.inject({
@@ -50,6 +64,19 @@ describe('food library deletion', () => {
         expect(blocked.json()).toEqual({
             error: 'food_in_use',
             recipes: [{ id: recipe.id, name: 'Overnight oats' }],
+            plannedMeals: 0,
+        })
+
+        const planBlocked = await app.inject({
+            method: 'DELETE',
+            url: `/api/foods/${planned.id}`,
+            payload: { version: planned.version },
+        })
+        expect(planBlocked.statusCode).toBe(409)
+        expect(planBlocked.json()).toEqual({
+            error: 'food_in_use',
+            recipes: [],
+            plannedMeals: 1,
         })
 
         const removed = await app.inject({
@@ -63,6 +90,9 @@ describe('food library deletion', () => {
         ).toEqual([])
         expect(
             await database.select().from(schema.foods).where(eq(schema.foods.id, inUse.id)),
+        ).toHaveLength(1)
+        expect(
+            await database.select().from(schema.foods).where(eq(schema.foods.id, planned.id)),
         ).toHaveLength(1)
 
         await app.close()

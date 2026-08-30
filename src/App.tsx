@@ -17,6 +17,7 @@ import { useServerData } from './hooks/useServerData'
 import type { CreateObservationInput } from './lib/observationApi'
 
 const Today = lazy(() => import('./pages/Today').then(module => ({ default: module.Today })))
+const Plan = lazy(() => import('./pages/Plan').then(module => ({ default: module.Plan })))
 const Journal = lazy(() => import('./pages/Journal').then(module => ({ default: module.Journal })))
 const Trends = lazy(() => import('./pages/Trends').then(module => ({ default: module.Trends })))
 const Metrics = lazy(() => import('./pages/Metrics').then(module => ({ default: module.Metrics })))
@@ -52,6 +53,7 @@ const Onboarding = lazy(() =>
 
 const pagePaths: Record<Exclude<Page, 'Settings'>, string> & { Settings: string } = {
     Today: '/today',
+    Plan: '/plan',
     Journal: '/journal',
     Trends: '/trends',
     Goals: '/goals',
@@ -67,13 +69,15 @@ export default function App() {
         ? 'Settings'
         : location.pathname.startsWith('/library')
           ? 'Library'
-          : location.pathname.startsWith('/journal')
-            ? 'Journal'
-            : location.pathname.startsWith('/trends')
-              ? 'Trends'
-              : location.pathname.startsWith('/goals')
-                ? 'Goals'
-                : 'Today'
+          : location.pathname.startsWith('/plan')
+            ? 'Plan'
+            : location.pathname.startsWith('/journal')
+              ? 'Journal'
+              : location.pathname.startsWith('/trends')
+                ? 'Trends'
+                : location.pathname.startsWith('/goals')
+                  ? 'Goals'
+                  : 'Today'
     const [collapsed, setCollapsed] = useState(false)
     const [moreOpen, setMoreOpen] = useState(false)
     const timezone = preferences?.timezone ?? 'UTC'
@@ -162,6 +166,7 @@ export default function App() {
                                     />
                                 }
                             />
+                            <Route path="/plan" element={<Plan />} />
                             <Route
                                 path="/journal"
                                 element={
@@ -242,9 +247,7 @@ export default function App() {
             </Box>
             <nav className="mobile-nav" aria-label="Primary navigation">
                 {nav
-                    .filter(({ label }) =>
-                        ['Today', 'Journal', 'Trends', 'Library'].includes(label),
-                    )
+                    .filter(({ label }) => ['Today', 'Plan', 'Journal', 'Trends'].includes(label))
                     .map(({ label, icon: Icon }) => (
                         <NavLink
                             className={page === label ? 'active' : ''}
@@ -257,7 +260,7 @@ export default function App() {
                         </NavLink>
                     ))}
                 <button
-                    className={['Goals', 'Settings'].includes(page) ? 'active' : ''}
+                    className={['Goals', 'Library', 'Settings'].includes(page) ? 'active' : ''}
                     type="button"
                     onClick={() => setMoreOpen(true)}
                     aria-label="Open more pages"

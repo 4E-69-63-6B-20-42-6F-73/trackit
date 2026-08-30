@@ -1,15 +1,20 @@
 import type { FastifyInstance } from 'fastify'
-import { and, eq } from 'drizzle-orm'
+import { and, eq, isNull } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { z } from 'zod'
 import { foods, recipeItems, recipes } from '../db/schema.js'
 import type * as schemaType from '../db/schema.js'
+import { planItems, plannedMeals } from '../planning/schema.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
 type FoodDeleteResult =
     | { status: 'deleted' }
-    | { status: 'in_use'; recipes: Array<{ id: string; name: string }> }
+    | {
+          status: 'in_use'
+          recipes: Array<{ id: string; name: string }>
+          plannedMeals: number
+      }
     | { status: 'version_conflict' }
     | { status: 'not_found' }
 
@@ -18,13 +23,25 @@ export class FoodLibraryService {
 
     async deleteFood(id: string, version: number): Promise<FoodDeleteResult> {
         return this.database.transaction(async transaction => {
-            const usedBy = await transaction
-                .select({ id: recipes.id, name: recipes.name })
-                .from(recipeItems)
-                .innerJoin(recipes, eq(recipeItems.recipeId, recipes.id))
-                .where(eq(recipeItems.foodId, id))
+            const [usedBy, planUses] = await Promise.all([
+                transaction
+                    .select({ id: recipes.id, name: recipes.name })
+                    .from(recipeItems)
+                    .innerJoin(recipes, eq(recipeItems.recipeId, recipes.id))
+                    .where(eq(recipeItems.foodId, id)),
+                transaction
+                    .select({ id: planItems.id })
+                    .from(plannedMeals)
+                    .innerJoin(planItems, eq(plannedMeals.planItemId, planItems.id))
+                    .where(and(eq(plannedMeals.foodId, id), isNull(planItems.deletedAt))),
+            ])
 
-            if (usedBy.length) return { status: 'in_use', recipes: usedBy }
+            if (usedBy.length || planUses.length)
+                return {
+                    status: 'in_use',
+                    recipes: usedBy,
+                    plannedMeals: planUses.length,
+                }
 
             const [deleted] = await transaction
                 .delete(foods)
@@ -56,7 +73,11 @@ export function registerFoodLibraryRoutes(app: FastifyInstance, database: Databa
         const result = await library.deleteFood(request.params.id, input.data.version)
         if (result.status === 'deleted') return reply.code(204).send()
         if (result.status === 'in_use') {
-            return reply.code(409).send({ error: 'food_in_use', recipes: result.recipes })
+            return reply.code(409).send({
+                error: 'food_in_use',
+                recipes: result.recipes,
+                plannedMeals: result.plannedMeals,
+            })
         }
         if (result.status === 'version_conflict') {
             return reply.code(409).send({ error: 'version_conflict' })

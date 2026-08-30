@@ -31,6 +31,7 @@ import {
 } from '../db/schema.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone } from '../data/timezone.js'
+import { planItems } from '../planning/schema.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Category = 'observations' | 'meals' | 'checkins'
@@ -118,6 +119,7 @@ export class DataDeletionService {
             await transaction.delete(deviceUploadBatches)
             await transaction.delete(devices)
             await transaction.delete(pairingCodes)
+            await transaction.delete(planItems)
             await transaction.delete(recipeItems)
             await transaction.delete(recipes)
             await transaction.delete(foods)

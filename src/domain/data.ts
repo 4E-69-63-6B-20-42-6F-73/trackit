@@ -1,6 +1,7 @@
 import {
     IconActivity,
     IconApple,
+    IconCalendarWeek,
     IconDashboard,
     IconMoon,
     IconNotes,
@@ -24,6 +25,7 @@ export const eventVisual = (category: Category) =>
 
 export const nav: { label: Page; icon: typeof IconDashboard }[] = [
     { label: 'Today', icon: IconDashboard },
+    { label: 'Plan', icon: IconCalendarWeek },
     { label: 'Journal', icon: IconNotes },
     { label: 'Trends', icon: IconTrendingUp },
     { label: 'Goals', icon: IconTargetArrow },

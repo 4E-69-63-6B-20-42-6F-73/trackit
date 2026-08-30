@@ -99,6 +99,55 @@ export const openApiContract = {
                 },
             },
         },
+        '/api/plan-items': {
+            get: {
+                description:
+                    'Lists dated user intentions. Planned meals never contribute to health metrics until logged.',
+                responses: { '200': { description: 'Plan items' } },
+            },
+            post: {
+                description: 'Creates a planned meal referencing a saved food or recipe.',
+                responses: {
+                    '201': { description: 'Created' },
+                    '404': { description: 'Food or recipe not found' },
+                },
+            },
+        },
+        '/api/plan-items/{id}': {
+            patch: {
+                responses: {
+                    '200': { description: 'Updated' },
+                    '404': { description: 'Plan item not found' },
+                    '409': { description: 'Version conflict or fulfilled item' },
+                },
+            },
+            delete: {
+                responses: {
+                    '204': { description: 'Removed from plan' },
+                    '409': { description: 'Version conflict' },
+                },
+            },
+        },
+        '/api/plan-items/{id}/skip': {
+            post: {
+                description: 'Skips or restores a plan item without creating a health observation.',
+                responses: {
+                    '200': { description: 'Updated' },
+                    '409': { description: 'Version conflict or fulfilled item' },
+                },
+            },
+        },
+        '/api/plan-items/{id}/log': {
+            post: {
+                description:
+                    'Atomically creates the canonical compound meal observation and links it as the result of the plan item.',
+                responses: {
+                    '201': { description: 'Meal logged' },
+                    '404': { description: 'Plan item or reference not found' },
+                    '409': { description: 'Version conflict or already fulfilled' },
+                },
+            },
+        },
         '/api/preferences': {
             get: { responses: { '200': { description: 'Preferences' } } },
             patch: { responses: { '200': { description: 'Updated' } } },
@@ -116,11 +165,13 @@ export const openApiContract = {
         '/api/foods/{id}': {
             delete: {
                 description:
-                    'Deletes a catalog food while preserving historical meal snapshots and refusing deletion while a recipe still references the food',
+                    'Deletes a catalog food while preserving historical meal snapshots and refusing deletion while a recipe or active meal plan still references the food',
                 responses: {
                     '204': { description: 'Deleted' },
                     '404': { description: 'Food not found' },
-                    '409': { description: 'Version conflict or food is used by a recipe' },
+                    '409': {
+                        description: 'Version conflict or food is used by a recipe or meal plan',
+                    },
                 },
             },
         },
