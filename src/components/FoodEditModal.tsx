@@ -1,29 +1,19 @@
-import { useState } from 'react'
 import {
     Alert,
+    Badge,
     Button,
     Group,
     Modal,
     NumberInput,
-    Select,
     SimpleGrid,
     Stack,
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMediaQuery } from '@mantine/hooks'
+import { useState } from 'react'
 import type { Food, Nutrients } from '../domain/nutrition'
-
-const nutrientFields: Array<{ key: keyof Nutrients; label: string; unit: string }> = [
-    { key: 'calories', label: 'Calories', unit: 'kcal' },
-    { key: 'protein', label: 'Protein', unit: 'g' },
-    { key: 'carbs', label: 'Carbohydrates', unit: 'g' },
-    { key: 'fat', label: 'Fat', unit: 'g' },
-    { key: 'fiber', label: 'Fiber', unit: 'g' },
-    { key: 'sugar', label: 'Sugar', unit: 'g' },
-    { key: 'saturatedFat', label: 'Saturated fat', unit: 'g' },
-    { key: 'sodium', label: 'Sodium', unit: 'mg' },
-    { key: 'potassium', label: 'Potassium', unit: 'mg' },
-]
+import { FoodNutritionFields, foodNutrientKeys } from './FoodNutritionFields'
 
 export function FoodEditModal({
     food,
@@ -36,16 +26,24 @@ export function FoodEditModal({
     onSave: (food: Omit<Food, 'id' | 'version'>) => Promise<void>
     onDelete: () => Promise<void>
 }) {
+    const compact = useMediaQuery('(max-width: 36em)')
     const [name, setName] = useState(food.name)
     const [brand, setBrand] = useState(food.brand ?? '')
+    const [barcode, setBarcode] = useState(food.barcode ?? '')
     const [servingName, setServingName] = useState(food.servingName)
     const [servingGrams, setServingGrams] = useState<number | string>(food.servingGrams)
-    const [quality, setQuality] = useState(food.nutritionQuality ?? 'complete')
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>(food.per100g)
     const [error, setError] = useState('')
+    const [deleteError, setDeleteError] = useState('')
     const [saving, setSaving] = useState(false)
     const [deleting, setDeleting] = useState(false)
     const [confirmingDelete, setConfirmingDelete] = useState(false)
+    const quality =
+        food.nutritionQuality === 'estimated'
+            ? 'estimated'
+            : foodNutrientKeys.every(key => nutrients[key] !== undefined)
+              ? 'complete'
+              : 'incomplete'
 
     const setNutrient = (key: keyof Nutrients, value: number | string) => {
         setNutrients(current => {
@@ -63,7 +61,7 @@ export function FoodEditModal({
             await onSave({
                 name: name.trim(),
                 brand: brand.trim() || undefined,
-                barcode: food.barcode,
+                barcode: barcode.trim() || undefined,
                 catalogSource: food.catalogSource,
                 catalogId: food.catalogId,
                 servingName: servingName.trim(),
@@ -82,122 +80,148 @@ export function FoodEditModal({
 
     const remove = async () => {
         setDeleting(true)
-        setError('')
+        setDeleteError('')
         try {
             await onDelete()
+            setConfirmingDelete(false)
             onClose()
         } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Could not delete food.')
-            setConfirmingDelete(false)
+            setDeleteError(reason instanceof Error ? reason.message : 'Could not delete food.')
         } finally {
             setDeleting(false)
         }
     }
 
     return (
-        <Modal opened onClose={onClose} title={`Edit ${food.name}`} centered size="lg">
-            <Stack>
-                <TextInput
-                    label="Food name"
-                    required
-                    value={name}
-                    onChange={event => setName(event.currentTarget.value)}
-                />
-                <TextInput
-                    label="Brand (optional)"
-                    value={brand}
-                    onChange={event => setBrand(event.currentTarget.value)}
-                />
-                <SimpleGrid cols={{ base: 1, xs: 2 }}>
+        <>
+            <Modal
+                opened
+                onClose={onClose}
+                title="Edit food"
+                centered={!compact}
+                fullScreen={compact}
+                size="lg"
+            >
+                <Stack>
+                    <Text fw={650}>Basics</Text>
                     <TextInput
-                        label="Serving name"
-                        value={servingName}
-                        onChange={event => setServingName(event.currentTarget.value)}
+                        label="Name"
+                        required
+                        value={name}
+                        onChange={event => setName(event.currentTarget.value)}
                     />
-                    <NumberInput
-                        label="Serving grams"
-                        min={0.1}
-                        suffix=" g"
-                        value={servingGrams}
-                        onChange={setServingGrams}
+                    <TextInput
+                        label="Brand (optional)"
+                        value={brand}
+                        onChange={event => setBrand(event.currentTarget.value)}
                     />
-                </SimpleGrid>
-                <Select
-                    label="Nutrition quality"
-                    value={quality}
-                    onChange={value =>
-                        setQuality((value as 'complete' | 'estimated' | 'incomplete') ?? 'complete')
-                    }
-                    data={['complete', 'estimated', 'incomplete']}
-                />
-                <Text size="sm" c="dimmed">
-                    Leave a nutrient blank when it is unknown. Unknown values are not treated as
-                    zero.
-                </Text>
-                <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
-                    {nutrientFields.map(({ key, label, unit }) => (
-                        <NumberInput
-                            key={key}
-                            label={`${label} (${unit} / 100 g)`}
-                            placeholder="Unknown"
-                            min={0}
-                            value={nutrients[key] ?? ''}
-                            onChange={value => setNutrient(key, value)}
+                    <TextInput
+                        label="Barcode (optional)"
+                        value={barcode}
+                        onChange={event => setBarcode(event.currentTarget.value)}
+                    />
+                    {food.catalogSource && (
+                        <Text size="xs" c="dimmed">
+                            Source: {food.catalogSource}
+                        </Text>
+                    )}
+
+                    <Text fw={650} mt="xs">
+                        Serving
+                    </Text>
+                    <SimpleGrid cols={{ base: 1, xs: 2 }}>
+                        <TextInput
+                            label="Serving label"
+                            placeholder="e.g. cup, scoop, container"
+                            value={servingName}
+                            onChange={event => setServingName(event.currentTarget.value)}
                         />
-                    ))}
-                </SimpleGrid>
-                {error && <Alert color="orange">{error}</Alert>}
-                {confirmingDelete && (
-                    <Alert color="red" title="Delete this food?">
-                        <Stack gap="sm">
-                            <Text size="sm">
-                                Logged meals keep their saved nutrition. If this food is used by a
-                                recipe, remove it from that recipe first.
-                            </Text>
-                            <Group justify="flex-end" gap="xs">
-                                <Button
-                                    variant="default"
-                                    size="xs"
-                                    disabled={deleting}
-                                    onClick={() => setConfirmingDelete(false)}
-                                >
-                                    Cancel
-                                </Button>
-                                <Button
-                                    color="red"
-                                    size="xs"
-                                    loading={deleting}
-                                    onClick={() => void remove()}
-                                >
-                                    Delete permanently
-                                </Button>
-                            </Group>
-                        </Stack>
-                    </Alert>
-                )}
-                <Group justify="space-between" align="center">
-                    <Button
-                        color="red"
-                        variant="subtle"
-                        disabled={saving || deleting}
-                        onClick={() => setConfirmingDelete(true)}
-                    >
-                        Delete food
-                    </Button>
-                    <Button
-                        loading={saving}
-                        disabled={
-                            deleting ||
-                            !name.trim() ||
-                            !servingName.trim() ||
-                            Number(servingGrams) <= 0
+                        <NumberInput
+                            label="Serving weight"
+                            suffix=" g"
+                            hideControls
+                            min={0.1}
+                            value={servingGrams}
+                            onChange={setServingGrams}
+                        />
+                    </SimpleGrid>
+
+                    <FoodNutritionFields
+                        nutrients={nutrients}
+                        onChange={setNutrient}
+                        status={
+                            quality === 'complete' ? undefined : (
+                                <Badge size="sm" variant="light">
+                                    {quality === 'estimated'
+                                        ? 'Estimated nutrition'
+                                        : 'Incomplete nutrition'}
+                                </Badge>
+                            )
                         }
-                        onClick={() => void save()}
-                    >
-                        Save food
-                    </Button>
-                </Group>
-            </Stack>
-        </Modal>
+                    />
+
+                    {error && <Alert color="orange">{error}</Alert>}
+                    <Group justify="space-between" className="food-modal-actions">
+                        <Button
+                            color="red"
+                            variant="subtle"
+                            disabled={saving || deleting}
+                            onClick={() => {
+                                setDeleteError('')
+                                setConfirmingDelete(true)
+                            }}
+                        >
+                            Delete food
+                        </Button>
+                        <Group gap="xs">
+                            <Button variant="default" disabled={saving || deleting} onClick={onClose}>
+                                Cancel
+                            </Button>
+                            <Button
+                                loading={saving}
+                                disabled={
+                                    deleting ||
+                                    !name.trim() ||
+                                    !servingName.trim() ||
+                                    Number(servingGrams) <= 0
+                                }
+                                onClick={() => void save()}
+                            >
+                                Save changes
+                            </Button>
+                        </Group>
+                    </Group>
+                </Stack>
+            </Modal>
+
+            <Modal
+                opened={confirmingDelete}
+                onClose={() => setConfirmingDelete(false)}
+                title="Delete this food?"
+                centered
+                size="sm"
+            >
+                <Stack>
+                    <Text size="sm">
+                        This permanently removes {food.name} from your food library. Logged meals
+                        keep their saved nutrition. If this food is used by a recipe, remove it from
+                        that recipe first.
+                    </Text>
+                    {deleteError && <Alert color="orange">{deleteError}</Alert>}
+                    <Group justify="flex-end">
+                        <Button
+                            variant="default"
+                            disabled={deleting}
+                            onClick={() => setConfirmingDelete(false)}
+                        >
+                            Keep food
+                        </Button>
+                        <Button color="red" loading={deleting} onClick={() => void remove()}>
+                            Delete food
+                        </Button>
+                    </Group>
+                </Stack>
+            </Modal>
+        </>
     )
 }
