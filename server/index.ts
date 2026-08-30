@@ -6,6 +6,7 @@ import { createApp } from './app.js'
 import { AuthService } from './auth/service.js'
 import { config } from './config.js'
 import { db, sql } from './db/client.js'
+import { registerEntryDeletionRoutes } from './data/entry-deletion-routes.js'
 import { PostgresInsightDataRepository } from './data/postgres-insight-repository.js'
 import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import { McpAccessService } from './mcp/service.js'
@@ -26,11 +27,12 @@ const projections = new ProjectionWorker(db)
 const projectionMaintenance = new ProjectionMaintenanceService(db)
 const providerRecordMaintenance = new ProviderRecordMaintenanceService(db)
 const mcp = new McpAccessService(db)
+const data = new PostgresInsightDataRepository(db)
 projections.start()
 
 const app = await createApp(new PostgresJournalRepository(db), {
     logger: true,
-    dataRepository: new PostgresInsightDataRepository(db),
+    dataRepository: data,
     auth: new AuthService(db),
     mcp,
     devices: new DeviceService(db, config.WEB_ORIGIN),
@@ -45,6 +47,7 @@ const app = await createApp(new PostgresJournalRepository(db), {
 
 registerMcpBrowserCors(app, mcp)
 registerFoodLibraryRoutes(app, db)
+registerEntryDeletionRoutes(app, db, data)
 
 await registerDataMaintenanceRoutes(app, {
     projections: projectionMaintenance,
