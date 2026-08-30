@@ -18,6 +18,16 @@ type ApiJournalEntry = {
     detailView?: JournalDetailView
 }
 
+export type JournalQuery = {
+    from?: string
+    to?: string
+    before?: string
+    beforeId?: string
+    category?: JournalEvent['category']
+    source?: string
+    limit?: number
+}
+
 const apiUrl = (path: string) => `${environment.VITE_API_URL}${path}`
 const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     id: entry.id,
@@ -39,14 +49,7 @@ const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
 })
 
 export async function listJournal(
-    query: {
-        from?: string
-        to?: string
-        before?: string
-        category?: JournalEvent['category']
-        source?: string
-        limit?: number
-    } = {},
+    query: JournalQuery = {},
     signal?: AbortSignal,
 ): Promise<JournalEvent[]> {
     const search = new URLSearchParams(
@@ -59,4 +62,12 @@ export async function listJournal(
         signal,
     )
     return body.data.map(toEvent)
+}
+
+export async function getJournalEntry(id: string, signal?: AbortSignal): Promise<JournalEvent> {
+    const body = await sharedJsonRequest<{ data: ApiJournalEntry }>(
+        apiUrl(`/api/journal/${encodeURIComponent(id)}`),
+        signal,
+    )
+    return toEvent(body.data)
 }
