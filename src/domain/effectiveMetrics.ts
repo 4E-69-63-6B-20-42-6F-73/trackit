@@ -1,6 +1,7 @@
 import { metricCatalog } from './metricCatalog.js'
 import type { NumericObservation } from './health.js'
 import type { MetricPreferences } from './metrics.js'
+import { calendarDateKey, calendarDateFromKey, addCalendarDays } from './calendar.js'
 
 const sourcePart = (value: unknown) => (typeof value === 'string' && value.trim() ? value : null)
 
@@ -169,7 +170,7 @@ const derivedObservation = (
     version: 1,
 })
 
-export function deriveMetrics(records: NumericObservation[]) {
+export function deriveMetrics(records: NumericObservation[], timezone = 'UTC') {
     const derived: NumericObservation[] = []
     const heights = records
         .filter(record => record.definitionId === 'height')
@@ -190,7 +191,7 @@ export function deriveMetrics(records: NumericObservation[]) {
     for (const record of records.filter(item =>
         ['calories', 'active_calories'].includes(item.definitionId),
     )) {
-        const day = record.observedAt.slice(0, 10)
+        const day = calendarDateKey(new Date(record.observedAt), timezone)
         const bucket = byDay.get(day) ?? { intake: [], burned: [] }
         bucket[record.definitionId === 'calories' ? 'intake' : 'burned'].push(record)
         byDay.set(day, bucket)
@@ -201,7 +202,15 @@ export function deriveMetrics(records: NumericObservation[]) {
         const value =
             bucket.intake.reduce((sum, item) => sum + item.canonicalValue, 0) -
             bucket.burned.reduce((sum, item) => sum + item.canonicalValue, 0)
-        derived.push(derivedObservation('calorie_balance', value, `${day}T23:59:59.999Z`, inputs))
+        const nextDay = calendarDateFromKey(addCalendarDays(day, 1), timezone)
+        derived.push(
+            derivedObservation(
+                'calorie_balance',
+                value,
+                new Date(nextDay.getTime() - 1).toISOString(),
+                inputs,
+            ),
+        )
     }
     return derived
 }
@@ -222,8 +231,16 @@ export function effectiveBaseMetricSeries(
 }
 
 export function effectiveMetricSeries(raw: NumericObservation[], preferences?: MetricPreferences) {
+    return effectiveMetricSeriesInTimezone(raw, preferences, 'UTC')
+}
+
+export function effectiveMetricSeriesInTimezone(
+    raw: NumericObservation[],
+    preferences: MetricPreferences | undefined,
+    timezone: string,
+) {
     const normalized = effectiveBaseMetricSeries(raw, preferences)
-    return [...normalized, ...deriveMetrics(normalized)].sort((a, b) =>
+    return [...normalized, ...deriveMetrics(normalized, timezone)].sort((a, b) =>
         a.observedAt.localeCompare(b.observedAt),
     )
 }

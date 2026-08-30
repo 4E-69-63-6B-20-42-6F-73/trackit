@@ -26,7 +26,7 @@ export async function replaceDerivedObservationCache(
         inputs: NumericObservation[]
     },
 ) {
-    const derived = deriveMetrics(options.inputs)
+    const derived = deriveMetrics(options.inputs, options.timezone)
     await database
         .delete(derivedObservations)
         .where(

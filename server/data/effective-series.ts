@@ -11,7 +11,7 @@ import {
 } from '../db/schema.js'
 import {
     effectiveBaseMetricSeries,
-    effectiveMetricSeries,
+    effectiveMetricSeriesInTimezone,
 } from '../../src/domain/effectiveMetrics.js'
 import type { NumericObservation } from '../../src/domain/health.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
@@ -212,7 +212,7 @@ async function loadEffectiveMetricSeries(
     const metricPreferences = (saved?.metricPreferences ?? undefined) as
         MetricPreferences | undefined
     const effective = includeDerived
-        ? effectiveMetricSeries(candidates, metricPreferences)
+        ? effectiveMetricSeriesInTimezone(candidates, metricPreferences, saved?.timezone ?? 'UTC')
         : effectiveBaseMetricSeries(candidates, metricPreferences)
     return effective.filter(record => {
         const observedAt = new Date(record.observedAt)

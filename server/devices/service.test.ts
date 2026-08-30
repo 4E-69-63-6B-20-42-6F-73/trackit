@@ -350,11 +350,11 @@ describe('Android device pairing and upload', () => {
 
         await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
             {
-                ...canonical,
+                provider: 'health_connect',
                 recordType: 'StepsRecord',
+                externalId: sourceId,
                 externalVersion: Number.MAX_SAFE_INTEGER,
                 startTime: '1970-01-01T00:00:00Z',
-                endTime: undefined,
                 payload: {},
                 deleted: true,
             },
@@ -374,6 +374,66 @@ describe('Android device pairing and upload', () => {
                 date.date.startsWith('1970-'),
             ),
         ).toBe(false)
+
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            {
+                ...canonical,
+                externalVersion: 101,
+                dataOrigin: 'com.example.changed-provider',
+            },
+        ])
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            {
+                provider: 'health_connect',
+                recordType: 'HeartRateRecord',
+                externalId: sourceId,
+                externalVersion: Number.MAX_SAFE_INTEGER,
+                startTime: '1970-01-01T00:00:00Z',
+                payload: {},
+                deleted: true,
+            },
+        ])
+        expect(
+            (await database.select().from(schema.healthRecords)).filter(
+                item => item.externalId === sourceId,
+            ),
+        ).toHaveLength(1)
+        expect(
+            (await database.select().from(schema.healthRecords)).find(
+                item => item.externalId === sourceId,
+            )?.deletedAt,
+        ).toBeInstanceOf(Date)
+
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            { ...canonical, externalVersion: 102 },
+        ])
+        expect(
+            (await database.select().from(schema.healthRecords)).find(
+                item => item.externalId === sourceId,
+            )?.deletedAt,
+        ).toBeInstanceOf(Date)
+
+        const absentId = 'deleted-while-token-expired'
+        await service.uploadHealthRecords(requested!.deviceId, randomUUID(), [
+            {
+                ...canonical,
+                externalId: absentId,
+                externalVersion: 1,
+            },
+        ])
+        expect(
+            await service.reconcileHealthRecords(
+                requested!.deviceId,
+                'HeartRateRecord',
+                '2026-08-01T00:00:00Z',
+                [],
+            ),
+        ).toMatchObject({ reconciled: 1 })
+        expect(
+            (await database.select().from(schema.healthRecords)).find(
+                item => item.externalId === absentId,
+            )?.deletedAt,
+        ).toBeInstanceOf(Date)
 
         await service.revoke(requested!.deviceId)
         expect(await authenticate(requested?.credential)).toBeNull()

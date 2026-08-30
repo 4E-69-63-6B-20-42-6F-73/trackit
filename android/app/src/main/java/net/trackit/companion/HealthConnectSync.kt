@@ -439,8 +439,10 @@ class HealthConnectSync(private val context: Context) {
         recordType: KClass<out Record>,
         cancelled: () -> Boolean,
     ) {
-        val filter = TimeRangeFilter.after(Instant.now().minus(Duration.ofDays(30)))
+        val since = Instant.now().minus(Duration.ofDays(30))
+        val filter = TimeRangeFilter.after(since)
         var pageToken: String? = null
+        val presentExternalIds = mutableSetOf<String>()
 
         do {
             if (cancelled()) throw CancellationException("Import cancelled")
@@ -474,6 +476,7 @@ class HealthConnectSync(private val context: Context) {
             }
 
             val uploads = response.records.map { record ->
+                presentExternalIds += record.metadata.id
                 requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
                     "Unable to serialize ${record::class.simpleName}"
                 }
@@ -488,6 +491,8 @@ class HealthConnectSync(private val context: Context) {
 
             pageToken = response.pageToken
         } while (pageToken != null)
+
+        api.reconcile(recordType.simpleName.orEmpty(), since, presentExternalIds)
     }
 
     @Suppress("UNCHECKED_CAST")

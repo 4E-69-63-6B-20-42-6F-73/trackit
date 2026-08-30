@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { deriveRecord } from './derive.js'
 import type { CanonicalHealthRecord } from './types.js'
+import { metricDefinition } from '../../src/domain/metricCatalog.js'
 
 const record = (recordType: string, payload: Record<string, unknown>): CanonicalHealthRecord => ({
     id: 'record',
@@ -78,5 +79,33 @@ describe('Health Connect record derivation', () => {
         expect(deriveRecord(source)).toMatchObject([
             { definitionId: 'exercise', value: 480, unit: 'minutes' },
         ])
+    })
+
+    it('converts provider-native height through Metric Center before creating observations', () => {
+        const [height] = deriveRecord(record('HeightRecord', { meters: 1.8 }))
+        expect(height).toMatchObject({
+            definitionId: 'height',
+            value: 180,
+            unit: 'cm',
+            originalValue: 1.8,
+            originalUnit: 'm',
+        })
+    })
+
+    it('always emits the canonical Metric Center unit for registered numeric projections', () => {
+        const inputs = [
+            record('HeightRecord', { meters: 1.8 }),
+            record('WeightRecord', { kilograms: 81 }),
+            record('HydrationRecord', { liters: 0.75 }),
+            record('DistanceRecord', { meters: 1200 }),
+            record('ActiveCaloriesBurnedRecord', { kilocalories: 300 }),
+            record('BodyFatRecord', { percentage: 18 }),
+            record('Vo2MaxRecord', { millilitersPerMinuteKilogram: 42 }),
+        ]
+        for (const projection of inputs.flatMap(deriveRecord)) {
+            const definition = metricDefinition(projection.definitionId)
+            expect(definition, projection.definitionId).toBeDefined()
+            expect(projection.unit, projection.definitionId).toBe(definition!.canonicalUnit)
+        }
     })
 })

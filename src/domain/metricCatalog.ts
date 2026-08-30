@@ -175,6 +175,85 @@ export const metricCatalog: MetricDefinition[] = [
         ...shared('active_calories', 'Calories burned', 'Activity', 'kcal', 'observation'),
         goalCapabilities: additiveGoals,
     },
+    {
+        ...shared('total_calories', 'Total calories burned', 'Activity', 'kcal', 'observation'),
+        goalCapabilities: additiveGoals,
+    },
+    {
+        ...shared('distance', 'Distance', 'Activity', 'm', 'observation'),
+        goalCapabilities: additiveGoals,
+    },
+    {
+        ...shared('body_fat', 'Body fat', 'Body', '%', 'observation', 1),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('lean_body_mass', 'Lean body mass', 'Body', 'kg', 'observation', 1),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('blood_pressure_systolic', 'Systolic pressure', 'Health', 'mmHg', 'observation'),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared(
+            'blood_pressure_diastolic',
+            'Diastolic pressure',
+            'Health',
+            'mmHg',
+            'observation',
+        ),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('hrv_rmssd', 'HRV (RMSSD)', 'Health', 'ms', 'observation'),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('oxygen_saturation', 'Oxygen saturation', 'Health', '%', 'observation', 1),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared(
+            'respiratory_rate',
+            'Respiratory rate',
+            'Health',
+            'breaths/min',
+            'observation',
+            1,
+        ),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('vo2_max', 'VO₂ max', 'Health', 'mL/kg/min', 'observation', 1),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared(
+            'basal_metabolic_rate',
+            'Basal metabolic rate',
+            'Body',
+            'kcal/day',
+            'observation',
+        ),
+        goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('sleep_deep', 'Deep sleep', 'Sleep', 'hours', 'observation', 2),
+        goalCapabilities: additiveGoals,
+    },
+    {
+        ...shared('sleep_rem', 'REM sleep', 'Sleep', 'hours', 'observation', 2),
+        goalCapabilities: additiveGoals,
+    },
+    {
+        ...shared('sleep_light', 'Light sleep', 'Sleep', 'hours', 'observation', 2),
+        goalCapabilities: additiveGoals,
+    },
+    {
+        ...shared('sleep_awake', 'Awake time', 'Sleep', 'hours', 'observation', 2),
+        goalCapabilities: additiveGoals,
+    },
     define({
         id: 'bmi',
         name: 'BMI',
