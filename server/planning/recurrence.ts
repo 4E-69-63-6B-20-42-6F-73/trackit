@@ -16,20 +16,12 @@ import {
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
-export type PlanScheduleSummary = {
-    id: string
-    weekdays: number[]
-    version: number
-}
-
-export const recurringScheduleKind = 'meal_schedule_rule'
+const scheduleOwnerId = 'owner:plan-schedule'
+const recurringScheduleKind = 'meal_schedule_rule'
 const recurringOccurrencePrefix = 'meal_schedule_occurrence:'
 
-export const recurringOccurrenceKind = (scheduleId: string) =>
+const recurringOccurrenceKind = (scheduleId: string) =>
     `${recurringOccurrencePrefix}${scheduleId}`
-
-export const scheduleIdFromPlanKind = (kind: string) =>
-    kind.startsWith(recurringOccurrencePrefix) ? kind.slice(recurringOccurrencePrefix.length) : null
 
 const dateKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 const scheduledTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
@@ -63,7 +55,7 @@ type PlanReference = z.infer<typeof referenceSchema>
 const weekdaysToMask = (weekdays: number[]) =>
     weekdays.reduce((mask, weekday) => mask | (1 << weekday), 0)
 
-export const weekdaysFromMask = (mask: number) =>
+const weekdaysFromMask = (mask: number) =>
     Array.from({ length: 7 }, (_, weekday) => weekday).filter(
         weekday => (mask & (1 << weekday)) !== 0,
     )
@@ -113,7 +105,7 @@ const referenceExists = async (database: Database, reference: PlanReference) => 
     )
 }
 
-export async function materializeRecurringPlanItems(
+async function materializeRecurringPlanItems(
     database: Database,
     fromDate: string,
     toDate: string,
@@ -139,7 +131,7 @@ export async function materializeRecurringPlanItems(
         .leftJoin(plannedMealCategories, eq(plannedMealCategories.planItemId, planItems.id))
         .where(
             and(
-                eq(planItems.userId, 'owner'),
+                eq(planItems.userId, scheduleOwnerId),
                 eq(planItems.kind, recurringScheduleKind),
                 isNull(planItems.deletedAt),
                 lte(planItems.scheduledDate, toDate),
@@ -189,38 +181,88 @@ export async function materializeRecurringPlanItems(
     })
 }
 
-export async function loadRecurringScheduleMetadata(database: Database, planKinds: string[]) {
-    const ids = Array.from(
-        new Set(
-            planKinds
-                .map(scheduleIdFromPlanKind)
-                .filter((id): id is string => Boolean(id)),
-        ),
-    )
-    if (!ids.length) return new Map<string, PlanScheduleSummary>()
-    const rows = await database
-        .select({ id: planItems.id, weekdayMask: planItems.position, version: planItems.version })
-        .from(planItems)
-        .where(
-            and(
-                inArray(planItems.id, ids),
-                eq(planItems.kind, recurringScheduleKind),
-                isNull(planItems.deletedAt),
-            ),
-        )
-    return new Map(
-        rows.map(row => [
-            row.id,
-            {
-                id: row.id,
-                weekdays: weekdaysFromMask(row.weekdayMask),
-                version: Number(row.version),
-            },
-        ]),
-    )
-}
-
 export function registerRecurringPlanRoutes(app: FastifyInstance, database: Database) {
+    app.addHook('preHandler', async request => {
+        if (request.method !== 'GET' || request.routeOptions.url !== '/api/plan-items') return
+        const query = request.query as { from?: string; to?: string }
+        const from = dateKeySchema.safeParse(query.from)
+        const to = dateKeySchema.safeParse(query.to)
+        if (from.success && to.success)
+            await materializeRecurringPlanItems(database, from.data, to.data)
+    })
+
+    app.get('/api/plan-schedules', async () => {
+        const schedules = await database
+            .select({
+                id: planItems.id,
+                startDate: planItems.scheduledDate,
+                weekdayMask: planItems.position,
+                scheduledTime: planScheduleTimes.scheduledTime,
+                version: planItems.version,
+                mealType: plannedMeals.mealType,
+                referenceType: plannedMeals.referenceType,
+                foodId: plannedMeals.foodId,
+                recipeId: plannedMeals.recipeId,
+                categoryId: plannedMealCategories.categoryId,
+                amount: plannedMeals.amount,
+                unit: plannedMeals.unit,
+                foodName: foods.name,
+                recipeName: recipes.name,
+                categoryName: foodCategories.name,
+            })
+            .from(planItems)
+            .innerJoin(plannedMeals, eq(plannedMeals.planItemId, planItems.id))
+            .leftJoin(planScheduleTimes, eq(planScheduleTimes.planItemId, planItems.id))
+            .leftJoin(plannedMealCategories, eq(plannedMealCategories.planItemId, planItems.id))
+            .leftJoin(foodCategories, eq(plannedMealCategories.categoryId, foodCategories.id))
+            .leftJoin(foods, eq(plannedMeals.foodId, foods.id))
+            .leftJoin(recipes, eq(plannedMeals.recipeId, recipes.id))
+            .where(
+                and(
+                    eq(planItems.userId, scheduleOwnerId),
+                    eq(planItems.kind, recurringScheduleKind),
+                    isNull(planItems.deletedAt),
+                ),
+            )
+            .orderBy(planItems.scheduledDate, plannedMeals.mealType, planItems.createdAt)
+
+        return {
+            data: schedules.map(schedule => {
+                const reference =
+                    schedule.referenceType === 'food'
+                        ? {
+                              type: 'food' as const,
+                              id: schedule.foodId!,
+                              name: schedule.foodName ?? 'Unavailable item',
+                          }
+                        : schedule.referenceType === 'recipe'
+                          ? {
+                                type: 'recipe' as const,
+                                id: schedule.recipeId!,
+                                name: schedule.recipeName ?? 'Unavailable item',
+                            }
+                          : {
+                                type: 'category' as const,
+                                id: schedule.categoryId!,
+                                name: schedule.categoryName ?? 'Unavailable food group',
+                            }
+                return {
+                    id: schedule.id,
+                    startDate: schedule.startDate,
+                    scheduledTime: schedule.scheduledTime ?? null,
+                    weekdays: weekdaysFromMask(schedule.weekdayMask),
+                    version: Number(schedule.version),
+                    meal: {
+                        mealType: schedule.mealType,
+                        reference,
+                        amount: schedule.amount,
+                        unit: schedule.unit,
+                    },
+                }
+            }),
+        }
+    })
+
     app.post('/api/plan-schedules', async (request, reply) => {
         const parsed = createScheduleSchema.safeParse(request.body)
         if (!parsed.success) return reply.code(400).send({ error: 'invalid_plan_schedule' })
@@ -234,6 +276,7 @@ export function registerRecurringPlanRoutes(app: FastifyInstance, database: Data
                 .insert(planItems)
                 .values({
                     id: scheduleId,
+                    userId: scheduleOwnerId,
                     kind: recurringScheduleKind,
                     scheduledDate: input.startDate,
                     position: weekdaysToMask(input.weekdays),
@@ -264,8 +307,16 @@ export function registerRecurringPlanRoutes(app: FastifyInstance, database: Data
         return reply.code(201).send({
             data: {
                 id: schedule.id,
+                startDate: input.startDate,
+                scheduledTime: input.scheduledTime ?? null,
                 weekdays: [...input.weekdays].sort((left, right) => left - right),
                 version: Number(schedule.version),
+                meal: {
+                    mealType: input.mealType,
+                    reference: input.reference,
+                    amount: input.amount,
+                    unit: input.reference.type === 'recipe' ? 'serving' : 'g',
+                },
             },
         })
     })
@@ -284,6 +335,7 @@ export function registerRecurringPlanRoutes(app: FastifyInstance, database: Data
             .where(
                 and(
                     eq(planItems.id, request.params.id),
+                    eq(planItems.userId, scheduleOwnerId),
                     eq(planItems.kind, recurringScheduleKind),
                     eq(planItems.version, input.version),
                     isNull(planItems.deletedAt),
@@ -297,6 +349,7 @@ export function registerRecurringPlanRoutes(app: FastifyInstance, database: Data
             .from(planItems)
             .where(
                 and(
+                    eq(planItems.userId, 'owner'),
                     eq(planItems.kind, recurringOccurrenceKind(request.params.id)),
                     gte(planItems.scheduledDate, input.fromDate),
                     isNull(planItems.deletedAt),
