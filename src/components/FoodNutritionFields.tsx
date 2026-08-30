@@ -27,18 +27,6 @@ const units: Record<keyof Nutrients, string> = {
     potassium: 'mg',
 }
 
-export const foodNutrientKeys: (keyof Nutrients)[] = [
-    'calories',
-    'protein',
-    'carbs',
-    'fat',
-    'fiber',
-    'sugar',
-    'saturatedFat',
-    'sodium',
-    'potassium',
-]
-
 const primary: (keyof Nutrients)[] = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar']
 const moreNutrients: (keyof Nutrients)[] = ['saturatedFat', 'sodium', 'potassium']
 
