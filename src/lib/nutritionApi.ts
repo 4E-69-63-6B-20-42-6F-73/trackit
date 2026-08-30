@@ -35,6 +35,7 @@ export type MealRecord = {
     favorite: boolean
     version: number
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+    serving?: { amount: number; unit: 'g' | 'serving' }
 }
 
 export type RecipeRecord = {
@@ -151,8 +152,8 @@ export async function importFoods(
                 fiberPer100g: food.per100g.fiber,
                 sugarPer100g: food.per100g.sugar,
                 saturatedFatPer100g: food.per100g.saturatedFat,
-                sodiumPer100g: food.per100g.sodium,
-                potassiumPer100g: food.per100g.potassium,
+                sodiumPer100g: food.sodiumPer100g,
+                potassiumPer100g: food.potassiumPer100g,
             })),
         }),
     })
@@ -297,6 +298,7 @@ export async function updateMeal(
         nutrients: Record<string, number>
         favorite: boolean
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+        serving: { amount: number; unit: 'g' | 'serving' } | null
     }>,
 ) {
     const response = await authRequest(`/api/meals/${id}`, {
