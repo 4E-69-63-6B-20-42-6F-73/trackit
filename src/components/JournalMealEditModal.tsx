@@ -58,10 +58,11 @@ function MealEditForm({
         event.detailView.serving?.unit ?? 'g',
     )
     const [nutritionQuality, setNutritionQuality] = useState(event.detailView.nutritionQuality)
-    const [nutrients, setNutrients] = useState<Record<NutrientKey, NumericValue>>(() =>
-        Object.fromEntries(
-            nutrientFields.map(([key]) => [key, event.detailView.nutrients[key] ?? '']),
-        ) as Record<NutrientKey, NumericValue>,
+    const [nutrients, setNutrients] = useState<Record<NutrientKey, NumericValue>>(
+        () =>
+            Object.fromEntries(
+                nutrientFields.map(([key]) => [key, event.detailView.nutrients[key] ?? '']),
+            ) as Record<NutrientKey, NumericValue>,
     )
     const [busy, setBusy] = useState(false)
     const [error, setError] = useState('')
@@ -120,9 +121,7 @@ function MealEditForm({
             <SegmentedControl
                 fullWidth
                 value={mealType}
-                onChange={value =>
-                    setMealType(value as 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack')
-                }
+                onChange={value => setMealType(value as 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack')}
                 data={['Breakfast', 'Lunch', 'Dinner', 'Snack']}
             />
             <SimpleGrid cols={{ base: 1, sm: 3 }}>
@@ -154,8 +153,7 @@ function MealEditForm({
                 label="Nutrition quality"
                 value={nutritionQuality}
                 onChange={value =>
-                    value &&
-                    setNutritionQuality(value as 'complete' | 'estimated' | 'incomplete')
+                    value && setNutritionQuality(value as 'complete' | 'estimated' | 'incomplete')
                 }
                 data={[
                     { value: 'complete', label: 'Complete' },
