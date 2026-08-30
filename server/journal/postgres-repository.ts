@@ -8,6 +8,7 @@ import type {
     JournalEntry,
     JournalListQuery,
     JournalRepository,
+    MealServingDetail,
 } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -18,6 +19,13 @@ type ProjectedDescription = {
     startedAt?: string
     endedAt?: string
     detailView?: JournalDetailView
+}
+
+type MealAttributes = {
+    mealType?: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
+    nutrientSnapshot?: Record<string, unknown>
+    nutritionQuality?: 'complete' | 'estimated' | 'incomplete'
+    serving?: unknown
 }
 
 const sourceLabel = (row: typeof observations.$inferSelect) => {
@@ -41,9 +49,62 @@ const projectedDescription = (value: unknown): ProjectedDescription | null => {
     return candidate as ProjectedDescription
 }
 
+const compactNumber = (value: number) => String(Math.round(value * 100) / 100)
+
+const mealServing = (value: unknown): MealServingDetail | undefined => {
+    if (!value || typeof value !== 'object') return undefined
+    const candidate = value as Record<string, unknown>
+    if (
+        typeof candidate.amount !== 'number' ||
+        !Number.isFinite(candidate.amount) ||
+        candidate.amount <= 0 ||
+        !['g', 'serving'].includes(String(candidate.unit))
+    )
+        return undefined
+    return {
+        amount: candidate.amount,
+        unit: candidate.unit as MealServingDetail['unit'],
+    }
+}
+
+const mealDetailView = (row: typeof observations.$inferSelect): JournalDetailView | undefined => {
+    if (row.definitionId !== 'meal') return undefined
+    const attributes = row.attributes as MealAttributes
+    const nutrients = Object.fromEntries(
+        Object.entries(attributes.nutrientSnapshot ?? {}).filter(
+            (entry): entry is [string, number] =>
+                typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+        ),
+    )
+    return {
+        kind: 'meal',
+        mealType: attributes.mealType ?? 'Snack',
+        serving: mealServing(attributes.serving),
+        nutrients,
+        nutritionQuality: attributes.nutritionQuality ?? 'complete',
+    }
+}
+
+const mealServingLabel = (serving?: MealServingDetail) => {
+    if (!serving) return null
+    if (serving.unit === 'g') return `${compactNumber(serving.amount)} g`
+    return `${compactNumber(serving.amount)} ${serving.amount === 1 ? 'serving' : 'servings'}`
+}
+
+const mealSummary = (detail: Extract<JournalDetailView, { kind: 'meal' }>) =>
+    [
+        mealServingLabel(detail.serving),
+        typeof detail.nutrients.calories === 'number'
+            ? `${compactNumber(detail.nutrients.calories)} kcal`
+            : null,
+    ]
+        .filter((value): value is string => Boolean(value))
+        .join(' · ') || detail.mealType
+
 const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     const attributes = row.attributes as Record<string, unknown>
     const projection = projectedDescription(attributes.description)
+    const mealDetail = mealDetailView(row)
     const primaryDefinitionId =
         typeof attributes.primaryDefinitionId === 'string'
             ? attributes.primaryDefinitionId
@@ -57,14 +118,16 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
               : metricCategory === 'Nutrition'
                 ? 'Meals'
                 : 'Measurements'
-    const detail = projection
-        ? projection.summary
-        : typeof attributes.description === 'string'
-          ? attributes.description
-          : (row.textValue ??
-            (row.valueType === 'number' && row.canonicalValue !== null
-                ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
-                : ''))
+    const detail = mealDetail
+        ? mealSummary(mealDetail)
+        : projection
+          ? projection.summary
+          : typeof attributes.description === 'string'
+            ? attributes.description
+            : (row.textValue ??
+              (row.valueType === 'number' && row.canonicalValue !== null
+                  ? `${row.canonicalValue} ${row.canonicalUnit ?? ''}`.trim()
+                  : ''))
     return {
         id: row.id,
         definitionId: primaryDefinitionId,
@@ -81,7 +144,7 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
         updatedAt: row.updatedAt.toISOString(),
         entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
         entityId: row.id,
-        detailView: projection?.detailView,
+        detailView: mealDetail ?? projection?.detailView,
     }
 }
 
