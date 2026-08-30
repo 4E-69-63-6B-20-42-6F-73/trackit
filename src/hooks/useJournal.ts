@@ -17,6 +17,11 @@ export function useJournal(query: { from?: string; to?: string; limit: number })
 
     const [refreshKey, setRefreshKey] = useState(0)
     useEffect(() => {
+        const refresh = () => setRefreshKey(key => key + 1)
+        window.addEventListener('trackit:observations-changed', refresh)
+        return () => window.removeEventListener('trackit:observations-changed', refresh)
+    }, [])
+    useEffect(() => {
         let active = true
         const controller = new AbortController()
         queueMicrotask(() => {
