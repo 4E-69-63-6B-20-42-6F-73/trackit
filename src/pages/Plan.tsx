@@ -392,7 +392,9 @@ export function Plan() {
                                                             )}
                                                             {status === 'planned' && (
                                                                 <Menu.Item
-                                                                    leftSection={<IconX size={15} />}
+                                                                    leftSection={
+                                                                        <IconX size={15} />
+                                                                    }
                                                                     onClick={() =>
                                                                         void mutate(() =>
                                                                             setPlanMealSkipped(
@@ -425,7 +427,9 @@ export function Plan() {
                                                             <Menu.Divider />
                                                             <Menu.Item
                                                                 color="red"
-                                                                leftSection={<IconTrash size={15} />}
+                                                                leftSection={
+                                                                    <IconTrash size={15} />
+                                                                }
                                                                 onClick={() =>
                                                                     void mutate(() =>
                                                                         deletePlanMeal(item),
@@ -571,8 +575,7 @@ export function Plan() {
                                 label="Meal"
                                 value={editor.mealType}
                                 onChange={value =>
-                                    value &&
-                                    setEditor({ ...editor, mealType: value as MealType })
+                                    value && setEditor({ ...editor, mealType: value as MealType })
                                 }
                                 data={mealTypes}
                             />
@@ -634,16 +637,18 @@ export function Plan() {
                         )}
                         <Divider />
                         <Group justify="flex-end">
-                            <Button variant="default" onClick={() => setEditor(null)} disabled={busy}>
+                            <Button
+                                variant="default"
+                                onClick={() => setEditor(null)}
+                                disabled={busy}
+                            >
                                 Cancel
                             </Button>
                             <Button
                                 color="trackit"
                                 loading={busy}
                                 disabled={
-                                    !editor.selection ||
-                                    !editor.date ||
-                                    Number(editor.amount) <= 0
+                                    !editor.selection || !editor.date || Number(editor.amount) <= 0
                                 }
                                 onClick={() => void saveEditor()}
                             >
@@ -686,7 +691,11 @@ export function Plan() {
                             }
                         />
                         <Group justify="flex-end">
-                            <Button variant="default" onClick={() => setLogState(null)} disabled={busy}>
+                            <Button
+                                variant="default"
+                                onClick={() => setLogState(null)}
+                                disabled={busy}
+                            >
                                 Cancel
                             </Button>
                             <Button color="trackit" loading={busy} onClick={() => void saveLog()}>
