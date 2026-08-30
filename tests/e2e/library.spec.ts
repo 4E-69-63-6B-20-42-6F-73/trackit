@@ -32,7 +32,6 @@ test('new food supports extended nutrient details', async ({ page }) => {
 
 test('food editor fits a narrow viewport and can permanently delete a food', async ({ page }) => {
     await page.setViewportSize({ width: 559, height: 840 })
-    let deleted = false
     const food = {
         id: 'd4799323-056d-4b83-a274-3776e03380e0',
         name: 'Plain Skyr',
@@ -57,13 +56,12 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
     }
     await page.route('**/api/foods*', route => {
         if (route.request().method() === 'DELETE') {
-            deleted = true
             return route.fulfill({ status: 204, body: '' })
         }
         return route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ data: deleted ? [] : [food] }),
+            body: JSON.stringify({ data: [food] }),
         })
     })
 
@@ -73,11 +71,16 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
     await expect(dialog).toBeVisible()
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 
+    const deleteRequest = page.waitForRequest(
+        request =>
+            request.method() === 'DELETE' && request.url().includes(`/api/foods/${food.id}`),
+    )
     await page.getByRole('button', { name: 'Delete food' }).click()
     await page.getByRole('button', { name: 'Delete permanently' }).click()
+    const request = await deleteRequest
 
+    expect(request.postDataJSON()).toEqual({ version: 1 })
     await expect(dialog).toBeHidden()
-    expect(deleted).toBe(true)
     await expect(page.getByText('Plain Skyr')).toHaveCount(0)
 })
 
