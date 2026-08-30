@@ -38,6 +38,7 @@ type MealAttributes = {
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
     favorite: boolean
     primaryDefinitionId: 'calories'
+    serving?: { amount: number; unit: 'g' | 'serving' }
 }
 
 const mealFromObservation = (
@@ -476,6 +477,7 @@ export class PostgresDataRepository implements DataRepository {
         favorite: boolean
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
         foodId?: string
+        serving?: { amount: number; unit: 'g' | 'serving' }
     }) {
         const projectionDate = await this.projectionDate(new Date(input.eatenAt))
         return this.database.transaction(async transaction => {
@@ -485,6 +487,7 @@ export class PostgresDataRepository implements DataRepository {
                 favorite: input.favorite,
                 nutritionQuality: input.nutritionQuality,
                 primaryDefinitionId: 'calories',
+                serving: input.serving,
             }
             const [root] = await transaction
                 .insert(observations)
@@ -584,6 +587,7 @@ export class PostgresDataRepository implements DataRepository {
                 favorite: input.favorite ?? previous.favorite ?? false,
                 nutritionQuality: input.nutritionQuality ?? previous.nutritionQuality ?? 'complete',
                 primaryDefinitionId: 'calories',
+                serving: previous.serving,
             }
             const [record] = await transaction
                 .update(observations)
