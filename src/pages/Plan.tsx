@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -87,7 +87,7 @@ export function Plan() {
     const todayKey = calendarTodayKey(timezone)
     const routeDate = params.get('date') ?? todayKey
     const weekStart = weekStartKey(routeDate)
-    const dates = useMemo(() => weekDateKeys(weekStart), [weekStart])
+    const dates = weekDateKeys(weekStart)
     const selectedDate = dates.includes(routeDate) ? routeDate : dates[0]
     const [items, setItems] = useState<MealPlanItem[]>([])
     const [foods, setFoods] = useState<Food[]>([])
@@ -98,23 +98,22 @@ export function Plan() {
     const [logState, setLogState] = useState<LogState | null>(null)
     const [busy, setBusy] = useState(false)
 
-    const refresh = useCallback(
-        () =>
-            Promise.all([
-                listPlanItems({ from: dates[0], to: dates[6] }),
-                searchFoods(''),
-                listRecipes(),
-            ])
-                .then(([nextItems, nextFoods, nextRecipes]) => {
-                    setItems(nextItems)
-                    setFoods(nextFoods)
-                    setRecipes(nextRecipes)
-                    setMessage('')
-                })
-                .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
-                .finally(() => setLoading(false)),
-        [dates],
-    )
+    const refresh = useCallback(() => {
+        const range = weekDateKeys(weekStart)
+        return Promise.all([
+            listPlanItems({ from: range[0], to: range[6] }),
+            searchFoods(''),
+            listRecipes(),
+        ])
+            .then(([nextItems, nextFoods, nextRecipes]) => {
+                setItems(nextItems)
+                setFoods(nextFoods)
+                setRecipes(nextRecipes)
+                setMessage('')
+            })
+            .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
+            .finally(() => setLoading(false))
+    }, [weekStart])
 
     useEffect(() => {
         void refresh()
@@ -147,7 +146,7 @@ export function Plan() {
     const selectedRecipe = selection?.startsWith('recipe:')
         ? recipes.find(recipe => recipe.id === selection.slice(7))
         : undefined
-    const preview = useMemo(() => {
+    const preview = (() => {
         const amount = Number(editor?.amount)
         if (!Number.isFinite(amount) || amount <= 0) return null
         if (selectedFood) return roundedNutrients(nutrientsFor(selectedFood, amount))
@@ -161,7 +160,7 @@ export function Plan() {
                 ) as Nutrients,
             )
         return null
-    }, [editor?.amount, selectedFood, selectedRecipe])
+    })()
 
     const chooseReference = (value: string | null) => {
         if (!editor) return
