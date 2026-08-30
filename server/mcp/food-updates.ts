@@ -119,14 +119,18 @@ const duplicateFood = (foods: FoodRecord[], id: string, food: FoodRecord, change
     const brand = changes.brand === undefined ? food.brand : changes.brand
     const barcode = changes.barcode === undefined ? food.barcode : changes.barcode
     const normalizedName = name.trim().toLocaleLowerCase()
-    const normalizedBrand = String(brand ?? '').trim().toLocaleLowerCase()
+    const normalizedBrand = String(brand ?? '')
+        .trim()
+        .toLocaleLowerCase()
 
     return foods.find(candidate => {
         if (candidate.id === id) return false
         if (barcode && candidate.barcode === barcode) return true
         return (
             candidate.name.trim().toLocaleLowerCase() === normalizedName &&
-            String(candidate.brand ?? '').trim().toLocaleLowerCase() === normalizedBrand
+            String(candidate.brand ?? '')
+                .trim()
+                .toLocaleLowerCase() === normalizedBrand
         )
     })
 }
@@ -279,7 +283,9 @@ export function registerFoodUpdateTools(
                         'The food edit confirmation is invalid, expired, already used, or from a different client. Call preview_update_food again and reuse its updateArguments unchanged after approval.',
                     )
                 }
-                return denied('The food could not be updated. Search for it and preview the edit again.')
+                return denied(
+                    'The food could not be updated. Search for it and preview the edit again.',
+                )
             }
 
             return textResult({ ...operation, provenance: `MCP client ${client.name}` })

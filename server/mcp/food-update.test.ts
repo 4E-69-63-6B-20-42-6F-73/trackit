@@ -25,12 +25,7 @@ const createHarness = async () => {
     })
     const grant = (await access.authenticate(issued.token))!
     const data = new PostgresDataRepository(database as never)
-    const server = createTrackItMcpServer(
-        grant,
-        data,
-        { list: async () => [] } as never,
-        access,
-    )
+    const server = createTrackItMcpServer(grant, data, { list: async () => [] } as never, access)
     const client = new Client({ name: 'food-update-test', version: '1.0.0' })
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
     await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
