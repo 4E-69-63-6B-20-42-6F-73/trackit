@@ -46,7 +46,14 @@ describe('App routing', () => {
         expect(
             await screen.findByRole('heading', { name: 'Plan', level: 1 }, { timeout: 5_000 }),
         ).toBeInTheDocument()
-        expect(screen.getByText('Meals are intentions until they are logged.')).toBeInTheDocument()
+        expect(
+            screen.getByText(
+                'Plan meals ahead. They become part of your health record only when logged.',
+            ),
+        ).toBeInTheDocument()
+        expect(
+            screen.queryByText('Meals are intentions until they are logged.'),
+        ).not.toBeInTheDocument()
     })
 
     it('renders a bookmarkable goals route', async () => {
