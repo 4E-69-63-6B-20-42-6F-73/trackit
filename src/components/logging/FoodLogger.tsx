@@ -58,9 +58,7 @@ const selectionDefaultAmount = (selection: Selection) =>
     selection.kind === 'food' ? selection.food.servingGrams : 1
 
 const selectionQuality = (selection: Selection) =>
-    selection.kind === 'food'
-        ? selection.food.nutritionQuality
-        : selection.recipe.nutritionQuality
+    selection.kind === 'food' ? selection.food.nutritionQuality : selection.recipe.nutritionQuality
 
 const selectionNutrients = (selection: Selection, amount: number) =>
     selection.kind === 'food'
@@ -205,9 +203,7 @@ export function FoodLogger({
         .filter(food => !food.favorite)
         .slice(0, 6)
         .map(food => ({ kind: 'food' as const, food }))
-    const nutrients = selection
-        ? selectionNutrients(selection, Number(amount) || 0)
-        : null
+    const nutrients = selection ? selectionNutrients(selection, Number(amount) || 0) : null
 
     const updateFoodState = (updated: Food) => {
         setLibraryFoods(current => current.map(food => (food.id === updated.id ? updated : food)))
@@ -292,8 +288,7 @@ export function FoodLogger({
         setCatalogError('')
     }
 
-    const quickLog = (item: Selection) =>
-        logSelection(item, selectionDefaultAmount(item), false)
+    const quickLog = (item: Selection) => logSelection(item, selectionDefaultAmount(item), false)
 
     const save = () => {
         if (!selection) return
@@ -405,7 +400,9 @@ export function FoodLogger({
         const DetectorClass = (window as Window & { BarcodeDetector?: Detector }).BarcodeDetector
         if (!DetectorClass) {
             setCatalogMode('barcode')
-            setCatalogError('Camera barcode detection is not supported here. Type the barcode instead.')
+            setCatalogError(
+                'Camera barcode detection is not supported here. Type the barcode instead.',
+            )
             return
         }
         setCatalogMode('barcode')
@@ -418,7 +415,8 @@ export function FoodLogger({
             }).detect(bitmap)
             bitmap.close()
             const value = matches[0]?.rawValue
-            if (!value) setCatalogError('No barcode was detected. Try again with the code in focus.')
+            if (!value)
+                setCatalogError('No barcode was detected. Try again with the code in focus.')
             else {
                 setBarcode(value)
                 setCatalogBusy(false)
@@ -459,7 +457,10 @@ export function FoodLogger({
         : 'Choose a food to continue.'
     const selectionAmount = Number(amount)
     const selectionValid =
-        Boolean(selection) && Number.isFinite(selectionAmount) && selectionAmount > 0 && Boolean(recordedAt)
+        Boolean(selection) &&
+        Number.isFinite(selectionAmount) &&
+        selectionAmount > 0 &&
+        Boolean(recordedAt)
 
     return (
         <>
@@ -628,11 +629,15 @@ export function FoodLogger({
                                     <span>kcal</span>
                                 </div>
                                 <div>
-                                    <strong>{Math.round((nutrients?.protein ?? 0) * 10) / 10} g</strong>
+                                    <strong>
+                                        {Math.round((nutrients?.protein ?? 0) * 10) / 10} g
+                                    </strong>
                                     <span>protein</span>
                                 </div>
                                 <div>
-                                    <strong>{Math.round((nutrients?.carbs ?? 0) * 10) / 10} g</strong>
+                                    <strong>
+                                        {Math.round((nutrients?.carbs ?? 0) * 10) / 10} g
+                                    </strong>
                                     <span>carbs</span>
                                 </div>
                                 <div>
@@ -667,8 +672,12 @@ export function FoodLogger({
                                             onClick={() => void runCatalogSearch()}
                                         >
                                             <span>
-                                                <strong>Search food catalog for “{query.trim()}”</strong>
-                                                <small>Find a branded food and save it as you log</small>
+                                                <strong>
+                                                    Search food catalog for “{query.trim()}”
+                                                </strong>
+                                                <small>
+                                                    Find a branded food and save it as you log
+                                                </small>
                                             </span>
                                             <span>→</span>
                                         </button>
@@ -734,7 +743,9 @@ export function FoodLogger({
                                                 inputMode="numeric"
                                                 value={barcode}
                                                 leftSection={<IconBarcode size={17} />}
-                                                onChange={event => setBarcode(event.currentTarget.value)}
+                                                onChange={event =>
+                                                    setBarcode(event.currentTarget.value)
+                                                }
                                                 onKeyDown={event =>
                                                     event.key === 'Enter' && void runBarcodeLookup()
                                                 }
@@ -798,8 +809,9 @@ export function FoodLogger({
                                                             <strong>{food.name}</strong>
                                                             <small>
                                                                 {food.brand || 'No brand'} ·{' '}
-                                                                {Math.round(preview.calories ?? 0)} kcal per{' '}
-                                                                {food.servingGrams} g serving
+                                                                {Math.round(preview.calories ?? 0)}{' '}
+                                                                kcal per {food.servingGrams} g
+                                                                serving
                                                             </small>
                                                         </span>
                                                         <span>Save & choose</span>
@@ -837,7 +849,9 @@ export function FoodLogger({
                                 <div className="food-log-empty-library">
                                     <IconCheck size={20} />
                                     <div>
-                                        <Text fw={700}>Your food library is ready for its first item</Text>
+                                        <Text fw={700}>
+                                            Your food library is ready for its first item
+                                        </Text>
                                         <Text size="sm" c="dimmed">
                                             Search above, scan a barcode, or create a custom food.
                                         </Text>
@@ -855,7 +869,11 @@ export function FoodLogger({
                                 >
                                     Scan barcode
                                 </Button>
-                                <Button variant="subtle" color="trackit" onClick={() => setCreating(true)}>
+                                <Button
+                                    variant="subtle"
+                                    color="trackit"
+                                    onClick={() => setCreating(true)}
+                                >
                                     Create food
                                 </Button>
                             </Group>

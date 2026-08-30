@@ -24,9 +24,7 @@ export function registerRecipeFavoriteRoutes(app: FastifyInstance, database: Dat
                 version: input.version + 1,
                 updatedAt: new Date(),
             })
-            .where(
-                and(eq(recipes.id, request.params.id), eq(recipes.version, input.version)),
-            )
+            .where(and(eq(recipes.id, request.params.id), eq(recipes.version, input.version)))
             .returning()
         if (!updated) return reply.code(409).send({ error: 'version_conflict' })
         return { data: updated }
