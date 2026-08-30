@@ -5,6 +5,24 @@ import { sharedJsonRequest } from './sharedRequest'
 
 export type PlanReference = { type: PlanReferenceType; id: string }
 
+export type PlanSchedule = {
+    id: string
+    startDate: string
+    scheduledTime: string | null
+    weekdays: number[]
+    version: number
+    meal: {
+        mealType: MealType
+        reference: {
+            type: PlanReferenceType
+            id: string
+            name: string
+        }
+        amount: number
+        unit: 'g' | 'serving'
+    }
+}
+
 export async function listPlanItems(
     range: { from?: string; to?: string } = {},
     signal?: AbortSignal,
@@ -15,6 +33,15 @@ export async function listPlanItems(
     return (
         await sharedJsonRequest<{ data: MealPlanItem[] }>(
             `${environment.VITE_API_URL}/api/plan-items?${query}`,
+            signal,
+        )
+    ).data
+}
+
+export async function listPlanSchedules(signal?: AbortSignal) {
+    return (
+        await sharedJsonRequest<{ data: PlanSchedule[] }>(
+            `${environment.VITE_API_URL}/api/plan-schedules`,
             signal,
         )
     ).data
@@ -35,6 +62,35 @@ export async function createPlanMeal(input: {
     })
     if (!response.ok) throw new Error('Could not add this meal to your plan.')
     return ((await response.json()) as { data: MealPlanItem }).data
+}
+
+export async function createPlanSchedule(input: {
+    startDate: string
+    scheduledTime?: string | null
+    mealType: MealType
+    reference: PlanReference
+    amount: number
+    weekdays: number[]
+}) {
+    const response = await authRequest('/api/plan-schedules', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+    })
+    if (!response.ok) throw new Error('Could not create this recurring meal schedule.')
+    return ((await response.json()) as { data: PlanSchedule }).data
+}
+
+export async function stopPlanSchedule(schedule: PlanSchedule, fromDate: string) {
+    const response = await authRequest(`/api/plan-schedules/${schedule.id}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ version: schedule.version, fromDate }),
+    })
+    if (response.status === 409)
+        throw new Error('This schedule changed elsewhere. Refresh and try again.')
+    if (!response.ok && response.status !== 404)
+        throw new Error('Could not stop this recurring meal schedule.')
 }
 
 export async function updatePlanMeal(
