@@ -510,8 +510,7 @@ export function Plan() {
 
             {mealTypes.map(mealType => {
                 const slotItems = items.filter(
-                    item =>
-                        item.scheduledDate === selectedDate && item.meal.mealType === mealType,
+                    item => item.scheduledDate === selectedDate && item.meal.mealType === mealType,
                 )
                 return (
                     <section key={mealType} className="plan-mobile-section">
