@@ -49,7 +49,8 @@ const scopes = [
     {
         value: 'meals:write',
         label: 'Add meals and manage foods',
-        description: 'Create foods and add saved foods to meals after preview confirmation.',
+        description:
+            'Create and edit foods, and add saved foods to meals after preview confirmation.',
         group: 'Change data',
     },
     {

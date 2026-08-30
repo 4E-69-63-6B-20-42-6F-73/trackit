@@ -6,6 +6,7 @@ import type { DataRepository } from '../data/types.js'
 import { PostgresDataRepository } from '../data/postgres-repository.js'
 import type { JournalRepository } from '../journal/types.js'
 import type { McpAccessService, McpClient } from './service.js'
+import { registerFoodUpdateTools } from './food-updates.js'
 import { registerMeasurementInsightTools } from './insights.js'
 
 type DatedRecord = Record<string, unknown> & { observedAt?: Date | string; eatenAt?: Date | string }
@@ -129,6 +130,7 @@ export function createTrackItMcpServer(
     }
 
     registerMeasurementInsightTools(server, client, data)
+    registerFoodUpdateTools(server, client, data, access)
 
     server.registerResource(
         'metric-catalog',
