@@ -32,12 +32,6 @@ const nutrientFields = [
 type NutrientKey = (typeof nutrientFields)[number][0]
 type NumericValue = string | number
 
-const servingLabel = (event: JournalEvent) => {
-    if (event.detailView?.kind !== 'meal' || !event.detailView.serving) return 'Not recorded'
-    const { amount, unit } = event.detailView.serving
-    return unit === 'g' ? `${amount} g` : `${amount} ${amount === 1 ? 'serving' : 'servings'}`
-}
-
 export function JournalMealEditModal({
     event,
     onClose,
@@ -52,6 +46,8 @@ export function JournalMealEditModal({
     const [name, setName] = useState('')
     const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Snack')
     const [recordedAt, setRecordedAt] = useState('')
+    const [servingAmount, setServingAmount] = useState<NumericValue>('')
+    const [servingUnit, setServingUnit] = useState<'g' | 'serving'>('g')
     const [nutritionQuality, setNutritionQuality] = useState<
         'complete' | 'estimated' | 'incomplete'
     >('complete')
@@ -74,6 +70,8 @@ export function JournalMealEditModal({
         setName(event.title)
         setMealType(event.detailView.mealType)
         setRecordedAt(calendarLocalDateTimeValue(new Date(event.observedAt), timezone))
+        setServingAmount(event.detailView.serving?.amount ?? '')
+        setServingUnit(event.detailView.serving?.unit ?? 'g')
         setNutritionQuality(event.detailView.nutritionQuality)
         setNutrients(
             Object.fromEntries(
@@ -104,6 +102,11 @@ export function JournalMealEditModal({
             }
             nextNutrients[key] = value
         }
+        const amount = servingAmount === '' ? null : Number(servingAmount)
+        if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
+            setError('Amount must be greater than zero.')
+            return
+        }
         setBusy(true)
         setError('')
         try {
@@ -111,6 +114,7 @@ export function JournalMealEditModal({
                 name: name.trim(),
                 mealType,
                 eatenAt: calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),
+                serving: amount === null ? null : { amount, unit: servingUnit },
                 nutrients: nextNutrients,
                 nutritionQuality,
             })
@@ -143,14 +147,30 @@ export function JournalMealEditModal({
                         }
                         data={['Breakfast', 'Lunch', 'Dinner', 'Snack']}
                     />
-                    <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                    <SimpleGrid cols={{ base: 1, sm: 3 }}>
                         <TextInput
                             type="datetime-local"
                             label="Date and time"
                             value={recordedAt}
                             onChange={change => setRecordedAt(change.currentTarget.value)}
                         />
-                        <TextInput label="Logged amount" value={servingLabel(event)} readOnly />
+                        <NumberInput
+                            label="Amount"
+                            value={servingAmount}
+                            min={0}
+                            decimalScale={2}
+                            placeholder="Not recorded"
+                            onChange={setServingAmount}
+                        />
+                        <Select
+                            label="Amount unit"
+                            value={servingUnit}
+                            onChange={value => value && setServingUnit(value as 'g' | 'serving')}
+                            data={[
+                                { value: 'g', label: 'Grams' },
+                                { value: 'serving', label: 'Servings' },
+                            ]}
+                        />
                     </SimpleGrid>
                     <Select
                         label="Nutrition quality"
