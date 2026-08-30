@@ -9,5 +9,6 @@ export async function setRecipeFavorite(recipe: RecipeRecord, favorite: boolean)
     })
     if (response.status === 409) throw new Error('Recipe changed elsewhere. Reload and try again.')
     if (!response.ok) throw new Error('Could not update recipe favorite')
-    return ((await response.json()) as { data: RecipeRecord }).data
+    const body = (await response.json()) as { data: { favorite: boolean; version: number } }
+    return { ...recipe, favorite: body.data.favorite, version: body.data.version }
 }
