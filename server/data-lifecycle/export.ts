@@ -1,6 +1,10 @@
 import type { DataRepository } from '../data/types.js'
 import type { JournalRepository } from '../journal/types.js'
 
+type PlanningExportRepository = DataRepository & {
+    listPlanItems?: () => Promise<unknown[]>
+}
+
 const escapeCsv = (value: unknown) => {
     const text =
         value == null ? '' : typeof value === 'object' ? JSON.stringify(value) : String(value)
@@ -8,10 +12,8 @@ const escapeCsv = (value: unknown) => {
 }
 
 export class ExportService {
-    // Keep the projection repository parameter temporarily so the app wiring remains stable;
-    // exports intentionally do not serialize Journal as a second source of truth.
     constructor(
-        private readonly data: DataRepository,
+        private readonly data: PlanningExportRepository,
         _journal: JournalRepository,
     ) {}
 
@@ -26,6 +28,7 @@ export class ExportService {
             sources,
             healthRecords,
             dailyMetrics,
+            planItems,
         ] = await Promise.all([
             this.data.listRawObservations?.() ?? this.data.listObservations(),
             this.data.getPreferences(),
@@ -36,10 +39,11 @@ export class ExportService {
             this.data.listSources(),
             this.data.listHealthRecords?.() ?? Promise.resolve([]),
             this.data.listDailyMetrics?.() ?? Promise.resolve([]),
+            this.data.listPlanItems?.() ?? Promise.resolve([]),
         ])
         return {
             schema: 'net.trackit.export',
-            version: 2,
+            version: 3,
             exportedAt: new Date().toISOString(),
             data: {
                 observations,
@@ -51,6 +55,7 @@ export class ExportService {
                 sources,
                 healthRecords,
                 dailyMetrics,
+                planItems,
             },
         }
     }
