@@ -34,6 +34,7 @@ export type JournalEvent = {
     title: string
     detail: string
     source: string
+    sourceRaw?: string
     deviceName?: string
     observedAt: string
     startedAt?: string
