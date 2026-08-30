@@ -35,9 +35,7 @@ export function registerEntryDeletionRoutes(
             type === 'meal'
                 ? await data.removeMeal(request.params.id)
                 : await data.removeObservation(request.params.id)
-        return removed
-            ? reply.code(204).send()
-            : reply.code(404).send({ error: 'not_found' })
+        return removed ? reply.code(204).send() : reply.code(404).send({ error: 'not_found' })
     })
 
     app.delete<{ Params: { id: string } }>('/api/meals/:id', async (request, reply) => {
