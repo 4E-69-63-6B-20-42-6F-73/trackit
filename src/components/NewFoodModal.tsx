@@ -5,6 +5,7 @@ import {
     Group,
     Modal,
     NumberInput,
+    SimpleGrid,
     Stack,
     Text,
     TextInput,
@@ -27,6 +28,7 @@ const labels: Record<keyof Nutrients, string> = {
 }
 const primary: (keyof Nutrients)[] = ['calories', 'protein', 'carbs', 'fat']
 const optional: (keyof Nutrients)[] = ['fiber', 'sugar', 'saturatedFat', 'sodium', 'potassium']
+const allNutrients: (keyof Nutrients)[] = [...primary, ...optional]
 
 export function NewFoodModal({
     opened,
@@ -52,10 +54,12 @@ export function NewFoodModal({
             placeholder="Unknown"
             value={nutrients[key] ?? ''}
             onChange={value =>
-                setNutrients(current => ({
-                    ...current,
-                    [key]: value === '' ? undefined : Number(value),
-                }))
+                setNutrients(current => {
+                    const next = { ...current }
+                    if (value === '') delete next[key]
+                    else next[key] = Number(value)
+                    return next
+                })
             }
             min={0}
         />
@@ -70,7 +74,9 @@ export function NewFoodModal({
                 servingName,
                 servingGrams: Number(servingGrams),
                 favorite: false,
-                nutritionQuality: Object.keys(nutrients).length === 9 ? 'complete' : 'incomplete',
+                nutritionQuality: allNutrients.every(key => nutrients[key] !== undefined)
+                    ? 'complete'
+                    : 'incomplete',
             })
             onCreate(food)
             setName('')
@@ -98,7 +104,7 @@ export function NewFoodModal({
                     value={brand}
                     onChange={event => setBrand(event.currentTarget.value)}
                 />
-                <Group grow>
+                <SimpleGrid cols={{ base: 1, xs: 2 }}>
                     <TextInput
                         label="Serving name"
                         value={servingName}
@@ -111,7 +117,7 @@ export function NewFoodModal({
                         value={servingGrams}
                         onChange={setServingGrams}
                     />
-                </Group>
+                </SimpleGrid>
                 <TextInput
                     label="Barcode (optional)"
                     value={barcode}
@@ -121,7 +127,7 @@ export function NewFoodModal({
                     Leave nutrients blank when they are unknown. Unknown values are not counted as
                     zero.
                 </Text>
-                <Group grow>{primary.map(field)}</Group>
+                <SimpleGrid cols={{ base: 1, xs: 2 }}>{primary.map(field)}</SimpleGrid>
                 <Button
                     variant="subtle"
                     color="gray"
