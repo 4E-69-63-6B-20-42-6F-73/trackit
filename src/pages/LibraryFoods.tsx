@@ -8,7 +8,10 @@ import { FoodEditModal } from '../components/FoodEditModal'
 import { NewFoodModal } from '../components/NewFoodModal'
 import { PageHeader } from '../components/PageHeader'
 import type { Food } from '../domain/nutrition'
-import { searchFoods, updateFood } from '../lib/nutritionApi'
+import { deleteFood, searchFoods, updateFood } from '../lib/nutritionApi'
+
+const nutritionStatusLabel = (quality: Food['nutritionQuality']) =>
+    quality === 'estimated' ? 'Estimated' : 'Incomplete'
 
 export function LibraryFoods() {
     const [foods, setFoods] = useState<Food[]>([])
@@ -105,7 +108,7 @@ export function LibraryFoods() {
                             </div>
                             {food.nutritionQuality !== 'complete' && (
                                 <Badge size="xs" variant="light">
-                                    {food.nutritionQuality}
+                                    {nutritionStatusLabel(food.nutritionQuality)}
                                 </Badge>
                             )}
                         </button>
@@ -156,6 +159,10 @@ export function LibraryFoods() {
                         setFoods(current =>
                             current.map(food => (food.id === updated.id ? updated : food)),
                         )
+                    }}
+                    onDelete={async () => {
+                        await deleteFood(editingFood)
+                        setFoods(current => current.filter(food => food.id !== editingFood.id))
                     }}
                 />
             )}

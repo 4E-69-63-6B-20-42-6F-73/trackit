@@ -234,6 +234,32 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
     return toFood(((await response.json()) as { data: FoodRecord }).data)
 }
 
+export async function deleteFood(food: Food) {
+    if (!food.version) throw new Error('This food is not stored on the server.')
+    const response = await authRequest(`/api/foods/${food.id}`, {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ version: food.version }),
+    })
+    if (response.status === 409) {
+        const body = (await response.json()) as {
+            error?: string
+            recipes?: Array<{ id: string; name: string }>
+        }
+        if (body.error === 'food_in_use') {
+            const names = body.recipes?.map(recipe => recipe.name).filter(Boolean) ?? []
+            throw new Error(
+                names.length
+                    ? `This food is used by ${names.join(', ')}. Remove it from those recipes before deleting it.`
+                    : 'This food is used by a recipe. Remove it from the recipe before deleting it.',
+            )
+        }
+        throw new Error('Food changed elsewhere. Reload and try again.')
+    }
+    if (response.status === 404) throw new Error('This food no longer exists.')
+    if (!response.ok) throw new Error('Could not delete food')
+}
+
 export async function logMeal(
     name: string,
     mealType: string,

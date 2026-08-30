@@ -10,6 +10,18 @@ export type Nutrients = {
     potassium?: number
 }
 
+export const foodNutrientKeys: (keyof Nutrients)[] = [
+    'calories',
+    'protein',
+    'carbs',
+    'fat',
+    'fiber',
+    'sugar',
+    'saturatedFat',
+    'sodium',
+    'potassium',
+]
+
 export type Food = {
     id: string
     name: string
