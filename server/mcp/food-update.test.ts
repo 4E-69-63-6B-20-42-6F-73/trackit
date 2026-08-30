@@ -9,8 +9,9 @@ import { PostgresDataRepository } from '../data/postgres-repository.js'
 import { createTrackItMcpServer } from './server.js'
 import { McpAccessService } from './service.js'
 
-const resultPayload = (response: unknown) =>
-    JSON.parse((response as { content: { text: string }[] }).content[0].text)
+const resultText = (response: unknown) =>
+    (response as { content: { text: string }[] }).content[0].text
+const resultPayload = (response: unknown) => JSON.parse(resultText(response))
 
 const createHarness = async () => {
     const databaseClient = new PGlite()
@@ -188,9 +189,7 @@ describe('MCP food editing', () => {
             arguments: preview.updateArguments,
         })
         expect(updateResponse.isError).toBe(true)
-        expect((updateResponse.content[0] as { text: string }).text).toContain(
-            'changed after preview',
-        )
+        expect(resultText(updateResponse)).toContain('changed after preview')
 
         const [saved] = (await data.listFoods('Greek yogurt')) as Array<{
             caloriesPer100g: number
