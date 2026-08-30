@@ -34,6 +34,10 @@ jobs:
             - uses: actions/setup-node@v7
               with:
                   node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Generate meal scheduling migration
+              run: npm run db:generate -- --name=meal_scheduling
             - name: Format changed files
               env:
                   BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -48,6 +52,6 @@ jobs:
                     git config user.name "trackit-formatter"
                     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
                     git add --all
-                    git commit -m "Format with Prettier"
+                    git commit -m "Generate meal scheduling migration"
                     git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
                   fi
