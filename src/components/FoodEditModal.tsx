@@ -131,7 +131,8 @@ export function FoodEditModal({
                     data={['complete', 'estimated', 'incomplete']}
                 />
                 <Text size="sm" c="dimmed">
-                    Leave a nutrient blank when it is unknown. Unknown values are not treated as zero.
+                    Leave a nutrient blank when it is unknown. Unknown values are not treated as
+                    zero.
                 </Text>
                 <SimpleGrid cols={{ base: 1, xs: 2 }} spacing="sm">
                     {nutrientFields.map(({ key, label, unit }) => (

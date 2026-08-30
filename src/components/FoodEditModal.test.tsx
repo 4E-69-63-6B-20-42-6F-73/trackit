@@ -27,12 +27,7 @@ const renderEditor = (onSave = vi.fn().mockResolvedValue(undefined), onDelete = 
     const onClose = vi.fn()
     render(
         <MantineProvider>
-            <FoodEditModal
-                food={food}
-                onClose={onClose}
-                onSave={onSave}
-                onDelete={onDelete}
-            />
+            <FoodEditModal food={food} onClose={onClose} onSave={onSave} onDelete={onDelete} />
         </MantineProvider>,
     )
     return { onClose, onSave, onDelete }
@@ -58,7 +53,9 @@ describe('FoodEditModal', () => {
         const { onClose } = renderEditor(vi.fn().mockResolvedValue(undefined), onDelete)
 
         await user.click(screen.getByRole('button', { name: 'Delete food' }))
-        expect(screen.getByText('Logged meals keep their saved nutrition.', { exact: false })).toBeVisible()
+        expect(
+            screen.getByText('Logged meals keep their saved nutrition.', { exact: false }),
+        ).toBeVisible()
         expect(onDelete).not.toHaveBeenCalled()
 
         await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
