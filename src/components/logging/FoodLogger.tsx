@@ -72,6 +72,18 @@ const selectionNutrients = (selection: Selection, amount: number) =>
               ) as Nutrients,
           )
 
+const catalogNutrients = (food: CatalogFood, amount: number): Partial<Nutrients> => {
+    const factor = amount / 100
+    return Object.fromEntries(
+        Object.entries(food.per100g)
+            .filter(
+                (entry): entry is [string, number] =>
+                    typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+            )
+            .map(([key, value]) => [key, value * factor]),
+    ) as Partial<Nutrients>
+}
+
 const foodUpdatePayload = (food: Food): Omit<Food, 'id' | 'version'> => {
     const payload = { ...food }
     delete (payload as Partial<Food>).id
@@ -80,11 +92,11 @@ const foodUpdatePayload = (food: Food): Omit<Food, 'id' | 'version'> => {
 }
 
 const resultSummary = (selection: Selection) => {
-    const amount = selectionDefaultAmount(selection)
-    const nutrients = selectionNutrients(selection, amount)
-    const calories = Math.round(nutrients.calories ?? 0)
-    const protein = Math.round((nutrients.protein ?? 0) * 10) / 10
-    return { calories, protein }
+    const nutrients = selectionNutrients(selection, selectionDefaultAmount(selection))
+    return {
+        calories: Math.round(nutrients.calories ?? 0),
+        protein: Math.round((nutrients.protein ?? 0) * 10) / 10,
+    }
 }
 
 const selectionMeta = (selection: Selection) =>
@@ -124,7 +136,7 @@ export function FoodLogger({
     const [amount, setAmount] = useState<number | string>(100)
     const [detailsOpen, setDetailsOpen] = useState(false)
     const [creating, setCreating] = useState(false)
-    const [loadingLibrary, setLoadingLibrary] = useState(false)
+    const [loadingLibrary, setLoadingLibrary] = useState(true)
     const [searching, setSearching] = useState(false)
     const [loggingKey, setLoggingKey] = useState<string | null>(null)
     const [favoriteBusy, setFavoriteBusy] = useState<string | null>(null)
@@ -142,7 +154,6 @@ export function FoodLogger({
     useEffect(() => {
         if (!opened) return
         let active = true
-        setLoadingLibrary(true)
         void Promise.all([searchFoods(''), listRecipes()])
             .then(([foods, nextRecipes]) => {
                 if (!active) return
@@ -160,11 +171,7 @@ export function FoodLogger({
     useEffect(() => {
         if (!opened) return
         const value = query.trim()
-        if (!value) {
-            setFoodResults([])
-            setSearching(false)
-            return
-        }
+        if (!value) return
         let active = true
         const timer = window.setTimeout(() => {
             setSearching(true)
@@ -415,9 +422,9 @@ export function FoodLogger({
             }).detect(bitmap)
             bitmap.close()
             const value = matches[0]?.rawValue
-            if (!value)
+            if (!value) {
                 setCatalogError('No barcode was detected. Try again with the code in focus.')
-            else {
+            } else {
                 setBarcode(value)
                 setCatalogBusy(false)
                 await runBarcodeLookup(value)
@@ -443,6 +450,12 @@ export function FoodLogger({
         } finally {
             setCatalogBusy(false)
         }
+    }
+
+    const openBarcode = () => {
+        setCatalogMode('barcode')
+        setCatalogResults([])
+        setCatalogError('')
     }
 
     const historicalLabel = formatCalendarDate(recordedDate, locale, {
@@ -516,9 +529,7 @@ export function FoodLogger({
                                     label="Time"
                                     value={recordedTime}
                                     onChange={event =>
-                                        setRecordedAt(
-                                            `${recordedDate}T${event.currentTarget.value}`,
-                                        )
+                                        setRecordedAt(`${recordedDate}T${event.currentTarget.value}`)
                                     }
                                 />
                             </SimpleGrid>
@@ -539,11 +550,16 @@ export function FoodLogger({
                         leftSection={<IconSearch size={18} />}
                         rightSection={searching ? <Loader size={15} /> : undefined}
                         onChange={event => {
-                            setQuery(event.currentTarget.value)
+                            const value = event.currentTarget.value
+                            setQuery(value)
                             setSelection(null)
                             setCatalogMode(null)
                             setCatalogResults([])
                             setCatalogError('')
+                            if (!value.trim()) {
+                                setFoodResults([])
+                                setSearching(false)
+                            }
                         }}
                     />
 
@@ -635,9 +651,7 @@ export function FoodLogger({
                                     <span>protein</span>
                                 </div>
                                 <div>
-                                    <strong>
-                                        {Math.round((nutrients?.carbs ?? 0) * 10) / 10} g
-                                    </strong>
+                                    <strong>{Math.round((nutrients?.carbs ?? 0) * 10) / 10} g</strong>
                                     <span>carbs</span>
                                 </div>
                                 <div>
@@ -684,7 +698,7 @@ export function FoodLogger({
                                         <button
                                             type="button"
                                             className="food-log-continuation"
-                                            onClick={() => setCatalogMode('barcode')}
+                                            onClick={openBarcode}
                                         >
                                             <span>
                                                 <strong>Scan barcode</strong>
@@ -743,9 +757,7 @@ export function FoodLogger({
                                                 inputMode="numeric"
                                                 value={barcode}
                                                 leftSection={<IconBarcode size={17} />}
-                                                onChange={event =>
-                                                    setBarcode(event.currentTarget.value)
-                                                }
+                                                onChange={event => setBarcode(event.currentTarget.value)}
                                                 onKeyDown={event =>
                                                     event.key === 'Enter' && void runBarcodeLookup()
                                                 }
@@ -795,7 +807,7 @@ export function FoodLogger({
                                         <div className="food-log-catalog-results">
                                             {catalogResults.map(food => {
                                                 const preview = roundedNutrients(
-                                                    nutrientsFor(food as Food, food.servingGrams),
+                                                    catalogNutrients(food, food.servingGrams),
                                                 )
                                                 return (
                                                     <button
@@ -809,9 +821,8 @@ export function FoodLogger({
                                                             <strong>{food.name}</strong>
                                                             <small>
                                                                 {food.brand || 'No brand'} ·{' '}
-                                                                {Math.round(preview.calories ?? 0)}{' '}
-                                                                kcal per {food.servingGrams} g
-                                                                serving
+                                                                {Math.round(preview.calories ?? 0)} kcal
+                                                                per {food.servingGrams} g serving
                                                             </small>
                                                         </span>
                                                         <span>Save & choose</span>
@@ -823,6 +834,88 @@ export function FoodLogger({
                                 </div>
                             )}
                         </>
+                    ) : catalogMode === 'barcode' ? (
+                        <div className="food-log-catalog-inline">
+                            <div className="food-log-catalog-head">
+                                <Text fw={700}>Scan barcode</Text>
+                                <Button
+                                    variant="subtle"
+                                    size="compact-xs"
+                                    color="trackit"
+                                    onClick={() => {
+                                        setCatalogMode(null)
+                                        setCatalogResults([])
+                                        setCatalogError('')
+                                    }}
+                                >
+                                    Back
+                                </Button>
+                            </div>
+                            <Stack gap="xs" mt="sm">
+                                <TextInput
+                                    label="EAN or UPC barcode"
+                                    inputMode="numeric"
+                                    value={barcode}
+                                    leftSection={<IconBarcode size={17} />}
+                                    onChange={event => setBarcode(event.currentTarget.value)}
+                                    onKeyDown={event =>
+                                        event.key === 'Enter' && void runBarcodeLookup()
+                                    }
+                                />
+                                <Group grow>
+                                    <Button
+                                        variant="default"
+                                        leftSection={<IconCamera size={17} />}
+                                        onClick={() => cameraInput.current?.click()}
+                                    >
+                                        Use camera
+                                    </Button>
+                                    <Button
+                                        color="trackit"
+                                        loading={catalogBusy}
+                                        onClick={() => void runBarcodeLookup()}
+                                    >
+                                        Look up
+                                    </Button>
+                                </Group>
+                                <input
+                                    ref={cameraInput}
+                                    hidden
+                                    type="file"
+                                    accept="image/*"
+                                    capture="environment"
+                                    aria-label="Take a barcode photo"
+                                    onChange={event => {
+                                        const file = event.currentTarget.files?.[0]
+                                        if (file) void scanImage(file)
+                                    }}
+                                />
+                            </Stack>
+                            {catalogError && (
+                                <Alert color="orange" mt="sm">
+                                    {catalogError}
+                                </Alert>
+                            )}
+                            {catalogResults.length > 0 && (
+                                <div className="food-log-catalog-results">
+                                    {catalogResults.map(food => (
+                                        <button
+                                            type="button"
+                                            key={`${food.catalogSource}-${food.catalogId}-${food.name}`}
+                                            className="food-log-catalog-result"
+                                            disabled={catalogBusy}
+                                            onClick={() => void saveCatalogFood(food)}
+                                        >
+                                            <span>
+                                                <strong>{food.name}</strong>
+                                                <small>{food.brand || 'No brand'}</small>
+                                            </span>
+                                            <span>Save & choose</span>
+                                        </button>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
                     ) : loadingLibrary ? (
                         <Group justify="center" py="xl">
                             <Loader size="sm" />
@@ -862,10 +955,7 @@ export function FoodLogger({
                                 <Button
                                     variant="default"
                                     leftSection={<IconBarcode size={17} />}
-                                    onClick={() => {
-                                        setQuery('barcode')
-                                        setCatalogMode('barcode')
-                                    }}
+                                    onClick={openBarcode}
                                 >
                                     Scan barcode
                                 </Button>
