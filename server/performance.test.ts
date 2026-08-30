@@ -1,30 +1,17 @@
 import { performance } from 'node:perf_hooks'
+import { PGlite } from '@electric-sql/pglite'
+import { drizzle } from 'drizzle-orm/pglite'
 import { describe, expect, it, vi } from 'vitest'
 import { createApp } from './app.js'
 import type { JournalEntry, JournalRepository } from './journal/types.js'
+import { PostgresJournalRepository } from './journal/postgres-repository.js'
 import type { DataRepository, RecordRange } from './data/types.js'
+import * as schema from './db/schema.js'
+import { applyTestMigrations } from './db/test-migrations.js'
 
-class FiveYearJournal implements JournalRepository {
-    private readonly entries: JournalEntry[] = Array.from({ length: 5 * 365 * 5 }, (_, index) => {
-        const observedAt = new Date(
-            Date.UTC(2021, 0, 1) + index * 4.8 * 60 * 60 * 1000,
-        ).toISOString()
-        return {
-            id: `${String(index).padStart(8, '0')}-0000-4000-8000-000000000000`,
-            definitionId: index % 2 ? 'meal' : 'weight',
-            category: index % 2 ? 'Meals' : 'Measurements',
-            title: `Representative record ${index}`,
-            detail: 'Small realistic payload with provenance',
-            source: 'Performance fixture',
-            observedAt,
-            version: 1,
-            createdAt: observedAt,
-            updatedAt: observedAt,
-        }
-    })
-
+class EmptyJournal implements JournalRepository {
     async list(): Promise<JournalEntry[]> {
-        return this.entries
+        return []
     }
 
     async ready(): Promise<boolean> {
@@ -161,7 +148,7 @@ describe('large-history performance', () => {
             { id: 'raw-garmin', metric: 'steps', canonicalValue: 7000 },
             { id: 'raw-samsung', metric: 'steps', canonicalValue: 7000 },
         ])
-        const app = await createApp(new FiveYearJournal(), { dataRepository: data })
+        const app = await createApp(new EmptyJournal(), { dataRepository: data })
 
         const response = await app.inject({ method: 'GET', url: '/api/observations?series=raw' })
 
@@ -171,9 +158,53 @@ describe('large-history performance', () => {
         await app.close()
     })
 
-    it('keeps the journal API P95 below 500 ms with five representative years', async () => {
-        const app = await createApp(new FiveYearJournal())
-        await app.inject({ method: 'GET', url: '/api/journal' })
+    it('keeps the real Journal read path P95 below 500 ms with five representative years', async () => {
+        const client = new PGlite()
+        await applyTestMigrations(client)
+        const database = drizzle(client, { schema })
+        const recordCount = 5 * 365 * 5
+        const base = Date.UTC(2021, 0, 1)
+        const records = Array.from({ length: recordCount }, (_, index) => {
+            const meal = index % 2 === 1
+            return {
+                definitionId: meal ? 'meal' : 'weight',
+                valueType: 'number',
+                canonicalValue: meal ? null : 70 + (index % 100) / 10,
+                canonicalUnit: meal ? null : 'kg',
+                category: meal ? 'Meals' : 'Measurements',
+                title: `Representative record ${index}`,
+                observedAt: new Date(base + index * 4.8 * 60 * 60 * 1000),
+                origin: 'external',
+                attributes: meal
+                    ? {
+                          sourceLabel: 'Performance fixture',
+                          mealType: 'Lunch',
+                          serving: { amount: 1, unit: 'serving' },
+                          nutrientSnapshot: {
+                              calories: 520,
+                              protein: 32,
+                              carbs: 58,
+                              fat: 18,
+                              fiber: 9,
+                              sugar: 7,
+                              sodium: 640,
+                              potassium: 780,
+                          },
+                      }
+                    : { sourceLabel: 'Performance fixture' },
+            }
+        })
+        for (let offset = 0; offset < records.length; offset += 500)
+            await database.insert(schema.observations).values(records.slice(offset, offset + 500))
+
+        const app = await createApp(new PostgresJournalRepository(database as never))
+        const warm = await app.inject({ method: 'GET', url: '/api/journal' })
+        expect(warm.statusCode).toBe(200)
+        const warmBody = warm.json() as { data: Record<string, unknown>[] }
+        expect(warmBody.data).toHaveLength(100)
+        expect(warmBody.data.every(entry => !('detailView' in entry))).toBe(true)
+        expect(Buffer.byteLength(warm.body, 'utf8')).toBeLessThan(100_000)
+
         const samples: number[] = []
         for (let index = 0; index < 20; index += 1) {
             const started = performance.now()
@@ -185,10 +216,11 @@ describe('large-history performance', () => {
         const p95 = samples[Math.ceil(samples.length * 0.95) - 1]
         expect(p95).toBeLessThan(500)
         await app.close()
+        await client.close()
     })
 
     it('keeps dashboard range responses P95 below 500 ms with five years of history', async () => {
-        const app = await createApp(new FiveYearJournal(), {
+        const app = await createApp(new EmptyJournal(), {
             dataRepository: new FiveYearData(),
         })
         const from = new Date(Date.UTC(2025, 11, 1)).toISOString()
