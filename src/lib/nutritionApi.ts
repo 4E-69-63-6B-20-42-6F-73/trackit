@@ -267,6 +267,7 @@ export async function logMeal(
     nutritionQuality: 'complete' | 'estimated' | 'incomplete' = 'complete',
     foodId?: string,
     eatenAt = new Date().toISOString(),
+    serving?: { amount: number; unit: 'g' | 'serving' },
 ) {
     const response = await authRequest('/api/meals', {
         method: 'POST',
@@ -280,6 +281,7 @@ export async function logMeal(
             nutritionQuality,
             favorite: false,
             foodId,
+            serving,
         }),
     })
     if (!response.ok) throw new Error('Could not log meal')
