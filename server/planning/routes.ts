@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { and, eq, gte, isNull, lte } from 'drizzle-orm'
+import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -14,7 +14,14 @@ import {
 } from '../db/schema.js'
 import { rebuildEffectiveDailyMetric } from '../data/daily-projection.js'
 import { dateKeyInTimezone } from '../data/timezone.js'
-import { planItems, plannedMeals } from './schema.js'
+import { foodCategories, foodCategoryMemberships } from '../nutrition/schema.js'
+import {
+    planFulfillments,
+    planItems,
+    planScheduleTimes,
+    plannedMealCategories,
+    plannedMeals,
+} from './schema.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
@@ -22,13 +29,18 @@ type NutritionQuality = 'complete' | 'estimated' | 'incomplete'
 type Nutrients = Record<string, number>
 
 const dateKeySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+const scheduledTimeSchema = z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/)
 const mealTypeSchema = z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack'])
+const categoryIdSchema = z.string().regex(/^[a-z0-9-]{1,60}$/)
 const referenceSchema = z.discriminatedUnion('type', [
     z.object({ type: z.literal('food'), id: z.string().uuid() }),
     z.object({ type: z.literal('recipe'), id: z.string().uuid() }),
+    z.object({ type: z.literal('category'), id: categoryIdSchema }),
 ])
+type PlanReference = z.infer<typeof referenceSchema>
 const createSchema = z.object({
     scheduledDate: dateKeySchema,
+    scheduledTime: scheduledTimeSchema.nullable().optional(),
     mealType: mealTypeSchema,
     reference: referenceSchema,
     amount: z.number().finite().positive(),
@@ -37,6 +49,7 @@ const createSchema = z.object({
 const updateSchema = z.object({
     version: z.number().int().positive(),
     scheduledDate: dateKeySchema.optional(),
+    scheduledTime: scheduledTimeSchema.nullable().optional(),
     mealType: mealTypeSchema.optional(),
     reference: referenceSchema.optional(),
     amount: z.number().finite().positive().optional(),
@@ -50,6 +63,7 @@ const logSchema = z.object({
     version: z.number().int().positive(),
     eatenAt: z.string().datetime(),
     amount: z.number().finite().positive().optional(),
+    foodId: z.string().uuid().optional(),
 })
 
 const nutrientColumns = [
@@ -70,6 +84,7 @@ const nutrientUnit = (metric: string) =>
 const planSelection = {
     id: planItems.id,
     scheduledDate: planItems.scheduledDate,
+    scheduledTime: planScheduleTimes.scheduledTime,
     position: planItems.position,
     skippedAt: planItems.skippedAt,
     linkedObservationId: planItems.resultObservationId,
@@ -79,10 +94,12 @@ const planSelection = {
     referenceType: plannedMeals.referenceType,
     foodId: plannedMeals.foodId,
     recipeId: plannedMeals.recipeId,
+    categoryId: plannedMealCategories.categoryId,
     amount: plannedMeals.amount,
     unit: plannedMeals.unit,
     foodName: foods.name,
     recipeName: recipes.name,
+    categoryName: foodCategories.name,
 }
 
 const planQuery = (database: Database) =>
@@ -90,6 +107,9 @@ const planQuery = (database: Database) =>
         .select(planSelection)
         .from(planItems)
         .innerJoin(plannedMeals, eq(plannedMeals.planItemId, planItems.id))
+        .leftJoin(planScheduleTimes, eq(planScheduleTimes.planItemId, planItems.id))
+        .leftJoin(plannedMealCategories, eq(plannedMealCategories.planItemId, planItems.id))
+        .leftJoin(foodCategories, eq(plannedMealCategories.categoryId, foodCategories.id))
         .leftJoin(foods, eq(plannedMeals.foodId, foods.id))
         .leftJoin(recipes, eq(plannedMeals.recipeId, recipes.id))
         .leftJoin(
@@ -97,27 +117,97 @@ const planQuery = (database: Database) =>
             and(eq(planItems.resultObservationId, observations.id), isNull(observations.deletedAt)),
         )
 
-const toPlanRecord = (row: Awaited<ReturnType<ReturnType<typeof planQuery>['limit']>>[number]) => ({
-    id: row.id,
-    kind: 'meal' as const,
-    scheduledDate: row.scheduledDate,
-    position: row.position,
-    skippedAt: row.skippedAt?.toISOString() ?? null,
-    resultObservationId: row.activeObservationId ?? null,
-    version: Number(row.version),
-    meal: {
-        mealType: row.mealType as MealType,
-        reference: {
-            type: row.referenceType as 'food' | 'recipe',
-            id: (row.referenceType === 'food' ? row.foodId : row.recipeId)!,
-            name:
-                (row.referenceType === 'food' ? row.foodName : row.recipeName) ??
-                'Unavailable item',
+type PlanRow = Awaited<ReturnType<ReturnType<typeof planQuery>['limit']>>[number]
+
+const fulfillmentTotals = async (database: Database, planItemIds: string[]) => {
+    if (!planItemIds.length) return new Map<string, number>()
+    const rows = await database
+        .select({
+            planItemId: planFulfillments.planItemId,
+            amount: sql<number>`coalesce(sum(${planFulfillments.amount}), 0)`,
+        })
+        .from(planFulfillments)
+        .innerJoin(
+            observations,
+            and(eq(planFulfillments.observationId, observations.id), isNull(observations.deletedAt)),
+        )
+        .where(inArray(planFulfillments.planItemId, planItemIds))
+        .groupBy(planFulfillments.planItemId)
+    return new Map(rows.map(row => [row.planItemId, Number(row.amount)]))
+}
+
+const toPlanRecord = (row: PlanRow, fulfilledAmount = 0) => {
+    const reference =
+        row.referenceType === 'food'
+            ? { type: 'food' as const, id: row.foodId!, name: row.foodName ?? 'Unavailable item' }
+            : row.referenceType === 'recipe'
+              ? {
+                    type: 'recipe' as const,
+                    id: row.recipeId!,
+                    name: row.recipeName ?? 'Unavailable item',
+                }
+              : {
+                    type: 'category' as const,
+                    id: row.categoryId!,
+                    name: row.categoryName ?? 'Unavailable food group',
+                }
+    return {
+        id: row.id,
+        kind: 'meal' as const,
+        scheduledDate: row.scheduledDate,
+        scheduledTime: row.scheduledTime ?? null,
+        position: row.position,
+        skippedAt: row.skippedAt?.toISOString() ?? null,
+        resultObservationId: row.activeObservationId ?? null,
+        version: Number(row.version),
+        meal: {
+            mealType: row.mealType as MealType,
+            reference,
+            amount: row.amount,
+            unit: row.unit as 'g' | 'serving',
+            fulfilledAmount,
         },
-        amount: row.amount,
-        unit: row.unit as 'g' | 'serving',
-    },
-})
+    }
+}
+
+const loadPlanRecord = async (database: Database, id: string) => {
+    const [row] = await planQuery(database).where(eq(planItems.id, id)).limit(1)
+    if (!row) return null
+    const totals = await fulfillmentTotals(database, [id])
+    return toPlanRecord(row, totals.get(id) ?? 0)
+}
+
+const referenceExists = async (database: Database, reference: PlanReference) => {
+    if (reference.type === 'food')
+        return Boolean(
+            (
+                await database
+                    .select({ id: foods.id })
+                    .from(foods)
+                    .where(eq(foods.id, reference.id))
+                    .limit(1)
+            )[0],
+        )
+    if (reference.type === 'recipe')
+        return Boolean(
+            (
+                await database
+                    .select({ id: recipes.id })
+                    .from(recipes)
+                    .where(eq(recipes.id, reference.id))
+                    .limit(1)
+            )[0],
+        )
+    return Boolean(
+        (
+            await database
+                .select({ id: foodCategories.id })
+                .from(foodCategories)
+                .where(eq(foodCategories.id, reference.id))
+                .limit(1)
+        )[0],
+    )
+}
 
 async function mealNutrition(
     database: Database,
@@ -199,10 +289,15 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                 .orderBy(
                     planItems.scheduledDate,
                     plannedMeals.mealType,
+                    sql`${planScheduleTimes.scheduledTime} asc nulls last`,
                     planItems.position,
                     planItems.createdAt,
                 )
-            return { data: rows.map(toPlanRecord) }
+            const totals = await fulfillmentTotals(
+                database,
+                rows.map(row => row.id),
+            )
+            return { data: rows.map(row => toPlanRecord(row, totals.get(row.id) ?? 0)) }
         },
     )
 
@@ -210,19 +305,8 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
         const parsed = createSchema.safeParse(request.body)
         if (!parsed.success) return reply.code(400).send({ error: 'invalid_plan_item' })
         const input = parsed.data
-        const referenceExists =
-            input.reference.type === 'food'
-                ? await database
-                      .select({ id: foods.id })
-                      .from(foods)
-                      .where(eq(foods.id, input.reference.id))
-                      .limit(1)
-                : await database
-                      .select({ id: recipes.id })
-                      .from(recipes)
-                      .where(eq(recipes.id, input.reference.id))
-                      .limit(1)
-        if (!referenceExists.length) return reply.code(404).send({ error: 'reference_not_found' })
+        if (!(await referenceExists(database, input.reference)))
+            return reply.code(404).send({ error: 'reference_not_found' })
 
         const record = await database.transaction(async transaction => {
             const [plan] = await transaction
@@ -240,12 +324,22 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                 foodId: input.reference.type === 'food' ? input.reference.id : null,
                 recipeId: input.reference.type === 'recipe' ? input.reference.id : null,
                 amount: input.amount,
-                unit: input.reference.type === 'food' ? 'g' : 'serving',
+                unit: input.reference.type === 'recipe' ? 'serving' : 'g',
             })
+            if (input.reference.type === 'category')
+                await transaction.insert(plannedMealCategories).values({
+                    planItemId: plan.id,
+                    categoryId: input.reference.id,
+                })
+            if (input.scheduledTime)
+                await transaction.insert(planScheduleTimes).values({
+                    planItemId: plan.id,
+                    scheduledTime: input.scheduledTime,
+                })
             return plan
         })
-        const [created] = await planQuery(database).where(eq(planItems.id, record.id)).limit(1)
-        return reply.code(201).send({ data: toPlanRecord(created) })
+        const created = await loadPlanRecord(database, record.id)
+        return reply.code(201).send({ data: created })
     })
 
     app.patch<{ Params: { id: string } }>('/api/plan-items/:id', async (request, reply) => {
@@ -258,24 +352,11 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
         if (!current) return reply.code(404).send({ error: 'plan_item_not_found' })
         if (Number(current.version) !== input.version)
             return reply.code(409).send({ error: 'version_conflict' })
-        if (current.activeObservationId)
+        const totals = await fulfillmentTotals(database, [current.id])
+        if (current.activeObservationId || (totals.get(current.id) ?? 0) > 0)
             return reply.code(409).send({ error: 'plan_item_fulfilled' })
-        if (input.reference) {
-            const referenceExists =
-                input.reference.type === 'food'
-                    ? await database
-                          .select({ id: foods.id })
-                          .from(foods)
-                          .where(eq(foods.id, input.reference.id))
-                          .limit(1)
-                    : await database
-                          .select({ id: recipes.id })
-                          .from(recipes)
-                          .where(eq(recipes.id, input.reference.id))
-                          .limit(1)
-            if (!referenceExists.length)
-                return reply.code(404).send({ error: 'reference_not_found' })
-        }
+        if (input.reference && !(await referenceExists(database, input.reference)))
+            return reply.code(404).send({ error: 'reference_not_found' })
 
         const updated = await database.transaction(async transaction => {
             const [plan] = await transaction
@@ -316,18 +397,35 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                     unit:
                         input.reference === undefined
                             ? undefined
-                            : input.reference.type === 'food'
-                              ? 'g'
-                              : 'serving',
+                            : input.reference.type === 'recipe'
+                              ? 'serving'
+                              : 'g',
                 })
                 .where(eq(plannedMeals.planItemId, request.params.id))
+            if (input.reference !== undefined) {
+                await transaction
+                    .delete(plannedMealCategories)
+                    .where(eq(plannedMealCategories.planItemId, request.params.id))
+                if (input.reference.type === 'category')
+                    await transaction.insert(plannedMealCategories).values({
+                        planItemId: request.params.id,
+                        categoryId: input.reference.id,
+                    })
+            }
+            if (input.scheduledTime !== undefined) {
+                await transaction
+                    .delete(planScheduleTimes)
+                    .where(eq(planScheduleTimes.planItemId, request.params.id))
+                if (input.scheduledTime)
+                    await transaction.insert(planScheduleTimes).values({
+                        planItemId: request.params.id,
+                        scheduledTime: input.scheduledTime,
+                    })
+            }
             return plan
         })
         if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-        const [record] = await planQuery(database)
-            .where(eq(planItems.id, request.params.id))
-            .limit(1)
-        return { data: toPlanRecord(record) }
+        return { data: await loadPlanRecord(database, request.params.id) }
     })
 
     app.post<{ Params: { id: string } }>('/api/plan-items/:id/skip', async (request, reply) => {
@@ -337,7 +435,8 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
             .where(and(eq(planItems.id, request.params.id), isNull(planItems.deletedAt)))
             .limit(1)
         if (!current) return reply.code(404).send({ error: 'plan_item_not_found' })
-        if (current.activeObservationId)
+        const totals = await fulfillmentTotals(database, [current.id])
+        if (current.activeObservationId || (totals.get(current.id) ?? 0) > 0)
             return reply.code(409).send({ error: 'plan_item_fulfilled' })
         const [record] = await database
             .update(planItems)
@@ -355,10 +454,7 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
             )
             .returning()
         if (!record) return reply.code(409).send({ error: 'version_conflict' })
-        const [updated] = await planQuery(database)
-            .where(eq(planItems.id, request.params.id))
-            .limit(1)
-        return { data: toPlanRecord(updated) }
+        return { data: await loadPlanRecord(database, request.params.id) }
     })
 
     app.post<{ Params: { id: string } }>('/api/plan-items/:id/log', async (request, reply) => {
@@ -378,13 +474,36 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                     .limit(1)
                 if (!current) throw new Error('plan_item_not_found')
                 if (Number(current.version) !== input.version) throw new Error('version_conflict')
-                if (current.activeObservationId) throw new Error('plan_item_fulfilled')
+                const totals = await fulfillmentTotals(transaction as Database, [current.id])
+                const fulfilledAmount = totals.get(current.id) ?? 0
+                if (current.activeObservationId || fulfilledAmount >= current.amount)
+                    throw new Error('plan_item_fulfilled')
 
-                const reference =
-                    current.referenceType === 'food'
-                        ? { type: 'food' as const, id: current.foodId! }
-                        : { type: 'recipe' as const, id: current.recipeId! }
-                const actualAmount = input.amount ?? current.amount
+                let reference: { type: 'food' | 'recipe'; id: string }
+                let actualAmount: number
+                if (current.referenceType === 'category') {
+                    if (!input.foodId) throw new Error('category_food_required')
+                    const [membership] = await transaction
+                        .select({ foodId: foodCategoryMemberships.foodId })
+                        .from(foodCategoryMemberships)
+                        .where(
+                            and(
+                                eq(foodCategoryMemberships.foodId, input.foodId),
+                                eq(foodCategoryMemberships.categoryId, current.categoryId!),
+                            ),
+                        )
+                        .limit(1)
+                    if (!membership) throw new Error('food_not_in_category')
+                    reference = { type: 'food', id: input.foodId }
+                    actualAmount = input.amount ?? Math.max(0.01, current.amount - fulfilledAmount)
+                } else {
+                    reference =
+                        current.referenceType === 'food'
+                            ? { type: 'food', id: current.foodId! }
+                            : { type: 'recipe', id: current.recipeId! }
+                    actualAmount = input.amount ?? current.amount
+                }
+
                 const nutrition = await mealNutrition(
                     transaction as Database,
                     reference,
@@ -418,6 +537,8 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                             planItemId: request.params.id,
                             foodId: reference.type === 'food' ? reference.id : undefined,
                             recipeId: reference.type === 'recipe' ? reference.id : undefined,
+                            foodCategoryId:
+                                current.referenceType === 'category' ? current.categoryId : undefined,
                         },
                     })
                     .returning()
@@ -457,10 +578,17 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                         })),
                     )
                 }
+                if (current.referenceType === 'category')
+                    await transaction.insert(planFulfillments).values({
+                        planItemId: current.id,
+                        observationId: root.id,
+                        amount: actualAmount,
+                    })
                 const [updated] = await transaction
                     .update(planItems)
                     .set({
-                        resultObservationId: root.id,
+                        resultObservationId:
+                            current.referenceType === 'category' ? undefined : root.id,
                         skippedAt: null,
                         version: input.version + 1,
                         updatedAt: new Date(),
@@ -483,7 +611,13 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                     transaction,
                     dateKeyInTimezone(root.observedAt, timezone),
                 )
-                return { observationId: root.id }
+                return {
+                    observationId: root.id,
+                    fulfilledAmount:
+                        current.referenceType === 'category'
+                            ? fulfilledAmount + actualAmount
+                            : actualAmount,
+                }
             })
             return reply.code(201).send({ data: result })
         } catch (error) {
@@ -491,7 +625,9 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
             if (message === 'plan_item_not_found') return reply.code(404).send({ error: message })
             if (message === 'version_conflict' || message === 'plan_item_fulfilled')
                 return reply.code(409).send({ error: message })
-            if (message === 'reference_not_found') return reply.code(404).send({ error: message })
+            if (message === 'reference_not_found' || message === 'food_not_in_category')
+                return reply.code(404).send({ error: message })
+            if (message === 'category_food_required') return reply.code(400).send({ error: message })
             throw error
         }
     })
