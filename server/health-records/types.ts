@@ -96,6 +96,8 @@ export type DerivedObservation = {
     definitionId: string
     value: number
     unit: string
+    originalValue?: number
+    originalUnit?: string
     observedAt?: Date
     endedAt?: Date | null
     kind: 'raw_metric' | 'derived_metric'

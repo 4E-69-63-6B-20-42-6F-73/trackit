@@ -40,7 +40,7 @@ describe('Metric Center', () => {
         expect(back.closest('.page-header-copy')).not.toBeNull()
         expect(screen.getByText('Resting heart rate')).toBeInTheDocument()
         expect(screen.getByText('min')).toBeInTheDocument()
-        expect(screen.getByText('h')).toBeInTheDocument()
+        expect(screen.getAllByText('h').length).toBeGreaterThan(0)
         expect(screen.getByText('steps').closest('.metric-row')).not.toHaveAttribute('disabled')
         await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
         await userEvent.click(await screen.findByRole('radio', { name: 'Pounds (lb)' }))

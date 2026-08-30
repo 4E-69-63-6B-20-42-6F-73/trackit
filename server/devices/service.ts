@@ -1,5 +1,5 @@
 import { createHash, createPublicKey, randomBytes, randomInt, verify } from 'node:crypto'
-import { and, desc, eq, gt, isNull, lt } from 'drizzle-orm'
+import { and, desc, eq, gt, gte, isNull, lt, notInArray } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
@@ -11,6 +11,7 @@ import {
     observationRelations,
     observations,
     pairingCodes,
+    preferences,
     sources,
     syncCursors,
 } from '../db/schema.js'
@@ -18,7 +19,7 @@ import { deriveRecord } from '../health-records/derive.js'
 import { projectHealthRecordToJournal } from '../health-records/journal.js'
 import { normalizeHealthRecord, normalizeHealthRecordInput } from '../health-records/normalize.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
-import { nextDate } from '../data/timezone.js'
+import { dateKeyInTimezone, nextDate } from '../data/timezone.js'
 import type { CanonicalHealthRecord, CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -43,8 +44,8 @@ async function insertHealthObservationGraph(
                       origin: 'external',
                       canonicalValue: projection.value,
                       canonicalUnit: projection.unit,
-                      originalValue: projection.value,
-                      originalUnit: projection.unit,
+                      originalValue: projection.originalValue ?? projection.value,
+                      originalUnit: projection.originalUnit ?? projection.unit,
                       observedAt: projection.observedAt!,
                       endedAt: projection.endedAt,
                       externalId: `${record.externalId}:${projection.definitionId}:v${projection.derivationVersion}`,
@@ -613,19 +614,19 @@ export class DeviceService {
                         target: [
                             healthRecords.userId,
                             healthRecords.connector,
-                            healthRecords.provider,
                             healthRecords.externalId,
                         ],
                         setWhere: lt(healthRecords.externalVersion, input.externalVersion),
                         set: {
-                            recordType: input.recordType,
+                            recordType: input.deleted ? undefined : input.recordType,
                             externalVersion: input.externalVersion,
-                            startTime,
-                            endTime,
-                            dataOrigin: input.dataOrigin,
-                            recordingMethod: input.recordingMethod,
-                            device: input.device ?? {},
-                            payload: input.payload,
+                            startTime: input.deleted ? undefined : startTime,
+                            endTime: input.deleted ? undefined : endTime,
+                            provider: input.deleted ? undefined : provider,
+                            dataOrigin: input.deleted ? undefined : input.dataOrigin,
+                            recordingMethod: input.deleted ? undefined : input.recordingMethod,
+                            device: input.deleted ? undefined : (input.device ?? {}),
+                            payload: input.deleted ? undefined : input.payload,
                             lastModifiedTime: input.lastModifiedTime
                                 ? new Date(input.lastModifiedTime)
                                 : undefined,
@@ -641,7 +642,6 @@ export class DeviceService {
                         and(
                             eq(healthRecords.userId, 'owner'),
                             eq(healthRecords.connector, connector),
-                            eq(healthRecords.provider, provider),
                             eq(healthRecords.externalId, input.externalId),
                         ),
                     )
@@ -651,11 +651,20 @@ export class DeviceService {
                 const previousProjections = await transaction
                     .select({
                         observedAt: observations.observedAt,
+                        endedAt: observations.endedAt,
                     })
                     .from(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
-                for (const projection of previousProjections)
-                    affectedDates.add(projection.observedAt.toISOString().slice(0, 10))
+                const [saved] = await transaction
+                    .select({ timezone: preferences.timezone })
+                    .from(preferences)
+                    .where(eq(preferences.id, 'owner'))
+                const timezone = saved?.timezone ?? 'UTC'
+                for (const projection of previousProjections) {
+                    affectedDates.add(dateKeyInTimezone(projection.observedAt, timezone))
+                    if (projection.endedAt)
+                        affectedDates.add(dateKeyInTimezone(projection.endedAt, timezone))
+                }
                 await transaction
                     .delete(observations)
                     .where(eq(observations.sourceRecordId, stored.id))
@@ -667,9 +676,12 @@ export class DeviceService {
                         startTime: stored.startTime,
                         endTime: stored.endTime,
                     })
-                    for (const projection of projections)
+                    for (const projection of projections) {
                         if (projection.observedAt)
-                            affectedDates.add(projection.observedAt.toISOString().slice(0, 10))
+                            affectedDates.add(dateKeyInTimezone(projection.observedAt, timezone))
+                        if (projection.endedAt)
+                            affectedDates.add(dateKeyInTimezone(projection.endedAt, timezone))
+                    }
                     /* Legacy journal persistence retired; Journal is projected from the graph.
                     const journal = projectHealthRecordToJournal(
                         {
@@ -798,6 +810,58 @@ export class DeviceService {
         }
 
         return { records: rebuilt }
+    }
+
+    async reconcileHealthRecords(
+        deviceId: string,
+        recordType: string,
+        since: string,
+        presentExternalIds: string[],
+    ) {
+        return this.database.transaction(async transaction => {
+            const conditions = [
+                eq(healthRecords.userId, 'owner'),
+                eq(healthRecords.connector, 'health_connect'),
+                eq(healthRecords.recordType, recordType),
+                gte(healthRecords.startTime, new Date(since)),
+                isNull(healthRecords.deletedAt),
+            ]
+            if (presentExternalIds.length)
+                conditions.push(notInArray(healthRecords.externalId, presentExternalIds))
+            const stale = await transaction
+                .select()
+                .from(healthRecords)
+                .where(and(...conditions))
+            const [saved] = await transaction
+                .select({ timezone: preferences.timezone })
+                .from(preferences)
+                .where(eq(preferences.id, 'owner'))
+            const timezone = saved?.timezone ?? 'UTC'
+            const dates = new Set<string>()
+            for (const record of stale) {
+                const prior = await transaction
+                    .select({ observedAt: observations.observedAt, endedAt: observations.endedAt })
+                    .from(observations)
+                    .where(eq(observations.sourceRecordId, record.id))
+                for (const item of prior) {
+                    dates.add(dateKeyInTimezone(item.observedAt, timezone))
+                    if (item.endedAt) dates.add(dateKeyInTimezone(item.endedAt, timezone))
+                }
+                await transaction
+                    .update(healthRecords)
+                    .set({
+                        externalVersion: deletionTombstoneVersion,
+                        deletedAt: new Date(),
+                        updatedAt: new Date(),
+                    })
+                    .where(eq(healthRecords.id, record.id))
+                await transaction
+                    .delete(observations)
+                    .where(eq(observations.sourceRecordId, record.id))
+            }
+            for (const date of dates) await this.markDailyDateDirty(transaction, date)
+            return { reconciled: stale.length, deviceId }
+        })
     }
 
     private async markDailyDateDirty(transaction: Transaction, date: string) {

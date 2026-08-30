@@ -737,6 +737,24 @@ export async function createApp(
                 input.data.records as CanonicalHealthRecordInput[],
             )
         })
+        app.post('/api/device/health-records/reconcile', async (request, reply) => {
+            const device = await authenticateDevice(request, requestBodyHash(request))
+            if (!device) return reply.code(401).send({ error: 'unauthorized' })
+            const input = z
+                .object({
+                    recordType: z.string().min(1).max(150),
+                    since: z.string().datetime(),
+                    presentExternalIds: z.array(z.string().min(1).max(500)).max(100_000),
+                })
+                .safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            return devices.reconcileHealthRecords(
+                device.id,
+                input.data.recordType,
+                input.data.since,
+                input.data.presentExternalIds,
+            )
+        })
         app.post('/api/health-records/rebuild', async () => ({
             data: await devices.rebuildHealthRecordObservations(),
         }))

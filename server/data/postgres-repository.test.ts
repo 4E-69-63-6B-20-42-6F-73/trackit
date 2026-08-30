@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm'
 import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { PostgresDataRepository } from './postgres-repository.js'
+import { rebuildEffectiveDailyMetric } from './daily-projection.js'
 
 async function migratedDatabase() {
     const client = new PGlite()
@@ -187,6 +188,17 @@ describe('metric source summaries', () => {
         expect(
             records.find(record => record.definitionId === 'calorie_balance')?.canonicalValue,
         ).toBe(1600)
+        await rebuildEffectiveDailyMetric(database as never, '2026-08-25')
+        const cached = (await repository.listObservations({
+            from: '2026-08-25T00:00:00.000Z',
+            to: '2026-08-26T00:00:00.000Z',
+            definitionIds: ['bmi', 'calorie_balance'],
+        })) as Array<{ definitionId: string; canonicalValue: number }>
+        expect(cached.find(record => record.definitionId === 'bmi')?.canonicalValue).toBeCloseTo(25)
+        expect(
+            cached.find(record => record.definitionId === 'calorie_balance')?.canonicalValue,
+        ).toBe(1600)
+        expect(await database.select().from(schema.derivedObservations)).toHaveLength(2)
         await client.close()
     })
 

@@ -10,6 +10,7 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.Signature
 import java.time.ZonedDateTime
+import java.time.Instant
 import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.UUID
@@ -86,6 +87,18 @@ class TrackItApi(context: Context) {
             .put("cursor", cursor)
             .put("status", status),
         method = "PUT",
+    )
+
+    suspend fun reconcile(
+        recordType: String,
+        since: Instant,
+        presentExternalIds: Set<String>,
+    ) = request(
+        path = "/api/device/health-records/reconcile",
+        body = JSONObject()
+            .put("recordType", recordType)
+            .put("since", HealthTime.serialize(since))
+            .put("presentExternalIds", JSONArray(presentExternalIds.toList())),
     )
 
     private suspend fun uploadAdaptive(

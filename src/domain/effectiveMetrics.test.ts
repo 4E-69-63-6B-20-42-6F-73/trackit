@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { NumericObservation } from './health'
-import { effectiveMetricSeries, observationSource, removeExactDuplicates } from './effectiveMetrics'
+import {
+    effectiveMetricSeries,
+    effectiveMetricSeriesInTimezone,
+    observationSource,
+    removeExactDuplicates,
+} from './effectiveMetrics'
 
 const record = (
     overrides: Partial<NumericObservation> &
@@ -165,5 +170,78 @@ describe('effective metric series', () => {
         expect(
             effective.find(item => item.definitionId === 'calorie_balance')?.canonicalValue,
         ).toBe(1600)
+    })
+
+    it('groups calorie balance by the configured local day instead of the UTC date', () => {
+        const effective = effectiveMetricSeriesInTimezone(
+            [
+                record({
+                    id: 'food',
+                    definitionId: 'calories',
+                    canonicalValue: 2200,
+                    observedAt: '2026-03-28T23:15:00Z',
+                }),
+                record({
+                    id: 'burn',
+                    definitionId: 'active_calories',
+                    canonicalValue: 600,
+                    observedAt: '2026-03-29T08:00:00Z',
+                }),
+            ],
+            undefined,
+            'Europe/Amsterdam',
+        )
+        expect(
+            effective.find(item => item.definitionId === 'calorie_balance')?.canonicalValue,
+        ).toBe(1600)
+    })
+
+    it('deduplicates overlapping sleep using its preserved source interval', () => {
+        const sleep = (id: string, provider: string, observedAt: string, endedAt: string) =>
+            record({
+                id,
+                definitionId: 'sleep',
+                canonicalValue: 8,
+                canonicalUnit: 'hours',
+                originalUnit: 'hours',
+                observedAt,
+                endedAt,
+                metadata: { source: 'Health Connect', dataOrigin: provider },
+            })
+        const effective = effectiveMetricSeries(
+            [
+                sleep('preferred', 'Provider A', '2026-08-29T21:01:00Z', '2026-08-30T05:03:00Z'),
+                sleep('duplicate', 'Provider B', '2026-08-29T21:05:00Z', '2026-08-30T05:06:00Z'),
+            ],
+            {
+                sleep: {
+                    displayUnit: 'hours',
+                    deduplication: {
+                        policy: 'prefer_priority',
+                        sourcePriority: [
+                            'Health Connect::Provider A',
+                            'Health Connect::Provider B',
+                        ],
+                    },
+                },
+            },
+        )
+        expect(
+            effective.filter(item => item.definitionId === 'sleep').map(item => item.id),
+        ).toEqual(['preferred'])
+    })
+
+    it('attributes additive cross-midnight intervals to their start instant', () => {
+        const interval = record({
+            id: 'cross-midnight',
+            definitionId: 'steps',
+            canonicalValue: 1000,
+            observedAt: '2026-08-30T21:50:00Z',
+            endedAt: '2026-08-30T22:10:00Z',
+        })
+        expect(
+            effectiveMetricSeriesInTimezone([interval], undefined, 'Europe/Amsterdam')[0]
+                .observedAt,
+        ).toBe('2026-08-30T21:50:00Z')
     })
 })

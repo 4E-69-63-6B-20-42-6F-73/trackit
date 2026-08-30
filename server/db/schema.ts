@@ -45,7 +45,6 @@ export const healthRecords = pgTable(
         uniqueIndex('health_record_source_identity_idx').on(
             table.userId,
             table.connector,
-            table.provider,
             table.externalId,
         ),
         index('health_record_type_start_idx').on(table.recordType, table.startTime),

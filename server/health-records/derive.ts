@@ -1,4 +1,6 @@
 import type { CanonicalHealthRecord, DerivedObservation, JsonObject } from './types.js'
+import { metricDefinition } from '../../src/domain/metricCatalog.js'
+import { toCanonicalMetricValue } from '../../src/domain/metrics.js'
 
 const hours = (start: Date, end: Date) => Math.max(0, end.getTime() - start.getTime()) / 3_600_000
 const minutes = (start: Date, end: Date) => Math.max(0, end.getTime() - start.getTime()) / 60_000
@@ -18,7 +20,20 @@ const observation = (
     unit: string,
     derivation: string,
     kind: DerivedObservation['kind'] = 'raw_metric',
-): DerivedObservation => ({ definitionId, value, unit, kind, derivation, derivationVersion: 1 })
+): DerivedObservation => {
+    const definition = metricDefinition(definitionId)
+    const canonicalValue = definition ? toCanonicalMetricValue(definitionId, value, unit) : value
+    return {
+        definitionId,
+        value: canonicalValue,
+        unit: definition?.canonicalUnit ?? unit,
+        originalValue: value,
+        originalUnit: unit,
+        kind,
+        derivation,
+        derivationVersion: 1,
+    }
+}
 
 function scalar(payload: JsonObject, key: string, definitionId: string, unit: string) {
     const value = finite(payload[key])
@@ -72,7 +87,7 @@ function deriveSleep(record: CanonicalHealthRecord): DerivedObservation[] {
                 'derived_metric',
             ),
         )
-    return result.map(item => ({ ...item, observedAt: record.endTime!, endedAt: record.endTime }))
+    return result.map(item => ({ ...item, observedAt: record.startTime, endedAt: record.endTime }))
 }
 
 function deriveHeartRate(record: CanonicalHealthRecord): DerivedObservation[] {
@@ -180,7 +195,7 @@ export function deriveRecord(record: CanonicalHealthRecord): DerivedObservation[
             case 'TotalCaloriesBurnedRecord':
                 return scalar(record.payload, 'kilocalories', 'total_calories', 'kcal')
             case 'HydrationRecord':
-                return scalar(record.payload, 'liters', 'hydration', 'L')
+                return scalar(record.payload, 'liters', 'water', 'L')
             case 'LeanBodyMassRecord':
                 return scalar(record.payload, 'kilograms', 'lean_body_mass', 'kg')
             case 'BasalMetabolicRateRecord':
