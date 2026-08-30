@@ -7,7 +7,7 @@ import {
     type UpdateObservationInput,
 } from '../lib/observationApi'
 
-export function useObservationCommands(refresh: () => void) {
+export function useObservationCommands() {
     const [failure, setFailure] = useState<{ message: string; retry: () => Promise<void> } | null>(
         null,
     )
@@ -15,7 +15,6 @@ export function useObservationCommands(refresh: () => void) {
         try {
             await command()
             setFailure(null)
-            refresh()
             window.dispatchEvent(new Event('trackit:observations-changed'))
             return true
         } catch {
