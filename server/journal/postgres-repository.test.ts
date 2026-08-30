@@ -92,7 +92,7 @@ describe('Journal observation projection preferences', () => {
         const data = new PostgresDataRepository(database as never)
         const journal = new PostgresJournalRepository(database as never)
 
-        const created = await data.createMeal({
+        await data.createMeal({
             name: 'Plain Skyr',
             mealType: 'Dinner',
             eatenAt: '2026-08-25T19:15:00.000Z',
@@ -108,17 +108,18 @@ describe('Journal observation projection preferences', () => {
             serving: { amount: 150, unit: 'g' },
         })
 
-        const [summary] = await journal.list()
+        const entries = await journal.list()
+        expect(entries).toHaveLength(1)
+        const summary = entries[0]!
         expect(summary).toEqual(
             expect.objectContaining({
-                id: created.id,
                 title: 'Plain Skyr',
                 detail: '150 g · 94.5 kcal',
                 category: 'Meals',
             }),
         )
         expect(summary).not.toHaveProperty('detailView')
-        expect(await journal.get(created.id)).toEqual(
+        expect(await journal.get(summary.id)).toEqual(
             expect.objectContaining({
                 detailView: {
                     kind: 'meal',
