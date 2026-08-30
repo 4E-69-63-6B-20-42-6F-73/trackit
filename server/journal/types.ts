@@ -53,6 +53,7 @@ export type JournalListQuery = {
     from?: string
     to?: string
     before?: string
+    beforeId?: string
     category?: JournalEntry['category']
     source?: string
     limit?: number
@@ -60,5 +61,6 @@ export type JournalListQuery = {
 
 export interface JournalRepository {
     list(query?: JournalListQuery): Promise<JournalEntry[]>
+    get(id: string): Promise<JournalEntry | null>
     ready(): Promise<boolean>
 }
