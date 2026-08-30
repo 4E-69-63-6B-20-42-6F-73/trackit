@@ -32,6 +32,7 @@ export function NewFoodModal({
     const [servingGrams, setServingGrams] = useState<number | string>(100)
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>({})
     const [error, setError] = useState('')
+    const [saving, setSaving] = useState(false)
 
     const setNutrient = (key: keyof Nutrients, value: number | string) => {
         setNutrients(current => {
@@ -43,6 +44,7 @@ export function NewFoodModal({
     }
 
     const save = async () => {
+        setSaving(true)
         setError('')
         try {
             const food = await createFood({
@@ -67,6 +69,8 @@ export function NewFoodModal({
             onClose()
         } catch {
             setError('The food could not be saved to your server. No local copy was created.')
+        } finally {
+            setSaving(false)
         }
     }
 
@@ -133,11 +137,14 @@ export function NewFoodModal({
                         paddingBottom: 'var(--mantine-spacing-xs)',
                     }}
                 >
-                    <Button variant="default" onClick={onClose}>
+                    <Button variant="default" disabled={saving} onClick={onClose}>
                         Cancel
                     </Button>
                     <Button
-                        disabled={!name.trim() || !servingName.trim() || Number(servingGrams) <= 0}
+                        loading={saving}
+                        disabled={
+                            !name.trim() || !servingName.trim() || Number(servingGrams) <= 0
+                        }
                         onClick={() => void save()}
                     >
                         Create food
