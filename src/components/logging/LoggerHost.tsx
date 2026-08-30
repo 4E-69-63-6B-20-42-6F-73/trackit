@@ -1,3 +1,5 @@
+import { useEffect, useState } from 'react'
+import { IconCircleCheck } from '@tabler/icons-react'
 import type { CreateObservationInput } from '../../lib/observationApi'
 import { useLogger } from '../../logging/LoggingContext'
 import type { LogActionId } from '../../logging/logActions'
@@ -20,18 +22,40 @@ export function LoggerHost({
     selectedDate?: string | null
 }) {
     const { activeLogger, closeLogger } = useLogger()
-    if (!activeLogger) return null
-    if (activeLogger === 'food') {
-        return <FoodLogger opened close={closeLogger} selectedDate={selectedDate} />
-    }
+    const [feedback, setFeedback] = useState<string | null>(null)
+
+    useEffect(() => {
+        if (!feedback) return
+        const timeout = window.setTimeout(() => setFeedback(null), 2200)
+        return () => window.clearTimeout(timeout)
+    }, [feedback])
+
     return (
-        <ManualEntryLogger
-            key={activeLogger}
-            opened
-            close={closeLogger}
-            add={add}
-            initialKind={kinds[activeLogger]}
-            selectedDate={selectedDate}
-        />
+        <>
+            {activeLogger === 'food' && (
+                <FoodLogger
+                    opened
+                    close={closeLogger}
+                    selectedDate={selectedDate}
+                    onFeedback={setFeedback}
+                />
+            )}
+            {activeLogger && activeLogger !== 'food' && (
+                <ManualEntryLogger
+                    key={activeLogger}
+                    opened
+                    close={closeLogger}
+                    add={add}
+                    initialKind={kinds[activeLogger]}
+                    selectedDate={selectedDate}
+                />
+            )}
+            {feedback && (
+                <div className="food-log-toast" role="status">
+                    <IconCircleCheck size={17} />
+                    <span>{feedback}</span>
+                </div>
+            )}
+        </>
     )
 }
