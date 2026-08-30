@@ -28,6 +28,8 @@ type MealAttributes = {
     serving?: unknown
 }
 
+type MealDetailView = Extract<JournalDetailView, { kind: 'meal' }>
+
 const sourceLabel = (row: typeof observations.$inferSelect) => {
     const attributes = row.attributes as Record<string, unknown>
     const metadata = row.metadata as Record<string, unknown>
@@ -67,7 +69,7 @@ const mealServing = (value: unknown): MealServingDetail | undefined => {
     }
 }
 
-const mealDetailView = (row: typeof observations.$inferSelect): JournalDetailView | undefined => {
+const mealDetailView = (row: typeof observations.$inferSelect): MealDetailView | undefined => {
     if (row.definitionId !== 'meal') return undefined
     const attributes = row.attributes as MealAttributes
     const nutrients = Object.fromEntries(
@@ -91,7 +93,7 @@ const mealServingLabel = (serving?: MealServingDetail) => {
     return `${compactNumber(serving.amount)} ${serving.amount === 1 ? 'serving' : 'servings'}`
 }
 
-const mealSummary = (detail: Extract<JournalDetailView, { kind: 'meal' }>) =>
+const mealSummary = (detail: MealDetailView) =>
     [
         mealServingLabel(detail.serving),
         typeof detail.nutrients.calories === 'number'
