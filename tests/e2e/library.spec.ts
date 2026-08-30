@@ -72,8 +72,7 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 
     const deleteRequest = page.waitForRequest(
-        request =>
-            request.method() === 'DELETE' && request.url().includes(`/api/foods/${food.id}`),
+        request => request.method() === 'DELETE' && request.url().includes(`/api/foods/${food.id}`),
     )
     await page.getByRole('button', { name: 'Delete food' }).click()
     await page.getByRole('button', { name: 'Delete permanently' }).click()
