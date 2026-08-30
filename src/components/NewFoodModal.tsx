@@ -121,7 +121,18 @@ export function NewFoodModal({
 
                 <FoodNutritionFields nutrients={nutrients} onChange={setNutrient} />
 
-                <Group justify="flex-end" className="food-modal-actions">
+                <Group
+                    justify="flex-end"
+                    style={{
+                        position: 'sticky',
+                        bottom: 0,
+                        zIndex: 1,
+                        background: 'var(--mantine-color-body)',
+                        borderTop: '1px solid var(--mantine-color-default-border)',
+                        paddingTop: 'var(--mantine-spacing-sm)',
+                        paddingBottom: 'var(--mantine-spacing-xs)',
+                    }}
+                >
                     <Button variant="default" onClick={onClose}>
                         Cancel
                     </Button>
