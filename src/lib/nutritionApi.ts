@@ -310,6 +310,12 @@ export async function updateMeal(
     return ((await response.json()) as { data: MealRecord }).data
 }
 
+export async function deleteMeal(id: string): Promise<void> {
+    const response = await authRequest(`/api/meals/${id}`, { method: 'DELETE' })
+    if (!response.ok && response.status !== 404)
+        throw new Error(`Meal delete failed (${response.status})`)
+}
+
 export async function listRecipes(): Promise<RecipeRecord[]> {
     const response = await fetch(`${environment.VITE_API_URL}/api/recipes`, {
         credentials: 'same-origin',
