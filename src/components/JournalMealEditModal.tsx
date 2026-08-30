@@ -12,10 +12,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import {
-    calendarLocalDateTimeToInstant,
-    calendarLocalDateTimeValue,
-} from '../domain/calendar'
+import { calendarLocalDateTimeToInstant, calendarLocalDateTimeValue } from '../domain/calendar'
 import type { JournalEvent } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 import { updateMeal } from '../lib/nutritionApi'
@@ -53,9 +50,7 @@ export function JournalMealEditModal({
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const [name, setName] = useState('')
-    const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>(
-        'Snack',
-    )
+    const [mealType, setMealType] = useState<'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'>('Snack')
     const [recordedAt, setRecordedAt] = useState('')
     const [nutritionQuality, setNutritionQuality] = useState<
         'complete' | 'estimated' | 'incomplete'
@@ -82,7 +77,12 @@ export function JournalMealEditModal({
         setNutritionQuality(event.detailView.nutritionQuality)
         setNutrients(
             Object.fromEntries(
-                nutrientFields.map(([key]) => [key, event.detailView?.kind === 'meal' ? (event.detailView.nutrients[key] ?? '') : '']),
+                nutrientFields.map(([key]) => [
+                    key,
+                    event.detailView?.kind === 'meal'
+                        ? (event.detailView.nutrients[key] ?? '')
+                        : '',
+                ]),
             ) as Record<NutrientKey, NumericValue>,
         )
         setError('')
@@ -157,9 +157,7 @@ export function JournalMealEditModal({
                         value={nutritionQuality}
                         onChange={value =>
                             value &&
-                            setNutritionQuality(
-                                value as 'complete' | 'estimated' | 'incomplete',
-                            )
+                            setNutritionQuality(value as 'complete' | 'estimated' | 'incomplete')
                         }
                         data={[
                             { value: 'complete', label: 'Complete' },
@@ -192,7 +190,11 @@ export function JournalMealEditModal({
                         <Button variant="default" onClick={onClose} disabled={busy}>
                             Cancel
                         </Button>
-                        <Button loading={busy} disabled={!name.trim() || !recordedAt} onClick={save}>
+                        <Button
+                            loading={busy}
+                            disabled={!name.trim() || !recordedAt}
+                            onClick={save}
+                        >
                             Save changes
                         </Button>
                     </Group>
