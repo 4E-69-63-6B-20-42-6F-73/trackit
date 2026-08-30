@@ -5,10 +5,11 @@ import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JournalEvent } from '../domain/types'
 import { ServerDataProvider } from '../hooks/useServerData'
-import { listJournal } from '../lib/journalApi'
+import { getJournalEntry, listJournal } from '../lib/journalApi'
 import { Journal } from './Journal'
 
 vi.mock('../lib/journalApi', () => ({
+    getJournalEntry: vi.fn(),
     listJournal: vi.fn(),
 }))
 
@@ -85,29 +86,46 @@ const renderJournal = (
     entry = '/',
     update = vi.fn().mockResolvedValue(true),
     events: JournalEvent[] = records,
-) =>
-    render(
+) => {
+    vi.mocked(listJournal).mockResolvedValue(events)
+    vi.mocked(getJournalEntry).mockImplementation(async id => {
+        const event = events.find(record => record.id === id)
+        if (!event) throw new Error('not found')
+        return event
+    })
+    return render(
         <MemoryRouter initialEntries={[entry]}>
             <MantineProvider>
                 <ServerDataProvider initialData={{ preferences }}>
-                    <Journal events={events} remove={vi.fn()} update={update} />
+                    <Journal remove={vi.fn()} update={update} />
                 </ServerDataProvider>
             </MantineProvider>
         </MemoryRouter>,
     )
+}
 
 describe('Journal', () => {
     beforeEach(() => {
         vi.mocked(listJournal).mockReset()
-        vi.mocked(listJournal).mockResolvedValue(records)
+        vi.mocked(getJournalEntry).mockReset()
     })
 
-    it('filters records and exposes owner actions only when available', async () => {
+    it('owns a single filtered request and exposes owner actions only when available', async () => {
         const update = vi.fn().mockResolvedValue(true)
         renderJournal('/?from=2026-08-16&to=2026-08-23', update)
 
+        await waitFor(() => expect(listJournal).toHaveBeenCalledTimes(1))
+        expect(listJournal).toHaveBeenCalledWith(
+            expect.objectContaining({
+                from: '2026-08-16T00:00:00.000Z',
+                to: '2026-08-24T00:00:00.000Z',
+                limit: 100,
+            }),
+            expect.any(AbortSignal),
+        )
+
         const user = userEvent.setup()
-        const search = screen.getByRole('textbox', { name: 'Search journal' })
+        const search = await screen.findByRole('textbox', { name: 'Search journal' })
         await screen.findByText('Breakfast')
 
         expect(screen.getByLabelText('Actions for Breakfast')).toBeInTheDocument()
@@ -146,12 +164,13 @@ describe('Journal', () => {
         })
     })
 
-    it('renders detailed entries directly without a second detail step or trend action', async () => {
+    it('loads detailed entries on demand without a second detail step or trend action', async () => {
         renderJournal('/', vi.fn().mockResolvedValue(true), [sleepRecord])
 
-        await userEvent.click(screen.getByText('Sleep'))
+        await userEvent.click(await screen.findByText('Sleep'))
 
         const dialog = await screen.findByRole('dialog')
+        await waitFor(() => expect(getJournalEntry).toHaveBeenCalledWith('sleep-1', expect.any(AbortSignal)))
         expect(within(dialog).getByText('Sleep phases')).toBeInTheDocument()
         expect(within(dialog).getByText('Pixel Watch')).toBeInTheDocument()
         expect(
@@ -164,7 +183,7 @@ describe('Journal', () => {
         renderJournal()
 
         const user = userEvent.setup()
-        await user.click(screen.getByRole('button', { name: /^Filters/ }))
+        await user.click(await screen.findByRole('button', { name: /^Filters/ }))
         await user.click(await screen.findByText('One day'))
         fireEvent.change(screen.getByLabelText('Journal date'), {
             target: { value: '2026-08-23' },
@@ -172,6 +191,16 @@ describe('Journal', () => {
 
         expect(await screen.findByText('Breakfast')).toBeInTheDocument()
         expect(screen.queryByText('Walk')).not.toBeInTheDocument()
+
+        await waitFor(() =>
+            expect(listJournal).toHaveBeenLastCalledWith(
+                expect.objectContaining({
+                    from: '2026-08-23T00:00:00.000Z',
+                    to: '2026-08-24T00:00:00.000Z',
+                }),
+                expect.any(AbortSignal),
+            ),
+        )
 
         await user.click(screen.getByRole('button', { name: 'Aug 23' }))
         expect(screen.getByText('Walk')).toBeInTheDocument()
