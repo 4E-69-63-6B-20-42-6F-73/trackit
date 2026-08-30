@@ -10,6 +10,9 @@ import { PageHeader } from '../components/PageHeader'
 import type { Food } from '../domain/nutrition'
 import { deleteFood, searchFoods, updateFood } from '../lib/nutritionApi'
 
+const nutritionStatusLabel = (quality: Food['nutritionQuality']) =>
+    quality === 'estimated' ? 'Estimated' : 'Incomplete'
+
 export function LibraryFoods() {
     const [foods, setFoods] = useState<Food[]>([])
     const [query, setQuery] = useState('')
@@ -105,7 +108,7 @@ export function LibraryFoods() {
                             </div>
                             {food.nutritionQuality !== 'complete' && (
                                 <Badge size="xs" variant="light">
-                                    {food.nutritionQuality}
+                                    {nutritionStatusLabel(food.nutritionQuality)}
                                 </Badge>
                             )}
                         </button>
