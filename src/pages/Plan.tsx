@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -78,6 +78,15 @@ type LogState = {
 const referenceValue = (item: MealPlanItem) =>
     `${item.meal.reference.type}:${item.meal.reference.id}`
 
+const loadPlanWeek = (weekStart: string) => {
+    const range = weekDateKeys(weekStart)
+    return Promise.all([
+        listPlanItems({ from: range[0], to: range[6] }),
+        searchFoods(''),
+        listRecipes(),
+    ])
+}
+
 export function Plan() {
     const [params, setParams] = useSearchParams()
     const compact = useMediaQuery('(max-width: 62em)')
@@ -98,13 +107,23 @@ export function Plan() {
     const [logState, setLogState] = useState<LogState | null>(null)
     const [busy, setBusy] = useState(false)
 
-    const refresh = useCallback(() => {
-        const range = weekDateKeys(weekStart)
-        return Promise.all([
-            listPlanItems({ from: range[0], to: range[6] }),
-            searchFoods(''),
-            listRecipes(),
-        ])
+    const applyLoadedWeek = ([nextItems, nextFoods, nextRecipes]: Awaited<
+        ReturnType<typeof loadPlanWeek>
+    >) => {
+        setItems(nextItems)
+        setFoods(nextFoods)
+        setRecipes(nextRecipes)
+        setMessage('')
+    }
+
+    const refresh = () =>
+        loadPlanWeek(weekStart)
+            .then(applyLoadedWeek)
+            .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
+            .finally(() => setLoading(false))
+
+    useEffect(() => {
+        void loadPlanWeek(weekStart)
             .then(([nextItems, nextFoods, nextRecipes]) => {
                 setItems(nextItems)
                 setFoods(nextFoods)
@@ -114,10 +133,6 @@ export function Plan() {
             .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
             .finally(() => setLoading(false))
     }, [weekStart])
-
-    useEffect(() => {
-        void refresh()
-    }, [refresh])
 
     const navigateDate = (date: string) => {
         setLoading(true)
