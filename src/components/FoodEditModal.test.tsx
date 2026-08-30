@@ -80,7 +80,7 @@ describe('FoodEditModal', () => {
 
         const editor = screen.getByRole('dialog', { name: 'Edit food' })
         await user.click(within(editor).getByRole('button', { name: 'Delete food' }))
-        const confirmation = screen.getByRole('dialog', { name: 'Delete this food?' })
+        const confirmation = await screen.findByRole('dialog', { name: 'Delete this food?' })
         expect(confirmation).toBeVisible()
         expect(
             screen.getByText('Logged meals keep their saved nutrition.', { exact: false }),
