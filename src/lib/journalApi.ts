@@ -22,7 +22,6 @@ export type JournalQuery = {
     from?: string
     to?: string
     before?: string
-    beforeId?: string
     category?: JournalEvent['category']
     source?: string
     limit?: number
