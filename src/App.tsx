@@ -202,10 +202,12 @@ export default function App() {
                             <Route path="/settings/connections/mcp/new" element={<McpNew />} />
                             <Route
                                 path="/connections"
-                                element={<Navigate to="/settings/connections" replace />} />
+                                element={<Navigate to="/settings/connections" replace />}
+                            />
                             <Route
                                 path="/connections/devices"
-                                element={<Navigate to="/settings/connections/devices" replace />} />
+                                element={<Navigate to="/settings/connections/devices" replace />}
+                            />
                             <Route
                                 path="/connections/devices/new"
                                 element={
@@ -214,13 +216,16 @@ export default function App() {
                             />
                             <Route
                                 path="/connections/mcp"
-                                element={<Navigate to="/settings/connections/mcp" replace />} />
+                                element={<Navigate to="/settings/connections/mcp" replace />}
+                            />
                             <Route
                                 path="/connections/mcp/new"
-                                element={<Navigate to="/settings/connections/mcp/new" replace />} />
+                                element={<Navigate to="/settings/connections/mcp/new" replace />}
+                            />
                             <Route
                                 path="/settings/goals"
-                                element={<Navigate to="/goals" replace />} />
+                                element={<Navigate to="/goals" replace />}
+                            />
                             <Route path="/settings/*" element={<Settings />} />
                             <Route path="*" element={<Navigate to="/today" replace />} />
                         </Routes>

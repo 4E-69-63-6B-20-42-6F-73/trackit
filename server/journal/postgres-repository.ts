@@ -163,7 +163,8 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
     return {
         id: row.id,
         definitionId: primaryDefinitionId,
-        category: (row.category ?? projectedCategory(primaryDefinitionId)) as JournalEntry['category'],
+        category: (row.category ??
+            projectedCategory(primaryDefinitionId)) as JournalEntry['category'],
         title: row.title ?? row.definitionId.replaceAll('_', ' '),
         detail,
         source: sourceLabel(row),
@@ -197,7 +198,9 @@ const toListEntry = (row: JournalListRow): JournalEntry => {
                   row.mealCalories !== null ? `${compactNumber(row.mealCalories)} kcal` : null,
               ]
                   .filter((value): value is string => Boolean(value))
-                  .join(' · ') || row.mealType || 'Snack'
+                  .join(' · ') ||
+              row.mealType ||
+              'Snack'
             : (row.projectedSummary ??
               row.plainDescription ??
               row.textValue ??
@@ -207,7 +210,8 @@ const toListEntry = (row: JournalListRow): JournalEntry => {
     return {
         id: row.id,
         definitionId: row.primaryDefinitionId,
-        category: (row.category ?? projectedCategory(row.primaryDefinitionId)) as JournalEntry['category'],
+        category: (row.category ??
+            projectedCategory(row.primaryDefinitionId)) as JournalEntry['category'],
         title: row.title ?? row.definitionId.replaceAll('_', ' '),
         detail,
         source: row.source,
@@ -307,9 +311,15 @@ export class PostgresJournalRepository implements JournalRepository {
                 createdAt: observations.createdAt,
                 updatedAt: observations.updatedAt,
                 source,
-                projectedSummary: sql<string | null>`${observations.attributes}->'description'->>'summary'`,
-                projectedStartedAt: sql<string | null>`${observations.attributes}->'description'->>'startedAt'`,
-                projectedEndedAt: sql<string | null>`${observations.attributes}->'description'->>'endedAt'`,
+                projectedSummary: sql<
+                    string | null
+                >`${observations.attributes}->'description'->>'summary'`,
+                projectedStartedAt: sql<
+                    string | null
+                >`${observations.attributes}->'description'->>'startedAt'`,
+                projectedEndedAt: sql<
+                    string | null
+                >`${observations.attributes}->'description'->>'endedAt'`,
                 plainDescription: sql<string | null>`CASE
                     WHEN jsonb_typeof(${observations.attributes}->'description') = 'string'
                     THEN ${observations.attributes}->>'description'

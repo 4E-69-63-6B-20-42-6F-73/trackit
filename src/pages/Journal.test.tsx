@@ -170,7 +170,9 @@ describe('Journal', () => {
         await userEvent.click(await screen.findByText('Sleep'))
 
         const dialog = await screen.findByRole('dialog')
-        await waitFor(() => expect(getJournalEntry).toHaveBeenCalledWith('sleep-1', expect.any(AbortSignal)))
+        await waitFor(() =>
+            expect(getJournalEntry).toHaveBeenCalledWith('sleep-1', expect.any(AbortSignal)),
+        )
         expect(within(dialog).getByText('Sleep phases')).toBeInTheDocument()
         expect(within(dialog).getByText('Pixel Watch')).toBeInTheDocument()
         expect(
