@@ -51,7 +51,9 @@ describe('App routing', () => {
                 'Plan meals ahead. They become part of your health record only when logged.',
             ),
         ).toBeInTheDocument()
-        expect(screen.queryByText('Meals are intentions until they are logged.')).not.toBeInTheDocument()
+        expect(
+            screen.queryByText('Meals are intentions until they are logged.'),
+        ).not.toBeInTheDocument()
     })
 
     it('renders a bookmarkable goals route', async () => {
