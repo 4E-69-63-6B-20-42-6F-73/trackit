@@ -11,9 +11,9 @@ import {
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useState } from 'react'
-import type { Food, Nutrients } from '../domain/nutrition'
+import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
-import { FoodNutritionFields, foodNutrientKeys } from './FoodNutritionFields'
+import { FoodNutritionFields } from './FoodNutritionFields'
 
 export function NewFoodModal({
     opened,
