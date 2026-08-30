@@ -20,16 +20,6 @@ export const openApiContract = {
         },
         '/api/journal': {
             get: { responses: { '200': { description: 'Journal entries' } } },
-            post: { responses: { '201': { description: 'Created idempotently' } } },
-        },
-        '/api/journal/{id}': {
-            patch: {
-                responses: {
-                    '200': { description: 'Updated' },
-                    '409': { description: 'Conflict' },
-                },
-            },
-            delete: { responses: { '204': { description: 'Deleted' } } },
         },
         '/api/observations': {
             get: {
@@ -38,6 +28,22 @@ export const openApiContract = {
                 responses: { '200': { description: 'Effective observations' } },
             },
             post: { responses: { '201': { description: 'Created' } } },
+        },
+        '/api/observations/{id}': {
+            patch: {
+                responses: {
+                    '200': { description: 'Updated' },
+                    '409': { description: 'Conflict' },
+                },
+            },
+            delete: {
+                description:
+                    'Deletes the canonical observation; compound meals also delete their nutrient component observations',
+                responses: {
+                    '204': { description: 'Deleted' },
+                    '404': { description: 'Observation not found' },
+                },
+            },
         },
         '/api/daily-metrics': {
             get: {
@@ -76,6 +82,22 @@ export const openApiContract = {
         '/api/meals': {
             get: { responses: { '200': { description: 'Meals' } } },
             post: { responses: { '201': { description: 'Created' } } },
+        },
+        '/api/meals/{id}': {
+            patch: {
+                responses: {
+                    '200': { description: 'Updated' },
+                    '409': { description: 'Conflict' },
+                },
+            },
+            delete: {
+                description:
+                    'Deletes a compound meal observation and all of its nutrient component observations',
+                responses: {
+                    '204': { description: 'Deleted' },
+                    '404': { description: 'Meal not found' },
+                },
+            },
         },
         '/api/preferences': {
             get: { responses: { '200': { description: 'Preferences' } } },
