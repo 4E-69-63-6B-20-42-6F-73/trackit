@@ -178,6 +178,7 @@ export const observationUpdateSchema = z.object({
     excluded: z.boolean().optional(),
     title: z.string().trim().min(1).max(160).optional(),
     textValue: z.string().max(2000).optional(),
+    detail: z.string().max(2000).optional(),
     observedAt: z.string().datetime().optional(),
     version: z.number().int().positive(),
 })
