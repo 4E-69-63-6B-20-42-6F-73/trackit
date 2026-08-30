@@ -21,6 +21,35 @@ describe('nutrition calculations', () => {
         })
     })
 
+    it('omits unavailable nutrients instead of turning them into NaN', () => {
+        const nutrients = nutrientsFor(
+            {
+                ...oats,
+                per100g: {
+                    ...oats.per100g,
+                    sugar: undefined,
+                    saturatedFat: undefined,
+                    sodium: 12,
+                },
+            },
+            50,
+        )
+
+        expect(nutrients).toEqual({
+            calories: 194.5,
+            protein: 8.45,
+            carbs: 33.15,
+            fat: 3.45,
+            fiber: 5.3,
+            sodium: 6,
+        })
+        expect(
+            Object.values(nutrients).every(
+                value => typeof value === 'number' && Number.isFinite(value),
+            ),
+        ).toBe(true)
+    })
+
     it('totals ingredients and calculates recipe servings', () => {
         const items = [
             { food: oats, grams: 100 },
