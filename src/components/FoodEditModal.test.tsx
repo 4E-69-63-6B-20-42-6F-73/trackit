@@ -61,8 +61,13 @@ describe('FoodEditModal', () => {
         const user = userEvent.setup()
         renderEditor()
 
-        expect(screen.queryByLabelText('Saturated fat')).not.toBeVisible()
-        await user.click(screen.getByRole('button', { name: 'More nutrients' }))
+        const disclosure = screen.getByRole('button', { name: 'More nutrients' })
+        expect(disclosure).toHaveAttribute('aria-expanded', 'false')
+        await user.click(disclosure)
+        expect(screen.getByRole('button', { name: 'Hide more nutrients' })).toHaveAttribute(
+            'aria-expanded',
+            'true',
+        )
         expect(screen.getByLabelText('Saturated fat')).toBeVisible()
         expect(screen.getByLabelText('Sodium')).toBeVisible()
         expect(screen.getByLabelText('Potassium')).toBeVisible()
