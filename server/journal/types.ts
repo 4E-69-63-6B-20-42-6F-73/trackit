@@ -53,7 +53,6 @@ export type JournalListQuery = {
     from?: string
     to?: string
     before?: string
-    beforeId?: string
     category?: JournalEntry['category']
     source?: string
     limit?: number
