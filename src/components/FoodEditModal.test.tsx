@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Food } from '../domain/nutrition'
@@ -78,11 +78,8 @@ describe('FoodEditModal', () => {
         const onDelete = vi.fn().mockResolvedValue(undefined)
         const { onClose } = renderEditor(vi.fn().mockResolvedValue(undefined), onDelete)
 
-        await user.click(
-            screen.getByRole('dialog', { name: 'Edit food' }).getByRole('button', {
-                name: 'Delete food',
-            }),
-        )
+        const editor = screen.getByRole('dialog', { name: 'Edit food' })
+        await user.click(within(editor).getByRole('button', { name: 'Delete food' }))
         const confirmation = screen.getByRole('dialog', { name: 'Delete this food?' })
         expect(confirmation).toBeVisible()
         expect(
@@ -90,7 +87,7 @@ describe('FoodEditModal', () => {
         ).toBeVisible()
         expect(onDelete).not.toHaveBeenCalled()
 
-        await user.click(confirmation.getByRole('button', { name: 'Delete food' }))
+        await user.click(within(confirmation).getByRole('button', { name: 'Delete food' }))
         await waitFor(() => expect(onDelete).toHaveBeenCalledOnce())
         expect(onClose).toHaveBeenCalledOnce()
     })
