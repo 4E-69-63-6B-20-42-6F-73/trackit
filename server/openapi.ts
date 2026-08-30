@@ -91,6 +91,17 @@ export const openApiContract = {
                 },
             },
         },
+        '/api/foods/{id}': {
+            delete: {
+                description:
+                    'Deletes a catalog food while preserving historical meal snapshots and refusing deletion while a recipe still references the food',
+                responses: {
+                    '204': { description: 'Deleted' },
+                    '404': { description: 'Food not found' },
+                    '409': { description: 'Version conflict or food is used by a recipe' },
+                },
+            },
+        },
         '/api/foods/import': {
             post: { responses: { '200': { description: 'Per-row food import result' } } },
         },
