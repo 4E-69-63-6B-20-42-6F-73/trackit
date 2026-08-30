@@ -253,17 +253,19 @@ export function JournalEntryDetailModal({
     const locale = preferences?.locale
     const timezone = preferences?.timezone ?? 'UTC'
     const [detailEvent, setDetailEvent] = useState<JournalEvent | null>(null)
+    const eventId = event?.id
 
     useEffect(() => {
-        if (!event) return
+        setDetailEvent(null)
+        if (!eventId) return
         const controller = new AbortController()
-        void getJournalEntry(event.id, controller.signal)
+        void getJournalEntry(eventId, controller.signal)
             .then(setDetailEvent)
             .catch(() => undefined)
         return () => controller.abort()
-    }, [event?.id])
+    }, [eventId])
 
-    const shownEvent = detailEvent?.id === event?.id ? detailEvent : event
+    const shownEvent = detailEvent?.id === eventId ? detailEvent : event
     const hasDetailedView =
         shownEvent?.detailView?.kind === 'meal' ||
         (shownEvent?.detailView?.kind === 'sleep' && shownEvent.detailView.stages.length > 0)
