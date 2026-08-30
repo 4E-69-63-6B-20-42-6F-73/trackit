@@ -61,7 +61,7 @@ describe('JournalMealEditModal', () => {
         )
 
         expect(screen.getByRole('dialog', { name: 'Edit meal' })).toBeVisible()
-        expect(screen.getByDisplayValue('150 g')).toHaveAttribute('readonly')
+        expect(screen.getByLabelText('Amount')).toHaveValue('150')
 
         await user.clear(screen.getByLabelText('Name'))
         await user.type(screen.getByLabelText('Name'), 'Evening oats')
@@ -69,6 +69,8 @@ describe('JournalMealEditModal', () => {
         fireEvent.change(screen.getByLabelText('Date and time'), {
             target: { value: '2026-08-23T19:15' },
         })
+        await user.clear(screen.getByLabelText('Amount'))
+        await user.type(screen.getByLabelText('Amount'), '200')
         await user.clear(screen.getByLabelText('Energy'))
         await user.type(screen.getByLabelText('Energy'), '500')
         await user.clear(screen.getByLabelText('Protein'))
@@ -83,6 +85,7 @@ describe('JournalMealEditModal', () => {
                 name: 'Evening oats',
                 mealType: 'Dinner',
                 eatenAt: '2026-08-23T19:15:00.000Z',
+                serving: { amount: 200, unit: 'g' },
                 nutritionQuality: 'estimated',
                 nutrients: expect.objectContaining({
                     calories: 500,
