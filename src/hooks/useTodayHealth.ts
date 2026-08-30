@@ -3,6 +3,7 @@ import { addCalendarDays, calendarDateKey, calendarDayRangeForKey } from '../dom
 import type { GoalEvaluation } from '../domain/goals'
 import type { NumericObservation } from '../domain/health'
 import { metricDefinition } from '../domain/metricCatalog'
+import { compareTodayHeadlineMetrics, isTodayHeadlineMetric } from '../domain/todaySummary'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { listGoalEvaluations } from '../lib/goalApi'
 import { listObservations } from '../lib/observationApi'
@@ -19,8 +20,6 @@ const asObservation = (row: DailyMetric): NumericObservation => ({
     excluded: false,
     version: row.derivationVersion,
 })
-
-const categoryOrder = ['Sleep', 'Health', 'Wellbeing', 'Body', 'Activity'] as const
 
 export function useTodayHealth(selectedDate: Date = new Date()) {
     const {
@@ -153,30 +152,16 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
                 : (dailyMetric(metric)?.value ?? 0)
         }
         const summaryMetrics = todayRows
-            .map(row => ({ row, definition: metricDefinition(row.definitionId) }))
-            .filter(
-                item =>
-                    item.definition &&
-                    item.definition.category !== 'Nutrition' &&
-                    !['steps', 'active_calories'].includes(item.row.definitionId),
-            )
-            .sort((left, right) => {
-                const leftCategory = categoryOrder.indexOf(
-                    left.definition!.category as (typeof categoryOrder)[number],
-                )
-                const rightCategory = categoryOrder.indexOf(
-                    right.definition!.category as (typeof categoryOrder)[number],
-                )
-                const leftRank = leftCategory === -1 ? categoryOrder.length : leftCategory
-                const rightRank = rightCategory === -1 ? categoryOrder.length : rightCategory
-                return (
-                    leftRank - rightRank ||
-                    left.definition!.name.localeCompare(right.definition!.name)
-                )
+            .flatMap(row => {
+                const definition = metricDefinition(row.definitionId)
+                return definition && isTodayHeadlineMetric(definition) ? [{ row, definition }] : []
             })
+            .sort((left, right) =>
+                compareTodayHeadlineMetrics(left.definition, right.definition),
+            )
             .slice(0, 4)
             .map(({ row, definition }) => ({
-                definition: definition!,
+                definition,
                 observation:
                     details
                         .filter(item => item.definitionId === row.definitionId && !item.excluded)
