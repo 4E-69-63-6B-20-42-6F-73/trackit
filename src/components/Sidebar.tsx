@@ -6,6 +6,7 @@ import type { Page } from '../domain/types'
 
 const paths: Partial<Record<Page, string>> = {
     Today: '/today',
+    Plan: '/plan',
     Journal: '/journal',
     Trends: '/trends',
     Goals: '/goals',
