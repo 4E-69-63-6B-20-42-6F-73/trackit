@@ -54,8 +54,13 @@ export const emptyNutrients = (): Nutrients => ({
 export const nutrientsFor = (food: Food, grams: number): Partial<Nutrients> => {
     const factor = grams / 100
     return Object.fromEntries(
-        Object.entries(food.per100g).map(([key, value]) => [key, value * factor]),
-    ) as Nutrients
+        Object.entries(food.per100g)
+            .filter(
+                (entry): entry is [string, number] =>
+                    typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+            )
+            .map(([key, value]) => [key, value * factor]),
+    ) as Partial<Nutrients>
 }
 
 export const totalNutrients = (items: FoodAmount[]): Nutrients =>
