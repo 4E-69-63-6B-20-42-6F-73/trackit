@@ -174,7 +174,11 @@ export function FoodEditModal({
                             Delete food
                         </Button>
                         <Group gap="xs">
-                            <Button variant="default" disabled={saving || deleting} onClick={onClose}>
+                            <Button
+                                variant="default"
+                                disabled={saving || deleting}
+                                onClick={onClose}
+                            >
                                 Cancel
                             </Button>
                             <Button
