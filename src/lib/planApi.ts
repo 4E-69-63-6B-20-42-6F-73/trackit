@@ -1,9 +1,9 @@
 import { environment } from '../app/env'
-import type { MealPlanItem, MealType } from '../domain/planning'
+import type { MealPlanItem, MealType, PlanReferenceType } from '../domain/planning'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 
-type PlanReference = { type: 'food' | 'recipe'; id: string }
+export type PlanReference = { type: PlanReferenceType; id: string }
 
 export async function listPlanItems(
     range: { from?: string; to?: string } = {},
@@ -22,6 +22,7 @@ export async function listPlanItems(
 
 export async function createPlanMeal(input: {
     scheduledDate: string
+    scheduledTime?: string | null
     mealType: MealType
     reference: PlanReference
     amount: number
@@ -40,6 +41,7 @@ export async function updatePlanMeal(
     item: MealPlanItem,
     changes: Partial<{
         scheduledDate: string
+        scheduledTime: string | null
         mealType: MealType
         reference: PlanReference
         amount: number
@@ -71,7 +73,7 @@ export async function setPlanMealSkipped(item: MealPlanItem, skipped: boolean) {
 
 export async function logPlannedMeal(
     item: MealPlanItem,
-    input: { eatenAt: string; amount?: number },
+    input: { eatenAt: string; amount?: number; foodId?: string },
 ) {
     const response = await authRequest(`/api/plan-items/${item.id}/log`, {
         method: 'POST',
@@ -79,8 +81,14 @@ export async function logPlannedMeal(
         body: JSON.stringify({ version: item.version, ...input }),
     })
     if (response.status === 409) throw new Error('This planned meal was already changed or logged.')
+    if (response.status === 400) throw new Error('Choose a food for this flexible target.')
+    if (response.status === 404) throw new Error('That food does not belong to this food group.')
     if (!response.ok) throw new Error('Could not log this planned meal.')
-    return ((await response.json()) as { data: { observationId: string } }).data
+    return (
+        (await response.json()) as {
+            data: { observationId: string; fulfilledAmount: number }
+        }
+    ).data
 }
 
 export async function deletePlanMeal(item: MealPlanItem) {

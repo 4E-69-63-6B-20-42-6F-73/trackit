@@ -5,6 +5,7 @@ const item = (changes: Partial<MealPlanItem> = {}): MealPlanItem => ({
     id: 'plan-1',
     kind: 'meal',
     scheduledDate: '2026-09-02',
+    scheduledTime: null,
     position: 0,
     skippedAt: null,
     resultObservationId: null,
@@ -14,6 +15,7 @@ const item = (changes: Partial<MealPlanItem> = {}): MealPlanItem => ({
         reference: { type: 'recipe', id: 'recipe-1', name: 'Chicken curry' },
         amount: 1,
         unit: 'serving',
+        fulfilledAmount: 0,
     },
     ...changes,
 })
@@ -42,6 +44,25 @@ describe('planning domain', () => {
                     resultObservationId: 'observation-1',
                 }),
             ),
+        ).toBe('logged')
+    })
+
+    it('tracks partial and complete food group targets', () => {
+        const flexible = item({
+            meal: {
+                mealType: 'Snack',
+                reference: { type: 'category', id: 'fruit', name: 'Fruit' },
+                amount: 200,
+                unit: 'g',
+                fulfilledAmount: 120,
+            },
+        })
+        expect(planStatus(flexible)).toBe('partial')
+        expect(
+            planStatus({
+                ...flexible,
+                meal: { ...flexible.meal, fulfilledAmount: 205 },
+            }),
         ).toBe('logged')
     })
 })

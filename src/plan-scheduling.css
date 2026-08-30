@@ -1,0 +1,13 @@
+.plan-meal-card-partial {
+    background: #fbfefd;
+    border-color: #c6dcd5;
+}
+
+.plan-meal-time {
+    color: var(--teal);
+    font-weight: 700;
+}
+
+.plan-meal-status-partial {
+    color: var(--teal);
+}

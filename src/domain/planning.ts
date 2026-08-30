@@ -1,10 +1,12 @@
 export type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
-export type PlanStatus = 'planned' | 'skipped' | 'logged'
+export type PlanStatus = 'planned' | 'partial' | 'skipped' | 'logged'
+export type PlanReferenceType = 'food' | 'recipe' | 'category'
 
 export type MealPlanItem = {
     id: string
     kind: 'meal'
     scheduledDate: string
+    scheduledTime: string | null
     position: number
     skippedAt: string | null
     resultObservationId: string | null
@@ -12,17 +14,24 @@ export type MealPlanItem = {
     meal: {
         mealType: MealType
         reference: {
-            type: 'food' | 'recipe'
+            type: PlanReferenceType
             id: string
             name: string
         }
         amount: number
         unit: 'g' | 'serving'
+        fulfilledAmount: number
     }
 }
 
-export const planStatus = (item: MealPlanItem): PlanStatus =>
-    item.resultObservationId ? 'logged' : item.skippedAt ? 'skipped' : 'planned'
+export const planStatus = (item: MealPlanItem): PlanStatus => {
+    if (item.resultObservationId) return 'logged'
+    if (item.meal.reference.type === 'category' && item.meal.fulfilledAmount >= item.meal.amount)
+        return 'logged'
+    if (item.skippedAt) return 'skipped'
+    if (item.meal.fulfilledAmount > 0) return 'partial'
+    return 'planned'
+}
 
 export const weekStartKey = (dateKey: string) => {
     const date = new Date(`${dateKey}T12:00:00.000Z`)
@@ -46,3 +55,6 @@ export const formatPlanAmount = (item: MealPlanItem) =>
     item.meal.unit === 'g'
         ? `${Math.round(item.meal.amount * 10) / 10} g`
         : `${Math.round(item.meal.amount * 100) / 100} ${item.meal.amount === 1 ? 'serving' : 'servings'}`
+
+export const formatPlanProgress = (item: MealPlanItem) =>
+    `${Math.round(item.meal.fulfilledAmount * 10) / 10} / ${Math.round(item.meal.amount * 10) / 10} g`

@@ -40,13 +40,16 @@ import { nutrientsFor, roundedNutrients, type Food, type Nutrients } from '../do
 import {
     addPlanDays,
     formatPlanAmount,
+    formatPlanProgress,
     planStatus,
     type MealPlanItem,
     type MealType,
+    type PlanReferenceType,
     weekDateKeys,
     weekStartKey,
 } from '../domain/planning'
 import { useServerData } from '../hooks/useServerData'
+import { listFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
 import { listRecipes, searchFoods, type RecipeRecord } from '../lib/nutritionApi'
 import {
     createPlanMeal,
@@ -70,6 +73,7 @@ const mealDescriptions: Record<MealType, string> = {
 type EditorState = {
     item: MealPlanItem | null
     date: string
+    time: string
     mealType: MealType
     selection: string | null
     amount: number | string
@@ -79,6 +83,7 @@ type LogState = {
     item: MealPlanItem
     recordedAt: string
     amount: number | string
+    foodId: string | null
 }
 
 const referenceValue = (item: MealPlanItem) =>
@@ -90,6 +95,7 @@ const loadPlanWeek = (weekStart: string) => {
         listPlanItems({ from: range[0], to: range[6] }),
         searchFoods(''),
         listRecipes(),
+        listFoodCategories(),
     ])
 }
 
@@ -107,18 +113,20 @@ export function Plan() {
     const [items, setItems] = useState<MealPlanItem[]>([])
     const [foods, setFoods] = useState<Food[]>([])
     const [recipes, setRecipes] = useState<RecipeRecord[]>([])
+    const [categories, setCategories] = useState<FoodCategory[]>([])
     const [loading, setLoading] = useState(true)
     const [message, setMessage] = useState('')
     const [editor, setEditor] = useState<EditorState | null>(null)
     const [logState, setLogState] = useState<LogState | null>(null)
     const [busy, setBusy] = useState(false)
 
-    const applyLoadedWeek = ([nextItems, nextFoods, nextRecipes]: Awaited<
+    const applyLoadedWeek = ([nextItems, nextFoods, nextRecipes, nextCategories]: Awaited<
         ReturnType<typeof loadPlanWeek>
     >) => {
         setItems(nextItems)
         setFoods(nextFoods)
         setRecipes(nextRecipes)
+        setCategories(nextCategories)
         setMessage('')
     }
 
@@ -130,12 +138,7 @@ export function Plan() {
 
     useEffect(() => {
         void loadPlanWeek(weekStart)
-            .then(([nextItems, nextFoods, nextRecipes]) => {
-                setItems(nextItems)
-                setFoods(nextFoods)
-                setRecipes(nextRecipes)
-                setMessage('')
-            })
+            .then(applyLoadedWeek)
             .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
             .finally(() => setLoading(false))
     }, [weekStart])
@@ -149,12 +152,13 @@ export function Plan() {
     }
 
     const openNew = (date: string, mealType: MealType) =>
-        setEditor({ item: null, date, mealType, selection: null, amount: 1 })
+        setEditor({ item: null, date, time: '', mealType, selection: null, amount: 1 })
 
     const openEdit = (item: MealPlanItem) =>
         setEditor({
             item,
             date: item.scheduledDate,
+            time: item.scheduledTime ?? '',
             mealType: item.meal.mealType,
             selection: referenceValue(item),
             amount: item.meal.amount,
@@ -166,6 +170,9 @@ export function Plan() {
         : undefined
     const selectedRecipe = selection?.startsWith('recipe:')
         ? recipes.find(recipe => recipe.id === selection.slice(7))
+        : undefined
+    const selectedCategory = selection?.startsWith('category:')
+        ? categories.find(category => category.id === selection.slice(9))
         : undefined
     const preview = (() => {
         const amount = Number(editor?.amount)
@@ -195,7 +202,7 @@ export function Plan() {
         setEditor({
             ...editor,
             selection: value,
-            amount: food?.servingGrams ?? 1,
+            amount: value.startsWith('category:') ? 200 : (food?.servingGrams ?? 1),
         })
     }
 
@@ -203,23 +210,18 @@ export function Plan() {
         if (!editor?.selection) return
         const amount = Number(editor.amount)
         if (!Number.isFinite(amount) || amount <= 0) return
-        const [type, id] = editor.selection.split(':') as ['food' | 'recipe', string]
+        const [type, id] = editor.selection.split(':') as [PlanReferenceType, string]
         setBusy(true)
         try {
-            if (editor.item)
-                await updatePlanMeal(editor.item, {
-                    scheduledDate: editor.date,
-                    mealType: editor.mealType,
-                    reference: { type, id },
-                    amount,
-                })
-            else
-                await createPlanMeal({
-                    scheduledDate: editor.date,
-                    mealType: editor.mealType,
-                    reference: { type, id },
-                    amount,
-                })
+            const changes = {
+                scheduledDate: editor.date,
+                scheduledTime: editor.time || null,
+                mealType: editor.mealType,
+                reference: { type, id },
+                amount,
+            }
+            if (editor.item) await updatePlanMeal(editor.item, changes)
+            else await createPlanMeal(changes)
             setEditor(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
             await refresh()
@@ -244,13 +246,25 @@ export function Plan() {
         }
     }
 
+    const categoryFoods = (item: MealPlanItem) => {
+        if (item.meal.reference.type !== 'category') return []
+        const category = categories.find(candidate => candidate.id === item.meal.reference.id)
+        if (!category) return []
+        const members = new Set(category.foodIds)
+        return foods.filter(food => members.has(food.id))
+    }
+
     const openLog = (item: MealPlanItem) => {
         const now = calendarLocalDateTimeValue(new Date(), timezone)
-        const [, time] = now.split('T')
+        const [, currentTime] = now.split('T')
+        const plannedTime =
+            item.scheduledTime ?? (item.scheduledDate === todayKey ? currentTime : '12:00')
+        const remaining = Math.max(0.01, item.meal.amount - item.meal.fulfilledAmount)
         setLogState({
             item,
-            recordedAt: `${item.scheduledDate}T${item.scheduledDate === todayKey ? time : '12:00'}`,
-            amount: item.meal.amount,
+            recordedAt: `${item.scheduledDate}T${plannedTime}`,
+            amount: item.meal.reference.type === 'category' ? remaining : item.meal.amount,
+            foodId: null,
         })
     }
 
@@ -258,6 +272,7 @@ export function Plan() {
         if (!logState) return
         const amount = Number(logState.amount)
         if (!Number.isFinite(amount) || amount <= 0 || !logState.recordedAt) return
+        if (logState.item.meal.reference.type === 'category' && !logState.foodId) return
         setBusy(true)
         try {
             await logPlannedMeal(logState.item, {
@@ -266,6 +281,7 @@ export function Plan() {
                     timezone,
                 ).toISOString(),
                 amount,
+                foodId: logState.foodId ?? undefined,
             })
             setLogState(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
@@ -282,18 +298,34 @@ export function Plan() {
 
     const mealCard = (item: MealPlanItem) => {
         const status = planStatus(item)
+        const typeLabel =
+            item.meal.reference.type === 'recipe'
+                ? 'Recipe'
+                : item.meal.reference.type === 'category'
+                  ? 'Food group'
+                  : 'Food'
         return (
             <div key={item.id} className={`plan-meal-card plan-meal-card-${status}`}>
                 <div className="plan-meal-title">{item.meal.reference.name}</div>
                 <div className="plan-meal-meta">
                     <span>
-                        {formatPlanAmount(item)} ·{' '}
-                        {item.meal.reference.type === 'recipe' ? 'Recipe' : 'Food'}
+                        {item.scheduledTime && (
+                            <span className="plan-meal-time">{item.scheduledTime} · </span>
+                        )}
+                        {item.meal.reference.type === 'category' && item.meal.fulfilledAmount > 0
+                            ? formatPlanProgress(item)
+                            : formatPlanAmount(item)}{' '}
+                        · {typeLabel}
                     </span>
                     {status === 'logged' && (
                         <span className="plan-meal-status">
                             <IconCheck size={11} />
-                            Logged
+                            {item.meal.reference.type === 'category' ? 'Complete' : 'Logged'}
+                        </span>
+                    )}
+                    {status === 'partial' && (
+                        <span className="plan-meal-status plan-meal-status-partial">
+                            In progress
                         </span>
                     )}
                     {status === 'skipped' && (
@@ -313,15 +345,17 @@ export function Plan() {
                         </ActionIcon>
                     </Menu.Target>
                     <Menu.Dropdown>
-                        {status === 'planned' && (
+                        {(status === 'planned' || status === 'partial') && (
                             <Menu.Item
                                 leftSection={<IconCheck size={15} />}
                                 onClick={() => openLog(item)}
                             >
-                                Log as eaten
+                                {item.meal.reference.type === 'category'
+                                    ? 'Log progress'
+                                    : 'Log as eaten'}
                             </Menu.Item>
                         )}
-                        {status !== 'logged' && (
+                        {(status === 'planned' || status === 'skipped') && (
                             <Menu.Item
                                 leftSection={<IconEdit size={15} />}
                                 onClick={() => openEdit(item)}
@@ -359,6 +393,15 @@ export function Plan() {
         )
     }
 
+    const slotItems = (date: string, mealType: MealType) =>
+        items
+            .filter(item => item.scheduledDate === date && item.meal.mealType === mealType)
+            .sort(
+                (left, right) =>
+                    (left.scheduledTime ?? '99:99').localeCompare(right.scheduledTime ?? '99:99') ||
+                    left.position - right.position,
+            )
+
     const desktopPlan = (
         <>
             <div className="plan-board">
@@ -376,9 +419,7 @@ export function Plan() {
                                 <div className="plan-day-name">
                                     {isToday
                                         ? 'Today'
-                                        : formatCalendarDate(date, locale, {
-                                              weekday: 'short',
-                                          })}
+                                        : formatCalendarDate(date, locale, { weekday: 'short' })}
                                 </div>
                                 <div className="plan-day-number">
                                     {formatCalendarDate(date, locale, { day: 'numeric' })}
@@ -402,21 +443,17 @@ export function Plan() {
                                 </span>
                             </div>
                             {dates.map(date => {
-                                const slotItems = items.filter(
-                                    item =>
-                                        item.scheduledDate === date &&
-                                        item.meal.mealType === mealType,
-                                )
+                                const planned = slotItems(date, mealType)
                                 const isToday = date === todayKey
                                 return (
                                     <div
                                         key={`${date}-${mealType}`}
                                         className={`plan-slot${isToday ? ' plan-slot-today' : ''}${
-                                            slotItems.length === 0 ? ' plan-slot-empty' : ''
+                                            planned.length === 0 ? ' plan-slot-empty' : ''
                                         }`}
                                     >
-                                        {slotItems.map(mealCard)}
-                                        {slotItems.length === 0 ? (
+                                        {planned.map(mealCard)}
+                                        {planned.length === 0 ? (
                                             <button
                                                 type="button"
                                                 className="plan-add-cell"
@@ -453,7 +490,7 @@ export function Plan() {
                 </span>
                 <span className="plan-legend-item">
                     <IconCheck size={13} />
-                    Logged meals become health records
+                    Flexible food groups can be completed across multiple foods
                 </span>
             </div>
         </>
@@ -479,9 +516,7 @@ export function Plan() {
                                 <span className="plan-mobile-day-name">
                                     {isToday
                                         ? 'Today'
-                                        : formatCalendarDate(date, locale, {
-                                              weekday: 'short',
-                                          })}
+                                        : formatCalendarDate(date, locale, { weekday: 'short' })}
                                 </span>
                                 <span className="plan-mobile-day-number">
                                     {formatCalendarDate(date, locale, { day: 'numeric' })}
@@ -491,29 +526,20 @@ export function Plan() {
                     })}
                 </div>
             </div>
-
             <div className="plan-mobile-heading">
                 <div className="plan-mobile-eyebrow">
                     {selectedDate === todayKey
                         ? 'Today'
-                        : formatCalendarDate(selectedDate, locale, {
-                              weekday: 'long',
-                          })}
+                        : formatCalendarDate(selectedDate, locale, { weekday: 'long' })}
                 </div>
                 <h2>
-                    {formatCalendarDate(selectedDate, locale, {
-                        month: 'long',
-                        day: 'numeric',
-                    })}
+                    {formatCalendarDate(selectedDate, locale, { month: 'long', day: 'numeric' })}
                 </h2>
             </div>
-
             {mealTypes.map(mealType => {
-                const slotItems = items.filter(
-                    item => item.scheduledDate === selectedDate && item.meal.mealType === mealType,
-                )
+                const planned = slotItems(selectedDate, mealType)
                 return (
-                    <section key={mealType} className="plan-mobile-section">
+                    <section className="plan-mobile-section" key={mealType}>
                         <div className="plan-mobile-section-header">
                             <strong>{mealType}</strong>
                             <button
@@ -524,10 +550,10 @@ export function Plan() {
                                 + Add
                             </button>
                         </div>
-                        {slotItems.length ? (
+                        {planned.length ? (
                             <div className="plan-mobile-list">
-                                {slotItems.map(item => (
-                                    <div key={item.id} className="plan-mobile-card">
+                                {planned.map(item => (
+                                    <div className="plan-mobile-card" key={item.id}>
                                         {mealCard(item)}
                                     </div>
                                 ))}
@@ -540,6 +566,8 @@ export function Plan() {
             })}
         </>
     )
+
+    const logFoods = logState ? categoryFoods(logState.item) : []
 
     return (
         <div className="page-content simple-page">
@@ -557,7 +585,7 @@ export function Plan() {
                     >
                         <IconChevronLeft size={17} />
                     </ActionIcon>
-                    <Text fw={700} className="plan-week-label">
+                    <Text className="plan-week-label" fw={700}>
                         {weekLabel}
                     </Text>
                     <ActionIcon
@@ -568,14 +596,11 @@ export function Plan() {
                         <IconChevronRight size={17} />
                     </ActionIcon>
                 </div>
-                <Button
-                    variant="default"
-                    size="sm"
-                    onClick={() => navigateDate(todayKey)}
-                    disabled={weekStart === weekStartKey(todayKey)}
-                >
-                    This week
-                </Button>
+                {weekStart !== weekStartKey(todayKey) && (
+                    <Button variant="default" size="sm" onClick={() => navigateDate(todayKey)}>
+                        This week
+                    </Button>
+                )}
             </div>
 
             {message && (
@@ -585,7 +610,11 @@ export function Plan() {
             )}
 
             {loading ? (
-                <Skeleton height={compact ? 440 : 540} radius="lg" />
+                compact ? (
+                    <Skeleton height={420} radius="lg" />
+                ) : (
+                    <Skeleton height={540} radius="lg" />
+                )
             ) : compact ? (
                 mobilePlan
             ) : (
@@ -602,13 +631,21 @@ export function Plan() {
             >
                 {editor && (
                     <Stack>
-                        <SimpleGrid cols={{ base: 1, sm: 2 }}>
+                        <SimpleGrid cols={{ base: 1, sm: 3 }}>
                             <TextInput
                                 type="date"
                                 label="Day"
                                 value={editor.date}
                                 onChange={event =>
                                     setEditor({ ...editor, date: event.currentTarget.value })
+                                }
+                            />
+                            <TextInput
+                                type="time"
+                                label="Time (optional)"
+                                value={editor.time}
+                                onChange={event =>
+                                    setEditor({ ...editor, time: event.currentTarget.value })
                                 }
                             />
                             <Select
@@ -622,11 +659,15 @@ export function Plan() {
                         </SimpleGrid>
                         <Select
                             searchable
-                            label="Food or recipe"
-                            placeholder="Search your library"
+                            label="Food, recipe, or food group"
+                            placeholder="Search your library or choose a flexible group"
                             value={editor.selection}
                             onChange={chooseReference}
                             data={[
+                                ...categories.map(category => ({
+                                    value: `category:${category.id}`,
+                                    label: `Food group · ${category.name}`,
+                                })),
                                 ...recipes.map(recipe => ({
                                     value: `recipe:${recipe.id}`,
                                     label: `Recipe · ${recipe.name}`,
@@ -636,16 +677,22 @@ export function Plan() {
                                     label: `Food · ${food.name}`,
                                 })),
                             ]}
-                            nothingFoundMessage="No saved food or recipe found"
+                            nothingFoundMessage="No saved food, recipe, or food group found"
                         />
                         <NumberInput
                             label={selectedRecipe ? 'Servings' : 'Amount'}
-                            suffix={selectedFood ? ' g' : undefined}
+                            suffix={selectedRecipe ? undefined : ' g'}
                             value={editor.amount}
                             onChange={value => setEditor({ ...editor, amount: value })}
                             min={0.01}
                             decimalScale={2}
                         />
+                        {selectedCategory && (
+                            <Text size="sm" c="dimmed">
+                                Any saved food assigned to {selectedCategory.name} can count toward
+                                this target. Progress can be logged in multiple entries.
+                            </Text>
+                        )}
                         {preview && (
                             <Paper withBorder radius="md" p="sm">
                                 <Text size="xs" c="dimmed" mb={6}>
@@ -702,17 +749,40 @@ export function Plan() {
             <Modal
                 opened={Boolean(logState)}
                 onClose={() => !busy && setLogState(null)}
-                title={<Text fw={700}>Log as eaten</Text>}
+                title={
+                    <Text fw={700}>
+                        {logState?.item.meal.reference.type === 'category'
+                            ? 'Log progress'
+                            : 'Log as eaten'}
+                    </Text>
+                }
             >
                 {logState && (
                     <Stack>
                         <div>
                             <Text fw={700}>{logState.item.meal.reference.name}</Text>
                             <Text size="sm" c="dimmed">
-                                Planned for {logState.item.meal.mealType.toLowerCase()}. Adjust what
-                                actually happened before logging.
+                                {logState.item.meal.reference.type === 'category'
+                                    ? `${formatPlanProgress(logState.item)} logged. Choose what you ate.`
+                                    : `Planned for ${logState.item.meal.mealType.toLowerCase()}. Adjust what actually happened before logging.`}
                             </Text>
                         </div>
+                        {logState.item.meal.reference.type === 'category' && (
+                            <Select
+                                searchable
+                                required
+                                label="Food"
+                                placeholder={
+                                    logFoods.length
+                                        ? `Choose a ${logState.item.meal.reference.name.toLowerCase()} food`
+                                        : 'Assign foods to this group in Library first'
+                                }
+                                value={logState.foodId}
+                                onChange={foodId => setLogState({ ...logState, foodId })}
+                                data={logFoods.map(food => ({ value: food.id, label: food.name }))}
+                                nothingFoundMessage="No matching foods in your library"
+                            />
+                        )}
                         <NumberInput
                             label={logState.item.meal.unit === 'g' ? 'Amount' : 'Servings'}
                             suffix={logState.item.meal.unit === 'g' ? ' g' : undefined}
@@ -738,8 +808,18 @@ export function Plan() {
                             >
                                 Cancel
                             </Button>
-                            <Button color="trackit" loading={busy} onClick={() => void saveLog()}>
-                                Log as eaten
+                            <Button
+                                color="trackit"
+                                loading={busy}
+                                disabled={
+                                    logState.item.meal.reference.type === 'category' &&
+                                    !logState.foodId
+                                }
+                                onClick={() => void saveLog()}
+                            >
+                                {logState.item.meal.reference.type === 'category'
+                                    ? 'Log progress'
+                                    : 'Log as eaten'}
                             </Button>
                         </Group>
                     </Stack>

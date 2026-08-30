@@ -4,6 +4,7 @@ import {
     Button,
     Group,
     Modal,
+    MultiSelect,
     NumberInput,
     SimpleGrid,
     Stack,
@@ -11,8 +12,9 @@ import {
     TextInput,
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
+import { listFoodCategories, setFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
 
 export function FoodEditModal({
@@ -33,6 +35,9 @@ export function FoodEditModal({
     const [servingName, setServingName] = useState(food.servingName)
     const [servingGrams, setServingGrams] = useState<number | string>(food.servingGrams)
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>(food.per100g)
+    const [categories, setCategories] = useState<FoodCategory[]>([])
+    const [categoryIds, setCategoryIds] = useState<string[]>([])
+    const [categoriesLoaded, setCategoriesLoaded] = useState(false)
     const [error, setError] = useState('')
     const [deleteError, setDeleteError] = useState('')
     const [saving, setSaving] = useState(false)
@@ -44,6 +49,20 @@ export function FoodEditModal({
             : foodNutrientKeys.every(key => nutrients[key] !== undefined)
               ? 'complete'
               : 'incomplete'
+
+    useEffect(() => {
+        void listFoodCategories()
+            .then(nextCategories => {
+                setCategories(nextCategories)
+                setCategoryIds(
+                    nextCategories
+                        .filter(category => category.foodIds.includes(food.id))
+                        .map(category => category.id),
+                )
+                setCategoriesLoaded(true)
+            })
+            .catch(() => undefined)
+    }, [food.id])
 
     const setNutrient = (key: keyof Nutrients, value: number | string) => {
         setNutrients(current => {
@@ -70,6 +89,7 @@ export function FoodEditModal({
                 nutritionQuality: quality,
                 per100g: nutrients,
             })
+            if (categoriesLoaded) await setFoodCategories(food.id, categoryIds)
             onClose()
         } catch (reason) {
             setError(reason instanceof Error ? reason.message : 'Could not update food.')
@@ -124,6 +144,21 @@ export function FoodEditModal({
                         <Text size="xs" c="dimmed">
                             Source: {food.catalogSource}
                         </Text>
+                    )}
+                    {categoriesLoaded && (
+                        <MultiSelect
+                            label="Food groups"
+                            description="Groups let flexible meal plans accept any matching food."
+                            placeholder="Choose one or more groups"
+                            data={categories.map(category => ({
+                                value: category.id,
+                                label: category.name,
+                            }))}
+                            value={categoryIds}
+                            onChange={setCategoryIds}
+                            searchable
+                            clearable
+                        />
                     )}
 
                     <Text fw={650} mt="xs">

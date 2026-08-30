@@ -10,6 +10,7 @@ import {
     uuid,
 } from 'drizzle-orm/pg-core'
 import { foods, observations, recipes } from '../db/schema.js'
+import { foodCategories } from '../nutrition/schema.js'
 
 export const planItems = pgTable(
     'plan_items',
@@ -45,3 +46,38 @@ export const plannedMeals = pgTable('planned_meals', {
     amount: doublePrecision('amount').notNull(),
     unit: text('unit').notNull(),
 })
+
+export const planScheduleTimes = pgTable('plan_schedule_times', {
+    planItemId: uuid('plan_item_id')
+        .primaryKey()
+        .references(() => planItems.id, { onDelete: 'cascade' }),
+    scheduledTime: text('scheduled_time').notNull(),
+})
+
+export const plannedMealCategories = pgTable('planned_meal_categories', {
+    planItemId: uuid('plan_item_id')
+        .primaryKey()
+        .references(() => planItems.id, { onDelete: 'cascade' }),
+    categoryId: text('category_id')
+        .notNull()
+        .references(() => foodCategories.id),
+})
+
+export const planFulfillments = pgTable(
+    'plan_fulfillments',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        planItemId: uuid('plan_item_id')
+            .notNull()
+            .references(() => planItems.id, { onDelete: 'cascade' }),
+        observationId: uuid('observation_id')
+            .notNull()
+            .references(() => observations.id, { onDelete: 'cascade' }),
+        amount: doublePrecision('amount').notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        uniqueIndex('plan_fulfillment_identity_idx').on(table.planItemId, table.observationId),
+        index('plan_fulfillment_plan_idx').on(table.planItemId),
+    ],
+)
