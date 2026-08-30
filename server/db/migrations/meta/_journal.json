@@ -1,146 +1,153 @@
 {
-    "version": "7",
-    "dialect": "postgresql",
-    "entries": [
-        {
-            "idx": 0,
-            "version": "7",
-            "when": 1787435256540,
-            "tag": "0000_initial",
-            "breakpoints": true
-        },
-        {
-            "idx": 1,
-            "version": "7",
-            "when": 1787490478738,
-            "tag": "0001_experience_preferences",
-            "breakpoints": true
-        },
-        {
-            "idx": 2,
-            "version": "7",
-            "when": 1787491669236,
-            "tag": "0002_food_catalog_barcode",
-            "breakpoints": true
-        },
-        {
-            "idx": 3,
-            "version": "7",
-            "when": 1787493238912,
-            "tag": "0003_health_connect_records",
-            "breakpoints": true
-        },
-        {
-            "idx": 4,
-            "version": "7",
-            "when": 1787508000000,
-            "tag": "0004_quiet_health_journal",
-            "breakpoints": true
-        },
-        {
-            "idx": 5,
-            "version": "7",
-            "when": 1787509000000,
-            "tag": "0005_nullable_food_nutrients",
-            "breakpoints": true
-        },
-        {
-            "idx": 6,
-            "version": "7",
-            "when": 1787529600000,
-            "tag": "0006_metric_preferences",
-            "breakpoints": true
-        },
-        {
-            "idx": 7,
-            "version": "7",
-            "when": 1787533200000,
-            "tag": "0007_generalized_goals",
-            "breakpoints": true
-        },
-        {
-            "idx": 8,
-            "version": "7",
-            "when": 1787590800000,
-            "tag": "0008_metric_sources",
-            "breakpoints": true
-        },
-        {
-            "idx": 9,
-            "version": "7",
-            "when": 1787594400000,
-            "tag": "0009_mcp_optional_expiry",
-            "breakpoints": true
-        },
-        {
-            "idx": 10,
-            "version": "7",
-            "when": 1787640000000,
-            "tag": "0010_metric_projection_versions",
-            "breakpoints": true
-        },
-        {
-            "idx": 11,
-            "version": "7",
-            "when": 1787642400000,
-            "tag": "0011_projection_materialization",
-            "breakpoints": true
-        },
-        {
-            "idx": 12,
-            "version": "7",
-            "when": 1787669429041,
-            "tag": "0012_derived_observation_cache",
-            "breakpoints": true
-        },
-        {
-            "idx": 13,
-            "version": "7",
-            "when": 1787670215755,
-            "tag": "0013_generalized_observations",
-            "breakpoints": true
-        },
-        {
-            "idx": 14,
-            "version": "7",
-            "when": 1787686079065,
-            "tag": "0014_retire_legacy_journal_meals",
-            "breakpoints": true
-        },
-        {
-            "idx": 15,
-            "version": "7",
-            "when": 1787688000000,
-            "tag": "0015_observation_definition_identity",
-            "breakpoints": true
-        },
-        {
-            "idx": 16,
-            "version": "7",
-            "when": 1787689000000,
-            "tag": "0016_projection_definition_identity",
-            "breakpoints": true
-        },
-        {
-            "idx": 17,
-            "version": "7",
-            "when": 1787981570171,
-            "tag": "0017_remove_managed_backup_retention",
-            "breakpoints": true
-        },
-        {
-            "idx": 18,
-            "version": "7",
-            "when": 1788035140841,
-            "tag": "0018_flawless_psynapse",
-            "breakpoints": true
-        },
-        {
-            "idx": 19,
-            "version": "7",
-            "when": 1788108316111,
-            "tag": "0019_canonical_health_record_identity",
-            "breakpoints": true
-        }
-    ]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1787435256540,
+      "tag": "0000_initial",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787490478738,
+      "tag": "0001_experience_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787491669236,
+      "tag": "0002_food_catalog_barcode",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787493238912,
+      "tag": "0003_health_connect_records",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787508000000,
+      "tag": "0004_quiet_health_journal",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787509000000,
+      "tag": "0005_nullable_food_nutrients",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787529600000,
+      "tag": "0006_metric_preferences",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787533200000,
+      "tag": "0007_generalized_goals",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1787590800000,
+      "tag": "0008_metric_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1787594400000,
+      "tag": "0009_mcp_optional_expiry",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1787640000000,
+      "tag": "0010_metric_projection_versions",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1787642400000,
+      "tag": "0011_projection_materialization",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787669429041,
+      "tag": "0012_derived_observation_cache",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787670215755,
+      "tag": "0013_generalized_observations",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1787686079065,
+      "tag": "0014_retire_legacy_journal_meals",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1787688000000,
+      "tag": "0015_observation_definition_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1787689000000,
+      "tag": "0016_projection_definition_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787981570171,
+      "tag": "0017_remove_managed_backup_retention",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1788035140841,
+      "tag": "0018_flawless_psynapse",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1788108316111,
+      "tag": "0019_canonical_health_record_identity",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1788112989010,
+      "tag": "0020_meal_planning",
+      "breakpoints": true
+    }
+  ]
 }
