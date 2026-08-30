@@ -15,7 +15,10 @@ export function registerFoodCategoryRoutes(app: FastifyInstance, database: Datab
     app.get('/api/food-categories', async () => {
         await database.insert(foodCategories).values(defaultFoodCategories).onConflictDoNothing()
         const [categories, memberships] = await Promise.all([
-            database.select().from(foodCategories).orderBy(foodCategories.sortOrder, foodCategories.name),
+            database
+                .select()
+                .from(foodCategories)
+                .orderBy(foodCategories.sortOrder, foodCategories.name),
             database.select().from(foodCategoryMemberships),
         ])
         return {

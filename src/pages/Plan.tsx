@@ -257,7 +257,8 @@ export function Plan() {
     const openLog = (item: MealPlanItem) => {
         const now = calendarLocalDateTimeValue(new Date(), timezone)
         const [, currentTime] = now.split('T')
-        const plannedTime = item.scheduledTime ?? (item.scheduledDate === todayKey ? currentTime : '12:00')
+        const plannedTime =
+            item.scheduledTime ?? (item.scheduledDate === todayKey ? currentTime : '12:00')
         const remaining = Math.max(0.01, item.meal.amount - item.meal.fulfilledAmount)
         setLogState({
             item,
@@ -323,7 +324,9 @@ export function Plan() {
                         </span>
                     )}
                     {status === 'partial' && (
-                        <span className="plan-meal-status plan-meal-status-partial">In progress</span>
+                        <span className="plan-meal-status plan-meal-status-partial">
+                            In progress
+                        </span>
                     )}
                     {status === 'skipped' && (
                         <span className="plan-meal-status plan-meal-status-skipped">Skipped</span>
@@ -529,7 +532,9 @@ export function Plan() {
                         ? 'Today'
                         : formatCalendarDate(selectedDate, locale, { weekday: 'long' })}
                 </div>
-                <h2>{formatCalendarDate(selectedDate, locale, { month: 'long', day: 'numeric' })}</h2>
+                <h2>
+                    {formatCalendarDate(selectedDate, locale, { month: 'long', day: 'numeric' })}
+                </h2>
             </div>
             {mealTypes.map(mealType => {
                 const planned = slotItems(selectedDate, mealType)

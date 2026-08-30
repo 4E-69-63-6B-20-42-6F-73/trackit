@@ -26,10 +26,7 @@ export type MealPlanItem = {
 
 export const planStatus = (item: MealPlanItem): PlanStatus => {
     if (item.resultObservationId) return 'logged'
-    if (
-        item.meal.reference.type === 'category' &&
-        item.meal.fulfilledAmount >= item.meal.amount
-    )
+    if (item.meal.reference.type === 'category' && item.meal.fulfilledAmount >= item.meal.amount)
         return 'logged'
     if (item.skippedAt) return 'skipped'
     if (item.meal.fulfilledAmount > 0) return 'partial'

@@ -84,9 +84,11 @@ export async function logPlannedMeal(
     if (response.status === 400) throw new Error('Choose a food for this flexible target.')
     if (response.status === 404) throw new Error('That food does not belong to this food group.')
     if (!response.ok) throw new Error('Could not log this planned meal.')
-    return ((await response.json()) as {
-        data: { observationId: string; fulfilledAmount: number }
-    }).data
+    return (
+        (await response.json()) as {
+            data: { observationId: string; fulfilledAmount: number }
+        }
+    ).data
 }
 
 export async function deletePlanMeal(item: MealPlanItem) {

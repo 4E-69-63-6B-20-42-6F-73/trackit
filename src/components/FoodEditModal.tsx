@@ -14,11 +14,7 @@ import {
 import { useMediaQuery } from '@mantine/hooks'
 import { useEffect, useState } from 'react'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
-import {
-    listFoodCategories,
-    setFoodCategories,
-    type FoodCategory,
-} from '../lib/foodCategoryApi'
+import { listFoodCategories, setFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
 
 export function FoodEditModal({

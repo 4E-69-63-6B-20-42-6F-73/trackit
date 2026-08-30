@@ -129,7 +129,10 @@ const fulfillmentTotals = async (database: Database, planItemIds: string[]) => {
         .from(planFulfillments)
         .innerJoin(
             observations,
-            and(eq(planFulfillments.observationId, observations.id), isNull(observations.deletedAt)),
+            and(
+                eq(planFulfillments.observationId, observations.id),
+                isNull(observations.deletedAt),
+            ),
         )
         .where(inArray(planFulfillments.planItemId, planItemIds))
         .groupBy(planFulfillments.planItemId)
@@ -538,7 +541,9 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                             foodId: reference.type === 'food' ? reference.id : undefined,
                             recipeId: reference.type === 'recipe' ? reference.id : undefined,
                             foodCategoryId:
-                                current.referenceType === 'category' ? current.categoryId : undefined,
+                                current.referenceType === 'category'
+                                    ? current.categoryId
+                                    : undefined,
                         },
                     })
                     .returning()
@@ -627,7 +632,8 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                 return reply.code(409).send({ error: message })
             if (message === 'reference_not_found' || message === 'food_not_in_category')
                 return reply.code(404).send({ error: message })
-            if (message === 'category_food_required') return reply.code(400).send({ error: message })
+            if (message === 'category_food_required')
+                return reply.code(400).send({ error: message })
             throw error
         }
     })
