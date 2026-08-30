@@ -1,4 +1,4 @@
-import { and, eq, isNull } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
@@ -25,11 +25,7 @@ export function registerRecipeFavoriteRoutes(app: FastifyInstance, database: Dat
                 updatedAt: new Date(),
             })
             .where(
-                and(
-                    eq(recipes.id, request.params.id),
-                    eq(recipes.version, input.version),
-                    isNull(recipes.deletedAt),
-                ),
+                and(eq(recipes.id, request.params.id), eq(recipes.version, input.version)),
             )
             .returning()
         if (!updated) return reply.code(409).send({ error: 'version_conflict' })
