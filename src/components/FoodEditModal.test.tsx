@@ -9,6 +9,7 @@ const food: Food = {
     id: 'food-1',
     name: 'Plain Skyr',
     brand: 'Generic',
+    catalogSource: 'MCP: llama',
     servingName: 'serving',
     servingGrams: 100,
     favorite: false,
@@ -34,31 +35,57 @@ const renderEditor = (onSave = vi.fn().mockResolvedValue(undefined), onDelete = 
 }
 
 describe('FoodEditModal', () => {
-    it('keeps a cleared nutrient unknown instead of changing it to zero', async () => {
+    it('uses the food form language and keeps a cleared nutrient unknown', async () => {
         const user = userEvent.setup()
         const { onSave } = renderEditor()
 
-        await user.clear(screen.getByLabelText('Sugar (g / 100 g)'))
-        await user.click(screen.getByRole('button', { name: 'Save food' }))
+        expect(screen.getByRole('dialog', { name: 'Edit food' })).toBeVisible()
+        expect(screen.getByText('Basics')).toBeVisible()
+        expect(screen.getByText('Serving')).toBeVisible()
+        expect(screen.getByText('Nutrition per 100 g')).toBeVisible()
+        expect(screen.getByText('Source: MCP: llama')).toBeVisible()
+        expect(screen.getByText('Estimated nutrition')).toBeVisible()
+        expect(screen.queryByLabelText('Nutrition quality')).not.toBeInTheDocument()
+
+        await user.clear(screen.getByLabelText('Sugar'))
+        await user.click(screen.getByRole('button', { name: 'Save changes' }))
 
         await waitFor(() => expect(onSave).toHaveBeenCalledOnce())
         const saved = onSave.mock.calls[0][0]
         expect(saved.per100g).not.toHaveProperty('sugar')
         expect(saved.per100g.fat).toBe(0.2)
+        expect(saved.nutritionQuality).toBe('estimated')
     })
 
-    it('requires confirmation before permanently deleting a food', async () => {
+    it('keeps secondary nutrients behind a disclosure', async () => {
+        const user = userEvent.setup()
+        renderEditor()
+
+        expect(screen.queryByLabelText('Saturated fat')).not.toBeVisible()
+        await user.click(screen.getByRole('button', { name: 'More nutrients' }))
+        expect(screen.getByLabelText('Saturated fat')).toBeVisible()
+        expect(screen.getByLabelText('Sodium')).toBeVisible()
+        expect(screen.getByLabelText('Potassium')).toBeVisible()
+    })
+
+    it('requires a separate confirmation before permanently deleting a food', async () => {
         const user = userEvent.setup()
         const onDelete = vi.fn().mockResolvedValue(undefined)
         const { onClose } = renderEditor(vi.fn().mockResolvedValue(undefined), onDelete)
 
-        await user.click(screen.getByRole('button', { name: 'Delete food' }))
+        await user.click(
+            screen.getByRole('dialog', { name: 'Edit food' }).getByRole('button', {
+                name: 'Delete food',
+            }),
+        )
+        const confirmation = screen.getByRole('dialog', { name: 'Delete this food?' })
+        expect(confirmation).toBeVisible()
         expect(
             screen.getByText('Logged meals keep their saved nutrition.', { exact: false }),
         ).toBeVisible()
         expect(onDelete).not.toHaveBeenCalled()
 
-        await user.click(screen.getByRole('button', { name: 'Delete permanently' }))
+        await user.click(confirmation.getByRole('button', { name: 'Delete food' }))
         await waitFor(() => expect(onDelete).toHaveBeenCalledOnce())
         expect(onClose).toHaveBeenCalledOnce()
     })
