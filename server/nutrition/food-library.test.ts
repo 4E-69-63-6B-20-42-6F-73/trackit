@@ -24,10 +24,7 @@ describe('food library deletion', () => {
             .insert(schema.foods)
             .values({ name: 'Rolled oats' })
             .returning()
-        const [planned] = await database
-            .insert(schema.foods)
-            .values({ name: 'Banana' })
-            .returning()
+        const [planned] = await database.insert(schema.foods).values({ name: 'Banana' }).returning()
         const [recipe] = await database
             .insert(schema.recipes)
             .values({ name: 'Overnight oats' })
