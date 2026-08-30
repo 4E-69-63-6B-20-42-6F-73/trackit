@@ -68,6 +68,7 @@ export const mealUpdateSchema = z.object({
     nutrients: z.record(z.string(), z.number().finite()).optional(),
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).optional(),
     favorite: z.boolean().optional(),
+    serving: mealServingSchema.nullable().optional(),
     version: z.number().int().positive(),
 })
 
