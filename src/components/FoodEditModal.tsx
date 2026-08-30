@@ -161,7 +161,18 @@ export function FoodEditModal({
                     />
 
                     {error && <Alert color="orange">{error}</Alert>}
-                    <Group justify="space-between" className="food-modal-actions">
+                    <Group
+                        justify="space-between"
+                        style={{
+                            position: 'sticky',
+                            bottom: 0,
+                            zIndex: 1,
+                            background: 'var(--mantine-color-body)',
+                            borderTop: '1px solid var(--mantine-color-default-border)',
+                            paddingTop: 'var(--mantine-spacing-sm)',
+                            paddingBottom: 'var(--mantine-spacing-xs)',
+                        }}
+                    >
                         <Button
                             color="red"
                             variant="subtle"
