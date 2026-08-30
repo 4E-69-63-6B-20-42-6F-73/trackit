@@ -589,7 +589,8 @@ export class PostgresDataRepository implements DataRepository {
                 favorite: input.favorite ?? previous.favorite ?? false,
                 nutritionQuality: input.nutritionQuality ?? previous.nutritionQuality ?? 'complete',
                 primaryDefinitionId: 'calories',
-                serving: input.serving === undefined ? previous.serving : (input.serving ?? undefined),
+                serving:
+                    input.serving === undefined ? previous.serving : (input.serving ?? undefined),
             }
             const [record] = await transaction
                 .update(observations)
