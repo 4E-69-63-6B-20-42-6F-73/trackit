@@ -54,6 +54,7 @@ const mealFromObservation = (
         nutrientSnapshot: nutrientSnapshot ?? attributes.nutrientSnapshot ?? {},
         nutritionQuality: attributes.nutritionQuality ?? 'complete',
         favorite: attributes.favorite ?? false,
+        serving: attributes.serving,
         sourceId: record.sourceId,
         version: Number(record.version),
         createdAt: record.createdAt,
@@ -566,6 +567,7 @@ export class PostgresDataRepository implements DataRepository {
             nutrients?: Record<string, number>
             favorite?: boolean
             nutritionQuality?: 'complete' | 'estimated' | 'incomplete'
+            serving?: { amount: number; unit: 'g' | 'serving' } | null
             version: number
         },
     ) {
@@ -587,7 +589,7 @@ export class PostgresDataRepository implements DataRepository {
                 favorite: input.favorite ?? previous.favorite ?? false,
                 nutritionQuality: input.nutritionQuality ?? previous.nutritionQuality ?? 'complete',
                 primaryDefinitionId: 'calories',
-                serving: previous.serving,
+                serving: input.serving === undefined ? previous.serving : (input.serving ?? undefined),
             }
             const [record] = await transaction
                 .update(observations)
