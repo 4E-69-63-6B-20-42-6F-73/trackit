@@ -75,7 +75,6 @@ export function useJournal(query: JournalQuery & { limit: number }, enabled = tr
                 category,
                 source,
                 before: oldest.observedAt,
-                beforeId: oldest.id,
                 limit,
             })
             setEvents(current => {
