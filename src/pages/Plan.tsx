@@ -3,6 +3,7 @@ import {
     ActionIcon,
     Alert,
     Button,
+    Chip,
     Divider,
     Group,
     Menu,
@@ -53,11 +54,15 @@ import { listFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
 import { listRecipes, searchFoods, type RecipeRecord } from '../lib/nutritionApi'
 import {
     createPlanMeal,
+    createPlanSchedule,
     deletePlanMeal,
     listPlanItems,
+    listPlanSchedules,
     logPlannedMeal,
     setPlanMealSkipped,
+    stopPlanSchedule,
     updatePlanMeal,
+    type PlanSchedule,
 } from '../lib/planApi'
 import '../plan.css'
 
@@ -70,6 +75,18 @@ const mealDescriptions: Record<MealType, string> = {
     Snack: 'Between meals',
 }
 
+const weekdayOptions = [
+    { value: '1', label: 'Mon' },
+    { value: '2', label: 'Tue' },
+    { value: '3', label: 'Wed' },
+    { value: '4', label: 'Thu' },
+    { value: '5', label: 'Fri' },
+    { value: '6', label: 'Sat' },
+    { value: '0', label: 'Sun' },
+]
+
+type RepeatMode = 'none' | 'weekly'
+
 type EditorState = {
     item: MealPlanItem | null
     date: string
@@ -77,6 +94,8 @@ type EditorState = {
     mealType: MealType
     selection: string | null
     amount: number | string
+    repeat: RepeatMode
+    weekdays: string[]
 }
 
 type LogState = {
@@ -89,6 +108,27 @@ type LogState = {
 const referenceValue = (item: MealPlanItem) =>
     `${item.meal.reference.type}:${item.meal.reference.id}`
 
+const weekdayForDate = (dateKey: string) => new Date(`${dateKey}T12:00:00.000Z`).getUTCDay()
+
+const scheduleDaysLabel = (weekdays: number[]) =>
+    weekdayOptions
+        .filter(option => weekdays.includes(Number(option.value)))
+        .map(option => option.label)
+        .join(', ')
+
+const nextScheduleDate = (startDate: string, weekdays: number[]) => {
+    for (let offset = 0; offset < 7; offset += 1) {
+        const date = addPlanDays(startDate, offset)
+        if (weekdays.includes(weekdayForDate(date))) return date
+    }
+    return startDate
+}
+
+const formatScheduleAmount = (schedule: PlanSchedule) =>
+    schedule.meal.unit === 'g'
+        ? `${Math.round(schedule.meal.amount * 10) / 10} g`
+        : `${Math.round(schedule.meal.amount * 100) / 100} ${schedule.meal.amount === 1 ? 'serving' : 'servings'}`
+
 const loadPlanWeek = (weekStart: string) => {
     const range = weekDateKeys(weekStart)
     return Promise.all([
@@ -96,6 +136,7 @@ const loadPlanWeek = (weekStart: string) => {
         searchFoods(''),
         listRecipes(),
         listFoodCategories(),
+        listPlanSchedules(),
     ])
 }
 
@@ -114,19 +155,26 @@ export function Plan() {
     const [foods, setFoods] = useState<Food[]>([])
     const [recipes, setRecipes] = useState<RecipeRecord[]>([])
     const [categories, setCategories] = useState<FoodCategory[]>([])
+    const [schedules, setSchedules] = useState<PlanSchedule[]>([])
     const [loading, setLoading] = useState(true)
     const [message, setMessage] = useState('')
     const [editor, setEditor] = useState<EditorState | null>(null)
     const [logState, setLogState] = useState<LogState | null>(null)
+    const [schedulesOpen, setSchedulesOpen] = useState(false)
     const [busy, setBusy] = useState(false)
 
-    const applyLoadedWeek = ([nextItems, nextFoods, nextRecipes, nextCategories]: Awaited<
-        ReturnType<typeof loadPlanWeek>
-    >) => {
+    const applyLoadedWeek = ([
+        nextItems,
+        nextFoods,
+        nextRecipes,
+        nextCategories,
+        nextSchedules,
+    ]: Awaited<ReturnType<typeof loadPlanWeek>>) => {
         setItems(nextItems)
         setFoods(nextFoods)
         setRecipes(nextRecipes)
         setCategories(nextCategories)
+        setSchedules(nextSchedules)
         setMessage('')
     }
 
@@ -152,7 +200,16 @@ export function Plan() {
     }
 
     const openNew = (date: string, mealType: MealType) =>
-        setEditor({ item: null, date, time: '', mealType, selection: null, amount: 1 })
+        setEditor({
+            item: null,
+            date,
+            time: '',
+            mealType,
+            selection: null,
+            amount: 1,
+            repeat: 'none',
+            weekdays: [String(weekdayForDate(date))],
+        })
 
     const openEdit = (item: MealPlanItem) =>
         setEditor({
@@ -162,6 +219,8 @@ export function Plan() {
             mealType: item.meal.mealType,
             selection: referenceValue(item),
             amount: item.meal.amount,
+            repeat: 'none',
+            weekdays: [],
         })
 
     const selection = editor?.selection
@@ -211,6 +270,8 @@ export function Plan() {
         const amount = Number(editor.amount)
         if (!Number.isFinite(amount) || amount <= 0) return
         const [type, id] = editor.selection.split(':') as [PlanReferenceType, string]
+        const weekdays = editor.weekdays.map(Number)
+        if (!editor.item && editor.repeat === 'weekly' && weekdays.length === 0) return
         setBusy(true)
         try {
             const changes = {
@@ -220,11 +281,24 @@ export function Plan() {
                 reference: { type, id },
                 amount,
             }
+            let destinationDate: string | null = null
             if (editor.item) await updatePlanMeal(editor.item, changes)
-            else await createPlanMeal(changes)
+            else if (editor.repeat === 'weekly') {
+                await createPlanSchedule({
+                    startDate: editor.date,
+                    scheduledTime: editor.time || null,
+                    mealType: editor.mealType,
+                    reference: { type, id },
+                    amount,
+                    weekdays,
+                })
+                destinationDate = nextScheduleDate(editor.date, weekdays)
+            } else await createPlanMeal(changes)
             setEditor(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
-            await refresh()
+            if (destinationDate && weekStartKey(destinationDate) !== weekStart)
+                navigateDate(destinationDate)
+            else await refresh()
         } catch (error) {
             setMessage(error instanceof Error ? error.message : 'Could not save this planned meal.')
         } finally {
@@ -596,11 +670,16 @@ export function Plan() {
                         <IconChevronRight size={17} />
                     </ActionIcon>
                 </div>
-                {weekStart !== weekStartKey(todayKey) && (
-                    <Button variant="default" size="sm" onClick={() => navigateDate(todayKey)}>
-                        This week
+                <Group gap="xs">
+                    <Button variant="default" size="sm" onClick={() => setSchedulesOpen(true)}>
+                        Schedules{schedules.length ? ` (${schedules.length})` : ''}
                     </Button>
-                )}
+                    {weekStart !== weekStartKey(todayKey) && (
+                        <Button variant="default" size="sm" onClick={() => navigateDate(todayKey)}>
+                            This week
+                        </Button>
+                    )}
+                </Group>
             </div>
 
             {message && (
@@ -657,6 +736,65 @@ export function Plan() {
                                 data={mealTypes}
                             />
                         </SimpleGrid>
+                        {!editor.item && (
+                            <Stack gap="xs">
+                                <Select
+                                    label="Repeat"
+                                    value={editor.repeat}
+                                    onChange={value =>
+                                        setEditor({
+                                            ...editor,
+                                            repeat: (value ?? 'none') as RepeatMode,
+                                        })
+                                    }
+                                    data={[
+                                        { value: 'none', label: 'Does not repeat' },
+                                        { value: 'weekly', label: 'Every week' },
+                                    ]}
+                                />
+                                {editor.repeat === 'weekly' && (
+                                    <div>
+                                        <Text size="sm" fw={600} mb={6}>
+                                            Repeat on
+                                        </Text>
+                                        <Chip.Group
+                                            multiple
+                                            value={editor.weekdays}
+                                            onChange={weekdays =>
+                                                setEditor({ ...editor, weekdays })
+                                            }
+                                        >
+                                            <Group gap={6} wrap="wrap">
+                                                {weekdayOptions.map(day => (
+                                                    <Chip
+                                                        key={day.value}
+                                                        value={day.value}
+                                                        size="xs"
+                                                    >
+                                                        {day.label}
+                                                    </Chip>
+                                                ))}
+                                            </Group>
+                                        </Chip.Group>
+                                        <Text size="xs" c="dimmed" mt={7}>
+                                            {editor.weekdays.length
+                                                ? `Repeats every ${scheduleDaysLabel(
+                                                      editor.weekdays.map(Number),
+                                                  )}, starting ${formatCalendarDate(
+                                                      editor.date,
+                                                      locale,
+                                                      {
+                                                          month: 'short',
+                                                          day: 'numeric',
+                                                          year: 'numeric',
+                                                      },
+                                                  )}.`
+                                                : 'Choose at least one day.'}
+                                        </Text>
+                                    </div>
+                                )}
+                            </Stack>
+                        )}
                         <Select
                             searchable
                             label="Food, recipe, or food group"
@@ -735,14 +873,74 @@ export function Plan() {
                                 color="trackit"
                                 loading={busy}
                                 disabled={
-                                    !editor.selection || !editor.date || Number(editor.amount) <= 0
+                                    !editor.selection ||
+                                    !editor.date ||
+                                    Number(editor.amount) <= 0 ||
+                                    (editor.repeat === 'weekly' && editor.weekdays.length === 0)
                                 }
                                 onClick={() => void saveEditor()}
                             >
-                                {editor.item ? 'Save changes' : 'Add to plan'}
+                                {editor.item
+                                    ? 'Save changes'
+                                    : editor.repeat === 'weekly'
+                                      ? 'Create schedule'
+                                      : 'Add to plan'}
                             </Button>
                         </Group>
                     </Stack>
+                )}
+            </Modal>
+
+            <Modal
+                opened={schedulesOpen}
+                onClose={() => !busy && setSchedulesOpen(false)}
+                title={<Text fw={700}>Recurring schedules</Text>}
+                size="lg"
+            >
+                {schedules.length ? (
+                    <Stack>
+                        {schedules.map(schedule => (
+                            <Paper key={schedule.id} withBorder radius="md" p="md">
+                                <Group justify="space-between" align="flex-start" wrap="nowrap">
+                                    <div>
+                                        <Text fw={700}>{schedule.meal.reference.name}</Text>
+                                        <Text size="sm" c="dimmed">
+                                            {formatScheduleAmount(schedule)} ·{' '}
+                                            {schedule.meal.mealType}
+                                        </Text>
+                                        <Text size="sm" c="dimmed" mt={4}>
+                                            Every {scheduleDaysLabel(schedule.weekdays)}
+                                            {schedule.scheduledTime
+                                                ? ` · ${schedule.scheduledTime}`
+                                                : ''}
+                                            {' · Starts '}
+                                            {formatCalendarDate(schedule.startDate, locale, {
+                                                month: 'short',
+                                                day: 'numeric',
+                                                year: 'numeric',
+                                            })}
+                                        </Text>
+                                    </div>
+                                    <Button
+                                        variant="subtle"
+                                        color="red"
+                                        size="xs"
+                                        loading={busy}
+                                        onClick={() =>
+                                            void mutate(() => stopPlanSchedule(schedule, todayKey))
+                                        }
+                                    >
+                                        Stop repeating
+                                    </Button>
+                                </Group>
+                            </Paper>
+                        ))}
+                    </Stack>
+                ) : (
+                    <Text size="sm" c="dimmed">
+                        No recurring meal schedules yet. Add a planned meal and choose Every week to
+                        create one.
+                    </Text>
                 )}
             </Modal>
 

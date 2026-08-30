@@ -20,6 +20,7 @@ import { ProjectionWorker } from './data/projection-state.js'
 import { ProjectionMaintenanceService } from './data/projection-maintenance.js'
 import { registerDataMaintenanceRoutes } from './data/maintenance-routes.js'
 import { ProviderRecordMaintenanceService } from './health-records/maintenance.js'
+import { registerRecurringPlanRoutes } from './planning/recurrence.js'
 import { registerPlanRoutes } from './planning/routes.js'
 
 await migrate(db, { migrationsFolder: './server/db/migrations' })
@@ -50,6 +51,7 @@ const app = await createApp(new PostgresJournalRepository(db), {
 registerMcpBrowserCors(app, mcp)
 registerFoodCategoryRoutes(app, db)
 registerFoodLibraryRoutes(app, db)
+registerRecurringPlanRoutes(app, db)
 registerPlanRoutes(app, db)
 registerEntryDeletionRoutes(app, db, data)
 

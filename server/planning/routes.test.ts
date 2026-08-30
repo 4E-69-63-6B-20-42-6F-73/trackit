@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { applyTestMigrations } from '../db/test-migrations.js'
 import { foodCategories, foodCategoryMemberships } from '../nutrition/schema.js'
+import { registerRecurringPlanRoutes } from './recurrence.js'
 import { planItems } from './schema.js'
 import { registerPlanRoutes } from './routes.js'
 
@@ -15,6 +16,7 @@ describe('meal planning routes', () => {
         await applyTestMigrations(databaseClient)
         const database = drizzle(databaseClient, { schema })
         const app = Fastify()
+        registerRecurringPlanRoutes(app, database as never)
         registerPlanRoutes(app, database as never)
 
         const [food] = await database
@@ -87,6 +89,7 @@ describe('meal planning routes', () => {
         await applyTestMigrations(databaseClient)
         const database = drizzle(databaseClient, { schema })
         const app = Fastify()
+        registerRecurringPlanRoutes(app, database as never)
         registerPlanRoutes(app, database as never)
 
         const [food] = await database.insert(schema.foods).values({ name: 'Banana' }).returning()
@@ -133,6 +136,7 @@ describe('meal planning routes', () => {
         await applyTestMigrations(databaseClient)
         const database = drizzle(databaseClient, { schema })
         const app = Fastify()
+        registerRecurringPlanRoutes(app, database as never)
         registerPlanRoutes(app, database as never)
 
         await database
@@ -218,6 +222,111 @@ describe('meal planning routes', () => {
                 .from(schema.observations)
                 .where(eq(schema.observations.definitionId, 'meal')),
         ).toHaveLength(2)
+
+        await app.close()
+        await databaseClient.close()
+    })
+
+    it('materializes recurring food group targets on configured weekdays', async () => {
+        const databaseClient = new PGlite()
+        await applyTestMigrations(databaseClient)
+        const database = drizzle(databaseClient, { schema })
+        const app = Fastify()
+        registerRecurringPlanRoutes(app, database as never)
+        registerPlanRoutes(app, database as never)
+
+        await database
+            .insert(foodCategories)
+            .values({ id: 'fruit', name: 'Fruit', sortOrder: 10 })
+            .onConflictDoNothing()
+
+        const created = await app.inject({
+            method: 'POST',
+            url: '/api/plan-schedules',
+            payload: {
+                startDate: '2026-08-30',
+                scheduledTime: '15:30',
+                mealType: 'Snack',
+                reference: { type: 'category', id: 'fruit' },
+                amount: 200,
+                weekdays: [1, 4],
+            },
+        })
+        expect(created.statusCode).toBe(201)
+        const schedule = created.json().data
+        expect(schedule.weekdays).toEqual([1, 4])
+
+        const listedSchedules = await app.inject({ method: 'GET', url: '/api/plan-schedules' })
+        expect(listedSchedules.statusCode).toBe(200)
+        expect(listedSchedules.json().data).toEqual([
+            expect.objectContaining({
+                id: schedule.id,
+                startDate: '2026-08-30',
+                scheduledTime: '15:30',
+                weekdays: [1, 4],
+                meal: expect.objectContaining({
+                    mealType: 'Snack',
+                    reference: { type: 'category', id: 'fruit', name: 'Fruit' },
+                    amount: 200,
+                }),
+            }),
+        ])
+
+        const firstWeek = await app.inject({
+            method: 'GET',
+            url: '/api/plan-items?from=2026-08-31&to=2026-09-06',
+        })
+        expect(firstWeek.statusCode).toBe(200)
+        expect(firstWeek.json().data).toEqual([
+            expect.objectContaining({
+                scheduledDate: '2026-08-31',
+                scheduledTime: '15:30',
+                meal: expect.objectContaining({
+                    reference: { type: 'category', id: 'fruit', name: 'Fruit' },
+                    amount: 200,
+                }),
+            }),
+            expect.objectContaining({
+                scheduledDate: '2026-09-03',
+                scheduledTime: '15:30',
+            }),
+        ])
+
+        const repeatedRead = await app.inject({
+            method: 'GET',
+            url: '/api/plan-items?from=2026-08-31&to=2026-09-06',
+        })
+        expect(repeatedRead.json().data).toHaveLength(2)
+        expect(await database.select().from(planItems)).toHaveLength(3)
+
+        const monday = repeatedRead.json().data[0]
+        const removedOccurrence = await app.inject({
+            method: 'DELETE',
+            url: `/api/plan-items/${monday.id}`,
+            payload: { version: monday.version },
+        })
+        expect(removedOccurrence.statusCode).toBe(204)
+
+        const afterRemoval = await app.inject({
+            method: 'GET',
+            url: '/api/plan-items?from=2026-08-31&to=2026-09-06',
+        })
+        expect(
+            afterRemoval.json().data.map((item: { scheduledDate: string }) => item.scheduledDate),
+        ).toEqual(['2026-09-03'])
+
+        const stopped = await app.inject({
+            method: 'DELETE',
+            url: `/api/plan-schedules/${schedule.id}`,
+            payload: { version: schedule.version, fromDate: '2026-08-30' },
+        })
+        expect(stopped.statusCode).toBe(204)
+
+        const future = await app.inject({
+            method: 'GET',
+            url: '/api/plan-items?from=2026-09-07&to=2026-09-13',
+        })
+        expect(future.json().data).toHaveLength(0)
 
         await app.close()
         await databaseClient.close()
