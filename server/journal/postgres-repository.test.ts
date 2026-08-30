@@ -85,14 +85,14 @@ describe('Journal observation projection preferences', () => {
         await client.close()
     })
 
-    it('projects meal size and nutrition from the historical meal snapshot', async () => {
+    it('keeps list payloads compact and loads meal details separately', async () => {
         const client = new PGlite()
         await applyTestMigrations(client)
         const database = drizzle(client, { schema })
         const data = new PostgresDataRepository(database as never)
         const journal = new PostgresJournalRepository(database as never)
 
-        await data.createMeal({
+        const created = await data.createMeal({
             name: 'Plain Skyr',
             mealType: 'Dinner',
             eatenAt: '2026-08-25T19:15:00.000Z',
@@ -108,11 +108,18 @@ describe('Journal observation projection preferences', () => {
             serving: { amount: 150, unit: 'g' },
         })
 
-        expect(await journal.list()).toEqual([
+        const [summary] = await journal.list()
+        expect(summary).toEqual(
             expect.objectContaining({
+                id: created.id,
                 title: 'Plain Skyr',
                 detail: '150 g · 94.5 kcal',
                 category: 'Meals',
+            }),
+        )
+        expect(summary).not.toHaveProperty('detailView')
+        expect(await journal.get(created.id)).toEqual(
+            expect.objectContaining({
                 detailView: {
                     kind: 'meal',
                     mealType: 'Dinner',
@@ -127,6 +134,31 @@ describe('Journal observation projection preferences', () => {
                     nutritionQuality: 'estimated',
                 },
             }),
+        )
+        await client.close()
+    })
+
+    it('applies source filtering before the page limit', async () => {
+        const client = new PGlite()
+        await applyTestMigrations(client)
+        const database = drizzle(client, { schema })
+        const journal = new PostgresJournalRepository(database as never)
+        const base = Date.UTC(2026, 0, 1)
+        await database.insert(schema.observations).values(
+            Array.from({ length: 101 }, (_, index) => ({
+                definitionId: 'weight',
+                canonicalValue: 80 + index / 100,
+                canonicalUnit: 'kg',
+                category: 'Measurements',
+                title: `Weight ${index}`,
+                observedAt: new Date(base + index * 60_000),
+                origin: 'external',
+                attributes: { sourceLabel: index === 0 ? 'Target source' : 'Other source' },
+            })),
+        )
+
+        expect(await journal.list({ source: 'Target source', limit: 1 })).toEqual([
+            expect.objectContaining({ title: 'Weight 0', source: 'Target source' }),
         ])
         await client.close()
     })
