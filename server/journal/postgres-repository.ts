@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, isNull, lt, notExists, or, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, isNull, lt, notExists, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { observationRelations, observations, preferences } from '../db/schema.js'
@@ -278,15 +278,6 @@ export class PostgresJournalRepository implements JournalRepository {
                 ELSE 'You'
             END
         )`
-        const before = filters.before ? new Date(filters.before) : null
-        const beforeCondition = before
-            ? filters.beforeId
-                ? or(
-                      lt(observations.observedAt, before),
-                      and(eq(observations.observedAt, before), lt(observations.id, filters.beforeId)),
-                  )
-                : lt(observations.observedAt, before)
-            : undefined
         const conditions = [
             eq(observations.userId, 'owner'),
             isNull(observations.deletedAt),
@@ -294,7 +285,7 @@ export class PostgresJournalRepository implements JournalRepository {
             notExists(this.component()),
             ...(filters.from ? [gte(observations.observedAt, new Date(filters.from))] : []),
             ...(filters.to ? [lt(observations.observedAt, new Date(filters.to))] : []),
-            ...(beforeCondition ? [beforeCondition] : []),
+            ...(filters.before ? [lt(observations.observedAt, new Date(filters.before))] : []),
             ...(filters.category ? [eq(observations.category, filters.category)] : []),
             ...(filters.source ? [sql`${source} = ${filters.source}`] : []),
         ]
