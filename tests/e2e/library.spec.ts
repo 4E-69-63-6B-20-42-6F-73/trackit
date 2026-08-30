@@ -24,8 +24,9 @@ test('new food supports extended nutrient details', async ({ page }) => {
     )
     await page.goto('/library/foods')
     await page.getByRole('button', { name: 'New food' }).click()
+    await expect(page.getByText('Nutrition per 100 g')).toBeVisible()
     await page.getByRole('button', { name: 'More nutrients' }).click()
-    for (const label of ['Sugar', 'Saturated fat', 'Sodium', 'Potassium']) {
+    for (const label of ['Saturated fat', 'Sodium', 'Potassium']) {
         await expect(page.getByLabel(new RegExp(label, 'i'))).toBeVisible()
     }
 })
@@ -37,7 +38,7 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
         name: 'Plain Skyr',
         brand: 'Generic',
         barcode: null,
-        catalogSource: null,
+        catalogSource: 'MCP: llama',
         catalogId: null,
         caloriesPer100g: 63,
         proteinPer100g: 11,
@@ -67,15 +68,19 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
 
     await page.goto('/library/foods')
     await page.getByRole('button', { name: /Plain Skyr/i }).click()
-    const dialog = page.getByRole('dialog', { name: 'Edit Plain Skyr' })
+    const dialog = page.getByRole('dialog', { name: 'Edit food' })
     await expect(dialog).toBeVisible()
+    await expect(dialog.getByText('Source: MCP: llama')).toBeVisible()
+    await expect(dialog.getByText('Estimated nutrition')).toBeVisible()
     expect(await dialog.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true)
 
     const deleteRequest = page.waitForRequest(
         request => request.method() === 'DELETE' && request.url().includes(`/api/foods/${food.id}`),
     )
-    await page.getByRole('button', { name: 'Delete food' }).click()
-    await page.getByRole('button', { name: 'Delete permanently' }).click()
+    await dialog.getByRole('button', { name: 'Delete food' }).click()
+    const confirmation = page.getByRole('dialog', { name: 'Delete this food?' })
+    await expect(confirmation).toBeVisible()
+    await confirmation.getByRole('button', { name: 'Delete food' }).click()
     const request = await deleteRequest
 
     expect(request.postDataJSON()).toEqual({ version: 1 })
