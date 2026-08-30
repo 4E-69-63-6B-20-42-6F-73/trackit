@@ -5,12 +5,14 @@ import type { Page } from '../domain/types'
 
 const paths: Partial<Record<Page, string>> = {
     Goals: '/goals',
+    Library: '/library',
     Settings: '/settings',
 }
 
 export function MobileMore({ page, close }: { page: Page; close: () => void }) {
     const goals = nav.find(({ label }) => label === 'Goals')!
-    const links = [goals, { label: 'Settings' as const, icon: IconSettings }]
+    const library = nav.find(({ label }) => label === 'Library')!
+    const links = [goals, library, { label: 'Settings' as const, icon: IconSettings }]
 
     return (
         <div className="mobile-more-backdrop" onClick={close}>
@@ -24,7 +26,7 @@ export function MobileMore({ page, close }: { page: Page; close: () => void }) {
                 <div className="mobile-more-heading">
                     <div>
                         <h2 id="mobile-more-title">More</h2>
-                        <p>Goals and settings.</p>
+                        <p>Goals, library, and settings.</p>
                     </div>
                     <button type="button" onClick={close} aria-label="Close more pages">
                         Close
