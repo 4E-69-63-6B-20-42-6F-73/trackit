@@ -1,61 +1,61 @@
 name: Repair MCP server diff
 
 on:
-  push:
-    branches:
-      - fix/mcp-llama-schema-compat
+    push:
+        branches:
+            - fix/mcp-llama-schema-compat
 
 permissions:
-  contents: write
+    contents: write
 
 jobs:
-  repair:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: fix/mcp-llama-schema-compat
-          fetch-depth: 0
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Restore main MCP server and apply timestamp compatibility fix
-        run: |
-          git checkout origin/main -- server/mcp/server.ts
-          python - <<'PY'
-          from pathlib import Path
+    repair:
+        if: github.actor != 'github-actions[bot]'
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: fix/mcp-llama-schema-compat
+                  fetch-depth: 0
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Restore main MCP server and apply timestamp compatibility fix
+              run: |
+                  git checkout origin/main -- server/mcp/server.ts
+                  python - <<'PY'
+                  from pathlib import Path
 
-          path = Path('server/mcp/server.ts')
-          source = path.read_text()
-          old = 'z.string().datetime()'
-          count = source.count(old)
-          if count != 4:
-              raise SystemExit(f'expected 4 datetime schemas on main, found {count}')
+                  path = Path('server/mcp/server.ts')
+                  source = path.read_text()
+                  old = 'z.string().datetime()'
+                  count = source.count(old)
+                  if count != 4:
+                      raise SystemExit(f'expected 4 datetime schemas on main, found {count}')
 
-          source = source.replace(old, 'timestampSchema')
-          marker = 'const foodSchema = z.object(foodFields)\n'
-          helper = '''const timestampSchema = z\n    .string()\n    .trim()\n    .min(1)\n    .refine(\n        value =>\n            /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$/.test(\n                value,\n            ) && !Number.isNaN(new Date(value).valueOf()),\n        'Must be a valid ISO 8601 UTC timestamp',\n    )\n'''
-          if marker not in source:
-              raise SystemExit('food schema marker not found')
-          source = source.replace(marker, marker + helper, 1)
-          path.write_text(source)
-          PY
-      - run: npx prettier --write server/mcp/server.ts
-      - run: npm run test -- server/mcp/llama-schema.test.ts server/mcp/server.test.ts server/mcp/food-confirmation.test.ts
-      - name: Commit and push repaired server
-        run: |
-          git config user.name github-actions[bot]
-          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add server/mcp/server.ts
-          git commit -m "fix: expose llama-compatible MCP timestamps"
-          for attempt in 1 2 3; do
-            git fetch origin fix/mcp-llama-schema-compat
-            git rebase origin/fix/mcp-llama-schema-compat
-            if git push origin HEAD:fix/mcp-llama-schema-compat; then
-              exit 0
-            fi
-          done
-          exit 1
+                  source = source.replace(old, 'timestampSchema')
+                  marker = 'const foodSchema = z.object(foodFields)\n'
+                  helper = '''const timestampSchema = z\n    .string()\n    .trim()\n    .min(1)\n    .refine(\n        value =>\n            /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\\.[0-9]+)?Z$/.test(\n                value,\n            ) && !Number.isNaN(new Date(value).valueOf()),\n        'Must be a valid ISO 8601 UTC timestamp',\n    )\n'''
+                  if marker not in source:
+                      raise SystemExit('food schema marker not found')
+                  source = source.replace(marker, marker + helper, 1)
+                  path.write_text(source)
+                  PY
+            - run: npx prettier --write server/mcp/server.ts
+            - run: npm run test -- server/mcp/llama-schema.test.ts server/mcp/server.test.ts server/mcp/food-confirmation.test.ts
+            - name: Commit and push repaired server
+              run: |
+                  git config user.name github-actions[bot]
+                  git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+                  git add server/mcp/server.ts
+                  git commit -m "fix: expose llama-compatible MCP timestamps"
+                  for attempt in 1 2 3; do
+                    git fetch origin fix/mcp-llama-schema-compat
+                    git rebase origin/fix/mcp-llama-schema-compat
+                    if git push origin HEAD:fix/mcp-llama-schema-compat; then
+                      exit 0
+                    fi
+                  done
+                  exit 1
