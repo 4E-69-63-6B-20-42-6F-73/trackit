@@ -25,7 +25,7 @@ const foodFields = {
     barcode: z
         .string()
         .trim()
-        .regex(/^\d{8,14}$/)
+        .regex(/^[0-9]{8,14}$/)
         .optional(),
     caloriesPer100g: z.number().finite().nonnegative().optional(),
     proteinPer100g: z.number().finite().nonnegative().optional(),
