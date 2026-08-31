@@ -84,20 +84,15 @@ export default function App() {
     const routeDate = new URLSearchParams(location.search).get('date')
     const todayDate = routeDate ?? calendarTodayKey(timezone)
     const todayRange = calendarDayRangeForKey(todayDate, timezone)
-    const journalRouteRange = routeDate ? calendarDayRangeForKey(routeDate, timezone) : null
-    const journalQuery =
-        page === 'Today'
-            ? { from: todayRange.from.toISOString(), to: todayRange.to.toISOString(), limit: 100 }
-            : page === 'Journal' && journalRouteRange
-              ? {
-                    from: journalRouteRange.from.toISOString(),
-                    to: journalRouteRange.to.toISOString(),
-                    limit: 100,
-                }
-              : { limit: page === 'Journal' ? 100 : 10 }
-    const { events, status, refresh, syncFailure, retry, hasOlder, loadingOlder, loadOlder } =
-        useJournal(journalQuery)
-    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands(refresh)
+    const { events, syncFailure, retry } = useJournal(
+        {
+            from: todayRange.from.toISOString(),
+            to: todayRange.to.toISOString(),
+            limit: 100,
+        },
+        page === 'Today',
+    )
+    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands()
     const [lastAdded, setLastAdded] = useState<{ id: string; title: string } | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
@@ -170,23 +165,15 @@ export default function App() {
                             <Route
                                 path="/journal"
                                 element={
-                                    status === 'connecting' ? (
-                                        <JournalPageSkeleton />
-                                    ) : (
-                                        <Journal
-                                            events={events}
-                                            remove={remove}
-                                            update={(event, changes) =>
-                                                update(event.id, {
-                                                    ...changes,
-                                                    version: event.version ?? 1,
-                                                })
-                                            }
-                                            hasOlder={hasOlder}
-                                            loadingOlder={loadingOlder}
-                                            loadOlder={loadOlder}
-                                        />
-                                    )
+                                    <Journal
+                                        remove={remove}
+                                        update={(event, changes) =>
+                                            update(event.id, {
+                                                ...changes,
+                                                version: event.version ?? 1,
+                                            })
+                                        }
+                                    />
                                 }
                             />
                             <Route

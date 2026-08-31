@@ -57,6 +57,7 @@ vi.mock('../hooks/useDailyNutrition', () => ({
 }))
 
 vi.mock('../lib/journalApi', () => ({
+    getJournalEntry: vi.fn().mockRejectedValue(new Error('not available')),
     listJournal: vi.fn().mockResolvedValue([
         {
             id: 'history',

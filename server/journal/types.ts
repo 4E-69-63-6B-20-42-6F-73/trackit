@@ -60,5 +60,6 @@ export type JournalListQuery = {
 
 export interface JournalRepository {
     list(query?: JournalListQuery): Promise<JournalEntry[]>
+    get?(id: string): Promise<JournalEntry | null>
     ready(): Promise<boolean>
 }

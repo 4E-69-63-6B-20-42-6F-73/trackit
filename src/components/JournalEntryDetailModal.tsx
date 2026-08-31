@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Badge, Button, Divider, Group, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
 import type { JournalEvent, SleepStageDetail } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
+import { getJournalEntry } from '../lib/journalApi'
 
 const stageLabels: Record<SleepStageDetail['type'], string> = {
     awake: 'Awake',
@@ -250,9 +252,22 @@ export function JournalEntryDetailModal({
     const { preferences } = useServerData()
     const locale = preferences?.locale
     const timezone = preferences?.timezone ?? 'UTC'
+    const [detailEvent, setDetailEvent] = useState<JournalEvent | null>(null)
+    const eventId = event?.id
+
+    useEffect(() => {
+        if (!eventId) return
+        const controller = new AbortController()
+        void getJournalEntry(eventId, controller.signal)
+            .then(setDetailEvent)
+            .catch(() => undefined)
+        return () => controller.abort()
+    }, [eventId])
+
+    const shownEvent = detailEvent?.id === eventId ? detailEvent : event
     const hasDetailedView =
-        event?.detailView?.kind === 'meal' ||
-        (event?.detailView?.kind === 'sleep' && event.detailView.stages.length > 0)
+        shownEvent?.detailView?.kind === 'meal' ||
+        (shownEvent?.detailView?.kind === 'sleep' && shownEvent.detailView.stages.length > 0)
     const formatDateTime = (value?: string) =>
         value
             ? new Intl.DateTimeFormat(locale, {
@@ -272,16 +287,16 @@ export function JournalEntryDetailModal({
         <Modal
             opened={Boolean(event)}
             onClose={onClose}
-            title={event?.title}
+            title={shownEvent?.title}
             centered
             size={hasDetailedView ? 'lg' : 'md'}
         >
-            {event && hasDetailedView ? (
+            {shownEvent && hasDetailedView ? (
                 <Stack gap="md">
-                    {event.detailView?.kind === 'meal' ? (
-                        <MealDetail event={event} locale={locale} timezone={timezone} />
+                    {shownEvent.detailView?.kind === 'meal' ? (
+                        <MealDetail event={shownEvent} locale={locale} timezone={timezone} />
                     ) : (
-                        <SleepDetail event={event} locale={locale} timezone={timezone} />
+                        <SleepDetail event={shownEvent} locale={locale} timezone={timezone} />
                     )}
                     <Divider />
                     <Group justify="space-between" align="flex-end">
@@ -291,16 +306,16 @@ export function JournalEntryDetailModal({
                                     Source
                                 </Text>
                                 <Text size="sm" fw={600}>
-                                    {event.source}
+                                    {shownEvent.source}
                                 </Text>
                             </div>
-                            {event.deviceName && (
+                            {shownEvent.deviceName && (
                                 <div>
                                     <Text size="xs" c="dimmed">
                                         Device
                                     </Text>
                                     <Text size="sm" fw={600}>
-                                        {event.deviceName}
+                                        {shownEvent.deviceName}
                                     </Text>
                                 </div>
                             )}
@@ -310,16 +325,18 @@ export function JournalEntryDetailModal({
                         </Button>
                     </Group>
                 </Stack>
-            ) : event ? (
+            ) : shownEvent ? (
                 <Stack gap="md">
                     <div>
                         <Text fw={700} size="xl">
-                            {event.detail}
+                            {shownEvent.detail}
                         </Text>
                         <Text size="sm" c="dimmed" mt={4}>
-                            {event.startedAt && event.endedAt && event.startedAt !== event.endedAt
-                                ? `${formatDateTime(event.startedAt)} – ${formatTime(event.endedAt)}`
-                                : formatDateTime(event.observedAt)}
+                            {shownEvent.startedAt &&
+                            shownEvent.endedAt &&
+                            shownEvent.startedAt !== shownEvent.endedAt
+                                ? `${formatDateTime(shownEvent.startedAt)} – ${formatTime(shownEvent.endedAt)}`
+                                : formatDateTime(shownEvent.observedAt)}
                         </Text>
                     </div>
                     <Divider />
@@ -328,16 +345,16 @@ export function JournalEntryDetailModal({
                             Source
                         </Text>
                         <Text size="sm" fw={600}>
-                            {event.source}
+                            {shownEvent.source}
                         </Text>
                     </div>
-                    {event.deviceName && (
+                    {shownEvent.deviceName && (
                         <div>
                             <Text size="xs" c="dimmed">
                                 Device
                             </Text>
                             <Text size="sm" fw={600}>
-                                {event.deviceName}
+                                {shownEvent.deviceName}
                             </Text>
                         </div>
                     )}
