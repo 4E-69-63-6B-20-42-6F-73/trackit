@@ -83,6 +83,12 @@ const weekdayIn = (date: Date, timezone: string) =>
     ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(
         new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(date),
     )
+const goalAttributionInstant = (observation: NumericObservation) =>
+    new Date(
+        observation.definitionId.startsWith('sleep') && observation.endedAt
+            ? observation.endedAt
+            : observation.observedAt,
+    )
 export function validateGoal(goal: Omit<Goal, 'id'> | Goal): string[] {
     const errors: string[] = []
     const metric = metricDefinition(goal.metricId)
@@ -124,17 +130,21 @@ export function evaluateGoal(
     const effectiveFrom = new Date(goal.effectiveFrom).getTime()
     const effectiveTo = goal.effectiveTo ? new Date(goal.effectiveTo).getTime() : Infinity
     const activeNow = now.getTime() >= effectiveFrom && now.getTime() <= effectiveTo
-    const qualifying = observations.filter(
-        item =>
+    const qualifying = observations.filter(item => {
+        const attributedAt = goalAttributionInstant(item)
+        return (
             activeNow &&
             item.definitionId === goal.metricId &&
             !item.excluded &&
-            new Date(item.observedAt).getTime() >= bounds.start.getTime() &&
-            new Date(item.observedAt).getTime() <= bounds.end.getTime() &&
+            attributedAt.getTime() >= bounds.start.getTime() &&
+            attributedAt.getTime() <= bounds.end.getTime() &&
             (!goal.schedule.weekdays?.length ||
-                goal.schedule.weekdays.includes(weekdayIn(new Date(item.observedAt), timezone))),
+                goal.schedule.weekdays.includes(weekdayIn(attributedAt, timezone)))
+        )
+    })
+    const ordered = [...qualifying].sort(
+        (a, b) => goalAttributionInstant(b).getTime() - goalAttributionInstant(a).getTime(),
     )
-    const ordered = [...qualifying].sort((a, b) => b.observedAt.localeCompare(a.observedAt))
     const value = !ordered.length
         ? null
         : goal.aggregation === 'latest'
