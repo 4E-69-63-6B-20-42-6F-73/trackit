@@ -138,8 +138,7 @@ export function evaluateGoal(
     })
     const ordered = [...qualifying].sort(
         (a, b) =>
-            dailyMetricAttributionInstant(b).getTime() -
-            dailyMetricAttributionInstant(a).getTime(),
+            dailyMetricAttributionInstant(b).getTime() - dailyMetricAttributionInstant(a).getTime(),
     )
     const value = !ordered.length
         ? null
