@@ -39,7 +39,7 @@ describe('Health Connect record derivation', () => {
         })
     })
 
-    it('derives versioned sleep stages and compound blood-pressure values', () => {
+    it('derives sleep duration from session duration minus awake stages', () => {
         const sleep = deriveRecord(
             record('SleepSessionRecord', {
                 stages: [
@@ -49,8 +49,26 @@ describe('Health Connect record derivation', () => {
                 ],
             }),
         )
-        expect(sleep.find(item => item.definitionId === 'sleep_deep')?.value).toBe(2)
+        expect(
+            Object.fromEntries(sleep.map(item => [item.definitionId, item.value])),
+        ).toMatchObject({
+            sleep: 7.5,
+            sleep_deep: 2,
+            sleep_rem: 1,
+            sleep_awake: 0.5,
+            sleep_efficiency: 93.75,
+        })
         expect(sleep.every(item => item.derivationVersion === 1)).toBe(true)
+    })
+
+    it('uses full session duration when no awake stage data is available', () => {
+        const sleep = deriveRecord(record('SleepSessionRecord', { stages: [] }))
+        expect(
+            Object.fromEntries(sleep.map(item => [item.definitionId, item.value])),
+        ).toMatchObject({ sleep: 8, sleep_efficiency: 100 })
+    })
+
+    it('derives compound blood-pressure values', () => {
         const pressure = deriveRecord(
             record('BloodPressureRecord', {
                 systolic: 122,

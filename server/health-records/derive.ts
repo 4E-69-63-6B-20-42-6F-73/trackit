@@ -44,9 +44,7 @@ function scalar(payload: JsonObject, key: string, definitionId: string, unit: st
 
 function deriveSleep(record: CanonicalHealthRecord): DerivedObservation[] {
     if (!record.endTime) return []
-    const result = [
-        observation('sleep', hours(record.startTime, record.endTime), 'hours', 'sleep_summary'),
-    ]
+    const duration = hours(record.startTime, record.endTime)
     const totals = new Map<string, number>()
     const stages = Array.isArray(record.payload.stages) ? record.payload.stages : []
     for (const stage of stages) {
@@ -58,13 +56,16 @@ function deriveSleep(record: CanonicalHealthRecord): DerivedObservation[] {
             typeof item.end !== 'string'
         )
             continue
-        const duration = hours(new Date(item.start), new Date(item.end))
-        if (Number.isFinite(duration))
+        const stageDuration = hours(new Date(item.start), new Date(item.end))
+        if (Number.isFinite(stageDuration))
             totals.set(
                 item.type.toLowerCase(),
-                (totals.get(item.type.toLowerCase()) ?? 0) + duration,
+                (totals.get(item.type.toLowerCase()) ?? 0) + stageDuration,
             )
     }
+    const awake = totals.get('awake') ?? 0
+    const sleepDuration = Math.max(0, duration - awake)
+    const result = [observation('sleep', sleepDuration, 'hours', 'sleep_summary')]
     for (const [stage, metric] of [
         ['deep', 'sleep_deep'],
         ['rem', 'sleep_rem'],
@@ -75,13 +76,11 @@ function deriveSleep(record: CanonicalHealthRecord): DerivedObservation[] {
         if (value !== undefined)
             result.push(observation(metric, value, 'hours', 'sleep_summary', 'derived_metric'))
     }
-    const awake = totals.get('awake') ?? 0
-    const duration = hours(record.startTime, record.endTime)
     if (duration > 0)
         result.push(
             observation(
                 'sleep_efficiency',
-                Math.max(0, (duration - awake) / duration) * 100,
+                (sleepDuration / duration) * 100,
                 '%',
                 'sleep_summary',
                 'derived_metric',
