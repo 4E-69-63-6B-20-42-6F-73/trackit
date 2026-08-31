@@ -43,11 +43,21 @@ const foodFields = {
 }
 
 const foodSchema = z.object(foodFields)
+const timestampSchema = z
+    .string()
+    .trim()
+    .min(1)
+    .refine(
+        value =>
+            /^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?Z$/.test(value) &&
+            !Number.isNaN(new Date(value).valueOf()),
+        'Must be a valid ISO 8601 UTC timestamp',
+    )
 const addFoodToMealPayloadSchema = z.object({
     foodId: z.string().uuid(),
     grams: z.number().finite().positive().max(100_000),
     mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
-    eatenAt: z.string().datetime(),
+    eatenAt: timestampSchema,
     foodVersion: z.number().int().positive(),
 })
 
@@ -557,7 +567,7 @@ export function createTrackItMcpServer(
                 foodId: z.string().uuid(),
                 grams: z.number().finite().positive().max(100_000),
                 mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
-                eatenAt: z.string().datetime(),
+                eatenAt: timestampSchema,
             },
         },
         async input => {
@@ -693,7 +703,7 @@ export function createTrackItMcpServer(
                 definitionId: z.string().min(1).max(100),
                 value: z.number().finite(),
                 unit: z.string().min(1).max(40),
-                observedAt: z.string().datetime(),
+                observedAt: timestampSchema,
                 idempotencyKey: z.string().uuid(),
             },
         },
@@ -731,7 +741,7 @@ export function createTrackItMcpServer(
             inputSchema: {
                 title: z.string().min(1).max(160),
                 detail: z.string().max(2000).default(''),
-                observedAt: z.string().datetime(),
+                observedAt: timestampSchema,
                 idempotencyKey: z.string().uuid(),
             },
         },
