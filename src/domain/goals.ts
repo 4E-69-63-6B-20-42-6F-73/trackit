@@ -1,4 +1,4 @@
-import type { NumericObservation } from './health.js'
+import { dailyMetricAttributionInstant, type NumericObservation } from './health.js'
 import {
     metricDefinition,
     type GoalAggregation,
@@ -83,12 +83,6 @@ const weekdayIn = (date: Date, timezone: string) =>
     ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(
         new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(date),
     )
-const goalAttributionInstant = (observation: NumericObservation) =>
-    new Date(
-        observation.definitionId.startsWith('sleep') && observation.endedAt
-            ? observation.endedAt
-            : observation.observedAt,
-    )
 export function validateGoal(goal: Omit<Goal, 'id'> | Goal): string[] {
     const errors: string[] = []
     const metric = metricDefinition(goal.metricId)
@@ -131,7 +125,7 @@ export function evaluateGoal(
     const effectiveTo = goal.effectiveTo ? new Date(goal.effectiveTo).getTime() : Infinity
     const activeNow = now.getTime() >= effectiveFrom && now.getTime() <= effectiveTo
     const qualifying = observations.filter(item => {
-        const attributedAt = goalAttributionInstant(item)
+        const attributedAt = dailyMetricAttributionInstant(item)
         return (
             activeNow &&
             item.definitionId === goal.metricId &&
@@ -143,7 +137,9 @@ export function evaluateGoal(
         )
     })
     const ordered = [...qualifying].sort(
-        (a, b) => goalAttributionInstant(b).getTime() - goalAttributionInstant(a).getTime(),
+        (a, b) =>
+            dailyMetricAttributionInstant(b).getTime() -
+            dailyMetricAttributionInstant(a).getTime(),
     )
     const value = !ordered.length
         ? null
