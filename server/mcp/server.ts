@@ -434,6 +434,7 @@ export function createTrackItMcpServer(
                         ? 'Ask the owner to choose a food id before previewing a meal addition.'
                         : 'Use the exact returned food id when previewing a meal addition.'
                     : 'No saved food matched. Preview creation before creating a new food.',
+                provenance: 'TrackIt food catalog',
             })
         },
     )
@@ -448,30 +449,33 @@ export function createTrackItMcpServer(
         async input => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
             const existing = ((await data.listFoods(input.name)) as FoodRecord[]).find(
-                food => food.name.toLocaleLowerCase() === input.name.toLocaleLowerCase(),
+                food =>
+                    food.name.toLocaleLowerCase() === input.name.toLocaleLowerCase() &&
+                    String(food.brand ?? '').toLocaleLowerCase() ===
+                        String(input.brand ?? '').toLocaleLowerCase(),
             )
             if (existing) {
                 return denied(
-                    `A food named ${existing.name} already exists. Use food id ${existing.id}.`,
+                    `A matching food already exists. Use food id ${existing.id} instead of creating a duplicate.`,
                 )
             }
-            const preview = foodSchema.parse(input)
             const confirmation = await access.issueConfirmation(
                 client,
                 'create_food',
-                randomUUID(),
-                preview,
+                input.name,
+                input,
             )
+            const createArguments = {
+                confirmationToken: confirmation.token,
+                idempotencyKey: randomUUID(),
+            }
             return textResult({
-                preview,
+                preview: input,
                 confirmationToken: confirmation.token,
                 expiresAt: confirmation.expiresAt,
-                createArguments: {
-                    confirmationToken: confirmation.token,
-                    idempotencyKey: randomUUID(),
-                },
+                createArguments,
                 nextStep:
-                    'Show this preview to the owner. After explicit approval, call create_food exactly once using createArguments unchanged.',
+                    'Show the preview to the owner. After explicit approval, call create_food exactly once using createArguments unchanged. The confirmation token and idempotency key are already generated; never replace them.',
             })
         },
     )
@@ -488,24 +492,69 @@ export function createTrackItMcpServer(
         },
         async ({ confirmationToken, idempotencyKey }) => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
-            const result = await access.runIdempotent(
-                client,
-                'create_food',
-                idempotencyKey,
-                async transaction => {
-                    const confirmation = await access.consumeConfirmationPayload<unknown>(
-                        client,
-                        confirmationToken,
-                        'create_food',
+            let operation
+            try {
+                operation = await access.runIdempotent(
+                    client,
+                    'create_food',
+                    idempotencyKey,
+                    async transaction => {
+                        const confirmation = await access.consumeConfirmationPayload<unknown>(
+                            client,
+                            confirmationToken,
+                            'create_food',
+                        )
+                        if (!confirmation) throw new Error('confirmation_required')
+                        const parsedFood = foodSchema.safeParse(confirmation.payload)
+                        if (!parsedFood.success || parsedFood.data.name !== confirmation.targetId) {
+                            throw new Error('confirmation_payload_invalid')
+                        }
+                        const food = parsedFood.data
+                        const transactionalData = new PostgresDataRepository(transaction)
+                        const duplicate = (
+                            (await transactionalData.listFoods(food.name)) as FoodRecord[]
+                        ).find(
+                            candidate =>
+                                candidate.name.toLocaleLowerCase() ===
+                                    food.name.toLocaleLowerCase() &&
+                                String(candidate.brand ?? '').toLocaleLowerCase() ===
+                                    String(food.brand ?? '').toLocaleLowerCase(),
+                        )
+                        if (duplicate) throw new Error(`food_exists:${duplicate.id}`)
+                        const created = await transactionalData.createFood({
+                            ...food,
+                            catalogSource: `MCP: ${client.name}`,
+                            favorite: false,
+                        })
+                        return { food: created }
+                    },
+                )
+            } catch (error) {
+                if (error instanceof Error && error.message.startsWith('food_exists:')) {
+                    return denied(
+                        `A matching food already exists. Use food id ${error.message.slice('food_exists:'.length)} instead.`,
                     )
-                    if (!confirmation) throw new Error('confirmation_required')
-                    const input = foodSchema.parse(confirmation.payload)
-                    const transactionalData = new PostgresDataRepository(transaction)
-                    const food = await transactionalData.createFood(input)
-                    return { food }
-                },
-            )
-            return textResult({ ...result, provenance: `MCP client ${client.name}` })
+                }
+                if (error instanceof Error && error.message === 'idempotency_claim_incomplete') {
+                    return denied(
+                        'A create_food request with this idempotency key is still in progress. Retry with the same createArguments.',
+                    )
+                }
+                if (
+                    error instanceof Error &&
+                    ['confirmation_required', 'confirmation_payload_invalid'].includes(
+                        error.message,
+                    )
+                ) {
+                    return denied(
+                        'The food preview confirmation is invalid, expired, already used, or from a different client. Call preview_create_food again and reuse its createArguments unchanged after approval.',
+                    )
+                }
+                return denied(
+                    'Food creation failed before it could be saved. Preview the food again.',
+                )
+            }
+            return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
     )
 
@@ -524,39 +573,34 @@ export function createTrackItMcpServer(
         async input => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
             if (!validGrantTimestamp(client, input.eatenAt)) {
-                return denied('The selected meal time is outside this assistant grant.')
+                return denied('The meal timestamp is outside this client grant.')
             }
-            const foods = (await data.listFoods()) as FoodRecord[]
-            const food = foods.find(candidate => candidate.id === input.foodId)
+            const food = ((await data.listFoods()) as FoodRecord[]).find(
+                candidate => candidate.id === input.foodId,
+            )
             if (!food) return denied('The selected food does not exist.')
-            const payload = addFoodToMealPayloadSchema.parse({
-                ...input,
-                foodVersion: food.version,
-            })
+            const preview = { ...input, foodVersion: food.version }
             const confirmation = await access.issueConfirmation(
                 client,
                 'add_food_to_meal',
-                food.id,
-                payload,
+                input.foodId,
+                preview,
             )
-            const preview = {
-                food: { id: food.id, name: food.name, brand: food.brand ?? null },
-                foodVersion: food.version,
-                grams: input.grams,
-                mealType: input.mealType,
-                eatenAt: input.eatenAt,
-                nutrients: foodNutrients(food, input.grams),
+            const commitArguments = {
+                confirmationToken: confirmation.token,
+                idempotencyKey: randomUUID(),
             }
             return textResult({
-                preview,
+                preview: {
+                    ...preview,
+                    food: { id: food.id, name: food.name, brand: food.brand ?? null },
+                    nutrients: foodNutrients(food, input.grams),
+                },
                 confirmationToken: confirmation.token,
                 expiresAt: confirmation.expiresAt,
-                commitArguments: {
-                    confirmationToken: confirmation.token,
-                    idempotencyKey: randomUUID(),
-                },
+                commitArguments,
                 nextStep:
-                    'Show this preview to the owner. After explicit approval, call add_food_to_meal exactly once using commitArguments unchanged.',
+                    'Show the meal preview to the owner. After explicit approval, call add_food_to_meal exactly once using commitArguments unchanged.',
             })
         },
     )
@@ -573,9 +617,9 @@ export function createTrackItMcpServer(
         },
         async ({ confirmationToken, idempotencyKey }) => {
             if (!scoped('meals:write') || !access) return denied('Scope meals:write is required.')
-            let result
+            let operation
             try {
-                result = await access.runIdempotent(
+                operation = await access.runIdempotent(
                     client,
                     'add_food_to_meal',
                     idempotencyKey,
@@ -586,49 +630,68 @@ export function createTrackItMcpServer(
                             'add_food_to_meal',
                         )
                         if (!confirmation) throw new Error('confirmation_required')
-                        const input = addFoodToMealPayloadSchema.parse(confirmation.payload)
+                        const parsedInput = addFoodToMealPayloadSchema.safeParse(
+                            confirmation.payload,
+                        )
+                        if (
+                            !parsedInput.success ||
+                            parsedInput.data.foodId !== confirmation.targetId
+                        ) {
+                            throw new Error('confirmation_payload_invalid')
+                        }
+                        const input = parsedInput.data
                         if (!validGrantTimestamp(client, input.eatenAt)) {
-                            throw new Error('grant_denied')
+                            throw new Error('timestamp_outside_grant')
                         }
                         const transactionalData = new PostgresDataRepository(transaction)
-                        const foods = (await transactionalData.listFoods()) as FoodRecord[]
-                        const food = foods.find(candidate => candidate.id === input.foodId)
+                        const food = ((await transactionalData.listFoods()) as FoodRecord[]).find(
+                            candidate => candidate.id === input.foodId,
+                        )
                         if (!food || food.version !== input.foodVersion) {
                             throw new Error('food_changed')
                         }
-                        return transactionalData.createMeal({
+                        const nutrients = foodNutrients(food, input.grams)
+                        const meal = (await transactionalData.createMeal({
                             name: food.name,
                             mealType: input.mealType,
-                            nutrients: foodNutrients(food, input.grams),
                             eatenAt: input.eatenAt,
-                            source: `MCP client ${client.name}`,
+                            nutrients,
+                            favorite: false,
+                            nutritionQuality: food.nutritionQuality,
                             foodId: food.id,
-                            grams: input.grams,
-                        })
+                        })) as { id: string }
+                        return { meal }
                     },
                 )
             } catch (error) {
                 if (error instanceof Error && error.message === 'food_changed') {
                     return denied(
-                        'The saved food changed after preview. Search for it and preview the meal addition again.',
+                        'The food changed after preview. Preview it again before adding it.',
                     )
                 }
-                if (error instanceof Error && error.message === 'grant_denied') {
-                    return denied('The selected meal time is outside this assistant grant.')
-                }
-                if (error instanceof Error && error.message === 'confirmation_required') {
-                    return denied(
-                        'The meal addition confirmation is invalid, expired, already used, or from a different client. Call preview_add_food_to_meal again and reuse its commitArguments unchanged after approval.',
-                    )
+                if (error instanceof Error && error.message === 'timestamp_outside_grant') {
+                    return denied('The meal timestamp is outside this client grant.')
                 }
                 if (error instanceof Error && error.message === 'idempotency_claim_incomplete') {
                     return denied(
                         'An add_food_to_meal request with this idempotency key is still in progress. Retry with the same commitArguments.',
                     )
                 }
-                return denied('The saved food could not be added to the meal.')
+                if (
+                    error instanceof Error &&
+                    ['confirmation_required', 'confirmation_payload_invalid'].includes(
+                        error.message,
+                    )
+                ) {
+                    return denied(
+                        'The add-food preview confirmation is invalid, expired, already used, or from a different client. Preview it again and reuse commitArguments unchanged after approval.',
+                    )
+                }
+                return denied(
+                    'Adding the food to the meal failed. Preview it again before retrying.',
+                )
             }
-            return textResult({ meal: result, provenance: `MCP client ${client.name}` })
+            return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
     )
 
@@ -649,22 +712,25 @@ export function createTrackItMcpServer(
                 return denied('Scope observations:write is required.')
             }
             if (!validGrantTimestamp(client, input.observedAt)) {
-                return denied('The selected observation time is outside this assistant grant.')
+                return denied('The measurement timestamp is outside this client grant.')
             }
-            const result = await access.runIdempotent(
+            const operation = await access.runIdempotent(
                 client,
                 'log_measurement',
                 input.idempotencyKey,
-                () =>
-                    data.createObservation({
+                async transaction => {
+                    const transactionalData = new PostgresDataRepository(transaction)
+                    const observation = await transactionalData.createObservation({
                         definitionId: input.definitionId,
                         value: input.value,
                         unit: input.unit,
                         observedAt: input.observedAt,
-                        source: `MCP client ${client.name}`,
-                    }),
+                        source: `MCP: ${client.name}`,
+                    })
+                    return { observation }
+                },
             )
-            return textResult({ observation: result, provenance: `MCP client ${client.name}` })
+            return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
     )
 
@@ -684,21 +750,25 @@ export function createTrackItMcpServer(
                 return denied('Scope checkins:write is required.')
             }
             if (!validGrantTimestamp(client, input.observedAt)) {
-                return denied('The selected check-in time is outside this assistant grant.')
+                return denied('The check-in timestamp is outside this client grant.')
             }
-            const result = await access.runIdempotent(
+            const operation = await access.runIdempotent(
                 client,
                 'log_checkin',
                 input.idempotencyKey,
-                () =>
-                    journal.create({
+                transaction =>
+                    new PostgresDataRepository(transaction).createObservation({
+                        definitionId: 'check_in',
+                        valueType: 'text',
+                        textValue: input.detail,
                         title: input.title,
-                        detail: input.detail,
+                        category: 'Check-ins',
+                        attributes: { description: input.detail },
+                        source: `MCP: ${client.name}`,
                         observedAt: input.observedAt,
-                        source: `MCP client ${client.name}`,
                     }),
             )
-            return textResult({ checkin: result, provenance: `MCP client ${client.name}` })
+            return textResult({ ...operation, provenance: `MCP client ${client.name}` })
         },
     )
 
@@ -713,8 +783,9 @@ export function createTrackItMcpServer(
                 return denied('Scope observations:write is required.')
             }
             const record = (await journal.list()).find(item => item.id === id)
-            if (!record || !inGrant(client, new Date(record.observedAt))) {
-                return denied('The selected observation is outside this assistant grant.')
+            if (!record) return denied('Journal record not found.')
+            if (!validGrantTimestamp(client, record.observedAt)) {
+                return denied('The journal record is outside this client grant.')
             }
             const confirmation = await access.issueConfirmation(client, 'delete_observation', id)
             return textResult({
@@ -736,8 +807,9 @@ export function createTrackItMcpServer(
                 return denied('Scope observations:write is required.')
             }
             const record = (await journal.list()).find(item => item.id === id)
-            if (!record || !inGrant(client, new Date(record.observedAt))) {
-                return denied('The selected observation is outside this assistant grant.')
+            if (!record) return denied('Journal record not found.')
+            if (!validGrantTimestamp(client, record.observedAt)) {
+                return denied('The journal record is outside this client grant.')
             }
             const confirmed = await access.consumeConfirmation(
                 client,
@@ -745,9 +817,8 @@ export function createTrackItMcpServer(
                 'delete_observation',
                 id,
             )
-            if (!confirmed) return denied('Valid deletion confirmation is required.')
-            await journal.remove(id)
-            return textResult({ deleted: id, provenance: `MCP client ${client.name}` })
+            if (!confirmed) return denied('A valid confirmation for this exact record is required.')
+            return textResult({ deleted: await data.removeObservation(id), id })
         },
     )
 
