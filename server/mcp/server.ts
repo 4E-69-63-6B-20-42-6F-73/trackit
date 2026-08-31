@@ -451,7 +451,9 @@ export function createTrackItMcpServer(
                 food => food.name.toLocaleLowerCase() === input.name.toLocaleLowerCase(),
             )
             if (existing) {
-                return denied(`A food named ${existing.name} already exists. Use food id ${existing.id}.`)
+                return denied(
+                    `A food named ${existing.name} already exists. Use food id ${existing.id}.`,
+                )
             }
             const preview = foodSchema.parse(input)
             const confirmation = await access.issueConfirmation(
@@ -527,7 +529,10 @@ export function createTrackItMcpServer(
             const foods = (await data.listFoods()) as FoodRecord[]
             const food = foods.find(candidate => candidate.id === input.foodId)
             if (!food) return denied('The selected food does not exist.')
-            const payload = addFoodToMealPayloadSchema.parse({ ...input, foodVersion: food.version })
+            const payload = addFoodToMealPayloadSchema.parse({
+                ...input,
+                foodVersion: food.version,
+            })
             const confirmation = await access.issueConfirmation(
                 client,
                 'add_food_to_meal',
@@ -681,13 +686,17 @@ export function createTrackItMcpServer(
             if (!validGrantTimestamp(client, input.observedAt)) {
                 return denied('The selected check-in time is outside this assistant grant.')
             }
-            const result = await access.runIdempotent(client, 'log_checkin', input.idempotencyKey, () =>
-                journal.create({
-                    title: input.title,
-                    detail: input.detail,
-                    observedAt: input.observedAt,
-                    source: `MCP client ${client.name}`,
-                }),
+            const result = await access.runIdempotent(
+                client,
+                'log_checkin',
+                input.idempotencyKey,
+                () =>
+                    journal.create({
+                        title: input.title,
+                        detail: input.detail,
+                        observedAt: input.observedAt,
+                        source: `MCP client ${client.name}`,
+                    }),
             )
             return textResult({ checkin: result, provenance: `MCP client ${client.name}` })
         },
@@ -709,9 +718,7 @@ export function createTrackItMcpServer(
             }
             const confirmation = await access.issueConfirmation(client, 'delete_observation', id)
             return textResult({
-                target: scoped('journal')
-                    ? record
-                    : { id: record.id, contentAvailable: false },
+                target: scoped('journal') ? record : { id: record.id, contentAvailable: false },
                 confirmationToken: confirmation.token,
                 expiresAt: confirmation.expiresAt,
             })
