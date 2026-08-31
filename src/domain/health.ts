@@ -19,6 +19,15 @@ export type NumericObservation = {
     version: number
 }
 
+export const dailyMetricAttributionInstant = (
+    observation: Pick<NumericObservation, 'definitionId' | 'observedAt' | 'endedAt'>,
+) =>
+    new Date(
+        observation.definitionId.startsWith('sleep') && observation.endedAt
+            ? observation.endedAt
+            : observation.observedAt,
+    )
+
 export type DailyPoint = {
     date: string
     value: number | null

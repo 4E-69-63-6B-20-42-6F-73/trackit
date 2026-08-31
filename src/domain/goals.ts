@@ -1,4 +1,4 @@
-import type { NumericObservation } from './health.js'
+import { dailyMetricAttributionInstant, type NumericObservation } from './health.js'
 import {
     metricDefinition,
     type GoalAggregation,
@@ -124,17 +124,22 @@ export function evaluateGoal(
     const effectiveFrom = new Date(goal.effectiveFrom).getTime()
     const effectiveTo = goal.effectiveTo ? new Date(goal.effectiveTo).getTime() : Infinity
     const activeNow = now.getTime() >= effectiveFrom && now.getTime() <= effectiveTo
-    const qualifying = observations.filter(
-        item =>
+    const qualifying = observations.filter(item => {
+        const attributedAt = dailyMetricAttributionInstant(item)
+        return (
             activeNow &&
             item.definitionId === goal.metricId &&
             !item.excluded &&
-            new Date(item.observedAt).getTime() >= bounds.start.getTime() &&
-            new Date(item.observedAt).getTime() <= bounds.end.getTime() &&
+            attributedAt.getTime() >= bounds.start.getTime() &&
+            attributedAt.getTime() <= bounds.end.getTime() &&
             (!goal.schedule.weekdays?.length ||
-                goal.schedule.weekdays.includes(weekdayIn(new Date(item.observedAt), timezone))),
+                goal.schedule.weekdays.includes(weekdayIn(attributedAt, timezone)))
+        )
+    })
+    const ordered = [...qualifying].sort(
+        (a, b) =>
+            dailyMetricAttributionInstant(b).getTime() - dailyMetricAttributionInstant(a).getTime(),
     )
-    const ordered = [...qualifying].sort((a, b) => b.observedAt.localeCompare(a.observedAt))
     const value = !ordered.length
         ? null
         : goal.aggregation === 'latest'

@@ -7,7 +7,11 @@ import {
     preferences,
     projectionDirtyDates,
 } from '../db/schema.js'
-import { aggregateDailyObservations, type NumericObservation } from '../../src/domain/health.js'
+import {
+    aggregateDailyObservations,
+    dailyMetricAttributionInstant,
+    type NumericObservation,
+} from '../../src/domain/health.js'
 import { effectiveMetricSeriesInTimezone } from '../../src/domain/effectiveMetrics.js'
 import type { MetricPreferences } from '../../src/domain/metrics.js'
 import { metricDefinition } from '../../src/domain/metricCatalog.js'
@@ -36,13 +40,9 @@ export async function replaceEffectiveDailyMetric(database: Transaction, date: s
         from: new Date(from.getTime() - 36 * 60 * 60 * 1000).toISOString(),
         to: to.toISOString(),
     })
-    const attributedInputs = candidates.filter(record => {
-        const attributionInstant =
-            record.definitionId.startsWith('sleep') && record.endedAt
-                ? new Date(record.endedAt)
-                : new Date(record.observedAt)
-        return dateKeyInTimezone(attributionInstant, timezone) === date
-    })
+    const attributedInputs = candidates.filter(
+        record => dateKeyInTimezone(dailyMetricAttributionInstant(record), timezone) === date,
+    )
     const priorHeight = candidates
         .filter(record => record.definitionId === 'height' && new Date(record.observedAt) < to)
         .sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0]

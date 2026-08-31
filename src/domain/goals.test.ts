@@ -107,6 +107,54 @@ describe('goal period and aggregation evaluation', () => {
         expect(result.met).toBe(true)
     })
 
+    it('attributes overnight sleep to the wake day like the daily projection', () => {
+        const mondayNight = new Date('2026-08-31T21:53:00.000Z')
+        const goal = weightGoal({
+            id: 'goal-sleep',
+            metricId: 'sleep',
+            aggregation: 'total',
+            comparator: 'gte',
+            target: { value: 8 },
+            period: { type: 'day' },
+            canonicalUnit: 'hours',
+            schedule: { weekdays: [1] },
+        })
+        const sleep = {
+            ...observation(8.4167, '2026-08-30T21:20:00.000Z', 'sleep'),
+            canonicalUnit: 'hours',
+            originalUnit: 'hours',
+            endedAt: '2026-08-31T05:45:00.000Z',
+        }
+
+        expect(evaluateGoal(goal, [sleep], mondayNight, 'Europe/Amsterdam')).toMatchObject({
+            value: 8.4167,
+            met: true,
+            observationCount: 1,
+        })
+    })
+
+    it('keeps non-sleep intervals attributed to their start day', () => {
+        const mondayNight = new Date('2026-08-31T21:53:00.000Z')
+        const goal = weightGoal({
+            metricId: 'steps',
+            aggregation: 'total',
+            comparator: 'gte',
+            target: { value: 1 },
+            period: { type: 'day' },
+            canonicalUnit: 'count',
+        })
+        const steps = {
+            ...observation(1_000, '2026-08-30T21:30:00.000Z', 'steps'),
+            endedAt: '2026-08-30T22:30:00.000Z',
+        }
+
+        expect(evaluateGoal(goal, [steps], mondayNight, 'Europe/Amsterdam')).toMatchObject({
+            value: null,
+            met: null,
+            observationCount: 0,
+        })
+    })
+
     it('uses Monday as the consistent week boundary', () => {
         const bounds = goalPeriodBounds({ type: 'week' }, now, 'UTC')
         expect(bounds.start.toISOString()).toBe('2026-08-24T00:00:00.000Z')
