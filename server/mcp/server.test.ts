@@ -62,10 +62,16 @@ describe('TrackIt MCP tools', () => {
             selectionRequired: true,
             clarificationQuestion: expect.stringContaining('Greek yogurt'),
         })
-        const toolNames = (await client.listTools()).tools.map(tool => tool.name)
+        const tools = (await client.listTools()).tools
+        const toolNames = tools.map(tool => tool.name)
         expect(toolNames).not.toContain('preview_meal')
         expect(toolNames).not.toContain('log_meal')
         expect(toolNames).toContain('add_food_to_meal')
+        const createFoodSchema = tools.find(tool => tool.name === 'preview_create_food')
+            ?.inputSchema as {
+            properties?: { barcode?: { pattern?: string } }
+        }
+        expect(createFoodSchema.properties?.barcode?.pattern).toBe('^[0-9]{8,14}$')
 
         const createPreview = await client.callTool({
             name: 'preview_create_food',
