@@ -17,6 +17,7 @@ import { DataDeletionService } from './data-lifecycle/deletion.js'
 import { FoodCatalogService } from './nutrition/catalog.js'
 import { registerFoodCategoryRoutes } from './nutrition/food-categories.js'
 import { registerFoodLibraryRoutes } from './nutrition/food-library.js'
+import { registerRecipeFavoriteRoutes } from './nutrition/recipe-favorites.js'
 import { ProjectionWorker } from './data/projection-state.js'
 import { ProjectionMaintenanceService } from './data/projection-maintenance.js'
 import { registerDataMaintenanceRoutes } from './data/maintenance-routes.js'
@@ -54,6 +55,7 @@ registerMcpBrowserCors(app, mcp)
 registerJournalDetailRoutes(app, journal)
 registerFoodCategoryRoutes(app, db)
 registerFoodLibraryRoutes(app, db)
+registerRecipeFavoriteRoutes(app, db)
 registerRecurringPlanRoutes(app, db)
 registerPlanRoutes(app, db)
 registerEntryDeletionRoutes(app, db, data)
