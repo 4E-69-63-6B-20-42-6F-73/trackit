@@ -84,7 +84,12 @@ const renderToday = (events: JournalEvent[] = [], openTrends = vi.fn()) =>
         <MemoryRouter>
             <MantineProvider>
                 <ServerDataProvider initialData={{ preferences }}>
-                    <Today events={events} openJournal={vi.fn()} openTrends={openTrends} />
+                    <Today
+                        events={events}
+                        journalStatus="online"
+                        openJournal={vi.fn()}
+                        openTrends={openTrends}
+                    />
                 </ServerDataProvider>
             </MantineProvider>
         </MemoryRouter>,
