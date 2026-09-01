@@ -36,7 +36,13 @@ jobs:
             - name: Validate Drizzle migration metadata
               run: npm run db:check
             - name: Verify generated artifacts are committed
-              run: git diff --exit-code -- src/lib/api.generated.ts server/db/migrations
+              run: |
+                  status="$(git status --porcelain -- src/lib/api.generated.ts server/db/migrations)"
+                  if [ -n "$status" ]; then
+                    printf '%s\n' "$status"
+                    git diff -- src/lib/api.generated.ts server/db/migrations
+                    exit 1
+                  fi
 
     quality:
         name: Code quality
