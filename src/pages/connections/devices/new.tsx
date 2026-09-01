@@ -56,7 +56,8 @@ export function DeviceNew() {
     }, [])
 
     useEffect(() => {
-        if (!pairing || expired || actionMutation.isSuccess && actionMutation.data === 'approve') return
+        if (!pairing || expired || (actionMutation.isSuccess && actionMutation.data === 'approve'))
+            return
         const timer = window.setInterval(() => setNow(Date.now()), 1000)
         return () => window.clearInterval(timer)
     }, [pairing, expired, actionMutation.isSuccess, actionMutation.data])
@@ -84,7 +85,9 @@ export function DeviceNew() {
           ? actionMutation.variables?.action === 'approve'
               ? 'The device could not be approved. It may have already been confirmed.'
               : 'The device could not be rejected. Try again.'
-          : ''
+          : devicesQuery.isError
+            ? 'TrackIt could not check for a pending phone. Pairing status will retry automatically.'
+            : ''
 
     const handleApprove = () => {
         if (!pendingDevice) return
@@ -143,7 +146,9 @@ export function DeviceNew() {
                 <Card withBorder padding="lg" radius="md" mb="xl">
                     <Group justify="center" role="status" aria-label="Generating pairing code">
                         <Loader size="sm" />
-                        <Text size="sm" c="dimmed">Generating pairing code…</Text>
+                        <Text size="sm" c="dimmed">
+                            Generating pairing code…
+                        </Text>
                     </Group>
                 </Card>
             )}
@@ -183,8 +188,12 @@ export function DeviceNew() {
                                         aria-label="Android pairing QR code"
                                     />
                                     <Stack gap={4} align="center">
-                                        <Text size="xs" c="dimmed">Pairing code</Text>
-                                        <Text fz="xl" fw={600}>{pairing.code}</Text>
+                                        <Text size="xs" c="dimmed">
+                                            Pairing code
+                                        </Text>
+                                        <Text fz="xl" fw={600}>
+                                            {pairing.code}
+                                        </Text>
                                         <Text size="xs" c="dimmed">
                                             Expires in {calculateTimeRemaining(pairing.expiresAt)}
                                         </Text>
@@ -206,7 +215,9 @@ export function DeviceNew() {
                     {pairingState === 'expired' && (
                         <Card withBorder padding="lg" radius="md">
                             <Stack gap="md" align="center">
-                                <Text size="lg" fw={500}>This code expired</Text>
+                                <Text size="lg" fw={500}>
+                                    This code expired
+                                </Text>
                                 <Text size="sm" c="dimmed" ta="center">
                                     The pairing code has expired. Generate a new code to continue.
                                 </Text>
@@ -221,7 +232,9 @@ export function DeviceNew() {
                         <Card withBorder padding="lg" radius="md" color="blue">
                             <Stack gap="md">
                                 <Group justify="space-between">
-                                    <Text size="sm" fw={500}>Confirm this phone</Text>
+                                    <Text size="sm" fw={500}>
+                                        Confirm this phone
+                                    </Text>
                                     <Button
                                         variant="default"
                                         size="sm"
@@ -237,7 +250,9 @@ export function DeviceNew() {
                                 </Group>
 
                                 <Stack gap="sm">
-                                    <Text size="md" fw={500}>{pendingDevice.name}</Text>
+                                    <Text size="md" fw={500}>
+                                        {pendingDevice.name}
+                                    </Text>
                                     <Text size="sm" c="dimmed">
                                         This device wants to connect to your TrackIt server.
                                     </Text>
@@ -270,7 +285,9 @@ export function DeviceNew() {
                     {pairingState === 'approved' && (
                         <Card withBorder padding="lg" radius="md" color="green">
                             <Stack gap="md" align="center">
-                                <Text size="lg" fw={500}>Phone connected</Text>
+                                <Text size="lg" fw={500}>
+                                    Phone connected
+                                </Text>
                                 <Text size="sm" c="dimmed" ta="center">
                                     Finish Health Connect setup on your Android phone.
                                 </Text>
