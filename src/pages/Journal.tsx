@@ -167,7 +167,7 @@ export function Journal({
     }, [locale, shown, timezone, todayKey])
 
     const beginEdit = async (event: JournalEvent) => {
-        const editable = event.definitionId === 'meal' ? await getJournalEntry(event.id) : event
+        const editable = event.entityType === 'meal' ? await getJournalEntry(event.id) : event
         setEditing(editable)
         setDraftTitle(editable.title)
         setDraftDetail(editable.detail)
@@ -431,19 +431,15 @@ export function Journal({
                                         </ActionIcon>
                                     </Menu.Target>
                                     <Menu.Dropdown>
-                                        {event.source === 'You' && (
-                                            <>
-                                                <Menu.Item onClick={() => void beginEdit(event)}>
-                                                    Edit
-                                                </Menu.Item>
-                                                <Menu.Item
-                                                    onClick={() => setDeleting(event)}
-                                                    color="red"
-                                                >
-                                                    Delete
-                                                </Menu.Item>
-                                            </>
-                                        )}
+                                        <Menu.Item onClick={() => void beginEdit(event)}>
+                                            Edit
+                                        </Menu.Item>
+                                        <Menu.Item
+                                            onClick={() => setDeleting(event)}
+                                            color="red"
+                                        >
+                                            Delete
+                                        </Menu.Item>
                                     </Menu.Dropdown>
                                 </Menu>
                             )}
