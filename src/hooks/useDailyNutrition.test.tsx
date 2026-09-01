@@ -24,7 +24,7 @@ const createWrapper = () => {
                     goals: [
                         {
                             id: 'protein-goal',
-                            metricId: 'protein',
+                            definitionId: 'protein',
                             aggregation: 'total',
                             comparator: 'gte',
                             target: { value: 120 },
