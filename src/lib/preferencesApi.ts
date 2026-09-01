@@ -1,35 +1,19 @@
+import { preferencesForPreset, type MetricPreferences } from '@trackit/domain/metrics'
 import { authRequest } from './authApi'
-import { preferencesForPreset, type MetricPreferences } from '../domain/metrics'
 
 export type Preferences = {
     displayName: string
     timezone: string
     locale: string
-    /** Internal Metric Center preset state; there is no standalone Units settings surface. */
     units: 'metric' | 'imperial'
     metricPreferences?: MetricPreferences
     experience?: ExperiencePreferences
-}
-
-/** @deprecated Remove with the remaining Today dashboard customization UI. */
-export type DashboardCard =
-    'sleep' | 'heart' | 'energy' | 'weight' | 'progress' | 'trend' | 'journal'
-
-/** @deprecated Remove with the remaining manual-entry routine UI. */
-export type LegacyRoutine = {
-    id: string
-    name: string
-    kinds: Array<'Water' | 'Weight' | 'Check-in' | 'Symptom' | 'Note'>
 }
 
 export type ExperiencePreferences = {
     onboardingStep?: number
     onboardingComplete?: boolean
     dismissedWeeklyReflection?: string
-    /** @deprecated No longer persisted by the server. */
-    visibleCards?: DashboardCard[]
-    /** @deprecated No longer persisted by the server. */
-    routines?: LegacyRoutine[]
 }
 
 export async function getPreferences(signal?: AbortSignal): Promise<Preferences> {
