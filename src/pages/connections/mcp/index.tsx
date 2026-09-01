@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -14,6 +14,7 @@ import {
     TextInput,
     Title,
 } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     IconArrowLeft,
     IconCopy,
@@ -30,9 +31,9 @@ import {
     revokeMcpClient,
     setMcpAllowedOrigins,
     setMcpEnabled,
-    type McpAccessEvent,
     type McpClientRecord,
 } from '../../../lib/mcpApi'
+import { serverQueryKeys } from '../../../lib/serverQueries'
 
 const clientState = (client: McpClientRecord) => {
     if (client.revokedAt) return { label: 'Revoked', color: 'gray' }
@@ -72,46 +73,85 @@ const toolLabels: Record<string, string> = {
     log_checkin: 'Added a check-in',
     create_checkin: 'Added a check-in',
     preview_delete_observation: 'Previewed measurement deletion',
-    delete_observation: 'Deleted a measurement',
+    delete_observation: 'Deleted measurement',
 }
 
 export function McpAccess() {
     const navigate = useNavigate()
-    const [enabled, setEnabled] = useState(false)
-    const [clients, setClients] = useState<McpClientRecord[]>([])
-    const [events, setEvents] = useState<McpAccessEvent[]>([])
-    const [allowedOrigins, setAllowedOrigins] = useState<string[]>([])
+    const queryClient = useQueryClient()
     const [originDraft, setOriginDraft] = useState('')
+    const [draftOrigins, setDraftOrigins] = useState<string[] | null>(null)
     const [originError, setOriginError] = useState('')
-    const [loading, setLoading] = useState(true)
-    const [saving, setSaving] = useState(false)
-    const [error, setError] = useState('')
+    const [actionError, setActionError] = useState('')
     const [copied, setCopied] = useState(false)
     const [revoking, setRevoking] = useState<McpClientRecord | null>(null)
     const [deleting, setDeleting] = useState<McpClientRecord | null>(null)
+    const statusQuery = useQuery({
+        queryKey: serverQueryKeys.mcpStatus,
+        queryFn: ({ signal }) => getMcpStatus(signal),
+    })
+    const eventsQuery = useQuery({
+        queryKey: serverQueryKeys.mcpAccessEvents,
+        queryFn: ({ signal }) => listMcpAccessEvents(signal),
+    })
+    const status = statusQuery.data
+    const enabled = status?.enabled ?? false
+    const clients = status?.clients ?? []
+    const events = eventsQuery.data ?? []
+    const allowedOrigins = draftOrigins ?? status?.allowedOrigins ?? []
+    const loading = statusQuery.isPending || eventsQuery.isPending
+    const queryError = statusQuery.isError || eventsQuery.isError
+        ? 'Assistant access settings are unavailable. Try again.'
+        : ''
+    const error = actionError || queryError
 
-    const refresh = useCallback(async () => {
-        setLoading(true)
-        try {
-            const [status, accessEvents] = await Promise.all([
-                getMcpStatus(),
-                listMcpAccessEvents(),
+    const refresh = async () => {
+        setActionError('')
+        await Promise.all([statusQuery.refetch(), eventsQuery.refetch()])
+    }
+    const toggleMutation = useMutation({
+        mutationFn: setMcpEnabled,
+        onMutate: () => setActionError(''),
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpStatus })
+        },
+        onError: () => setActionError('Assistant access could not be updated. Try again.'),
+    })
+    const clientMutation = useMutation({
+        mutationFn: async ({ client, action }: { client: McpClientRecord; action: 'revoke' | 'delete' }) => {
+            if (action === 'revoke') await revokeMcpClient(client.id)
+            else await deleteMcpClient(client.id)
+        },
+        onMutate: () => setActionError(''),
+        onSuccess: async (_, { action }) => {
+            if (action === 'revoke') setRevoking(null)
+            else setDeleting(null)
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpStatus }),
+                queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpAccessEvents }),
             ])
-            setEnabled(status.enabled)
-            setClients(status.clients)
-            setAllowedOrigins(status.allowedOrigins)
-            setEvents(accessEvents)
-            setError('')
-        } catch {
-            setError('Assistant access settings are unavailable. Try again.')
-        } finally {
-            setLoading(false)
-        }
-    }, [])
-
-    useEffect(() => {
-        queueMicrotask(() => void refresh())
-    }, [refresh])
+        },
+        onError: (_, { client, action }) =>
+            setActionError(
+                action === 'revoke'
+                    ? `Could not revoke ${client.name}. Try again.`
+                    : `Could not delete ${client.name}. Try again.`,
+            ),
+    })
+    const originsMutation = useMutation({
+        mutationFn: setMcpAllowedOrigins,
+        onMutate: () => setActionError(''),
+        onSuccess: result => {
+            queryClient.setQueryData<typeof status>(serverQueryKeys.mcpStatus, current =>
+                current ? { ...current, allowedOrigins: result.allowedOrigins } : current,
+            )
+            setDraftOrigins(null)
+            setOriginError('')
+        },
+        onError: () => setActionError('Browser origins could not be updated. Try again.'),
+    })
+    const saving =
+        toggleMutation.isPending || clientMutation.isPending || originsMutation.isPending
 
     const orderedClients = useMemo(
         () =>
@@ -127,59 +167,12 @@ export function McpAccess() {
     const activeClients = orderedClients.filter(client => clientState(client).label === 'Active')
     const inactiveClients = orderedClients.filter(client => clientState(client).label !== 'Active')
 
-    const toggle = async (checked: boolean) => {
-        setSaving(true)
-        try {
-            await setMcpEnabled(checked)
-            setEnabled(checked)
-            setError('')
-        } catch {
-            setError('Assistant access could not be updated. Try again.')
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    const revoke = async () => {
-        if (!revoking) return
-        setSaving(true)
-        try {
-            await revokeMcpClient(revoking.id)
-            setClients(current =>
-                current.map(client =>
-                    client.id === revoking.id
-                        ? { ...client, revokedAt: new Date().toISOString() }
-                        : client,
-                ),
-            )
-            setRevoking(null)
-            setError('')
-        } catch {
-            setError(`Could not revoke ${revoking.name}. Try again.`)
-        } finally {
-            setSaving(false)
-        }
-    }
-    const remove = async () => {
-        if (!deleting) return
-        setSaving(true)
-        try {
-            await deleteMcpClient(deleting.id)
-            setClients(current => current.filter(client => client.id !== deleting.id))
-            setDeleting(null)
-            setError('')
-        } catch {
-            setError(`Could not delete ${deleting.name}. Try again.`)
-        } finally {
-            setSaving(false)
-        }
-    }
     const copyEndpoint = async () => {
         try {
             await navigator.clipboard.writeText(`${window.location.origin}/mcp`)
             setCopied(true)
         } catch {
-            setError('The endpoint could not be copied automatically.')
+            setActionError('The endpoint could not be copied automatically.')
         }
     }
     const addOrigin = () => {
@@ -195,22 +188,9 @@ export function McpAccess() {
             setOriginError('That origin is already allowed.')
             return
         }
-        setAllowedOrigins(current => [...current, value])
+        setDraftOrigins([...allowedOrigins, value])
         setOriginDraft('')
         setOriginError('')
-    }
-    const saveOrigins = async () => {
-        setSaving(true)
-        try {
-            const result = await setMcpAllowedOrigins(allowedOrigins)
-            setAllowedOrigins(result.allowedOrigins)
-            setOriginError('')
-            setError('')
-        } catch {
-            setError('Browser origins could not be updated. Try again.')
-        } finally {
-            setSaving(false)
-        }
     }
 
     return (
@@ -236,7 +216,7 @@ export function McpAccess() {
                 <Button
                     color="trackit"
                     leftSection={<IconPlus size={16} />}
-                    disabled={!enabled}
+                    disabled={!enabled || loading}
                     onClick={() => navigate('/connections/mcp/new')}
                 >
                     Add assistant
@@ -259,8 +239,8 @@ export function McpAccess() {
                 </div>
                 <Switch
                     checked={enabled}
-                    disabled={saving}
-                    onChange={event => void toggle(event.currentTarget.checked)}
+                    disabled={saving || loading}
+                    onChange={event => toggleMutation.mutate(event.currentTarget.checked)}
                     label={enabled ? 'Enabled' : 'Disabled'}
                 />
                 <div className="mcp-endpoint">
@@ -302,8 +282,8 @@ export function McpAccess() {
                                 color="red"
                                 aria-label={`Remove ${origin}`}
                                 onClick={() =>
-                                    setAllowedOrigins(current =>
-                                        current.filter(candidate => candidate !== origin),
+                                    setDraftOrigins(
+                                        allowedOrigins.filter(candidate => candidate !== origin),
                                     )
                                 }
                             >
@@ -334,7 +314,11 @@ export function McpAccess() {
                         </Button>
                     </Group>
                     <Group justify="flex-end">
-                        <Button loading={saving} onClick={() => void saveOrigins()}>
+                        <Button
+                            loading={originsMutation.isPending}
+                            disabled={loading}
+                            onClick={() => originsMutation.mutate(allowedOrigins)}
+                        >
                             Save browser origins
                         </Button>
                     </Group>
@@ -352,7 +336,7 @@ export function McpAccess() {
                     variant="subtle"
                     color="gray"
                     aria-label="Refresh assistants"
-                    loading={loading}
+                    loading={statusQuery.isFetching || eventsQuery.isFetching}
                     onClick={() => void refresh()}
                 >
                     <IconRefresh size={17} />
@@ -520,7 +504,7 @@ export function McpAccess() {
                         })
                     ) : (
                         <Text size="sm" c="dimmed" p="lg">
-                            No assistant requests recorded yet.
+                            {loading ? 'Loading assistant activity…' : 'No assistant requests recorded yet.'}
                         </Text>
                     )}
                 </Card>
@@ -541,7 +525,11 @@ export function McpAccess() {
                     <Button variant="default" onClick={() => setRevoking(null)}>
                         Cancel
                     </Button>
-                    <Button color="red" loading={saving} onClick={() => void revoke()}>
+                    <Button
+                        color="red"
+                        loading={clientMutation.isPending && clientMutation.variables?.action === 'revoke'}
+                        onClick={() => revoking && clientMutation.mutate({ client: revoking, action: 'revoke' })}
+                    >
                         Revoke access
                     </Button>
                 </Group>
@@ -561,7 +549,11 @@ export function McpAccess() {
                     <Button variant="default" onClick={() => setDeleting(null)}>
                         Cancel
                     </Button>
-                    <Button color="red" loading={saving} onClick={() => void remove()}>
+                    <Button
+                        color="red"
+                        loading={clientMutation.isPending && clientMutation.variables?.action === 'delete'}
+                        onClick={() => deleting && clientMutation.mutate({ client: deleting, action: 'delete' })}
+                    >
                         Delete assistant
                     </Button>
                 </Group>
