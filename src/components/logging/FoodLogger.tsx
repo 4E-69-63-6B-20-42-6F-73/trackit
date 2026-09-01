@@ -341,7 +341,11 @@ export function FoodLogger({
                                   unit: item.kind === 'food' ? 'g' : 'serving',
                               },
                     foodId:
-                        item.kind === 'food' ? item.food.id : item.kind === 'recipe' ? null : undefined,
+                        item.kind === 'food'
+                            ? item.food.id
+                            : item.kind === 'recipe'
+                              ? null
+                              : undefined,
                     recipeId:
                         item.kind === 'recipe'
                             ? item.recipe.id

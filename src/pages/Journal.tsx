@@ -434,10 +434,7 @@ export function Journal({
                                         <Menu.Item onClick={() => void beginEdit(event)}>
                                             Edit
                                         </Menu.Item>
-                                        <Menu.Item
-                                            onClick={() => setDeleting(event)}
-                                            color="red"
-                                        >
+                                        <Menu.Item onClick={() => setDeleting(event)} color="red">
                                             Delete
                                         </Menu.Item>
                                     </Menu.Dropdown>
