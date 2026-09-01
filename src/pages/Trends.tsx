@@ -9,29 +9,29 @@ import {
 } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { CorrelationNote } from '../components/CorrelationNote'
-import { ObservationRecords } from '../components/ObservationRecords'
-import { PageHeader } from '../components/PageHeader'
-import { TrendChart } from '../components/TrendChart'
 import {
     addCalendarDays,
     calendarDateFromKey,
     calendarDayRangeForKey,
     calendarTodayKey,
-} from '../domain/calendar'
+} from '@trackit/domain/calendar'
 import {
     dailySeries,
     weeklySeries,
     type NumericObservation,
     type TrendGranularity,
-} from '../domain/health'
-import { metricDefinition } from '../domain/metricCatalog'
+} from '@trackit/domain/health'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
 import {
     convertMetricValue,
     displayUnitFor,
     formatMetricDisplayValue,
     unitPresentation,
-} from '../domain/metrics'
+} from '@trackit/domain/metrics'
+import { CorrelationNote } from '../components/CorrelationNote'
+import { ObservationRecords } from '../components/ObservationRecords'
+import { PageHeader } from '../components/PageHeader'
+import { TrendChart } from '../components/TrendChart'
 import { useServerData } from '../hooks/useServerData'
 import { listDailyMetrics } from '../lib/dailyMetricApi'
 import { healthQueryKeys } from '../lib/healthQueries'
@@ -218,8 +218,8 @@ export function Trends() {
             if (!activeDefinitionId) throw new Error('No metric selected')
             return saveTrendView({
                 name: `${metricLabel(activeDefinitionId)} · ${range}`,
-                metric: activeDefinitionId,
-                comparisonMetric: comparisonDefinitionId ?? undefined,
+                definitionId: activeDefinitionId,
+                comparisonDefinitionId: comparisonDefinitionId ?? undefined,
                 rangeDays: days,
                 granularity,
             })
@@ -243,9 +243,9 @@ export function Trends() {
     const loadView = (id: string) => {
         const view = savedViews.find(item => item.id === id)
         if (!view) return
-        setDefinitionId(view.metric)
-        setComparisonDefinitionId(view.comparisonMetric)
-        setShowCompare(Boolean(view.comparisonMetric))
+        setDefinitionId(view.definitionId)
+        setComparisonDefinitionId(view.comparisonDefinitionId)
+        setShowCompare(Boolean(view.comparisonDefinitionId))
         setShowAnalysis(false)
         setGranularity(view.granularity)
         setInspectedIds(null)
