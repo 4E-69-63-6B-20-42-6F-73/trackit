@@ -26,6 +26,7 @@ import {
 import { metricDefinition, type MetricCategory } from '../domain/metricCatalog'
 import { formatMetric, type MetricPreferences } from '../domain/metrics'
 import type { JournalEvent } from '../domain/types'
+import type { ServerStatus } from '../hooks/useJournal'
 import { useServerData } from '../hooks/useServerData'
 import { useTodayHealth } from '../hooks/useTodayHealth'
 import { listJournal } from '../lib/journalApi'
@@ -75,6 +76,7 @@ const goalTargetLabel = (
 
 type TodayProps = {
     events: JournalEvent[]
+    journalStatus: ServerStatus
     openJournal: (date: string) => void
     openTrends: (definitionId?: string) => void
     openConnections?: () => void
@@ -84,6 +86,7 @@ type TodayProps = {
 
 export function Today({
     events,
+    journalStatus,
     openJournal,
     openTrends,
     openConnections,
@@ -136,7 +139,9 @@ export function Today({
     const coldStart =
         isToday &&
         hasHistory === false &&
+        journalStatus === 'online' &&
         !health.loading &&
+        !health.unavailable &&
         events.length === 0 &&
         health.summaryMetrics.length === 0
 
@@ -282,6 +287,13 @@ export function Today({
                             radius="lg"
                             aria-label="Loading daily summary"
                         />
+                    ) : health.unavailable ? (
+                        <section className="panel today-empty-summary">
+                            <Text fw={650}>Daily summary unavailable</Text>
+                            <Text size="sm" c="dimmed">
+                                TrackIt could not load the observations needed for this summary.
+                            </Text>
+                        </section>
                     ) : health.summaryMetrics.length > 0 ? (
                         <section className="metric-grid">
                             {health.summaryMetrics.map(metric => {
@@ -350,6 +362,13 @@ export function Today({
                     <article className="panel today-goals">
                         {health.loading ? (
                             <TodayGoalsSkeleton />
+                        ) : health.unavailable ? (
+                            <Stack gap={4}>
+                                <Text fw={650}>Goal status unavailable</Text>
+                                <Text size="sm" c="dimmed">
+                                    TrackIt could not load goal progress for this day.
+                                </Text>
+                            </Stack>
                         ) : health.dailyGoals.length > 0 ? (
                             health.dailyGoals.slice(0, 4).map(({ goal, evaluation }) => {
                                 const definition = metricDefinition(goal.metricId)
@@ -438,7 +457,21 @@ export function Today({
                                 View this day
                             </Button>
                         </div>
-                        {events.length > 0 ? (
+                        {journalStatus === 'connecting' ? (
+                            <Skeleton
+                                role="status"
+                                height={96}
+                                radius="md"
+                                aria-label="Loading Journal entries"
+                            />
+                        ) : journalStatus === 'offline' ? (
+                            <div className="today-empty-journal">
+                                <Text fw={650}>Journal entries unavailable</Text>
+                                <Text size="sm" c="dimmed">
+                                    TrackIt could not load the Journal for this day.
+                                </Text>
+                            </div>
+                        ) : events.length > 0 ? (
                             <JournalEventList events={events.slice(0, 3)} showChevron />
                         ) : (
                             <div className="today-empty-journal">
