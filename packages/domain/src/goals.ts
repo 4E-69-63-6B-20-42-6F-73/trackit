@@ -10,7 +10,7 @@ export type GoalPeriod = { type: 'day' } | { type: 'week' } | { type: 'rolling';
 export type GoalTarget = { value: number } | { min: number; max: number }
 export type Goal = {
     id: string
-    metricId: string
+    definitionId: string
     aggregation: GoalAggregation
     comparator: MetricComparison
     target: GoalTarget
@@ -85,7 +85,7 @@ const weekdayIn = (date: Date, timezone: string) =>
     )
 export function validateGoal(goal: Omit<Goal, 'id'> | Goal): string[] {
     const errors: string[] = []
-    const metric = metricDefinition(goal.metricId)
+    const metric = metricDefinition(goal.definitionId)
     const capabilities = metric?.goalCapabilities
     if (!metric || !capabilities) return ['Metric does not support goals.']
     const periods = capabilities.aggregations[goal.aggregation]
@@ -128,7 +128,7 @@ export function evaluateGoal(
         const attributedAt = dailyMetricAttributionInstant(item)
         return (
             activeNow &&
-            item.definitionId === goal.metricId &&
+            item.definitionId === goal.definitionId &&
             !item.excluded &&
             attributedAt.getTime() >= bounds.start.getTime() &&
             attributedAt.getTime() <= bounds.end.getTime() &&
