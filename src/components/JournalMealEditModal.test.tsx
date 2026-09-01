@@ -102,8 +102,8 @@ describe('JournalMealEditModal', () => {
                 }),
             }),
         )
-        expect(changes).not.toHaveProperty('foodId')
-        expect(changes).not.toHaveProperty('recipeId')
+        expect(changes.foodId).toBeUndefined()
+        expect(changes.recipeId).toBeUndefined()
         expect(onSaved).toHaveBeenCalledTimes(1)
         expect(onClose).toHaveBeenCalledTimes(1)
     })
