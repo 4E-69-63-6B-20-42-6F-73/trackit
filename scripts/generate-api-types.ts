@@ -29,9 +29,7 @@ const asObject = (value: unknown): JsonObject | undefined =>
         : undefined
 
 const propertyKey = (value: string) =>
-    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value) || /^\d+$/.test(value)
-        ? value
-        : JSON.stringify(value)
+    /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(value) || /^\d+$/.test(value) ? value : JSON.stringify(value)
 
 const resolvePointer = (document: JsonObject, pointer: string): unknown => {
     if (!pointer.startsWith('#/')) return undefined
