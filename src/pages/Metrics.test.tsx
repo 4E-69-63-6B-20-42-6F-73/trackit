@@ -1,27 +1,32 @@
+import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { MantineProvider } from '@mantine/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
-import { updatePreferences, type Preferences } from '../lib/preferencesApi'
 import { listMetricSources } from '../lib/observationApi'
+import { updatePreferences, type Preferences } from '../lib/preferencesApi'
 import { Metrics } from './Metrics'
 
 vi.mock('../lib/preferencesApi', () => ({ getPreferences: vi.fn(), updatePreferences: vi.fn() }))
 vi.mock('../lib/observationApi', () => ({ listMetricSources: vi.fn() }))
 
 const base: Preferences = { displayName: 'Alex', timezone: 'UTC', locale: 'en-US', units: 'metric' }
-const renderPage = (preferences = base) =>
-    render(
+const renderPage = (preferences = base) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
         <MantineProvider>
-            <MemoryRouter>
-                <ServerDataProvider initialData={{ preferences }}>
-                    <Metrics />
-                </ServerDataProvider>
-            </MemoryRouter>
+            <QueryClientProvider client={queryClient}>
+                <MemoryRouter>
+                    <ServerDataProvider initialData={{ preferences }}>
+                        <Metrics />
+                    </ServerDataProvider>
+                </MemoryRouter>
+            </QueryClientProvider>
         </MantineProvider>,
     )
+}
 
 describe('Metric Center', () => {
     beforeEach(() => {
