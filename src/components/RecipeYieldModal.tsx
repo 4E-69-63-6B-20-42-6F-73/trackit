@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Alert, Button, Modal, NumberInput, Stack, Text } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import type { RecipeRecord } from '../lib/nutritionApi'
 
 export function RecipeYieldModal({
@@ -12,21 +13,15 @@ export function RecipeYieldModal({
     onSave: (servings: number) => Promise<void>
 }) {
     const [servings, setServings] = useState<number | string>(recipe.servings)
-    const [error, setError] = useState('')
-    const [saving, setSaving] = useState(false)
-
-    const save = async () => {
-        setSaving(true)
-        setError('')
-        try {
-            await onSave(Number(servings))
-            onClose()
-        } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Could not update recipe yield.')
-        } finally {
-            setSaving(false)
-        }
-    }
+    const saveMutation = useMutation({
+        mutationFn: () => onSave(Number(servings)),
+        onSuccess: onClose,
+    })
+    const error = saveMutation.isError
+        ? saveMutation.error instanceof Error
+            ? saveMutation.error.message
+            : 'Could not update recipe yield.'
+        : ''
 
     return (
         <Modal opened onClose={onClose} title={`Edit ${recipe.name} yield`}>
@@ -43,7 +38,7 @@ export function RecipeYieldModal({
                     decimalScale={1}
                 />
                 {error && <Alert color="orange">{error}</Alert>}
-                <Button loading={saving} onClick={() => void save()}>
+                <Button loading={saveMutation.isPending} onClick={() => saveMutation.mutate()}>
                     Recalculate servings
                 </Button>
             </Stack>
