@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState } from 'react'
-import { addCalendarDays, calendarDateKey, calendarDayRangeForKey } from '../domain/calendar'
-import type { GoalEvaluation } from '../domain/goals'
-import type { NumericObservation } from '../domain/health'
-import { metricDefinition } from '../domain/metricCatalog'
-import { compareTodayHeadlineMetrics, isTodayHeadlineMetric } from '../domain/todaySummary'
+import { addCalendarDays, calendarDateKey, calendarDayRangeForKey } from '@trackit/domain/calendar'
+import type { GoalEvaluation } from '@trackit/domain/goals'
+import type { NumericObservation } from '@trackit/domain/health'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
+import { compareTodayHeadlineMetrics, isTodayHeadlineMetric } from '@trackit/domain/todaySummary'
 import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
 import { listGoalEvaluations } from '../lib/goalApi'
 import { healthQueryKeys } from '../lib/healthQueries'
@@ -106,7 +106,7 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
             )
         })
         const activeGoal = (metric: string) =>
-            activeGoals.find(goal => goal.metricId === metric) ?? null
+            activeGoals.find(goal => goal.definitionId === metric) ?? null
         const sleepByDate = new Map(values('sleep').map(row => [row.date, row]))
         const sleepRows = Array.from({ length: 7 }, (_, offset) => {
             const key = addCalendarDays(selectedKey, -6 + offset)
