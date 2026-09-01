@@ -9,7 +9,7 @@ export interface paths {
             }
             requestBody?: never
             responses: {
-                '200': {
+                200: {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
@@ -33,7 +33,7 @@ export interface paths {
                         }
                     }
                 }
-                '400': {
+                400: {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }
@@ -62,7 +62,7 @@ export interface paths {
                 }
             }
             responses: {
-                '201': {
+                201: {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
@@ -70,7 +70,7 @@ export interface paths {
                         }
                     }
                 }
-                '400': {
+                400: {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }
@@ -82,8 +82,8 @@ export interface paths {
             parameters: { query?: never; header?: never; path: { id: string }; cookie?: never }
             requestBody?: never
             responses: {
-                '204': { headers: { [name: string]: unknown }; content?: never }
-                '404': { headers: { [name: string]: unknown }; content?: never }
+                204: { headers: { [name: string]: unknown }; content?: never }
+                404: { headers: { [name: string]: unknown }; content?: never }
             }
         }
         patch: {
@@ -101,7 +101,7 @@ export interface paths {
                 }
             }
             responses: {
-                '200': {
+                200: {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
@@ -109,11 +109,11 @@ export interface paths {
                         }
                     }
                 }
-                '400': {
+                400: {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }
-                '409': {
+                409: {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }
@@ -130,7 +130,7 @@ export interface paths {
             }
             requestBody?: never
             responses: {
-                '200': {
+                200: {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
@@ -144,7 +144,7 @@ export interface paths {
                         }
                     }
                 }
-                '400': {
+                400: {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }
@@ -156,7 +156,7 @@ export interface paths {
             parameters: { query?: never; header?: never; path?: never; cookie?: never }
             requestBody?: never
             responses: {
-                '200': {
+                200: {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
