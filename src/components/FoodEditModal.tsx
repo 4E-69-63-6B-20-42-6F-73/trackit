@@ -7,18 +7,22 @@ import {
     MultiSelect,
     NumberInput,
     SimpleGrid,
-    Skeleton,
     Stack,
     Text,
     TextInput,
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import {
+    servingOptionDrafts,
+    servingOptionsFromDrafts,
+    type ServingOptionDraft,
+} from '../domain/foodServingOptions'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
-import { listFoodCategories, setFoodCategories } from '../lib/foodCategoryApi'
-import { serverQueryKeys } from '../lib/serverQueries'
+import { listFoodCategories, setFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
+import { FoodServingOptionsFields } from './FoodServingOptionsFields'
+import { useToast } from './toastContext'
 
 export function FoodEditModal({
     food,
@@ -32,14 +36,23 @@ export function FoodEditModal({
     onDelete: () => Promise<void>
 }) {
     const compact = useMediaQuery('(max-width: 36em)')
-    const queryClient = useQueryClient()
+    const toast = useToast()
     const [name, setName] = useState(food.name)
     const [brand, setBrand] = useState(food.brand ?? '')
     const [barcode, setBarcode] = useState(food.barcode ?? '')
     const [servingName, setServingName] = useState(food.servingName)
     const [servingGrams, setServingGrams] = useState<number | string>(food.servingGrams)
+    const [servingOptions, setServingOptions] = useState<ServingOptionDraft[]>(
+        servingOptionDrafts(food.servingOptions),
+    )
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>(food.per100g)
-    const [categoryIds, setCategoryIds] = useState<string[] | null>(null)
+    const [categories, setCategories] = useState<FoodCategory[]>([])
+    const [categoryIds, setCategoryIds] = useState<string[]>([])
+    const [categoriesLoaded, setCategoriesLoaded] = useState(false)
+    const [error, setError] = useState('')
+    const [deleteError, setDeleteError] = useState('')
+    const [saving, setSaving] = useState(false)
+    const [deleting, setDeleting] = useState(false)
     const [confirmingDelete, setConfirmingDelete] = useState(false)
     const quality =
         food.nutritionQuality === 'estimated'
@@ -48,44 +61,19 @@ export function FoodEditModal({
               ? 'complete'
               : 'incomplete'
 
-    const categoriesQuery = useQuery({
-        queryKey: serverQueryKeys.foodCategories,
-        queryFn: ({ signal }) => listFoodCategories(signal),
-    })
-    const categories = categoriesQuery.data ?? []
-    const selectedCategoryIds =
-        categoryIds ??
-        categories.filter(category => category.foodIds.includes(food.id)).map(category => category.id)
-
-    const saveMutation = useMutation({
-        mutationFn: async () => {
-            await onSave({
-                name: name.trim(),
-                brand: brand.trim() || undefined,
-                barcode: barcode.trim() || undefined,
-                catalogSource: food.catalogSource,
-                catalogId: food.catalogId,
-                servingName: servingName.trim(),
-                servingGrams: Number(servingGrams),
-                favorite: food.favorite,
-                nutritionQuality: quality,
-                per100g: nutrients,
+    useEffect(() => {
+        void listFoodCategories()
+            .then(nextCategories => {
+                setCategories(nextCategories)
+                setCategoryIds(
+                    nextCategories
+                        .filter(category => category.foodIds.includes(food.id))
+                        .map(category => category.id),
+                )
+                setCategoriesLoaded(true)
             })
-            if (categoriesQuery.isSuccess) await setFoodCategories(food.id, selectedCategoryIds)
-        },
-        onSuccess: async () => {
-            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.foodCategories })
-            onClose()
-        },
-    })
-
-    const deleteMutation = useMutation({
-        mutationFn: onDelete,
-        onSuccess: () => {
-            setConfirmingDelete(false)
-            onClose()
-        },
-    })
+            .catch(() => undefined)
+    }, [food.id])
 
     const setNutrient = (key: keyof Nutrients, value: number | string) => {
         setNutrients(current => {
@@ -96,18 +84,51 @@ export function FoodEditModal({
         })
     }
 
-    const saving = saveMutation.isPending
-    const deleting = deleteMutation.isPending
-    const saveError = saveMutation.isError
-        ? saveMutation.error instanceof Error
-            ? saveMutation.error.message
-            : 'Could not update food.'
-        : ''
-    const deleteError = deleteMutation.isError
-        ? deleteMutation.error instanceof Error
-            ? deleteMutation.error.message
-            : 'Could not delete food.'
-        : ''
+    const save = async () => {
+        setSaving(true)
+        setError('')
+        try {
+            await onSave({
+                name: name.trim(),
+                brand: brand.trim() || undefined,
+                barcode: barcode.trim() || undefined,
+                catalogSource: food.catalogSource,
+                catalogId: food.catalogId,
+                servingName: servingName.trim(),
+                servingGrams: Number(servingGrams),
+                servingOptions: servingOptionsFromDrafts(servingOptions),
+                favorite: food.favorite,
+                nutritionQuality: quality,
+                per100g: nutrients,
+            })
+            if (categoriesLoaded) await setFoodCategories(food.id, categoryIds)
+            toast.success(`${name.trim()} updated.`)
+            onClose()
+        } catch (reason) {
+            const message = reason instanceof Error ? reason.message : 'Could not update food.'
+            setError(message)
+            toast.error(message)
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const remove = async () => {
+        setDeleting(true)
+        setDeleteError('')
+        try {
+            await onDelete()
+            toast.success(`${food.name} deleted.`)
+            setConfirmingDelete(false)
+            onClose()
+        } catch (reason) {
+            const message = reason instanceof Error ? reason.message : 'Could not delete food.'
+            setDeleteError(message)
+            toast.error(message)
+        } finally {
+            setDeleting(false)
+        }
+    }
 
     return (
         <>
@@ -118,6 +139,7 @@ export function FoodEditModal({
                 centered={!compact}
                 fullScreen={compact}
                 size="lg"
+                className="food-editor-modal"
             >
                 <Stack>
                     <Text fw={650}>Basics</Text>
@@ -142,9 +164,7 @@ export function FoodEditModal({
                             Source: {food.catalogSource}
                         </Text>
                     )}
-                    {categoriesQuery.isPending ? (
-                        <Skeleton height={58} radius="md" role="status" aria-label="Loading food groups" />
-                    ) : categoriesQuery.isSuccess ? (
+                    {categoriesLoaded && (
                         <MultiSelect
                             label="Food groups"
                             description="Groups let flexible meal plans accept any matching food."
@@ -153,25 +173,31 @@ export function FoodEditModal({
                                 value: category.id,
                                 label: category.name,
                             }))}
-                            value={selectedCategoryIds}
+                            value={categoryIds}
                             onChange={setCategoryIds}
                             searchable
                             clearable
                         />
-                    ) : (
-                        <Alert color="orange">Food groups could not be loaded.</Alert>
                     )}
 
-                    <Text fw={650} mt="xs">Serving</Text>
+                    <div>
+                        <Text fw={650} mt="xs">
+                            Serving
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                            Serving size is a logging shortcut. Nutrition values below always
+                            describe 100 g.
+                        </Text>
+                    </div>
                     <SimpleGrid cols={{ base: 1, xs: 2 }}>
                         <TextInput
-                            label="Serving label"
+                            label="Default serving label"
                             placeholder="e.g. cup, scoop, container"
                             value={servingName}
                             onChange={event => setServingName(event.currentTarget.value)}
                         />
                         <NumberInput
-                            label="Serving weight"
+                            label="Default serving weight"
                             suffix=" g"
                             hideControls
                             min={0.1}
@@ -179,6 +205,11 @@ export function FoodEditModal({
                             onChange={setServingGrams}
                         />
                     </SimpleGrid>
+
+                    <FoodServingOptionsFields
+                        options={servingOptions}
+                        onChange={setServingOptions}
+                    />
 
                     <FoodNutritionFields
                         nutrients={nutrients}
@@ -194,32 +225,25 @@ export function FoodEditModal({
                         }
                     />
 
-                    {saveError && <Alert color="orange">{saveError}</Alert>}
-                    <Group
-                        justify="space-between"
-                        style={{
-                            position: 'sticky',
-                            bottom: 0,
-                            zIndex: 1,
-                            background: 'var(--mantine-color-body)',
-                            borderTop: '1px solid var(--mantine-color-default-border)',
-                            paddingTop: 'var(--mantine-spacing-sm)',
-                            paddingBottom: 'var(--mantine-spacing-xs)',
-                        }}
-                    >
+                    {error && <Alert color="orange">{error}</Alert>}
+                    <Group justify="space-between" className="food-editor-actions">
                         <Button
                             color="red"
                             variant="subtle"
                             disabled={saving || deleting}
                             onClick={() => {
-                                deleteMutation.reset()
+                                setDeleteError('')
                                 setConfirmingDelete(true)
                             }}
                         >
                             Delete food
                         </Button>
                         <Group gap="xs">
-                            <Button variant="default" disabled={saving || deleting} onClick={onClose}>
+                            <Button
+                                variant="default"
+                                disabled={saving || deleting}
+                                onClick={onClose}
+                            >
                                 Cancel
                             </Button>
                             <Button
@@ -230,7 +254,7 @@ export function FoodEditModal({
                                     !servingName.trim() ||
                                     Number(servingGrams) <= 0
                                 }
-                                onClick={() => saveMutation.mutate()}
+                                onClick={() => void save()}
                             >
                                 Save changes
                             </Button>
@@ -261,7 +285,7 @@ export function FoodEditModal({
                         >
                             Keep food
                         </Button>
-                        <Button color="red" loading={deleting} onClick={() => deleteMutation.mutate()}>
+                        <Button color="red" loading={deleting} onClick={() => void remove()}>
                             Delete food
                         </Button>
                     </Group>

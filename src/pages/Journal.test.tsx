@@ -1,5 +1,4 @@
 import { MantineProvider } from '@mantine/core'
-import { QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -7,7 +6,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JournalEvent } from '../domain/types'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { getJournalEntry, listJournal } from '../lib/journalApi'
-import { createTestQueryClient } from '../test/queryClient'
 import { Journal } from './Journal'
 
 vi.mock('../lib/journalApi', () => ({
@@ -15,10 +13,18 @@ vi.mock('../lib/journalApi', () => ({
     listJournal: vi.fn(),
 }))
 
+vi.mock('../components/JournalMealEditModal', () => ({
+    JournalMealEditModal: ({ event }: { event: JournalEvent | null }) =>
+        event ? <div data-testid="journal-meal-editor">{event.title}</div> : null,
+}))
+
 const records: JournalEvent[] = [
     {
         id: '1',
         definitionId: 'note',
+        entityType: 'observation',
+        entityId: '1',
+        editable: true,
         time: '08:00',
         category: 'Check-ins',
         title: 'Breakfast',
@@ -29,6 +35,9 @@ const records: JournalEvent[] = [
     {
         id: '2',
         definitionId: 'walk',
+        entityType: 'observation',
+        entityId: '2',
+        editable: false,
         time: '09:00',
         category: 'Activity',
         title: 'Walk',
@@ -39,6 +48,9 @@ const records: JournalEvent[] = [
     {
         id: '3',
         definitionId: 'walk',
+        entityType: 'observation',
+        entityId: '3',
+        editable: false,
         time: '10:00',
         category: 'Activity',
         title: 'Earlier walk',
@@ -51,6 +63,9 @@ const records: JournalEvent[] = [
 const sleepRecord: JournalEvent = {
     id: 'sleep-1',
     definitionId: 'sleep',
+    entityType: 'observation',
+    entityId: 'sleep-1',
+    editable: false,
     time: '07:30',
     category: 'Sleep',
     title: 'Sleep',
@@ -88,22 +103,20 @@ const renderJournal = (
     entry = '/',
     update = vi.fn().mockResolvedValue(true),
     events: JournalEvent[] = records,
+    details: Record<string, JournalEvent> = {},
 ) => {
     vi.mocked(listJournal).mockResolvedValue(events)
     vi.mocked(getJournalEntry).mockImplementation(async id => {
-        const event = events.find(record => record.id === id)
+        const event = details[id] ?? events.find(record => record.id === id)
         if (!event) throw new Error('not found')
         return event
     })
-    const queryClient = createTestQueryClient()
     return render(
         <MemoryRouter initialEntries={[entry]}>
             <MantineProvider>
-                <QueryClientProvider client={queryClient}>
-                    <ServerDataProvider initialData={{ preferences, goals: [] }}>
-                        <Journal remove={vi.fn()} update={update} />
-                    </ServerDataProvider>
-                </QueryClientProvider>
+                <ServerDataProvider initialData={{ preferences }}>
+                    <Journal remove={vi.fn()} update={update} />
+                </ServerDataProvider>
             </MantineProvider>
         </MemoryRouter>,
     )
@@ -167,6 +180,45 @@ describe('Journal', () => {
                 }),
             )
         })
+    })
+
+    it('uses entity identity to load meal edit detail', async () => {
+        const summary: JournalEvent = {
+            id: 'meal-1',
+            definitionId: 'calories',
+            entityType: 'meal',
+            entityId: 'meal-1',
+            editable: true,
+            time: '12:30',
+            category: 'Meals',
+            title: 'Chicken bowl',
+            detail: '150 g · 420 kcal',
+            source: 'You',
+            observedAt: '2026-08-23T12:30:00.000Z',
+            version: 2,
+        }
+        const detail: JournalEvent = {
+            ...summary,
+            detailView: {
+                kind: 'meal',
+                mealType: 'Lunch',
+                serving: { amount: 150, unit: 'g' },
+                nutrients: { calories: 420, protein: 35 },
+                nutritionQuality: 'complete',
+                sourceItem: {
+                    kind: 'food',
+                    id: '11111111-1111-4111-8111-111111111111',
+                },
+            },
+        }
+        renderJournal('/', vi.fn().mockResolvedValue(true), [summary], { 'meal-1': detail })
+
+        const user = userEvent.setup()
+        await user.click(await screen.findByLabelText('Actions for Chicken bowl'))
+        await user.click(await screen.findByText('Edit'))
+
+        await waitFor(() => expect(getJournalEntry).toHaveBeenCalledWith('meal-1'))
+        expect(await screen.findByTestId('journal-meal-editor')).toHaveTextContent('Chicken bowl')
     })
 
     it('loads detailed entries on demand without a second detail step or trend action', async () => {

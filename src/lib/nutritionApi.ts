@@ -1,5 +1,6 @@
 import { environment } from '../app/env'
-import type { Food, Nutrients } from '../domain/nutrition'
+import type { Food, FoodServingOption, Nutrients } from '../domain/nutrition'
+import type { MealSourceItem } from '../domain/types'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 
@@ -21,6 +22,7 @@ type FoodRecord = {
     potassiumPer100g: number | null
     servingName: string
     servingGrams: number
+    servingOptions?: FoodServingOption[] | null
     favorite: boolean
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
     version: number
@@ -36,6 +38,7 @@ export type MealRecord = {
     version: number
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
     serving?: { amount: number; unit: 'g' | 'serving' }
+    sourceItem?: MealSourceItem
 }
 
 export type RecipeRecord = {
@@ -69,15 +72,16 @@ const toFood = (record: FoodRecord): Food => ({
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
+    servingOptions: record.servingOptions ?? [],
     favorite: record.favorite,
     nutritionQuality: record.nutritionQuality,
     version: record.version,
 })
 
-export async function searchFoods(query = '', signal?: AbortSignal) {
+export async function searchFoods(query = '') {
     const response = await fetch(
         `${environment.VITE_API_URL}/api/foods${query ? `?q=${encodeURIComponent(query)}` : ''}`,
-        { credentials: 'same-origin', signal },
+        { credentials: 'same-origin' },
     )
     if (!response.ok) throw new Error('Food search unavailable')
     const body = (await response.json()) as { data: FoodRecord[] }
@@ -96,6 +100,7 @@ export async function createFood(food: Omit<Food, 'id'>) {
             catalogId: food.catalogId,
             servingName: food.servingName,
             servingGrams: food.servingGrams,
+            servingOptions: food.servingOptions ?? [],
             favorite: food.favorite,
             nutritionQuality: food.nutritionQuality ?? 'complete',
             caloriesPer100g: food.per100g.calories,
@@ -143,6 +148,7 @@ export async function importFoods(
                 catalogId: food.catalogId,
                 servingName: food.servingName,
                 servingGrams: food.servingGrams,
+                servingOptions: food.servingOptions ?? [],
                 favorite: food.favorite,
                 nutritionQuality: food.nutritionQuality ?? 'complete',
                 caloriesPer100g: food.per100g.calories,
@@ -182,14 +188,13 @@ const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> 
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
+    servingOptions: record.servingOptions ?? [],
     favorite: false,
     nutritionQuality: record.nutritionQuality,
 })
 
-export async function lookupCatalogBarcode(barcode: string, signal?: AbortSignal) {
-    const response = await authRequest(`/api/food-catalog/barcode/${encodeURIComponent(barcode)}`, {
-        signal,
-    })
+export async function lookupCatalogBarcode(barcode: string) {
+    const response = await authRequest(`/api/food-catalog/barcode/${encodeURIComponent(barcode)}`)
     if (response.status === 404) return null
     if (response.status === 503)
         throw new Error('No external food catalog is configured on this server.')
@@ -197,10 +202,8 @@ export async function lookupCatalogBarcode(barcode: string, signal?: AbortSignal
     return catalogToFood(((await response.json()) as { data: CatalogFoodRecord }).data)
 }
 
-export async function searchFoodCatalog(query: string, signal?: AbortSignal) {
-    const response = await authRequest(`/api/food-catalog/search?q=${encodeURIComponent(query)}`, {
-        signal,
-    })
+export async function searchFoodCatalog(query: string) {
+    const response = await authRequest(`/api/food-catalog/search?q=${encodeURIComponent(query)}`)
     if (response.status === 503)
         throw new Error('No external food catalog is configured on this server.')
     if (!response.ok) throw new Error('The food catalog is unavailable. Try again later.')
@@ -221,6 +224,7 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
             catalogId: changes.catalogId,
             servingName: changes.servingName,
             servingGrams: changes.servingGrams,
+            servingOptions: changes.servingOptions ?? [],
             favorite: changes.favorite,
             nutritionQuality: changes.nutritionQuality ?? 'complete',
             caloriesPer100g: changes.per100g.calories,
@@ -283,6 +287,7 @@ export async function logMeal(
     foodId?: string,
     eatenAt = new Date().toISOString(),
     serving?: { amount: number; unit: 'g' | 'serving' },
+    recipeId?: string,
 ) {
     const response = await authRequest('/api/meals', {
         method: 'POST',
@@ -296,6 +301,7 @@ export async function logMeal(
             nutritionQuality,
             favorite: false,
             foodId,
+            recipeId,
             serving,
         }),
     })
@@ -313,6 +319,8 @@ export async function updateMeal(
         favorite: boolean
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
         serving: { amount: number; unit: 'g' | 'serving' } | null
+        foodId: string | null
+        recipeId: string | null
     }>,
 ) {
     const response = await authRequest(`/api/meals/${id}`, {
@@ -330,10 +338,9 @@ export async function deleteMeal(id: string): Promise<void> {
         throw new Error(`Meal delete failed (${response.status})`)
 }
 
-export async function listRecipes(signal?: AbortSignal): Promise<RecipeRecord[]> {
+export async function listRecipes(): Promise<RecipeRecord[]> {
     const response = await fetch(`${environment.VITE_API_URL}/api/recipes`, {
         credentials: 'same-origin',
-        signal,
     })
     if (!response.ok) throw new Error('Recipes unavailable')
     return ((await response.json()) as { data: RecipeRecord[] }).data
