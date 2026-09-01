@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -7,34 +8,39 @@ import { useDailyNutrition } from './useDailyNutrition'
 
 vi.mock('../lib/nutritionApi', () => ({ listMeals: vi.fn() }))
 
-const wrapper = ({ children }: { children: ReactNode }) => (
-    <ServerDataProvider
-        initialData={{
-            preferences: {
-                displayName: 'Alex',
-                timezone: 'Europe/Amsterdam',
-                locale: 'en-US',
-                units: 'metric',
-            },
-            goals: [
-                {
-                    id: 'protein-goal',
-                    metricId: 'protein',
-                    aggregation: 'total',
-                    comparator: 'gte',
-                    target: { value: 120 },
-                    period: { type: 'day' },
-                    canonicalUnit: 'g',
-                    effectiveFrom: '2026-08-01T00:00:00.000Z',
-                    effectiveTo: null,
-                    schedule: { weekdays: [2] },
-                },
-            ],
-        }}
-    >
-        {children}
-    </ServerDataProvider>
-)
+const createWrapper = () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>
+            <ServerDataProvider
+                initialData={{
+                    preferences: {
+                        displayName: 'Alex',
+                        timezone: 'Europe/Amsterdam',
+                        locale: 'en-US',
+                        units: 'metric',
+                    },
+                    goals: [
+                        {
+                            id: 'protein-goal',
+                            metricId: 'protein',
+                            aggregation: 'total',
+                            comparator: 'gte',
+                            target: { value: 120 },
+                            period: { type: 'day' },
+                            canonicalUnit: 'g',
+                            effectiveFrom: '2026-08-01T00:00:00.000Z',
+                            effectiveTo: null,
+                            schedule: { weekdays: [2] },
+                        },
+                    ],
+                }}
+            >
+                {children}
+            </ServerDataProvider>
+        </QueryClientProvider>
+    )
+}
 
 describe('useDailyNutrition', () => {
     beforeEach(() => {
@@ -54,7 +60,9 @@ describe('useDailyNutrition', () => {
 
     it('uses the configured timezone for the meal range and daily goal schedule', async () => {
         const selectedDate = new Date('2026-08-24T22:00:00.000Z')
-        const { result } = renderHook(() => useDailyNutrition(selectedDate), { wrapper })
+        const { result } = renderHook(() => useDailyNutrition(selectedDate), {
+            wrapper: createWrapper(),
+        })
 
         await waitFor(() => expect(result.current.loading).toBe(false))
         expect(listMeals).toHaveBeenCalledWith(
