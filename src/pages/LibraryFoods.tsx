@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Alert, Badge, Button, Group, Stack, Text, TextInput } from '@mantine/core'
+import { Alert, Badge, Button, Group, Skeleton, Stack, Text, TextInput } from '@mantine/core'
+import { useDebouncedValue } from '@mantine/hooks'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconApple, IconArrowLeft, IconPlus, IconSearch } from '@tabler/icons-react'
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { FoodCatalogLookup } from '../components/FoodCatalogLookup'
 import { FoodCsvImport } from '../components/FoodCsvImport'
@@ -9,36 +11,34 @@ import { NewFoodModal } from '../components/NewFoodModal'
 import { PageHeader } from '../components/PageHeader'
 import type { Food } from '../domain/nutrition'
 import { deleteFood, searchFoods, updateFood } from '../lib/nutritionApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 const nutritionStatusLabel = (quality: Food['nutritionQuality']) =>
     quality === 'estimated' ? 'Estimated' : 'Incomplete'
 
 export function LibraryFoods() {
-    const [foods, setFoods] = useState<Food[]>([])
+    const queryClient = useQueryClient()
     const [query, setQuery] = useState('')
-    const [message, setMessage] = useState('')
+    const [debouncedQuery] = useDebouncedValue(query, 150)
     const [createFoodOpened, setCreateFoodOpened] = useState(false)
     const [editingFood, setEditingFood] = useState<Food | null>(null)
+    const foodsQuery = useQuery({
+        queryKey: [...serverQueryKeys.foods, debouncedQuery],
+        queryFn: () => searchFoods(debouncedQuery),
+    })
+    const foods = foodsQuery.data ?? []
 
-    useEffect(() => {
-        const timeout = window.setTimeout(() => {
-            void searchFoods(query)
-                .then(records => {
-                    setFoods(records)
-                    setMessage('')
-                })
-                .catch(() => {
-                    setFoods([])
-                    setMessage('Your food library could not be loaded from the server.')
-                })
-        }, 150)
-        return () => window.clearTimeout(timeout)
-    }, [query])
+    const refreshFoods = () =>
+        queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
 
     const addFoodLocally = (food: Food) => {
-        if (!query || food.name.toLowerCase().includes(query.toLowerCase())) {
-            setFoods(current => [food, ...current.filter(item => item.id !== food.id)])
+        if (!debouncedQuery || food.name.toLowerCase().includes(debouncedQuery.toLowerCase())) {
+            queryClient.setQueryData<Food[]>(
+                [...serverQueryKeys.foods, debouncedQuery],
+                current => [food, ...(current ?? []).filter(item => item.id !== food.id)],
+            )
         }
+        void refreshFoods()
     }
 
     return (
@@ -58,9 +58,9 @@ export function LibraryFoods() {
                     </Button>
                 }
             />
-            {message && (
+            {foodsQuery.isError && (
                 <Alert mt="md" color="orange">
-                    {message}
+                    Your food library could not be loaded from the server.
                 </Alert>
             )}
             <section className="panel">
@@ -70,7 +70,7 @@ export function LibraryFoods() {
                     </Text>
                     <Group gap="xs">
                         <FoodCatalogLookup onCreated={addFoodLocally} />
-                        <FoodCsvImport onImported={setFoods} />
+                        <FoodCsvImport onImported={() => void refreshFoods()} />
                         <Button
                             size="sm"
                             leftSection={<IconPlus size={16} />}
@@ -88,32 +88,38 @@ export function LibraryFoods() {
                     leftSection={<IconSearch size={17} />}
                 />
                 <Stack gap="xs" mt="md">
-                    {foods.map(food => (
-                        <button
-                            className="food-row"
-                            key={food.id}
-                            onClick={() => setEditingFood(food)}
-                        >
-                            <div className="food-icon">
-                                <IconApple size={18} />
-                            </div>
-                            <div>
-                                <Text fw={600} size="sm">
-                                    {food.name}
-                                </Text>
-                                <Text size="xs" c="dimmed">
-                                    {food.brand ? `${food.brand} · ` : ''}
-                                    {food.per100g.calories ?? '—'} kcal per 100 g
-                                </Text>
-                            </div>
-                            {food.nutritionQuality !== 'complete' && (
-                                <Badge size="xs" variant="light">
-                                    {nutritionStatusLabel(food.nutritionQuality)}
-                                </Badge>
-                            )}
-                        </button>
-                    ))}
-                    {foods.length === 0 && !message && (
+                    {foodsQuery.isPending ? (
+                        Array.from({ length: 4 }, (_, index) => (
+                            <Skeleton key={index} height={58} radius="md" />
+                        ))
+                    ) : (
+                        foods.map(food => (
+                            <button
+                                className="food-row"
+                                key={food.id}
+                                onClick={() => setEditingFood(food)}
+                            >
+                                <div className="food-icon">
+                                    <IconApple size={18} />
+                                </div>
+                                <div>
+                                    <Text fw={600} size="sm">
+                                        {food.name}
+                                    </Text>
+                                    <Text size="xs" c="dimmed">
+                                        {food.brand ? `${food.brand} · ` : ''}
+                                        {food.per100g.calories ?? '—'} kcal per 100 g
+                                    </Text>
+                                </div>
+                                {food.nutritionQuality !== 'complete' && (
+                                    <Badge size="xs" variant="light">
+                                        {nutritionStatusLabel(food.nutritionQuality)}
+                                    </Badge>
+                                )}
+                            </button>
+                        ))
+                    )}
+                    {!foodsQuery.isPending && foods.length === 0 && !foodsQuery.isError && (
                         <div className="compact-empty">
                             <Text fw={650}>
                                 {query ? 'No matching foods' : 'Your food library is empty'}
@@ -156,13 +162,20 @@ export function LibraryFoods() {
                     onClose={() => setEditingFood(null)}
                     onSave={async changes => {
                         const updated = await updateFood(editingFood, changes)
-                        setFoods(current =>
-                            current.map(food => (food.id === updated.id ? updated : food)),
+                        queryClient.setQueryData<Food[]>(
+                            [...serverQueryKeys.foods, debouncedQuery],
+                            current =>
+                                (current ?? []).map(food =>
+                                    food.id === updated.id ? updated : food,
+                                ),
                         )
+                        setEditingFood(updated)
+                        await refreshFoods()
                     }}
                     onDelete={async () => {
                         await deleteFood(editingFood)
-                        setFoods(current => current.filter(food => food.id !== editingFood.id))
+                        setEditingFood(null)
+                        await refreshFoods()
                     }}
                 />
             )}
