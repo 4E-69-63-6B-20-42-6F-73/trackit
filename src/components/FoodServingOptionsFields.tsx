@@ -74,10 +74,7 @@ export function FoodServingOptionsFields({
                 color="trackit"
                 leftSection={<IconPlus size={16} />}
                 onClick={() =>
-                    onChange([
-                        ...options,
-                        { id: crypto.randomUUID(), label: '', grams: '' },
-                    ])
+                    onChange([...options, { id: crypto.randomUUID(), label: '', grams: '' }])
                 }
             >
                 Add serving option

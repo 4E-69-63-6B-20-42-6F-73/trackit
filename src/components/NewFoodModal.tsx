@@ -122,7 +122,8 @@ export function NewFoodModal({
                         Serving
                     </Text>
                     <Text size="sm" c="dimmed">
-                        Serving size is a logging shortcut. Nutrition values below always describe 100 g.
+                        Serving size is a logging shortcut. Nutrition values below always describe
+                        100 g.
                     </Text>
                 </div>
                 <SimpleGrid cols={{ base: 1, xs: 2 }}>
@@ -146,10 +147,7 @@ export function NewFoodModal({
 
                 <FoodNutritionFields nutrients={nutrients} onChange={setNutrient} />
 
-                <Group
-                    justify="flex-end"
-                    className="food-editor-actions"
-                >
+                <Group justify="flex-end" className="food-editor-actions">
                     <Button variant="default" disabled={saving} onClick={onClose}>
                         Cancel
                     </Button>

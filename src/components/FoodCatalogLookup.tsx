@@ -210,7 +210,8 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                                                 : `${Math.round(food.per100g.calories)} kcal per 100 g`}
                                         </Text>
                                         <Text size="xs" c="dimmed">
-                                            Default serving: {food.servingGrams} g ({food.servingName})
+                                            Default serving: {food.servingGrams} g (
+                                            {food.servingName})
                                         </Text>
                                     </div>
                                     <Badge

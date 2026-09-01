@@ -761,8 +761,8 @@ export function FoodLogger({
                                         </Button>
                                     </div>
                                     <Text size="xs" c="dimmed" mt={6}>
-                                        Nutrition is per 100 g. Serving size is stored separately as a
-                                        logging shortcut.
+                                        Nutrition is per 100 g. Serving size is stored separately as
+                                        a logging shortcut.
                                     </Text>
 
                                     {catalogMode === 'barcode' && (
@@ -838,10 +838,13 @@ export function FoodLogger({
                                                             <strong>{food.name}</strong>
                                                             <small>
                                                                 {food.brand || 'No brand'} ·{' '}
-                                                                {Math.round(food.per100g.calories ?? 0)}{' '}
+                                                                {Math.round(
+                                                                    food.per100g.calories ?? 0,
+                                                                )}{' '}
                                                                 kcal per 100 g ·{' '}
-                                                                {Math.round(preview.calories ?? 0)} kcal per{' '}
-                                                                {food.servingGrams} g serving
+                                                                {Math.round(preview.calories ?? 0)}{' '}
+                                                                kcal per {food.servingGrams} g
+                                                                serving
                                                             </small>
                                                         </span>
                                                         <span>Save & choose</span>
@@ -871,8 +874,8 @@ export function FoodLogger({
                                 </Button>
                             </div>
                             <Text size="xs" c="dimmed" mt={6}>
-                                Nutrition is per 100 g. Serving size is stored separately as a logging
-                                shortcut.
+                                Nutrition is per 100 g. Serving size is stored separately as a
+                                logging shortcut.
                             </Text>
                             <Stack gap="xs" mt="sm">
                                 <TextInput
@@ -933,8 +936,8 @@ export function FoodLogger({
                                                 <strong>{food.name}</strong>
                                                 <small>
                                                     {food.brand || 'No brand'} ·{' '}
-                                                    {Math.round(food.per100g.calories ?? 0)} kcal per
-                                                    100 g · serving {food.servingGrams} g
+                                                    {Math.round(food.per100g.calories ?? 0)} kcal
+                                                    per 100 g · serving {food.servingGrams} g
                                                 </small>
                                             </span>
                                             <span>Save & choose</span>

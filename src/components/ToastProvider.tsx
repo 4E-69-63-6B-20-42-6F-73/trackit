@@ -37,9 +37,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         }, 3200)
     }, [])
 
-    useEffect(() => () => {
-        if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current)
-    }, [])
+    useEffect(
+        () => () => {
+            if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current)
+        },
+        [],
+    )
 
     const value = useMemo<ToastContextValue>(
         () => ({
@@ -67,7 +70,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                         }}
                     >
                         <Notification
-                            color={toast.tone === 'error' ? 'red' : toast.tone === 'info' ? 'blue' : 'teal'}
+                            color={
+                                toast.tone === 'error'
+                                    ? 'red'
+                                    : toast.tone === 'info'
+                                      ? 'blue'
+                                      : 'teal'
+                            }
                             title={toast.tone === 'error' ? 'Something went wrong' : undefined}
                             withCloseButton
                             onClose={dismiss}
