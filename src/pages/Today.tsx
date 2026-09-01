@@ -1,4 +1,5 @@
 import { ActionIcon, Button, Group, Progress, Skeleton, Stack, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import {
     IconActivity,
     IconChevronLeft,
@@ -9,7 +10,7 @@ import {
     IconScale,
     IconSparkles,
 } from '@tabler/icons-react'
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
 import { JournalEntryDetailModal } from '../components/JournalEntryDetailModal'
@@ -28,6 +29,7 @@ import type { JournalEvent } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 import { useTodayHealth } from '../hooks/useTodayHealth'
 import { listJournal } from '../lib/journalApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 const metricVisual: Record<
     Exclude<MetricCategory, 'Nutrition'>,
@@ -97,7 +99,11 @@ export function Today({
     )
     const selectedDate = calendarDateFromKey(selectedKey, timezone)
     const health = useTodayHealth(selectedDate)
-    const [hasHistory, setHasHistory] = useState<boolean | null>(null)
+    const historyQuery = useQuery({
+        queryKey: [...serverQueryKeys.journal, 'history-presence'],
+        queryFn: ({ signal }) => listJournal({ limit: 1 }, signal),
+    })
+    const hasHistory = historyQuery.data ? historyQuery.data.length > 0 : null
     const [selectedSleepEvent, setSelectedSleepEvent] = useState<JournalEvent | null>(null)
     const isToday = selectedKey === todayKey
     const locale = health.preferences?.locale
@@ -108,14 +114,6 @@ export function Today({
                 event.detailView?.kind === 'sleep' &&
                 event.detailView.stages.length > 0,
         ) ?? null
-
-    useEffect(() => {
-        const controller = new AbortController()
-        void listJournal({ limit: 1 }, controller.signal)
-            .then(records => setHasHistory(records.length > 0))
-            .catch(() => setHasHistory(null))
-        return () => controller.abort()
-    }, [events.length])
 
     const setSelectedKey = (next: string) => {
         const bounded = next > todayKey ? todayKey : next
