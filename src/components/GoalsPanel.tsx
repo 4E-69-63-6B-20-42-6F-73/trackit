@@ -17,6 +17,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
     IconChevronDown,
     IconChevronUp,
@@ -24,7 +25,7 @@ import {
     IconTargetArrow,
     IconTrash,
 } from '@tabler/icons-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { calendarDayRangeForKey, calendarTodayKey, formatCalendarDate } from '../domain/calendar'
 import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '../domain/goals'
@@ -50,6 +51,7 @@ import {
     updateGoal,
     type GoalRecord,
 } from '../lib/goalApi'
+import { healthQueryKeys } from '../lib/healthQueries'
 
 const weekdays = [
     { value: '1', label: 'Monday' },
@@ -347,7 +349,7 @@ function GoalCard({
 
 export function GoalsPanel() {
     const navigate = useNavigate()
-    const { goals, preferences, loading } = useServerData()
+    const { goals, preferences, loading: serverLoading } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const today = calendarTodayKey(timezone)
     const goalMetrics = metricCatalog.filter(item => item.goalCapabilities)
@@ -363,22 +365,23 @@ export function GoalsPanel() {
     const [advanced, setAdvanced] = useState(false)
     const [editing, setEditing] = useState<GoalRecord | null>(null)
     const [deleting, setDeleting] = useState<GoalRecord | null>(null)
-    const [evaluations, setEvaluations] = useState<Record<string, GoalEvaluation>>({})
-    const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
     const [error, setError] = useState('')
+    const evaluationsQuery = useQuery({
+        queryKey: [...healthQueryKeys.goalEvaluations, 'goals-page'],
+        enabled: goals.length > 0,
+        queryFn: ({ signal }) => listGoalEvaluations(signal),
+    })
+    const evaluations = evaluationsQuery.data ?? {}
+    const loading = serverLoading || (goals.length > 0 && evaluationsQuery.isPending)
+    const evaluationError = evaluationsQuery.isError
+        ? 'Goal observations could not be loaded.'
+        : ''
     const definition = metricDefinition(metricId)!
     const displayUnit = displayUnitFor(metricId, preferences?.metricPreferences, preferences?.units)
     const options = measurements(metricId)
     const selectedMeasurement =
         options.find(item => item.value === measurement) ?? preferredMeasurement(metricId, options)!
-
-    useEffect(() => {
-        if (!goals.length) return
-        void listGoalEvaluations()
-            .then(setEvaluations)
-            .catch(() => setError('Goal observations could not be loaded.'))
-    }, [goals])
 
     const resetForMetric = (next: string) => {
         setMetricId(next)
@@ -480,26 +483,42 @@ export function GoalsPanel() {
         if (mode === 'weekends') setSelectedWeekdays(weekendSchedule)
         if (mode === 'custom' && selectedWeekdays.length === 0) setSelectedWeekdays(weekdaySchedule)
     }
-    const save = async (event: FormEvent) => {
+    const saveMutation = useMutation({
+        mutationFn: async ({ goal, input }: { goal: GoalRecord | null; input: Omit<Goal, 'id'> }) => {
+            if (goal) return updateGoal(goal.id, input)
+            return createGoal(input)
+        },
+        onMutate: () => setError(''),
+        onSuccess: (_, { goal }) => {
+            setMessage(goal ? 'Goal updated.' : 'Goal added.')
+            resetForm()
+        },
+        onError: () => setError('The goal could not be saved. Check the values and try again.'),
+    })
+    const retireMutation = useMutation({
+        mutationFn: retireGoal,
+        onMutate: () => setError(''),
+        onSuccess: () => setMessage('Goal retired.'),
+        onError: () => setError('The goal could not be retired.'),
+    })
+    const deleteMutation = useMutation({
+        mutationFn: deleteGoal,
+        onMutate: () => setError(''),
+        onSuccess: () => {
+            setDeleting(null)
+            setMessage('Retired goal deleted.')
+        },
+        onError: () => setError('The retired goal could not be deleted.'),
+    })
+    const saving = saveMutation.isPending || retireMutation.isPending || deleteMutation.isPending
+    const save = (event: FormEvent) => {
         event.preventDefault()
         const errors = validation()
         if (errors.length) {
             setError(errors[0])
             return
         }
-        setSaving(true)
-        setError('')
-        try {
-            const input = draft()
-            if (editing) await updateGoal(editing.id, input)
-            else await createGoal(input)
-            setMessage(editing ? 'Goal updated.' : 'Goal added.')
-            resetForm()
-        } catch {
-            setError('The goal could not be saved. Check the values and try again.')
-        } finally {
-            setSaving(false)
-        }
+        saveMutation.mutate({ goal: editing, input: draft() })
     }
     const activeGoals = useMemo(
         () => goals.filter(goal => !goal.effectiveTo || new Date(goal.effectiveTo) > new Date()),
@@ -507,26 +526,10 @@ export function GoalsPanel() {
     )
     const pastGoals = goals.filter(goal => !activeGoals.includes(goal))
     const retire = async (goal: GoalRecord) => {
-        try {
-            await retireGoal(goal)
-            setMessage('Goal retired.')
-        } catch {
-            setError('The goal could not be retired.')
-        }
+        await retireMutation.mutateAsync(goal)
     }
-    const remove = async () => {
-        if (!deleting) return
-        setSaving(true)
-        setError('')
-        try {
-            await deleteGoal(deleting)
-            setDeleting(null)
-            setMessage('Retired goal deleted.')
-        } catch {
-            setError('The retired goal could not be deleted.')
-        } finally {
-            setSaving(false)
-        }
+    const remove = () => {
+        if (deleting) deleteMutation.mutate(deleting)
     }
     const targetPreview =
         comparator === 'between'
@@ -545,7 +548,7 @@ export function GoalsPanel() {
                         </Text>
                     </div>
                 </div>
-                <form onSubmit={event => void save(event)}>
+                <form onSubmit={save}>
                     <Stack>
                         <Select
                             label="What do you want to track?"
@@ -700,7 +703,7 @@ export function GoalsPanel() {
                                     Cancel
                                 </Button>
                             )}
-                            <Button type="submit" loading={saving}>
+                            <Button type="submit" loading={saveMutation.isPending}>
                                 {editing ? 'Save changes' : 'Create goal'}
                             </Button>
                         </Group>
@@ -718,6 +721,7 @@ export function GoalsPanel() {
                         {message}
                     </Alert>
                 )}
+                {evaluationError && <Alert color="orange">{evaluationError}</Alert>}
                 {loading ? (
                     <Stack role="status" aria-label="Loading goals">
                         <Skeleton height={150} />
@@ -785,7 +789,7 @@ export function GoalsPanel() {
                     <Button variant="default" onClick={() => setDeleting(null)}>
                         Keep goal
                     </Button>
-                    <Button color="red" loading={saving} onClick={() => void remove()}>
+                    <Button color="red" loading={deleteMutation.isPending} onClick={remove}>
                         Delete goal
                     </Button>
                 </Group>
