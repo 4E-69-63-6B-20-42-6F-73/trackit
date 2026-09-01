@@ -12,7 +12,6 @@ const semanticDefinitions: ObservationDefinition[] = [
     { id: 'meal', name: 'Meal', valueType: 'compound' },
     { id: 'note', name: 'Note', valueType: 'text' },
     { id: 'event', name: 'Event', valueType: 'event' },
-    { id: 'symptom', name: 'Symptom', valueType: 'number' },
     { id: 'check_in', name: 'Check-in', valueType: 'text' },
     { id: 'health_record', name: 'Imported health record', valueType: 'compound' },
 ]
