@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
     ActionIcon,
+    Alert,
     Button,
     Group,
+    Loader,
     Menu,
     Modal,
     Popover,
@@ -12,6 +14,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import {
     IconChevronLeft,
     IconChevronRight,
@@ -44,9 +47,11 @@ const categories = ['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-
 export function Journal({
     remove,
     update,
+    commandPending = false,
 }: {
     remove: (id: string) => void
     update: (event: JournalEvent, changes: { title: string; detail: string }) => Promise<boolean>
+    commandPending?: boolean
 }) {
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
@@ -66,6 +71,10 @@ export function Journal({
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
+
+    const mealEditMutation = useMutation({
+        mutationFn: (event: JournalEvent) => getJournalEntry(event.id),
+    })
 
     const selectedRange = selectedDate ? calendarDayRangeForKey(selectedDate, timezone) : null
     const from = selectedRange
@@ -166,11 +175,26 @@ export function Journal({
         ).map(([, group]) => group)
     }, [locale, shown, timezone, todayKey])
 
-    const beginEdit = async (event: JournalEvent) => {
-        const editable = event.definitionId === 'meal' ? await getJournalEntry(event.id) : event
-        setEditing(editable)
-        setDraftTitle(editable.title)
-        setDraftDetail(editable.detail)
+    const isMealEdit = (event: JournalEvent | null) =>
+        Boolean(event && (event.definitionId === 'meal' || event.detailView?.kind === 'meal'))
+    const detailedEditing =
+        editing && isMealEdit(editing) && mealEditMutation.data?.id === editing.id
+            ? mealEditMutation.data
+            : editing
+
+    const beginEdit = (event: JournalEvent) => {
+        mealEditMutation.reset()
+        setEditing(event)
+        if (isMealEdit(event)) {
+            mealEditMutation.mutate(event)
+            return
+        }
+        setDraftTitle(event.title)
+        setDraftDetail(event.detail)
+    }
+    const closeEditing = () => {
+        setEditing(null)
+        mealEditMutation.reset()
     }
     const moveDay = (days: number) => {
         const current = selectedDate ?? todayKey
@@ -433,10 +457,14 @@ export function Journal({
                                     <Menu.Dropdown>
                                         {event.source === 'You' && (
                                             <>
-                                                <Menu.Item onClick={() => void beginEdit(event)}>
+                                                <Menu.Item
+                                                    disabled={mealEditMutation.isPending}
+                                                    onClick={() => beginEdit(event)}
+                                                >
                                                     Edit
                                                 </Menu.Item>
                                                 <Menu.Item
+                                                    disabled={commandPending}
                                                     onClick={() => setDeleting(event)}
                                                     color="red"
                                                 >
@@ -462,7 +490,7 @@ export function Journal({
                         </Button>
                     </div>
                 )}
-                {availableEvents.length === 0 && (
+                {availableEvents.length === 0 && !syncFailure && (
                     <div className="empty-state">
                         <IconPlus size={24} />
                         <Text fw={600}>Your journal is ready</Text>
@@ -488,14 +516,48 @@ export function Journal({
                 )}
             </section>
 
+            <Modal
+                opened={Boolean(editing && isMealEdit(editing) && mealEditMutation.isPending)}
+                onClose={closeEditing}
+                title="Loading meal"
+                centered
+                size="sm"
+            >
+                <Group justify="center" py="lg" role="status" aria-label="Loading meal details">
+                    <Loader size="sm" />
+                    <Text size="sm" c="dimmed">Loading the latest meal details…</Text>
+                </Group>
+            </Modal>
+            <Modal
+                opened={Boolean(editing && isMealEdit(editing) && mealEditMutation.isError)}
+                onClose={closeEditing}
+                title="Meal unavailable"
+                centered
+                size="sm"
+            >
+                <Stack>
+                    <Alert color="orange">
+                        The latest meal details could not be loaded. Try again before editing.
+                    </Alert>
+                    <Group justify="flex-end">
+                        <Button variant="default" onClick={closeEditing}>Cancel</Button>
+                        <Button
+                            loading={mealEditMutation.isPending}
+                            onClick={() => editing && mealEditMutation.mutate(editing)}
+                        >
+                            Retry
+                        </Button>
+                    </Group>
+                </Stack>
+            </Modal>
             <JournalMealEditModal
-                event={editing?.detailView?.kind === 'meal' ? editing : null}
-                onClose={() => setEditing(null)}
-                onSaved={() => setEditing(null)}
+                event={detailedEditing?.detailView?.kind === 'meal' ? detailedEditing : null}
+                onClose={closeEditing}
+                onSaved={closeEditing}
             />
             <Modal
-                opened={Boolean(editing && editing.detailView?.kind !== 'meal')}
-                onClose={() => setEditing(null)}
+                opened={Boolean(editing && !isMealEdit(editing))}
+                onClose={closeEditing}
                 title="Edit entry"
                 centered
             >
@@ -511,15 +573,16 @@ export function Journal({
                     onChange={event => setDraftDetail(event.currentTarget.value)}
                 />
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setEditing(null)}>
+                    <Button variant="default" disabled={commandPending} onClick={closeEditing}>
                         Cancel
                     </Button>
                     <Button
+                        loading={commandPending}
                         disabled={!draftTitle.trim()}
                         onClick={async () => {
                             if (!editing) return
                             if (await update(editing, { title: draftTitle, detail: draftDetail }))
-                                setEditing(null)
+                                closeEditing()
                         }}
                     >
                         Save changes
@@ -538,11 +601,16 @@ export function Journal({
                     from it.
                 </Text>
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setDeleting(null)}>
+                    <Button
+                        variant="default"
+                        disabled={commandPending}
+                        onClick={() => setDeleting(null)}
+                    >
                         Keep entry
                     </Button>
                     <Button
                         color="red"
+                        loading={commandPending}
                         onClick={() => {
                             if (deleting) remove(deleting.id)
                             setDeleting(null)
