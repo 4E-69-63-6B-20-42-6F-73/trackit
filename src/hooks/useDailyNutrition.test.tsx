@@ -1,15 +1,16 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listMeals } from '../lib/nutritionApi'
+import { createTestQueryClient } from '../test/queryClient'
 import { ServerDataProvider } from './useServerData'
 import { useDailyNutrition } from './useDailyNutrition'
 
 vi.mock('../lib/nutritionApi', () => ({ listMeals: vi.fn() }))
 
 const createWrapper = () => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const queryClient = createTestQueryClient()
     return ({ children }: { children: ReactNode }) => (
         <QueryClientProvider client={queryClient}>
             <ServerDataProvider
