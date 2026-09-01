@@ -1,4 +1,4 @@
-import type { Goal, GoalEvaluation } from '../domain/goals'
+import type { Goal, GoalEvaluation } from '@trackit/domain/goals'
 import { authRequest } from './authApi'
 
 export type GoalRecord = Goal
