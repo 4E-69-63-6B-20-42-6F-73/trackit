@@ -184,6 +184,11 @@ export const observationUpdateSchema = z.object({
     version: z.number().int().positive(),
 })
 
+const foodServingOptionSchema = z.object({
+    label: z.string().trim().min(1).max(60),
+    grams: z.number().finite().positive(),
+})
+
 export const foodInputSchema = z.object({
     name: z.string().trim().min(1).max(160),
     brand: z.string().trim().max(120).optional(),
@@ -205,6 +210,7 @@ export const foodInputSchema = z.object({
     potassiumPer100g: z.number().finite().nonnegative().nullish(),
     servingName: z.string().trim().min(1).max(60).default('serving'),
     servingGrams: z.number().finite().positive().default(100),
+    servingOptions: z.array(foodServingOptionSchema).max(12).default([]),
     favorite: z.boolean().default(false),
     nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
 })
