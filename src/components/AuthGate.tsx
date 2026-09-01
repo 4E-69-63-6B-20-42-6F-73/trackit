@@ -1,4 +1,3 @@
-import { useEffect, useState, type ReactNode } from 'react'
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser'
 import type {
     PublicKeyCredentialCreationOptionsJSON,
@@ -16,73 +15,86 @@ import {
     TextInput,
     Title,
 } from '@mantine/core'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { useState, type ReactNode } from 'react'
 import { environment } from '../app/env'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 type AuthState = 'loading' | 'offline' | 'setup' | 'login' | 'recovery' | 'authenticated'
+type AuthOverride = Extract<AuthState, 'login' | 'recovery' | 'authenticated'> | null
+
+type AuthStatus = {
+    configured: boolean
+    authenticated: boolean
+}
+
+const loadAuthStatus = async (signal: AbortSignal): Promise<AuthStatus> => {
+    const response = await fetch(`${environment.VITE_API_URL}/api/auth/status`, {
+        credentials: 'same-origin',
+        signal,
+    })
+    if (!response.ok) throw new Error('unavailable')
+    return (await response.json()) as AuthStatus
+}
 
 export function AuthGate({ children }: { children: ReactNode }) {
-    const [state, setState] = useState<AuthState>('loading')
+    const statusQuery = useQuery({
+        queryKey: serverQueryKeys.authStatus,
+        queryFn: ({ signal }) => loadAuthStatus(signal),
+        retry: 1,
+    })
+    const [overrideState, setOverrideState] = useState<AuthOverride>(null)
     const [password, setPassword] = useState('')
     const [bootstrapSecret, setBootstrapSecret] = useState('')
     const [recoveryCode, setRecoveryCode] = useState('')
     const [error, setError] = useState('')
     const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
+    const state: AuthState = overrideState
+        ? overrideState
+        : statusQuery.isPending
+          ? 'loading'
+          : statusQuery.isError
+            ? 'offline'
+            : statusQuery.data.authenticated
+              ? 'authenticated'
+              : statusQuery.data.configured
+                ? 'login'
+                : 'setup'
 
-    useEffect(() => {
-        let active = true
-        fetch(`${environment.VITE_API_URL}/api/auth/status`, { credentials: 'same-origin' })
-            .then(async response => {
-                if (!response.ok) throw new Error('unavailable')
-                const status = (await response.json()) as {
-                    configured: boolean
-                    authenticated: boolean
-                }
-                if (active) {
-                    setState(
-                        status.authenticated
-                            ? 'authenticated'
-                            : status.configured
-                              ? 'login'
-                              : 'setup',
-                    )
-                }
+    const submitMutation = useMutation({
+        mutationFn: async () => {
+            const endpoint = state === 'setup' ? 'setup' : 'login'
+            const response = await fetch(`${environment.VITE_API_URL}/api/auth/${endpoint}`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'content-type': 'application/json',
+                    ...(state === 'setup'
+                        ? { 'x-trackit-bootstrap-secret': bootstrapSecret }
+                        : {}),
+                },
+                body: JSON.stringify({ password }),
             })
-            .catch(() => {
-                if (active) setState('offline')
-            })
-        return () => {
-            active = false
-        }
-    }, [])
-
-    const submit = async () => {
-        setError('')
-        const endpoint = state === 'setup' ? 'setup' : 'login'
-        const response = await fetch(`${environment.VITE_API_URL}/api/auth/${endpoint}`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'content-type': 'application/json',
-                ...(state === 'setup' ? { 'x-trackit-bootstrap-secret': bootstrapSecret } : {}),
-            },
-            body: JSON.stringify({ password }),
-        })
-        if (!response.ok) {
-            setError(
-                state === 'setup'
-                    ? 'Check the setup secret and use a password of at least 12 characters.'
-                    : 'That password is incorrect.',
-            )
-            return
-        }
-        if (state === 'setup') {
-            const result = (await response.json()) as { recoveryCodes: string[] }
-            setRecoveryCodes(result.recoveryCodes)
-        } else {
-            setState('authenticated')
-        }
-        setPassword('')
-    }
+            if (!response.ok) {
+                throw new Error(
+                    state === 'setup'
+                        ? 'Check the setup secret and use a password of at least 12 characters.'
+                        : 'That password is incorrect.',
+                )
+            }
+            return state === 'setup'
+                ? ((await response.json()) as { recoveryCodes: string[] })
+                : null
+        },
+        onMutate: () => setError(''),
+        onSuccess: result => {
+            if (result) setRecoveryCodes(result.recoveryCodes)
+            else setOverrideState('authenticated')
+            setPassword('')
+        },
+        onError: mutationError =>
+            setError(mutationError instanceof Error ? mutationError.message : 'Sign-in failed.'),
+    })
 
     const csrfToken = () =>
         document.cookie
@@ -90,9 +102,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
             .find(value => value.startsWith('trackit_csrf='))
             ?.split('=')[1]
 
-    const registerPasskey = async () => {
-        setError('')
-        try {
+    const registerPasskeyMutation = useMutation({
+        mutationFn: async () => {
             const optionsResponse = await fetch(
                 `${environment.VITE_API_URL}/api/auth/passkey/register/options`,
                 {
@@ -101,12 +112,12 @@ export function AuthGate({ children }: { children: ReactNode }) {
                     headers: { 'x-csrf-token': csrfToken() ?? '' },
                 },
             )
+            if (!optionsResponse.ok) throw new Error('options_failed')
             const attempt = (await optionsResponse.json()) as {
                 attemptId: string
                 options: PublicKeyCredentialCreationOptionsJSON
             }
-            const optionsJSON = attempt.options
-            const response = await startRegistration({ optionsJSON })
+            const response = await startRegistration({ optionsJSON: attempt.options })
             const verification = await fetch(
                 `${environment.VITE_API_URL}/api/auth/passkey/register/verify`,
                 {
@@ -120,25 +131,25 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 },
             )
             if (!verification.ok) throw new Error('verification_failed')
-            setState('authenticated')
-        } catch {
-            setError('Passkey registration was cancelled or could not be verified.')
-        }
-    }
+        },
+        onMutate: () => setError(''),
+        onSuccess: () => setOverrideState('authenticated'),
+        onError: () =>
+            setError('Passkey registration was cancelled or could not be verified.'),
+    })
 
-    const loginWithPasskey = async () => {
-        setError('')
-        try {
+    const loginWithPasskeyMutation = useMutation({
+        mutationFn: async () => {
             const optionsResponse = await fetch(
                 `${environment.VITE_API_URL}/api/auth/passkey/authenticate/options`,
                 { method: 'POST', credentials: 'same-origin' },
             )
+            if (!optionsResponse.ok) throw new Error('options_failed')
             const attempt = (await optionsResponse.json()) as {
                 attemptId: string
                 options: PublicKeyCredentialRequestOptionsJSON
             }
-            const optionsJSON = attempt.options
-            const response = await startAuthentication({ optionsJSON })
+            const response = await startAuthentication({ optionsJSON: attempt.options })
             const verification = await fetch(
                 `${environment.VITE_API_URL}/api/auth/passkey/authenticate/verify`,
                 {
@@ -149,27 +160,34 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 },
             )
             if (!verification.ok) throw new Error('verification_failed')
-            setState('authenticated')
-        } catch {
-            setError('Passkey sign-in was cancelled or could not be verified.')
-        }
-    }
+        },
+        onMutate: () => setError(''),
+        onSuccess: () => setOverrideState('authenticated'),
+        onError: () => setError('Passkey sign-in was cancelled or could not be verified.'),
+    })
 
-    const recover = async () => {
-        setError('')
-        const response = await fetch(`${environment.VITE_API_URL}/api/auth/recover`, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'content-type': 'application/json' },
-            body: JSON.stringify({ code: recoveryCode.trim() }),
-        })
-        if (!response.ok) {
-            setError('That recovery code is invalid or has already been used.')
-            return
-        }
-        setRecoveryCode('')
-        setState('authenticated')
-    }
+    const recoveryMutation = useMutation({
+        mutationFn: async () => {
+            const response = await fetch(`${environment.VITE_API_URL}/api/auth/recover`, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'content-type': 'application/json' },
+                body: JSON.stringify({ code: recoveryCode.trim() }),
+            })
+            if (!response.ok) throw new Error('That recovery code is invalid or has already been used.')
+        },
+        onMutate: () => setError(''),
+        onSuccess: () => {
+            setRecoveryCode('')
+            setOverrideState('authenticated')
+        },
+        onError: mutationError =>
+            setError(
+                mutationError instanceof Error
+                    ? mutationError.message
+                    : 'That recovery code could not be used.',
+            ),
+    })
 
     if (state === 'authenticated') return children
     if (state === 'loading') {
@@ -196,7 +214,9 @@ export function AuthGate({ children }: { children: ReactNode }) {
                             <code>docker compose up --build</code>, or run{' '}
                             <code>npm run dev:server</code> beside Vite.
                         </Text>
-                        <Button onClick={() => window.location.reload()}>Try again</Button>
+                        <Button loading={statusQuery.isFetching} onClick={() => void statusQuery.refetch()}>
+                            Try again
+                        </Button>
                     </Stack>
                 </Paper>
             </Center>
@@ -229,10 +249,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
                                 autoComplete="off"
                             />
                             {error && <Alert color="red">{error}</Alert>}
-                            <Button disabled={!recoveryCode.trim()} onClick={() => void recover()}>
+                            <Button
+                                loading={recoveryMutation.isPending}
+                                disabled={!recoveryCode.trim()}
+                                onClick={() => recoveryMutation.mutate()}
+                            >
                                 Recover session
                             </Button>
-                            <Button variant="subtle" onClick={() => setState('login')}>
+                            <Button variant="subtle" onClick={() => setOverrideState('login')}>
                                 Back to sign in
                             </Button>
                         </>
@@ -246,15 +270,23 @@ export function AuthGate({ children }: { children: ReactNode }) {
                                 <code>{recoveryCodes.join('\n')}</code>
                             </Paper>
                             {error && <Alert color="red">{error}</Alert>}
-                            <Button onClick={() => void registerPasskey()}>Create a passkey</Button>
-                            <Button variant="subtle" onClick={() => setState('authenticated')}>
+                            <Button
+                                loading={registerPasskeyMutation.isPending}
+                                onClick={() => registerPasskeyMutation.mutate()}
+                            >
+                                Create a passkey
+                            </Button>
+                            <Button variant="subtle" onClick={() => setOverrideState('authenticated')}>
                                 Skip for now
                             </Button>
                         </>
                     ) : (
                         <>
                             {state === 'login' && 'PublicKeyCredential' in window && (
-                                <Button onClick={() => void loginWithPasskey()}>
+                                <Button
+                                    loading={loginWithPasskeyMutation.isPending}
+                                    onClick={() => loginWithPasskeyMutation.mutate()}
+                                >
                                     Sign in with a passkey
                                 </Button>
                             )}
@@ -285,13 +317,14 @@ export function AuthGate({ children }: { children: ReactNode }) {
                             )}
                             {error && <Alert color="red">{error}</Alert>}
                             <Button
+                                loading={submitMutation.isPending}
                                 disabled={state === 'setup' && !bootstrapSecret}
-                                onClick={() => void submit()}
+                                onClick={() => submitMutation.mutate()}
                             >
                                 {state === 'setup' ? 'Create owner account' : 'Sign in'}
                             </Button>
                             {state === 'login' && (
-                                <Button variant="subtle" onClick={() => setState('recovery')}>
+                                <Button variant="subtle" onClick={() => setOverrideState('recovery')}>
                                     Use a recovery code
                                 </Button>
                             )}
