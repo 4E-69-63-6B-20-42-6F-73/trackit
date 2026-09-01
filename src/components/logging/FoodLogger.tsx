@@ -104,6 +104,11 @@ const selectionMeta = (selection: Selection) =>
         ? selection.food.brand || `${selection.food.servingGrams} g serving`
         : 'Recipe · per serving'
 
+const defaultServingLabel = (food: Food) => {
+    const label = food.servingName.trim()
+    return /^[\d¼½¾]/.test(label) ? label : `1 ${label}`
+}
+
 export function FoodLogger({
     opened,
     close,
@@ -608,13 +613,15 @@ export function FoodLogger({
                                             ? [
                                                   { label: '100 g', value: 100 },
                                                   {
-                                                      label: `1 ${selection.food.servingName}`,
+                                                      label: defaultServingLabel(selection.food),
                                                       value: selection.food.servingGrams,
                                                   },
-                                                  {
-                                                      label: `2 ${selection.food.servingName}s`,
-                                                      value: selection.food.servingGrams * 2,
-                                                  },
+                                                  ...(selection.food.servingOptions ?? []).map(
+                                                      option => ({
+                                                          label: option.label,
+                                                          value: option.grams,
+                                                      }),
+                                                  ),
                                               ]
                                             : [
                                                   { label: '½ serving', value: 0.5 },
@@ -753,6 +760,10 @@ export function FoodLogger({
                                             Back
                                         </Button>
                                     </div>
+                                    <Text size="xs" c="dimmed" mt={6}>
+                                        Nutrition is per 100 g. Serving size is stored separately as a
+                                        logging shortcut.
+                                    </Text>
 
                                     {catalogMode === 'barcode' && (
                                         <Stack gap="xs" mt="sm">
@@ -827,9 +838,10 @@ export function FoodLogger({
                                                             <strong>{food.name}</strong>
                                                             <small>
                                                                 {food.brand || 'No brand'} ·{' '}
-                                                                {Math.round(preview.calories ?? 0)}{' '}
-                                                                kcal per {food.servingGrams} g
-                                                                serving
+                                                                {Math.round(food.per100g.calories ?? 0)}{' '}
+                                                                kcal per 100 g ·{' '}
+                                                                {Math.round(preview.calories ?? 0)} kcal per{' '}
+                                                                {food.servingGrams} g serving
                                                             </small>
                                                         </span>
                                                         <span>Save & choose</span>
@@ -858,6 +870,10 @@ export function FoodLogger({
                                     Back
                                 </Button>
                             </div>
+                            <Text size="xs" c="dimmed" mt={6}>
+                                Nutrition is per 100 g. Serving size is stored separately as a logging
+                                shortcut.
+                            </Text>
                             <Stack gap="xs" mt="sm">
                                 <TextInput
                                     label="EAN or UPC barcode"
@@ -915,7 +931,11 @@ export function FoodLogger({
                                         >
                                             <span>
                                                 <strong>{food.name}</strong>
-                                                <small>{food.brand || 'No brand'}</small>
+                                                <small>
+                                                    {food.brand || 'No brand'} ·{' '}
+                                                    {Math.round(food.per100g.calories ?? 0)} kcal per
+                                                    100 g · serving {food.servingGrams} g
+                                                </small>
                                             </span>
                                             <span>Save & choose</span>
                                         </button>
