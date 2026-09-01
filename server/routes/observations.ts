@@ -1,13 +1,30 @@
+import swagger from '@fastify/swagger'
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import type { ZodError } from 'zod'
+import type { ZodTypeProvider } from 'fastify-type-provider-zod'
 import {
+    jsonSchemaTransform,
+    serializerCompiler,
+    validatorCompiler,
+} from 'fastify-type-provider-zod'
+import {
+    dailyMetricListResponseSchema,
     dailyMetricRangeQuerySchema,
+    errorResponseSchema,
+    metricSourceListResponseSchema,
+    type MetricSourceSummary,
+    numericObservationSchema,
+    type NumericObservationResponse,
+    observationIdParamsSchema,
+    observationInputSchema,
+    observationListResponseSchema,
     observationRangeQuerySchema,
-    type DailyMetricRangeQuery,
-    type ObservationRangeQuery,
+    observationUpdateSchema,
+    parseObservationDefinitionIds,
+    unknownDataResponseSchema,
 } from '../contracts/observations.js'
 import type { DataRepository } from '../data/types.js'
-import { observationInputSchema, observationUpdateSchema } from '../data/types.js'
+import { mergeGeneratedObservationPaths, openApiContract } from '../openapi.js'
 
 type BadRequest = (
     request: FastifyRequest,
@@ -28,16 +45,42 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
     app,
     { data, badRequest },
 ) => {
-    app.get<{ Querystring: ObservationRangeQuery }>(
+    app.setValidatorCompiler(validatorCompiler)
+    app.setSerializerCompiler(serializerCompiler)
+    await app.register(swagger, {
+        openapi: {
+            info: openApiContract.info,
+            servers: openApiContract.servers,
+        },
+        transform: jsonSchemaTransform,
+    })
+
+    const routes = app.withTypeProvider<ZodTypeProvider>()
+
+    routes.get(
         '/api/observations',
+        {
+            attachValidation: true,
+            schema: {
+                querystring: observationRangeQuerySchema,
+                response: {
+                    200: observationListResponseSchema,
+                    400: errorResponseSchema,
+                },
+            },
+        },
         async (request, reply) => {
-            const range = observationRangeQuerySchema.safeParse(request.query)
-            if (!range.success)
-                return badRequest(request, reply, {
-                    error: 'invalid_range',
-                    validation: range.error,
-                })
-            const bounded = { ...range.data }
+            if (request.validationError)
+                return badRequest(request, reply, { error: 'invalid_range' })
+            const bounded: {
+                from?: string
+                to?: string
+                definitionIds?: string[]
+            } = {
+                from: request.query.from,
+                to: request.query.to,
+                definitionIds: parseObservationDefinitionIds(request.query.definitionIds),
+            }
             if (!bounded.from) {
                 const from = new Date()
                 from.setUTCDate(from.getUTCDate() - 365)
@@ -50,43 +93,102 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
                     366 * 86_400_000
             )
                 return badRequest(request, reply, { error: 'range_too_large' })
-            return { data: await data.listObservations(bounded) }
+            return {
+                data: (await data.listObservations(bounded)) as NumericObservationResponse[],
+            }
         },
     )
 
-    app.get('/api/metric-sources', async () => ({
-        data: (await data.listMetricSources?.()) ?? [],
-    }))
+    routes.get(
+        '/api/metric-sources',
+        {
+            schema: {
+                response: {
+                    200: metricSourceListResponseSchema,
+                },
+            },
+        },
+        async () => ({
+            data: ((await data.listMetricSources?.()) ?? []) as MetricSourceSummary[],
+        }),
+    )
 
-    app.get<{ Querystring: DailyMetricRangeQuery }>(
+    routes.get(
         '/api/daily-metrics',
+        {
+            attachValidation: true,
+            schema: {
+                querystring: dailyMetricRangeQuerySchema,
+                response: {
+                    200: dailyMetricListResponseSchema,
+                    400: errorResponseSchema,
+                },
+            },
+        },
         async (request, reply) => {
-            const dateRange = dailyMetricRangeQuerySchema.safeParse(request.query)
-            if (!dateRange.success)
-                return badRequest(request, reply, { validation: dateRange.error })
-            if (!dateRange.data.from || !dateRange.data.to)
+            if (request.validationError) return badRequest(request, reply)
+            if (!request.query.from || !request.query.to)
                 return badRequest(request, reply, { error: 'date_range_required' })
             const days =
-                (new Date(`${dateRange.data.to}T00:00:00.000Z`).getTime() -
-                    new Date(`${dateRange.data.from}T00:00:00.000Z`).getTime()) /
+                (new Date(`${request.query.to}T00:00:00.000Z`).getTime() -
+                    new Date(`${request.query.from}T00:00:00.000Z`).getTime()) /
                 86_400_000
             if (days < 0 || days > 365)
                 return badRequest(request, reply, { error: 'range_too_large' })
-            return { data: (await data.listDailyMetrics?.(dateRange.data)) ?? [] }
+            return {
+                data: (await data.listDailyMetrics?.({
+                    from: request.query.from,
+                    to: request.query.to,
+                })) ?? [],
+            }
         },
     )
 
-    app.post('/api/observations', async (request, reply) => {
-        const input = observationInputSchema.safeParse(request.body)
-        if (!input.success) return badRequest(request, reply, { validation: input.error })
-        return reply.code(201).send({ data: await data.createObservation(input.data) })
-    })
+    routes.post(
+        '/api/observations',
+        {
+            attachValidation: true,
+            schema: {
+                body: observationInputSchema,
+                response: {
+                    201: unknownDataResponseSchema,
+                    400: errorResponseSchema,
+                },
+            },
+        },
+        async (request, reply) => {
+            if (request.validationError) return badRequest(request, reply)
+            return reply.code(201).send({ data: await data.createObservation(request.body) })
+        },
+    )
 
-    app.patch<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
-        const input = observationUpdateSchema.safeParse(request.body)
-        if (!input.success) return badRequest(request, reply, { validation: input.error })
-        const updated = await data.updateObservation(request.params.id, input.data)
-        if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-        return { data: updated }
+    routes.patch(
+        '/api/observations/:id',
+        {
+            attachValidation: true,
+            schema: {
+                params: observationIdParamsSchema,
+                body: observationUpdateSchema,
+                response: {
+                    200: unknownDataResponseSchema,
+                    400: errorResponseSchema,
+                    409: errorResponseSchema,
+                },
+            },
+        },
+        async (request, reply) => {
+            if (request.validationError) return badRequest(request, reply)
+            const updated = await data.updateObservation(request.params.id, request.body)
+            if (!updated) return reply.code(409).send({ error: 'version_conflict' })
+            return { data: updated }
+        },
+    )
+
+    app.addHook('onReady', async () => {
+        mergeGeneratedObservationPaths(
+            app.swagger() as unknown as {
+                paths?: Record<string, Record<string, unknown>>
+            },
+        )
     })
 }

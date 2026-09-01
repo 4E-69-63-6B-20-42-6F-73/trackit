@@ -1,34 +1,43 @@
 import { describe, expect, it } from 'vitest'
-import { observationOpenApiPaths, observationRangeQuerySchema } from './observations.js'
+import {
+    numericObservationSchema,
+    observationRangeQuerySchema,
+    parseObservationDefinitionIds,
+} from './observations.js'
 
 describe('observation API contract', () => {
     it('parses bounded observation filters', () => {
-        expect(
-            observationRangeQuerySchema.parse({
-                from: '2026-08-01T00:00:00.000Z',
-                to: '2026-09-01T00:00:00.000Z',
-                definitionIds: 'steps,weight',
-            }),
-        ).toEqual({
+        const query = observationRangeQuerySchema.parse({
             from: '2026-08-01T00:00:00.000Z',
             to: '2026-09-01T00:00:00.000Z',
-            definitionIds: ['steps', 'weight'],
+            definitionIds: 'steps,weight',
         })
+
+        expect(query).toEqual({
+            from: '2026-08-01T00:00:00.000Z',
+            to: '2026-09-01T00:00:00.000Z',
+            definitionIds: 'steps,weight',
+        })
+        expect(parseObservationDefinitionIds(query.definitionIds)).toEqual(['steps', 'weight'])
     })
 
-    it('publishes the same observation body schema through OpenAPI', () => {
-        const schema =
-            observationOpenApiPaths['/api/observations'].post.requestBody.content[
-                'application/json'
-            ].schema
-
-        expect(schema).toMatchObject({
-            type: 'object',
-            properties: {
-                definitionId: { type: 'string' },
-                observedAt: { type: 'string', format: 'date-time' },
-                valueType: {},
-            },
+    it('defines the effective numeric observation response', () => {
+        expect(
+            numericObservationSchema.parse({
+                id: 'observation-1',
+                definitionId: 'steps',
+                canonicalValue: 1000,
+                canonicalUnit: 'count',
+                originalValue: 1000,
+                originalUnit: 'count',
+                observedAt: '2026-09-01T08:00:00.000Z',
+                excluded: false,
+                version: 1,
+            }),
+        ).toMatchObject({
+            id: 'observation-1',
+            definitionId: 'steps',
+            canonicalValue: 1000,
         })
     })
 })

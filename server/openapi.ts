@@ -154,3 +154,25 @@ export const openApiContract = {
         },
     },
 } as const
+
+const generatedObservationMethods = {
+    '/api/observations': ['get', 'post'],
+    '/api/observations/{id}': ['patch'],
+    '/api/daily-metrics': ['get'],
+    '/api/metric-sources': ['get'],
+} as const
+
+export function mergeGeneratedObservationPaths(generated: {
+    paths?: Record<string, Record<string, unknown>>
+}) {
+    const paths = openApiContract.paths as Record<string, Record<string, unknown>>
+    for (const [path, methods] of Object.entries(generatedObservationMethods)) {
+        const source = generated.paths?.[path]
+        if (!source) continue
+        const target = (paths[path] ??= {})
+        for (const method of methods) {
+            const operation = source[method]
+            if (operation) target[method] = operation
+        }
+    }
+}
