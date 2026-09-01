@@ -27,21 +27,21 @@ import {
 } from '@tabler/icons-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { calendarDayRangeForKey, calendarTodayKey, formatCalendarDate } from '../domain/calendar'
-import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '../domain/goals'
+import { calendarDayRangeForKey, calendarTodayKey, formatCalendarDate } from '@trackit/domain/calendar'
+import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '@trackit/domain/goals'
 import {
     metricCatalog,
     metricDefinition,
     type GoalAggregation,
     type MetricComparison,
-} from '../domain/metricCatalog'
+} from '@trackit/domain/metricCatalog'
 import {
     convertMetricValue,
     displayUnitFor,
     formatMetric,
     toCanonicalMetricValue,
     unitPresentation,
-} from '../domain/metrics'
+} from '@trackit/domain/metrics'
 import { useServerData } from '../hooks/useServerData'
 import {
     createGoal,
@@ -191,7 +191,7 @@ function GoalCard({
     onDelete: () => void
     onViewTrend: () => void
 }) {
-    const definition = metricDefinition(goal.metricId)
+    const definition = metricDefinition(goal.definitionId)
     const now = new Date()
     const result = evaluation ?? {
         value: null,
@@ -204,16 +204,16 @@ function GoalCard({
     const retired = Boolean(goal.effectiveTo && new Date(goal.effectiveTo) < now)
     const targetLabel =
         goal.comparator === 'between' && 'min' in goal.target
-            ? `${formatMetric(goal.metricId, goal.target.min, metricPreferences, locale)}–${formatMetric(goal.metricId, goal.target.max, metricPreferences, locale)}`
+            ? `${formatMetric(goal.definitionId, goal.target.min, metricPreferences, locale)}–${formatMetric(goal.definitionId, goal.target.max, metricPreferences, locale)}`
             : 'value' in goal.target
-              ? `${goal.comparator === 'gte' ? 'at least' : 'at or below'} ${formatMetric(goal.metricId, goal.target.value, metricPreferences, locale)}`
+              ? `${goal.comparator === 'gte' ? 'at least' : 'at or below'} ${formatMetric(goal.definitionId, goal.target.value, metricPreferences, locale)}`
               : ''
     const differenceLabel =
         result.value !== null &&
         result.met === false &&
         result.difference !== null &&
         goal.comparator !== 'between'
-            ? `${formatMetric(goal.metricId, result.difference, metricPreferences, locale)} ${goal.comparator === 'lte' ? 'above' : 'below'} target`
+            ? `${formatMetric(goal.definitionId, result.difference, metricPreferences, locale)} ${goal.comparator === 'lte' ? 'above' : 'below'} target`
             : null
     const scheduledDays = (
         goal.schedule.weekdays?.length ? goal.schedule.weekdays.map(String) : everyDay
@@ -246,7 +246,7 @@ function GoalCard({
         <article className="goal-card">
             <Group justify="space-between" align="start" wrap="nowrap">
                 <div>
-                    <Text fw={700}>{definition?.name ?? goal.metricId}</Text>
+                    <Text fw={700}>{definition?.name ?? goal.definitionId}</Text>
                     <Text size="sm" c="dimmed">
                         {periodText(goal)}
                     </Text>
@@ -281,7 +281,7 @@ function GoalCard({
                             <ActionIcon
                                 variant="subtle"
                                 color="gray"
-                                aria-label={`Actions for ${definition?.name ?? goal.metricId}`}
+                                aria-label={`Actions for ${definition?.name ?? goal.definitionId}`}
                             >
                                 <IconDots size={17} />
                             </ActionIcon>
@@ -319,7 +319,7 @@ function GoalCard({
                       ? upcoming
                           ? 'Starts soon'
                           : 'Nothing recorded yet'
-                      : formatMetric(goal.metricId, result.value, metricPreferences, locale)}
+                      : formatMetric(goal.definitionId, result.value, metricPreferences, locale)}
             </Text>
             <Text size="sm">Target: {targetLabel}</Text>
             {timingLabel && (
@@ -433,7 +433,7 @@ export function GoalsPanel() {
     }
     const edit = (goal: GoalRecord) => {
         setEditing(goal)
-        setMetricId(goal.metricId)
+        setMetricId(goal.definitionId)
         setMeasurement(
             `${goal.aggregation}:${goal.period.type}${goal.period.type === 'rolling' ? `:${goal.period.days}` : ''}`,
         )
@@ -447,18 +447,18 @@ export function GoalsPanel() {
         setSelectedWeekdays(goalDays)
         setAdvanced(true)
         const unit = displayUnitFor(
-            goal.metricId,
+            goal.definitionId,
             preferences?.metricPreferences,
             preferences?.units,
         )
         if ('value' in goal.target)
             setTarget(
-                convertMetricValue(goal.metricId, goal.target.value, goal.canonicalUnit, unit),
+                convertMetricValue(goal.definitionId, goal.target.value, goal.canonicalUnit, unit),
             )
         else {
-            setTarget(convertMetricValue(goal.metricId, goal.target.min, goal.canonicalUnit, unit))
+            setTarget(convertMetricValue(goal.definitionId, goal.target.min, goal.canonicalUnit, unit))
             setRangeMax(
-                convertMetricValue(goal.metricId, goal.target.max, goal.canonicalUnit, unit),
+                convertMetricValue(goal.definitionId, goal.target.max, goal.canonicalUnit, unit),
             )
         }
     }
@@ -466,7 +466,7 @@ export function GoalsPanel() {
         const startRange = calendarDayRangeForKey(effectiveFrom || today, timezone)
         const endRange = effectiveTo ? calendarDayRangeForKey(effectiveTo, timezone) : null
         return {
-            metricId,
+            definitionId: metricId,
             aggregation: selectedMeasurement.aggregation,
             comparator,
             target:
@@ -790,7 +790,9 @@ export function GoalsPanel() {
                                 onRetire={() => retire(goal)}
                                 onDelete={() => setDeleting(goal)}
                                 onViewTrend={() =>
-                                    navigate(`/trends?metric=${encodeURIComponent(goal.metricId)}`)
+                                    navigate(
+                                        `/trends?metric=${encodeURIComponent(goal.definitionId)}`,
+                                    )
                                 }
                             />
                         ))}
@@ -812,7 +814,9 @@ export function GoalsPanel() {
                                 onRetire={() => retire(goal)}
                                 onDelete={() => setDeleting(goal)}
                                 onViewTrend={() =>
-                                    navigate(`/trends?metric=${encodeURIComponent(goal.metricId)}`)
+                                    navigate(
+                                        `/trends?metric=${encodeURIComponent(goal.definitionId)}`,
+                                    )
                                 }
                             />
                         ))}
@@ -828,8 +832,9 @@ export function GoalsPanel() {
                 size="sm"
             >
                 <Text size="sm">
-                    This permanently removes the {metricDefinition(deleting?.metricId ?? '')?.name}{' '}
-                    goal. Your observations are not affected.
+                    This permanently removes the{' '}
+                    {metricDefinition(deleting?.definitionId ?? '')?.name} goal. Your observations
+                    are not affected.
                 </Text>
                 <Group justify="flex-end" mt="lg">
                     <Button variant="default" onClick={() => setDeleting(null)}>
