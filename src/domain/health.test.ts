@@ -6,7 +6,7 @@ import {
     rollingBaselineDelta,
     weeklySeries,
     type NumericObservation,
-} from './health'
+} from '@trackit/domain/health'
 
 const observation = (id: string, observedAt: string, value: number): NumericObservation => ({
     id,
@@ -35,6 +35,22 @@ describe('health calculations', () => {
             { date: '2026-03-29', value: null, recordIds: [] },
             { date: '2026-03-30', value: 80, recordIds: ['one'] },
             { date: '2026-03-31', value: null, recordIds: [] },
+        ])
+    })
+
+    it('attributes overnight sleep to the wake day', () => {
+        const sleep: NumericObservation = {
+            ...observation('sleep', '2026-08-30T21:20:00.000Z', 8.4167),
+            definitionId: 'sleep',
+            canonicalUnit: 'hours',
+            originalUnit: 'hours',
+            endedAt: '2026-08-31T05:45:00.000Z',
+        }
+        expect(
+            dailySeries([sleep], new Date('2026-08-30T12:00:00Z'), 2, 'Europe/Amsterdam'),
+        ).toEqual([
+            { date: '2026-08-30', value: null, recordIds: [] },
+            { date: '2026-08-31', value: 8.4167, recordIds: ['sleep'] },
         ])
     })
 
