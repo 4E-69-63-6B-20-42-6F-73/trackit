@@ -27,8 +27,17 @@ import {
 } from '@tabler/icons-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { calendarDayRangeForKey, calendarTodayKey, formatCalendarDate } from '@trackit/domain/calendar'
-import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '@trackit/domain/goals'
+import {
+    calendarDayRangeForKey,
+    calendarTodayKey,
+    formatCalendarDate,
+} from '@trackit/domain/calendar'
+import {
+    validateGoal,
+    type Goal,
+    type GoalEvaluation,
+    type GoalPeriod,
+} from '@trackit/domain/goals'
 import {
     metricCatalog,
     metricDefinition,
@@ -456,7 +465,9 @@ export function GoalsPanel() {
                 convertMetricValue(goal.definitionId, goal.target.value, goal.canonicalUnit, unit),
             )
         else {
-            setTarget(convertMetricValue(goal.definitionId, goal.target.min, goal.canonicalUnit, unit))
+            setTarget(
+                convertMetricValue(goal.definitionId, goal.target.min, goal.canonicalUnit, unit),
+            )
             setRangeMax(
                 convertMetricValue(goal.definitionId, goal.target.max, goal.canonicalUnit, unit),
             )
