@@ -340,6 +340,14 @@ export function FoodLogger({
                                   amount: consumedAmount,
                                   unit: item.kind === 'food' ? 'g' : 'serving',
                               },
+                    foodId:
+                        item.kind === 'food' ? item.food.id : item.kind === 'recipe' ? null : undefined,
+                    recipeId:
+                        item.kind === 'recipe'
+                            ? item.recipe.id
+                            : item.kind === 'food'
+                              ? null
+                              : undefined,
                 })
                 window.dispatchEvent(new Event('trackit:nutrition-changed'))
                 window.dispatchEvent(new Event('trackit:observations-changed'))
@@ -354,6 +362,7 @@ export function FoodLogger({
                     item.kind === 'food' ? item.food.id : undefined,
                     eatenAt,
                     { amount: consumedAmount, unit: item.kind === 'food' ? 'g' : 'serving' },
+                    item.kind === 'recipe' ? item.recipe.id : undefined,
                 )
                 window.dispatchEvent(new Event('trackit:nutrition-changed'))
                 onFeedback?.(`${selectionName(item)} logged to ${mealType.toLowerCase()}.`)
