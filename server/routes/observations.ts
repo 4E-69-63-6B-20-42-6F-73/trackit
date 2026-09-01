@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify'
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
 import { z } from 'zod'
 import type { DataRepository } from '../data/types.js'
 import { observationInputSchema, observationUpdateSchema } from '../data/types.js'
@@ -28,12 +28,15 @@ type BadRequest = (
     },
 ) => FastifyReply
 
-export async function registerObservationRoutes(
-    app: FastifyInstance,
-    options: { data: DataRepository; badRequest: BadRequest },
-) {
-    const { data, badRequest } = options
+type ObservationRouteOptions = {
+    data: DataRepository
+    badRequest: BadRequest
+}
 
+export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = async (
+    app,
+    { data, badRequest },
+) => {
     app.get<{ Querystring: { from?: string; to?: string; definitionIds?: string } }>(
         '/api/observations',
         async (request, reply) => {
