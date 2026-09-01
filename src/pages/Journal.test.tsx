@@ -252,7 +252,8 @@ describe('Journal', () => {
         const user = userEvent.setup()
         await user.click(await screen.findByRole('button', { name: /^Filters/ }))
         await user.click(await screen.findByText('One day'))
-        fireEvent.change(screen.getByLabelText('Journal date'), {
+        const journalDate = await screen.findByLabelText('Journal date')
+        fireEvent.change(journalDate, {
             target: { value: '2026-08-23' },
         })
 
