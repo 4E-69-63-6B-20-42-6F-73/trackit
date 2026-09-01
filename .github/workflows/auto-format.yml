@@ -46,10 +46,21 @@ jobs:
               env:
                   BASE_SHA: ${{ github.event.pull_request.base.sha }}
               run: |
-                  git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD -- \
-                    '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
-                    '*.md' '*.css' '*.scss' '*.yaml' '*.yml' \
-                    | xargs -0 -r npx --yes prettier@3.9.6 --write
+                  {
+                    git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD -- \
+                      '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                      '*.md' '*.css' '*.scss' '*.yaml' '*.yml'
+                    git diff --name-only --diff-filter=ACMR -z -- \
+                      '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                      '*.md' '*.css' '*.scss' '*.yaml' '*.yml'
+                    git ls-files --others --exclude-standard -z -- \
+                      '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                      '*.md' '*.css' '*.scss' '*.yaml' '*.yml'
+                  } | sort -zu | while IFS= read -r -d '' file; do
+                    if [ -f "$file" ]; then
+                      printf '%s\0' "$file"
+                    fi
+                  done | xargs -0 -r npx --yes prettier@3.9.6 --write
             - name: Commit generated artifacts
               run: |
                   if [ -n "$(git status --porcelain)" ]; then
