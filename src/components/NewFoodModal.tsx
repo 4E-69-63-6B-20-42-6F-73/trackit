@@ -16,7 +16,7 @@ import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition
 import { createFood } from '../lib/nutritionApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
 import { FoodServingOptionsFields } from './FoodServingOptionsFields'
-import { useToast } from './toastContext'
+import { toast } from './toast'
 
 export function NewFoodModal({
     opened,
@@ -28,7 +28,6 @@ export function NewFoodModal({
     onCreate: (food: Food) => void
 }) {
     const compact = useMediaQuery('(max-width: 36em)')
-    const toast = useToast()
     const [name, setName] = useState('')
     const [brand, setBrand] = useState('')
     const [barcode, setBarcode] = useState('')
