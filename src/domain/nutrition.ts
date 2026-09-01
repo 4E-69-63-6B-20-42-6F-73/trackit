@@ -22,6 +22,11 @@ export const foodNutrientKeys: (keyof Nutrients)[] = [
     'potassium',
 ]
 
+export type FoodServingOption = {
+    label: string
+    grams: number
+}
+
 export type Food = {
     id: string
     name: string
@@ -32,6 +37,7 @@ export type Food = {
     per100g: Partial<Nutrients>
     servingName: string
     servingGrams: number
+    servingOptions?: FoodServingOption[]
     favorite: boolean
     nutritionQuality?: 'complete' | 'estimated' | 'incomplete'
     version?: number

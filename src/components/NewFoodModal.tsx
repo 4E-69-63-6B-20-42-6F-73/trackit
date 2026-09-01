@@ -11,9 +11,12 @@ import {
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useState } from 'react'
+import { servingOptionsFromDrafts, type ServingOptionDraft } from '../domain/foodServingOptions'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
+import { FoodServingOptionsFields } from './FoodServingOptionsFields'
+import { toast } from './toast'
 
 export function NewFoodModal({
     opened,
@@ -30,6 +33,7 @@ export function NewFoodModal({
     const [barcode, setBarcode] = useState('')
     const [servingName, setServingName] = useState('serving')
     const [servingGrams, setServingGrams] = useState<number | string>(100)
+    const [servingOptions, setServingOptions] = useState<ServingOptionDraft[]>([])
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>({})
     const [error, setError] = useState('')
     const [saving, setSaving] = useState(false)
@@ -54,21 +58,26 @@ export function NewFoodModal({
                 per100g: nutrients,
                 servingName: servingName.trim(),
                 servingGrams: Number(servingGrams),
+                servingOptions: servingOptionsFromDrafts(servingOptions),
                 favorite: false,
                 nutritionQuality: foodNutrientKeys.every(key => nutrients[key] !== undefined)
                     ? 'complete'
                     : 'incomplete',
             })
             onCreate(food)
+            toast.success(`${food.name} added to your food library.`)
             setName('')
             setBrand('')
             setBarcode('')
             setServingName('serving')
             setServingGrams(100)
+            setServingOptions([])
             setNutrients({})
             onClose()
         } catch {
-            setError('The food could not be saved to your server. No local copy was created.')
+            const message = 'The food could not be saved to your server. No local copy was created.'
+            setError(message)
+            toast.error(message)
         } finally {
             setSaving(false)
         }
@@ -82,6 +91,7 @@ export function NewFoodModal({
             centered={!compact}
             fullScreen={compact}
             size="md"
+            className="food-editor-modal"
         >
             <Stack>
                 {error && <Alert color="orange">{error}</Alert>}
@@ -103,18 +113,24 @@ export function NewFoodModal({
                     onChange={event => setBarcode(event.currentTarget.value)}
                 />
 
-                <Text fw={650} mt="xs">
-                    Serving
-                </Text>
+                <div>
+                    <Text fw={650} mt="xs">
+                        Serving
+                    </Text>
+                    <Text size="sm" c="dimmed">
+                        Serving size is a logging shortcut. Nutrition values below always describe
+                        100 g.
+                    </Text>
+                </div>
                 <SimpleGrid cols={{ base: 1, xs: 2 }}>
                     <TextInput
-                        label="Serving label"
+                        label="Default serving label"
                         placeholder="e.g. cup, scoop, container"
                         value={servingName}
                         onChange={event => setServingName(event.currentTarget.value)}
                     />
                     <NumberInput
-                        label="Serving weight"
+                        label="Default serving weight"
                         suffix=" g"
                         hideControls
                         min={0.1}
@@ -123,20 +139,11 @@ export function NewFoodModal({
                     />
                 </SimpleGrid>
 
+                <FoodServingOptionsFields options={servingOptions} onChange={setServingOptions} />
+
                 <FoodNutritionFields nutrients={nutrients} onChange={setNutrient} />
 
-                <Group
-                    justify="flex-end"
-                    style={{
-                        position: 'sticky',
-                        bottom: 0,
-                        zIndex: 1,
-                        background: 'var(--mantine-color-body)',
-                        borderTop: '1px solid var(--mantine-color-default-border)',
-                        paddingTop: 'var(--mantine-spacing-sm)',
-                        paddingBottom: 'var(--mantine-spacing-xs)',
-                    }}
-                >
+                <Group justify="flex-end" className="food-editor-actions">
                     <Button variant="default" disabled={saving} onClick={onClose}>
                         Cancel
                     </Button>

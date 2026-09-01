@@ -13,9 +13,16 @@ import {
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useEffect, useState } from 'react'
+import {
+    servingOptionDrafts,
+    servingOptionsFromDrafts,
+    type ServingOptionDraft,
+} from '../domain/foodServingOptions'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
 import { listFoodCategories, setFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
+import { FoodServingOptionsFields } from './FoodServingOptionsFields'
+import { useToast } from './toastContext'
 
 export function FoodEditModal({
     food,
@@ -29,11 +36,15 @@ export function FoodEditModal({
     onDelete: () => Promise<void>
 }) {
     const compact = useMediaQuery('(max-width: 36em)')
+    const toast = useToast()
     const [name, setName] = useState(food.name)
     const [brand, setBrand] = useState(food.brand ?? '')
     const [barcode, setBarcode] = useState(food.barcode ?? '')
     const [servingName, setServingName] = useState(food.servingName)
     const [servingGrams, setServingGrams] = useState<number | string>(food.servingGrams)
+    const [servingOptions, setServingOptions] = useState<ServingOptionDraft[]>(
+        servingOptionDrafts(food.servingOptions),
+    )
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>(food.per100g)
     const [categories, setCategories] = useState<FoodCategory[]>([])
     const [categoryIds, setCategoryIds] = useState<string[]>([])
@@ -85,14 +96,18 @@ export function FoodEditModal({
                 catalogId: food.catalogId,
                 servingName: servingName.trim(),
                 servingGrams: Number(servingGrams),
+                servingOptions: servingOptionsFromDrafts(servingOptions),
                 favorite: food.favorite,
                 nutritionQuality: quality,
                 per100g: nutrients,
             })
             if (categoriesLoaded) await setFoodCategories(food.id, categoryIds)
+            toast.success(`${name.trim()} updated.`)
             onClose()
         } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Could not update food.')
+            const message = reason instanceof Error ? reason.message : 'Could not update food.'
+            setError(message)
+            toast.error(message)
         } finally {
             setSaving(false)
         }
@@ -103,10 +118,13 @@ export function FoodEditModal({
         setDeleteError('')
         try {
             await onDelete()
+            toast.success(`${food.name} deleted.`)
             setConfirmingDelete(false)
             onClose()
         } catch (reason) {
-            setDeleteError(reason instanceof Error ? reason.message : 'Could not delete food.')
+            const message = reason instanceof Error ? reason.message : 'Could not delete food.'
+            setDeleteError(message)
+            toast.error(message)
         } finally {
             setDeleting(false)
         }
@@ -121,6 +139,7 @@ export function FoodEditModal({
                 centered={!compact}
                 fullScreen={compact}
                 size="lg"
+                className="food-editor-modal"
             >
                 <Stack>
                     <Text fw={650}>Basics</Text>
@@ -161,18 +180,24 @@ export function FoodEditModal({
                         />
                     )}
 
-                    <Text fw={650} mt="xs">
-                        Serving
-                    </Text>
+                    <div>
+                        <Text fw={650} mt="xs">
+                            Serving
+                        </Text>
+                        <Text size="sm" c="dimmed">
+                            Serving size is a logging shortcut. Nutrition values below always
+                            describe 100 g.
+                        </Text>
+                    </div>
                     <SimpleGrid cols={{ base: 1, xs: 2 }}>
                         <TextInput
-                            label="Serving label"
+                            label="Default serving label"
                             placeholder="e.g. cup, scoop, container"
                             value={servingName}
                             onChange={event => setServingName(event.currentTarget.value)}
                         />
                         <NumberInput
-                            label="Serving weight"
+                            label="Default serving weight"
                             suffix=" g"
                             hideControls
                             min={0.1}
@@ -180,6 +205,11 @@ export function FoodEditModal({
                             onChange={setServingGrams}
                         />
                     </SimpleGrid>
+
+                    <FoodServingOptionsFields
+                        options={servingOptions}
+                        onChange={setServingOptions}
+                    />
 
                     <FoodNutritionFields
                         nutrients={nutrients}
@@ -196,18 +226,7 @@ export function FoodEditModal({
                     />
 
                     {error && <Alert color="orange">{error}</Alert>}
-                    <Group
-                        justify="space-between"
-                        style={{
-                            position: 'sticky',
-                            bottom: 0,
-                            zIndex: 1,
-                            background: 'var(--mantine-color-body)',
-                            borderTop: '1px solid var(--mantine-color-default-border)',
-                            paddingTop: 'var(--mantine-spacing-sm)',
-                            paddingBottom: 'var(--mantine-spacing-xs)',
-                        }}
-                    >
+                    <Group justify="space-between" className="food-editor-actions">
                         <Button
                             color="red"
                             variant="subtle"

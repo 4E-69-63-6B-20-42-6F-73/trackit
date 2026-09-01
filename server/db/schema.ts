@@ -247,6 +247,10 @@ export const foods = pgTable('foods', {
     potassiumPer100g: doublePrecision('potassium_per_100g'),
     servingName: text('serving_name').notNull().default('serving'),
     servingGrams: doublePrecision('serving_grams').notNull().default(100),
+    servingOptions: jsonb('serving_options')
+        .$type<Array<{ label: string; grams: number }>>()
+        .notNull()
+        .default([]),
     favorite: boolean('favorite').notNull().default(false),
     nutritionQuality: text('nutrition_quality').notNull().default('complete'),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),

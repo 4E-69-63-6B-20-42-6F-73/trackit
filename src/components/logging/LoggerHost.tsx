@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react'
-import { IconCircleCheck } from '@tabler/icons-react'
+import { toast } from '../toast'
 import type { CreateObservationInput } from '../../lib/observationApi'
 import { useLogger } from '../../logging/LoggingContext'
 import type { LogActionId } from '../../logging/logActions'
@@ -14,6 +13,14 @@ const kinds: Record<Exclude<LogActionId, 'food'>, ManualEntryKind> = {
     journal: 'Note',
 }
 
+const feedback: Record<Exclude<LogActionId, 'food'>, string> = {
+    water: 'Water logged.',
+    weight: 'Weight saved.',
+    energy: 'Check-in saved.',
+    symptom: 'Symptom saved.',
+    journal: 'Note saved.',
+}
+
 export function LoggerHost({
     add,
     selectedDate,
@@ -22,13 +29,10 @@ export function LoggerHost({
     selectedDate?: string | null
 }) {
     const { activeLogger, closeLogger } = useLogger()
-    const [feedback, setFeedback] = useState<string | null>(null)
-
-    useEffect(() => {
-        if (!feedback) return
-        const timeout = window.setTimeout(() => setFeedback(null), 2200)
-        return () => window.clearTimeout(timeout)
-    }, [feedback])
+    const addWithFeedback = (input: CreateObservationInput) => {
+        add(input)
+        if (activeLogger && activeLogger !== 'food') toast.success(feedback[activeLogger])
+    }
 
     return (
         <>
@@ -37,7 +41,7 @@ export function LoggerHost({
                     opened
                     close={closeLogger}
                     selectedDate={selectedDate}
-                    onFeedback={setFeedback}
+                    onFeedback={toast.success}
                 />
             )}
             {activeLogger && activeLogger !== 'food' && (
@@ -45,16 +49,10 @@ export function LoggerHost({
                     key={activeLogger}
                     opened
                     close={closeLogger}
-                    add={add}
+                    add={addWithFeedback}
                     initialKind={kinds[activeLogger]}
                     selectedDate={selectedDate}
                 />
-            )}
-            {feedback && (
-                <div className="food-log-toast" role="status">
-                    <IconCircleCheck size={17} />
-                    <span>{feedback}</span>
-                </div>
             )}
         </>
     )

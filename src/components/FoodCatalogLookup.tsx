@@ -3,6 +3,7 @@ import { Alert, Badge, Button, Group, Modal, Stack, Text, TextInput } from '@man
 import { IconBarcode, IconCamera, IconSearch } from '@tabler/icons-react'
 import type { Food } from '../domain/nutrition'
 import { createFood, lookupCatalogBarcode, searchFoodCatalog } from '../lib/nutritionApi'
+import { toast } from './toast'
 
 export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => void }) {
     const cameraInput = useRef<HTMLInputElement>(null)
@@ -73,7 +74,9 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                 if (foods.length === 0) setError('No catalog foods matched that search.')
             }
         } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Catalog lookup failed.')
+            const message = reason instanceof Error ? reason.message : 'Catalog lookup failed.'
+            setError(message)
+            toast.error(message)
         } finally {
             setBusy(false)
         }
@@ -86,12 +89,15 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
         try {
             const created = await createFood(selected)
             onCreated(created)
+            toast.success(`${created.name} saved to your library.`)
             setOpened(false)
             setValue('')
             setResults([])
             setSelected(null)
         } catch {
-            setError('This food could not be saved. It may already exist in your library.')
+            const message = 'This food could not be saved. It may already exist in your library.'
+            setError(message)
+            toast.error(message)
         } finally {
             setBusy(false)
         }
@@ -120,6 +126,11 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                         Catalog queries are sent by your TrackIt server only when you search. Review
                         nutrition values before saving them to your private library.
                     </Text>
+                    <Alert color="blue" variant="light">
+                        Catalog nutrition is normalized to <strong>100 g</strong>. Serving size is
+                        stored separately as a convenient amount for logging and does not change the
+                        per-100-g nutrition values.
+                    </Alert>
                     <Group gap="xs">
                         <Button
                             variant={mode === 'barcode' ? 'light' : 'default'}
@@ -192,10 +203,14 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                                     <div>
                                         <Text fw={650}>{food.name}</Text>
                                         <Text size="sm" c="dimmed">
-                                            {food.brand || 'No brand'} Â·{' '}
+                                            {food.brand || 'No brand'} ·{' '}
                                             {food.per100g.calories === undefined
                                                 ? 'Calories unknown'
                                                 : `${Math.round(food.per100g.calories)} kcal per 100 g`}
+                                        </Text>
+                                        <Text size="xs" c="dimmed">
+                                            Default serving: {food.servingGrams} g (
+                                            {food.servingName})
                                         </Text>
                                     </div>
                                     <Badge

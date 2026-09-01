@@ -1,3 +1,31 @@
+.food-editor-modal .mantine-Modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100dvh - 32px);
+    overflow: hidden;
+}
+
+.food-editor-modal .mantine-Modal-header {
+    flex: 0 0 auto;
+}
+
+.food-editor-modal .mantine-Modal-body {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding-bottom: 0;
+}
+
+.food-editor-actions {
+    background: var(--mantine-color-body);
+    border-top: 1px solid var(--mantine-color-default-border);
+    bottom: 0;
+    padding-bottom: var(--mantine-spacing-xs);
+    padding-top: var(--mantine-spacing-sm);
+    position: sticky;
+    z-index: 2;
+}
+
 .food-log-context-row {
     align-items: center;
     display: flex;
@@ -224,9 +252,9 @@
 }
 
 .food-log-catalog-inline {
-    border-style: solid;
-    border-color: #cdded8;
     background: #fbfefd;
+    border-color: #cdded8;
+    border-style: solid;
 }
 
 .food-log-catalog-head {
@@ -277,26 +305,11 @@
     min-width: 0;
 }
 
-.food-log-toast {
-    align-items: center;
-    background: #223a35;
-    border-radius: 12px;
-    bottom: 26px;
-    box-shadow: 0 12px 30px rgb(22 44 38 / 24%);
-    color: #fff;
-    display: flex;
-    font-size: 12.5px;
-    font-weight: 650;
-    gap: 8px;
-    left: 50%;
-    max-width: min(420px, calc(100vw - 32px));
-    padding: 11px 14px;
-    position: fixed;
-    transform: translateX(-50%);
-    z-index: 500;
-}
-
 @media (max-width: 48em) {
+    .food-editor-modal .mantine-Modal-content {
+        max-height: 100dvh;
+    }
+
     .food-logger .mantine-Modal-content {
         border-radius: 18px 18px 0 0;
         margin-top: auto;
@@ -343,9 +356,5 @@
 
     .food-log-footer .mantine-Button-root {
         width: 100%;
-    }
-
-    .food-log-toast {
-        bottom: 82px;
     }
 }
