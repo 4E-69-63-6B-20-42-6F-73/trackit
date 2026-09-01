@@ -13,7 +13,6 @@ import {
     errorResponseSchema,
     metricSourceListResponseSchema,
     type MetricSourceSummary,
-    numericObservationSchema,
     type NumericObservationResponse,
     observationIdParamsSchema,
     observationInputSchema,
