@@ -74,10 +74,10 @@ const toFood = (record: FoodRecord): Food => ({
     version: record.version,
 })
 
-export async function searchFoods(query = '') {
+export async function searchFoods(query = '', signal?: AbortSignal) {
     const response = await fetch(
         `${environment.VITE_API_URL}/api/foods${query ? `?q=${encodeURIComponent(query)}` : ''}`,
-        { credentials: 'same-origin' },
+        { credentials: 'same-origin', signal },
     )
     if (!response.ok) throw new Error('Food search unavailable')
     const body = (await response.json()) as { data: FoodRecord[] }
@@ -186,8 +186,10 @@ const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> 
     nutritionQuality: record.nutritionQuality,
 })
 
-export async function lookupCatalogBarcode(barcode: string) {
-    const response = await authRequest(`/api/food-catalog/barcode/${encodeURIComponent(barcode)}`)
+export async function lookupCatalogBarcode(barcode: string, signal?: AbortSignal) {
+    const response = await authRequest(`/api/food-catalog/barcode/${encodeURIComponent(barcode)}`, {
+        signal,
+    })
     if (response.status === 404) return null
     if (response.status === 503)
         throw new Error('No external food catalog is configured on this server.')
@@ -195,8 +197,10 @@ export async function lookupCatalogBarcode(barcode: string) {
     return catalogToFood(((await response.json()) as { data: CatalogFoodRecord }).data)
 }
 
-export async function searchFoodCatalog(query: string) {
-    const response = await authRequest(`/api/food-catalog/search?q=${encodeURIComponent(query)}`)
+export async function searchFoodCatalog(query: string, signal?: AbortSignal) {
+    const response = await authRequest(`/api/food-catalog/search?q=${encodeURIComponent(query)}`, {
+        signal,
+    })
     if (response.status === 503)
         throw new Error('No external food catalog is configured on this server.')
     if (!response.ok) throw new Error('The food catalog is unavailable. Try again later.')
@@ -326,9 +330,10 @@ export async function deleteMeal(id: string): Promise<void> {
         throw new Error(`Meal delete failed (${response.status})`)
 }
 
-export async function listRecipes(): Promise<RecipeRecord[]> {
+export async function listRecipes(signal?: AbortSignal): Promise<RecipeRecord[]> {
     const response = await fetch(`${environment.VITE_API_URL}/api/recipes`, {
         credentials: 'same-origin',
+        signal,
     })
     if (!response.ok) throw new Error('Recipes unavailable')
     return ((await response.json()) as { data: RecipeRecord[] }).data
