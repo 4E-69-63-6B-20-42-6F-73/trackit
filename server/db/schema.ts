@@ -405,7 +405,7 @@ export const syncCursors = pgTable(
 
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),
-    definitionId: text('definition_id').notNull(),
+    definitionId: text('metric').notNull(),
     aggregation: text('aggregation').notNull().default('latest'),
     comparator: text('comparator').notNull().default('gte'),
     target: jsonb('target').$type<{ value: number } | { min: number; max: number }>().notNull(),
@@ -423,8 +423,8 @@ export const goals = pgTable('goals', {
 export const savedTrendViews = pgTable('saved_trend_views', {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
-    definitionId: text('definition_id').notNull(),
-    comparisonDefinitionId: text('comparison_definition_id'),
+    definitionId: text('metric').notNull(),
+    comparisonDefinitionId: text('comparison_metric'),
     rangeDays: integer('range_days').notNull(),
     granularity: text('granularity').notNull().default('daily'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

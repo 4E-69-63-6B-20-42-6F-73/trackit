@@ -682,52 +682,6 @@ export class DeviceService {
                         if (projection.endedAt)
                             affectedDates.add(dateKeyInTimezone(projection.endedAt, timezone))
                     }
-                    /* Legacy journal persistence retired; Journal is projected from the graph.
-                    const journal = projectHealthRecordToJournal(
-                        {
-                            ...input,
-                            id: stored.id,
-                            userId: stored.userId,
-                            startTime: stored.startTime,
-                            endTime: stored.endTime,
-                        },
-                        projections,
-                    )
-                    if (retiredTimelineWrite && journal)
-                        await transaction
-                            .insert(retiredTimelineTable)
-                            .values({
-                                id: stored.id,
-                                ...journal,
-                                sourceId: deviceId,
-                                sourceLabel: stored.dataOrigin
-                                    ? `Health Connect · ${stored.dataOrigin}`
-                                    : 'Health Connect',
-                                observedAt:
-                                    stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                        ? stored.endTime!
-                                        : stored.startTime,
-                                externalId: `${stored.provider}:${stored.externalId}`,
-                                entityType: 'health_record',
-                                entityId: stored.id,
-                            })
-                            .onConflictDoUpdate({
-                                target: retiredTimelineTable.id,
-                                set: {
-                                    ...journal,
-                                    sourceId: deviceId,
-                                    sourceLabel: stored.dataOrigin
-                                        ? `Health Connect · ${stored.dataOrigin}`
-                                        : 'Health Connect',
-                                    observedAt:
-                                        stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                            ? stored.endTime!
-                                            : stored.startTime,
-                                    deletedAt: null,
-                                    updatedAt: now,
-                                },
-                            })
-                    */
                 }
             }
 
