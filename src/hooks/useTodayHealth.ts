@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useMemo } from 'react'
 import { addCalendarDays, calendarDateKey, calendarDayRangeForKey } from '../domain/calendar'
 import type { GoalEvaluation } from '../domain/goals'
 import type { NumericObservation } from '../domain/health'
 import { metricDefinition } from '../domain/metricCatalog'
 import { compareTodayHeadlineMetrics, isTodayHeadlineMetric } from '../domain/todaySummary'
-import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
+import { dailyMetricQueryOptions, type DailyMetric } from '../lib/dailyMetricApi'
 import { listGoalEvaluations } from '../lib/goalApi'
-import { listObservations } from '../lib/observationApi'
+import { healthQueryKeys } from '../lib/healthQueries'
+import { observationQueryOptions } from '../lib/observationApi'
 import { useServerData } from './useServerData'
 
 const asObservation = (row: DailyMetric): NumericObservation => ({
@@ -28,67 +30,25 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         loading: sharedLoading,
         unavailable: sharedUnavailable,
     } = useServerData()
-    const [daily, setDaily] = useState<DailyMetric[]>([])
-    const [details, setDetails] = useState<NumericObservation[]>([])
-    const [goalEvaluations, setGoalEvaluations] = useState<Record<string, GoalEvaluation>>({})
-    const [loading, setLoading] = useState(true)
-    const [unavailable, setUnavailable] = useState(false)
     const timezone = preferences?.timezone ?? 'UTC'
     const selectedKey = calendarDateKey(selectedDate, timezone)
-    const load = useCallback(
-        (signal: AbortSignal) => {
-            const day = calendarDayRangeForKey(selectedKey, timezone)
-            const evaluationAt = new Date(Math.min(day.to.getTime() - 1, Date.now()))
-            queueMicrotask(() => {
-                if (!signal.aborted) setLoading(true)
-            })
-            return Promise.all([
-                listDailyMetrics(
-                    { from: addCalendarDays(selectedKey, -29), to: selectedKey },
-                    signal,
-                ),
-                listObservations(
-                    {
-                        from: day.from.toISOString(),
-                        to: day.to.toISOString(),
-                    },
-                    signal,
-                ),
-                listGoalEvaluations(signal, evaluationAt.toISOString()),
-            ])
-                .then(([metrics, observations, evaluations]) => {
-                    setDaily(metrics)
-                    setDetails(observations)
-                    setGoalEvaluations(evaluations)
-                    setUnavailable(false)
-                })
-                .catch(error => {
-                    if (error instanceof DOMException && error.name === 'AbortError') return
-                    setUnavailable(true)
-                })
-                .finally(() => {
-                    if (!signal.aborted) setLoading(false)
-                })
-        },
-        [selectedKey, timezone],
+    const day = calendarDayRangeForKey(selectedKey, timezone)
+    const evaluationAt = new Date(Math.min(day.to.getTime() - 1, Date.now())).toISOString()
+    const dailyQuery = useQuery(
+        dailyMetricQueryOptions({ from: addCalendarDays(selectedKey, -29), to: selectedKey }),
     )
-
-    useEffect(() => {
-        let controller = new AbortController()
-        void load(controller.signal)
-        const refresh = () => {
-            controller.abort()
-            controller = new AbortController()
-            void load(controller.signal)
-        }
-        window.addEventListener('trackit:observations-changed', refresh)
-        window.addEventListener('trackit:preferences-saved', refresh)
-        return () => {
-            controller.abort()
-            window.removeEventListener('trackit:observations-changed', refresh)
-            window.removeEventListener('trackit:preferences-saved', refresh)
-        }
-    }, [load])
+    const observationsQuery = useQuery(
+        observationQueryOptions({ from: day.from.toISOString(), to: day.to.toISOString() }),
+    )
+    const goalEvaluationsQuery = useQuery({
+        queryKey: [...healthQueryKeys.goalEvaluations, evaluationAt],
+        queryFn: ({ signal }) => listGoalEvaluations(signal, evaluationAt),
+    })
+    const daily = dailyQuery.data?.data ?? []
+    const details = observationsQuery.data?.data ?? []
+    const goalEvaluations = goalEvaluationsQuery.data ?? ({} as Record<string, GoalEvaluation>)
+    const loading = dailyQuery.isPending || observationsQuery.isPending || goalEvaluationsQuery.isPending
+    const unavailable = dailyQuery.isError || observationsQuery.isError || goalEvaluationsQuery.isError
 
     return useMemo(() => {
         const todayRows = daily.filter(row => row.date === selectedKey)
