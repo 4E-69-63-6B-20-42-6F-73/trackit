@@ -1,8 +1,7 @@
 import type { Page } from '@playwright/test'
-import { evaluateGoal, type Goal } from '../../src/domain/goals'
-import type { NumericObservation } from '../../src/domain/health'
+import { evaluateGoal, type Goal } from '@trackit/domain/goals'
+import type { NumericObservation } from '@trackit/domain/health'
 
-/** Authenticates through a server response; no application data is stored in the browser. */
 export async function useAuthenticatedServer(
     page: Page,
     options: {
@@ -178,7 +177,6 @@ export async function useAuthenticatedServer(
                       timezone: 'UTC',
                       locale: 'en',
                       units: 'metric',
-                      goals: {},
                       mcpEnabled: false,
                       experience: { onboardingComplete: true, onboardingStep: 5 },
                   })
