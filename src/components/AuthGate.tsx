@@ -47,8 +47,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
     const [password, setPassword] = useState('')
     const [bootstrapSecret, setBootstrapSecret] = useState('')
     const [recoveryCode, setRecoveryCode] = useState('')
-    const [error, setError] = useState('')
-    const [recoveryCodes, setRecoveryCodes] = useState<string[]>([])
     const state: AuthState = overrideState
         ? overrideState
         : statusQuery.isPending
@@ -86,14 +84,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 ? ((await response.json()) as { recoveryCodes: string[] })
                 : null
         },
-        onMutate: () => setError(''),
         onSuccess: result => {
-            if (result) setRecoveryCodes(result.recoveryCodes)
-            else setOverrideState('authenticated')
+            if (!result) setOverrideState('authenticated')
             setPassword('')
         },
-        onError: mutationError =>
-            setError(mutationError instanceof Error ? mutationError.message : 'Sign-in failed.'),
     })
 
     const csrfToken = () =>
@@ -132,10 +126,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             )
             if (!verification.ok) throw new Error('verification_failed')
         },
-        onMutate: () => setError(''),
         onSuccess: () => setOverrideState('authenticated'),
-        onError: () =>
-            setError('Passkey registration was cancelled or could not be verified.'),
     })
 
     const loginWithPasskeyMutation = useMutation({
@@ -161,9 +152,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
             )
             if (!verification.ok) throw new Error('verification_failed')
         },
-        onMutate: () => setError(''),
         onSuccess: () => setOverrideState('authenticated'),
-        onError: () => setError('Passkey sign-in was cancelled or could not be verified.'),
     })
 
     const recoveryMutation = useMutation({
@@ -174,20 +163,35 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 headers: { 'content-type': 'application/json' },
                 body: JSON.stringify({ code: recoveryCode.trim() }),
             })
-            if (!response.ok) throw new Error('That recovery code is invalid or has already been used.')
+            if (!response.ok)
+                throw new Error('That recovery code is invalid or has already been used.')
         },
-        onMutate: () => setError(''),
         onSuccess: () => {
             setRecoveryCode('')
             setOverrideState('authenticated')
         },
-        onError: mutationError =>
-            setError(
-                mutationError instanceof Error
-                    ? mutationError.message
-                    : 'That recovery code could not be used.',
-            ),
     })
+
+    const recoveryCodes = submitMutation.data?.recoveryCodes ?? []
+    const submitError = submitMutation.isError
+        ? submitMutation.error instanceof Error
+            ? submitMutation.error.message
+            : 'Sign-in failed.'
+        : ''
+    const loginError =
+        loginWithPasskeyMutation.submittedAt > submitMutation.submittedAt
+            ? loginWithPasskeyMutation.isError
+                ? 'Passkey sign-in was cancelled or could not be verified.'
+                : ''
+            : submitError
+    const registrationError = registerPasskeyMutation.isError
+        ? 'Passkey registration was cancelled or could not be verified.'
+        : ''
+    const recoveryError = recoveryMutation.isError
+        ? recoveryMutation.error instanceof Error
+            ? recoveryMutation.error.message
+            : 'That recovery code could not be used.'
+        : ''
 
     if (state === 'authenticated') return children
     if (state === 'loading') {
@@ -214,7 +218,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
                             <code>docker compose up --build</code>, or run{' '}
                             <code>npm run dev:server</code> beside Vite.
                         </Text>
-                        <Button loading={statusQuery.isFetching} onClick={() => void statusQuery.refetch()}>
+                        <Button
+                            loading={statusQuery.isFetching}
+                            onClick={() => void statusQuery.refetch()}
+                        >
                             Try again
                         </Button>
                     </Stack>
@@ -248,7 +255,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                                 onChange={event => setRecoveryCode(event.currentTarget.value)}
                                 autoComplete="off"
                             />
-                            {error && <Alert color="red">{error}</Alert>}
+                            {recoveryError && <Alert color="red">{recoveryError}</Alert>}
                             <Button
                                 loading={recoveryMutation.isPending}
                                 disabled={!recoveryCode.trim()}
@@ -269,14 +276,17 @@ export function AuthGate({ children }: { children: ReactNode }) {
                             <Paper bg="gray.0" p="md">
                                 <code>{recoveryCodes.join('\n')}</code>
                             </Paper>
-                            {error && <Alert color="red">{error}</Alert>}
+                            {registrationError && <Alert color="red">{registrationError}</Alert>}
                             <Button
                                 loading={registerPasskeyMutation.isPending}
                                 onClick={() => registerPasskeyMutation.mutate()}
                             >
                                 Create a passkey
                             </Button>
-                            <Button variant="subtle" onClick={() => setOverrideState('authenticated')}>
+                            <Button
+                                variant="subtle"
+                                onClick={() => setOverrideState('authenticated')}
+                            >
                                 Skip for now
                             </Button>
                         </>
@@ -315,7 +325,11 @@ export function AuthGate({ children }: { children: ReactNode }) {
                                     autoComplete="off"
                                 />
                             )}
-                            {error && <Alert color="red">{error}</Alert>}
+                            {(state === 'setup' ? submitError : loginError) && (
+                                <Alert color="red">
+                                    {state === 'setup' ? submitError : loginError}
+                                </Alert>
+                            )}
                             <Button
                                 loading={submitMutation.isPending}
                                 disabled={state === 'setup' && !bootstrapSecret}
@@ -324,7 +338,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
                                 {state === 'setup' ? 'Create owner account' : 'Sign in'}
                             </Button>
                             {state === 'login' && (
-                                <Button variant="subtle" onClick={() => setOverrideState('recovery')}>
+                                <Button
+                                    variant="subtle"
+                                    onClick={() => setOverrideState('recovery')}
+                                >
                                     Use a recovery code
                                 </Button>
                             )}
