@@ -3,10 +3,9 @@ import { Alert, Badge, Button, Group, Modal, Stack, Text, TextInput } from '@man
 import { IconBarcode, IconCamera, IconSearch } from '@tabler/icons-react'
 import type { Food } from '../domain/nutrition'
 import { createFood, lookupCatalogBarcode, searchFoodCatalog } from '../lib/nutritionApi'
-import { useToast } from './toastContext'
+import { toast } from './toast'
 
 export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => void }) {
-    const toast = useToast()
     const cameraInput = useRef<HTMLInputElement>(null)
     const [opened, setOpened] = useState(false)
     const [mode, setMode] = useState<'barcode' | 'search'>('barcode')
