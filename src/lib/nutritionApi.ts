@@ -1,5 +1,5 @@
 import { environment } from '../app/env'
-import type { Food, Nutrients } from '../domain/nutrition'
+import type { Food, FoodServingOption, Nutrients } from '../domain/nutrition'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 
@@ -21,6 +21,7 @@ type FoodRecord = {
     potassiumPer100g: number | null
     servingName: string
     servingGrams: number
+    servingOptions?: FoodServingOption[] | null
     favorite: boolean
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
     version: number
@@ -69,6 +70,7 @@ const toFood = (record: FoodRecord): Food => ({
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
+    servingOptions: record.servingOptions ?? [],
     favorite: record.favorite,
     nutritionQuality: record.nutritionQuality,
     version: record.version,
@@ -96,6 +98,7 @@ export async function createFood(food: Omit<Food, 'id'>) {
             catalogId: food.catalogId,
             servingName: food.servingName,
             servingGrams: food.servingGrams,
+            servingOptions: food.servingOptions ?? [],
             favorite: food.favorite,
             nutritionQuality: food.nutritionQuality ?? 'complete',
             caloriesPer100g: food.per100g.calories,
@@ -143,6 +146,7 @@ export async function importFoods(
                 catalogId: food.catalogId,
                 servingName: food.servingName,
                 servingGrams: food.servingGrams,
+                servingOptions: food.servingOptions ?? [],
                 favorite: food.favorite,
                 nutritionQuality: food.nutritionQuality ?? 'complete',
                 caloriesPer100g: food.per100g.calories,
@@ -182,6 +186,7 @@ const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> 
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
+    servingOptions: record.servingOptions ?? [],
     favorite: false,
     nutritionQuality: record.nutritionQuality,
 })
@@ -217,6 +222,7 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
             catalogId: changes.catalogId,
             servingName: changes.servingName,
             servingGrams: changes.servingGrams,
+            servingOptions: changes.servingOptions ?? [],
             favorite: changes.favorite,
             nutritionQuality: changes.nutritionQuality ?? 'complete',
             caloriesPer100g: changes.per100g.calories,
