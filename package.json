@@ -3,7 +3,9 @@
     "private": true,
     "version": "0.1.0",
     "type": "module",
-    "workspaces": ["packages/*"],
+    "workspaces": [
+        "packages/*"
+    ],
     "scripts": {
         "start": "docker compose up --build",
         "dev": "npm run dev:web",

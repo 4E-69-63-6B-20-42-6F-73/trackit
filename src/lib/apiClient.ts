@@ -6,7 +6,9 @@ import { csrfToken } from './authApi'
 
 const authenticatedFetch: typeof fetch = (input, init) => {
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
-    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    const headers = new Headers(
+        init?.headers ?? (input instanceof Request ? input.headers : undefined),
+    )
     if (!['GET', 'HEAD'].includes(method)) {
         headers.set('x-csrf-token', csrfToken() ?? '')
     }

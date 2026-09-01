@@ -95,8 +95,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             bounded.to ??= new Date().toISOString()
             if (
                 new Date(bounded.to).getTime() <= new Date(bounded.from).getTime() ||
-                new Date(bounded.to).getTime() - new Date(bounded.from).getTime() >
-                    366 * 86_400_000
+                new Date(bounded.to).getTime() - new Date(bounded.from).getTime() > 366 * 86_400_000
             )
                 return badRequest(request, reply, { error: 'range_too_large' })
             return {
@@ -142,10 +141,11 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             if (days < 0 || days > 365)
                 return badRequest(request, reply, { error: 'range_too_large' })
             return {
-                data: (await data.listDailyMetrics?.({
-                    from: request.query.from,
-                    to: request.query.to,
-                })) ?? [],
+                data:
+                    (await data.listDailyMetrics?.({
+                        from: request.query.from,
+                        to: request.query.to,
+                    })) ?? [],
             }
         },
     )

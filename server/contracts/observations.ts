@@ -139,7 +139,8 @@ export const observationOpenApiPaths = {
                 'Requires inclusive owner-local from/to dates with a maximum 366-day window',
             responses: {
                 '200': {
-                    description: 'Versioned effective daily metric projections in the owner timezone',
+                    description:
+                        'Versioned effective daily metric projections in the owner timezone',
                 },
                 '400': { description: 'Missing, reversed, or oversized date range' },
             },

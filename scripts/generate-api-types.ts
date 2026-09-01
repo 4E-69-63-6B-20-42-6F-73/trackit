@@ -121,7 +121,10 @@ const parametersType = (
     operation: JsonObject,
     document: JsonObject,
 ): string => {
-    const entries = [...(Array.isArray(pathItem.parameters) ? pathItem.parameters : []), ...(Array.isArray(operation.parameters) ? operation.parameters : [])]
+    const entries = [
+        ...(Array.isArray(pathItem.parameters) ? pathItem.parameters : []),
+        ...(Array.isArray(operation.parameters) ? operation.parameters : []),
+    ]
     const parameters = new Map<string, JsonObject>()
     for (const entry of entries) {
         const parameter = resolveObject(entry, document)
@@ -183,11 +186,7 @@ const responsesType = (operation: JsonObject, document: JsonObject): string => {
     return `{ ${entries.join('; ')} }`
 }
 
-const operationType = (
-    pathItem: JsonObject,
-    operation: JsonObject,
-    document: JsonObject,
-): string =>
+const operationType = (pathItem: JsonObject, operation: JsonObject, document: JsonObject): string =>
     `{ parameters: ${parametersType(pathItem, operation, document)}; ${requestBodyType(operation, document)}; responses: ${responsesType(operation, document)} }`
 
 const renderPaths = (document: JsonObject): string => {
@@ -198,7 +197,8 @@ const renderPaths = (document: JsonObject): string => {
         if (!pathItem) throw new Error(`OpenAPI path is missing: ${path}`)
         const operations = methods.map(method => {
             const operation = asObject(pathItem[method])
-            if (!operation) throw new Error(`OpenAPI operation is missing: ${method.toUpperCase()} ${path}`)
+            if (!operation)
+                throw new Error(`OpenAPI operation is missing: ${method.toUpperCase()} ${path}`)
             return `${method}: ${operationType(pathItem, operation, document)}`
         })
         return `${propertyKey(path)}: { ${operations.join('; ')} }`

@@ -2,202 +2,173 @@ export interface paths {
     '/api/observations': {
         get: {
             parameters: {
-                query?: {
-                    from?: string
-                    to?: string
-                    definitionIds?: string
-                }
+                query?: { definitionIds?: string; from?: string; to?: string }
                 header?: never
                 path?: never
                 cookie?: never
             }
             requestBody?: never
             responses: {
-                200: {
+                '200': {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
-                            data: NumericObservation[]
+                            data: Array<{
+                                canonicalUnit: string
+                                canonicalValue: number
+                                connector?: string | null
+                                definitionId: string
+                                endedAt?: string | null
+                                excluded: boolean
+                                externalId?: string | null
+                                id: string
+                                metadata?: { [key: string]: unknown }
+                                observedAt: string
+                                originalUnit: string
+                                originalValue: number
+                                provider?: string | null
+                                sourceId?: string | null
+                                version: number
+                            }>
                         }
                     }
                 }
-                400: ErrorResponse
+                '400': {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string } }
+                }
             }
         }
         post: {
-            parameters: EmptyParameters
+            parameters: { query?: never; header?: never; path?: never; cookie?: never }
             requestBody: {
                 content: {
-                    'application/json': ObservationInput
+                    'application/json': {
+                        attributes?: { [key: string]: unknown }
+                        booleanValue?: boolean
+                        category?: 'Meals' | 'Activity' | 'Sleep' | 'Measurements' | 'Check-ins'
+                        categoryValue?: string
+                        definitionId: string
+                        detail?: string
+                        id?: string
+                        observedAt: string
+                        source?: string
+                        textValue?: string
+                        title?: string
+                        unit?: string
+                        value?: number
+                        valueType?: 'number' | 'text' | 'boolean' | 'category' | 'event'
+                    }
                 }
             }
             responses: {
-                201: ObservationMutationResponse
-                400: ErrorResponse
+                '201': {
+                    headers: { [name: string]: unknown }
+                    content: {
+                        'application/json': {
+                            data: { excluded: boolean; id: string; version: number }
+                        }
+                    }
+                }
+                '400': {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string } }
+                }
             }
         }
     }
     '/api/observations/{id}': {
         delete: {
-            parameters: PathIdParameters
+            parameters: { query?: never; header?: never; path: { id: string }; cookie?: never }
             requestBody?: never
             responses: {
-                204: EmptyResponse
-                404: EmptyResponse
+                '204': { headers: { [name: string]: unknown }; content?: never }
+                '404': { headers: { [name: string]: unknown }; content?: never }
             }
         }
         patch: {
-            parameters: PathIdParameters
+            parameters: { query?: never; header?: never; path: { id: string }; cookie?: never }
             requestBody: {
                 content: {
-                    'application/json': ObservationUpdate
+                    'application/json': {
+                        detail?: string
+                        excluded?: boolean
+                        observedAt?: string
+                        textValue?: string
+                        title?: string
+                        version: number
+                    }
                 }
             }
             responses: {
-                200: ObservationMutationResponse
-                400: ErrorResponse
-                409: ErrorResponse
+                '200': {
+                    headers: { [name: string]: unknown }
+                    content: {
+                        'application/json': {
+                            data: { excluded: boolean; id: string; version: number }
+                        }
+                    }
+                }
+                '400': {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string } }
+                }
+                '409': {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string } }
+                }
             }
         }
     }
     '/api/daily-metrics': {
         get: {
             parameters: {
-                query: {
-                    from: string
-                    to: string
-                }
+                query: { from: string; to: string }
                 header?: never
                 path?: never
                 cookie?: never
             }
             requestBody?: never
             responses: {
-                200: {
+                '200': {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
-                            data: DailyMetric[]
+                            data: Array<{
+                                date: string
+                                definitionId: string
+                                derivationVersion: number
+                                unit: string
+                                value: number
+                            }>
                         }
                     }
                 }
-                400: ErrorResponse
+                '400': {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string } }
+                }
             }
         }
     }
     '/api/metric-sources': {
         get: {
-            parameters: EmptyParameters
+            parameters: { query?: never; header?: never; path?: never; cookie?: never }
             requestBody?: never
             responses: {
-                200: {
+                '200': {
                     headers: { [name: string]: unknown }
                     content: {
                         'application/json': {
-                            data: MetricSourceSummary[]
+                            data: Array<{
+                                connector: string | null
+                                definitionId: string
+                                provider: string
+                            }>
                         }
                     }
                 }
             }
         }
     }
-}
-
-type EmptyParameters = {
-    query?: never
-    header?: never
-    path?: never
-    cookie?: never
-}
-
-type PathIdParameters = {
-    query?: never
-    header?: never
-    path: { id: string }
-    cookie?: never
-}
-
-type EmptyResponse = {
-    headers: { [name: string]: unknown }
-    content?: never
-}
-
-type ErrorResponse = {
-    headers: { [name: string]: unknown }
-    content: {
-        'application/json': { error: string }
-    }
-}
-
-type ObservationMutationResponse = {
-    headers: { [name: string]: unknown }
-    content: {
-        'application/json': {
-            data: ObservationMutationResult
-        }
-    }
-}
-
-type ObservationMutationResult = {
-    id: string
-    version: number
-    excluded: boolean
-}
-
-type NumericObservation = {
-    id: string
-    definitionId: string
-    canonicalValue: number
-    canonicalUnit: string
-    originalValue: number
-    originalUnit: string
-    observedAt: string
-    endedAt?: string | null
-    sourceId?: string | null
-    externalId?: string | null
-    provider?: string | null
-    connector?: string | null
-    metadata?: Record<string, unknown>
-    excluded: boolean
-    version: number
-}
-
-type ObservationInput = {
-    id?: string
-    definitionId: string
-    valueType?: 'number' | 'text' | 'boolean' | 'category' | 'event'
-    value?: number
-    unit?: string
-    textValue?: string
-    detail?: string
-    booleanValue?: boolean
-    categoryValue?: string
-    title?: string
-    category?: 'Meals' | 'Activity' | 'Sleep' | 'Measurements' | 'Check-ins'
-    attributes?: Record<string, unknown>
-    observedAt: string
-    source?: string
-}
-
-type ObservationUpdate = {
-    excluded?: boolean
-    title?: string
-    textValue?: string
-    detail?: string
-    observedAt?: string
-    version: number
-}
-
-type DailyMetric = {
-    date: string
-    definitionId: string
-    value: number
-    unit: string
-    derivationVersion: number
-}
-
-type MetricSourceSummary = {
-    definitionId: string
-    provider: string
-    connector: string | null
 }

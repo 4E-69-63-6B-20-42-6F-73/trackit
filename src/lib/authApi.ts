@@ -26,9 +26,7 @@ export const authRequest = async (path: string, init?: RequestInit) => {
         ...init,
         headers: {
             ...(init?.headers ?? {}),
-            ...(!['GET', 'HEAD'].includes(method)
-                ? { 'x-csrf-token': csrfToken() ?? '' }
-                : {}),
+            ...(!['GET', 'HEAD'].includes(method) ? { 'x-csrf-token': csrfToken() ?? '' } : {}),
         },
     })
     if (response.ok && affectsHealthQueries(path, method)) await invalidateHealthQueries()

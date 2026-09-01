@@ -9,8 +9,6 @@ export const healthQueryKeys = {
 
 export async function invalidateHealthQueries() {
     await Promise.all(
-        Object.values(healthQueryKeys).map(queryKey =>
-            queryClient.invalidateQueries({ queryKey }),
-        ),
+        Object.values(healthQueryKeys).map(queryKey => queryClient.invalidateQueries({ queryKey })),
     )
 }

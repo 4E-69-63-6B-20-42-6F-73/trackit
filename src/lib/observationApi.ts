@@ -11,11 +11,7 @@ export type CreateObservationInput =
 export type UpdateObservationInput =
     paths['/api/observations/{id}']['patch']['requestBody']['content']['application/json']
 
-const observationParams = (range: {
-    from?: string
-    to?: string
-    definitionIds?: string[]
-}) => ({
+const observationParams = (range: { from?: string; to?: string; definitionIds?: string[] }) => ({
     params: {
         query: {
             from: range.from,
