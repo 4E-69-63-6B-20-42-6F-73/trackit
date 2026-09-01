@@ -15,6 +15,11 @@ export const serverQueryKeys = {
     planSchedules: ['server', 'plan-schedules'] as const,
     trendViews: ['server', 'trend-views'] as const,
     authStatus: ['server', 'auth-status'] as const,
+    devices: ['server', 'devices'] as const,
+    mcpStatus: ['server', 'mcp-status'] as const,
+    mcpAccessEvents: ['server', 'mcp-access-events'] as const,
+    securitySessions: ['server', 'security-sessions'] as const,
+    securityAudit: ['server', 'security-audit'] as const,
 }
 
 export async function invalidateJournalQueries() {
