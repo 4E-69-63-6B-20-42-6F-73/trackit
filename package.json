@@ -6,8 +6,10 @@
     "workspaces": ["packages/*"],
     "scripts": {
         "start": "docker compose up --build",
-        "dev": "npm run build:domain && npm run dev:web",
+        "dev": "npm run dev:web",
+        "predev:web": "npm run build:domain",
         "dev:web": "vite",
+        "predev:api": "npm run build:domain",
         "dev:api": "tsx -env-file=.env watch server/index.ts",
         "dev:db": "docker compose -f compose.yaml -f compose.dev.yaml up -d db",
         "prestart:server": "npm run build:domain",
@@ -17,7 +19,7 @@
         "api:types": "tsx scripts/generate-api-types.ts",
         "preapi:types:check": "npm run build:domain",
         "api:types:check": "tsx scripts/generate-api-types.ts --check",
-        "prebuild": "npm run build:domain && npm run api:types:check",
+        "prebuild": "npm run api:types",
         "build": "tsc -b && tsc -p tsconfig.server.json && tsc -p tsconfig.runtime.json && vite build && node scripts/check-bundle.mjs",
         "db:generate": "drizzle-kit generate",
         "db:check": "drizzle-kit check",
@@ -36,7 +38,7 @@
         "build:android": "cd android && gradlew.bat assembleDebug",
         "security:secrets": "node scripts/scan-secrets.mjs",
         "security:deps": "npm audit --omit=dev --audit-level=high",
-        "check": "npm run format:check && npm run lint && npm run db:check && npm run security:secrets && npm run test && npm run build",
+        "check": "npm run format:check && npm run lint && npm run db:check && npm run security:secrets && npm run api:types:check && npm run test && npm run build",
         "preview": "vite preview"
     },
     "dependencies": {
