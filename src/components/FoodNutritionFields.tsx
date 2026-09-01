@@ -1,7 +1,7 @@
 import { Button, Collapse, Group, NumberInput, SimpleGrid, Stack, Text } from '@mantine/core'
 import { IconChevronDown, IconChevronUp } from '@tabler/icons-react'
 import { useId, useState, type ReactNode } from 'react'
-import type { Nutrients } from '../domain/nutrition'
+import type { Nutrients } from '@trackit/domain/nutrition'
 
 const labels: Record<keyof Nutrients, string> = {
     calories: 'Calories',

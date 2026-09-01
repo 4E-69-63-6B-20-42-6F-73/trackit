@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { NumericObservation } from './health'
+import type { NumericObservation } from '@trackit/domain/health'
 import {
     effectiveMetricSeries,
     effectiveMetricSeriesInTimezone,
     observationSource,
     removeExactDuplicates,
-} from './effectiveMetrics'
+} from '@trackit/domain/effectiveMetrics'
 
 const record = (
     overrides: Partial<NumericObservation> &

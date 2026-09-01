@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { metricCatalog } from './metricCatalog'
+import { metricCatalog } from '@trackit/domain/metricCatalog'
 import {
     convertMetricValue,
     detectUnitPreset,
     formatMetric,
     normalizedMetricPreferences,
     preferencesForPreset,
-} from './metrics'
+} from '@trackit/domain/metrics'
 
 describe('metric registry', () => {
     it('has unique IDs and valid units', () => {

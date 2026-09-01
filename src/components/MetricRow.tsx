@@ -1,6 +1,6 @@
 import { IconChevronRight } from '@tabler/icons-react'
-import type { MetricDefinition } from '../domain/metricCatalog'
-import { unitPresentation } from '../domain/metrics'
+import type { MetricDefinition } from '@trackit/domain/metricCatalog'
+import { unitPresentation } from '@trackit/domain/metrics'
 
 export function MetricRow({
     metric,

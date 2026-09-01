@@ -37,8 +37,8 @@ import {
     calendarLocalDateTimeValue,
     calendarTodayKey,
     formatCalendarDate,
-} from '../domain/calendar'
-import { nutrientsFor, roundedNutrients, type Nutrients } from '../domain/nutrition'
+} from '@trackit/domain/calendar'
+import { nutrientsFor, roundedNutrients, type Nutrients } from '@trackit/domain/nutrition'
 import {
     addPlanDays,
     formatPlanAmount,
@@ -49,7 +49,7 @@ import {
     type PlanReferenceType,
     weekDateKeys,
     weekStartKey,
-} from '../domain/planning'
+} from '@trackit/domain/planning'
 import { useServerData } from '../hooks/useServerData'
 import { listFoodCategories } from '../lib/foodCategoryApi'
 import { listRecipes, searchFoods } from '../lib/nutritionApi'

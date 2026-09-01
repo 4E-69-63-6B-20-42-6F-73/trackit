@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { formatMetricValue, friendlySourceName } from './formatting'
+import { formatMetricValue, friendlySourceName } from '@trackit/domain/formatting'
 
 describe('shared display formatting', () => {
     it('formats sleep duration without exposing decimal hours', () => {

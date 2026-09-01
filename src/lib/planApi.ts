@@ -1,5 +1,5 @@
 import { environment } from '../app/env'
-import type { MealPlanItem, MealType, PlanReferenceType } from '../domain/planning'
+import type { MealPlanItem, MealType, PlanReferenceType } from '@trackit/domain/planning'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 

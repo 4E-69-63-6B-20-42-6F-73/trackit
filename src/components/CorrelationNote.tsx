@@ -1,6 +1,6 @@
 import { Alert, Text } from '@mantine/core'
-import { dailySeries, pearsonCorrelation, type NumericObservation } from '../domain/health'
-import { metricDefinition } from '../domain/metricCatalog'
+import { dailySeries, pearsonCorrelation, type NumericObservation } from '@trackit/domain/health'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
 
 const label = (definitionId: string) =>
     metricDefinition(definitionId)?.name ??

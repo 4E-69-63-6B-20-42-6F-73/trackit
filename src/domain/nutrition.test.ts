@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { nutrientsFor, nutrientsPerServing, totalNutrients, type Food } from './nutrition'
+import {
+    nutrientsFor,
+    nutrientsPerServing,
+    totalNutrients,
+    type Food,
+} from '@trackit/domain/nutrition'
 
 const oats: Food = {
     id: 'oats',

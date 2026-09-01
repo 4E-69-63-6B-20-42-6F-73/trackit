@@ -1,5 +1,5 @@
 import { Text } from '@mantine/core'
-import type { Page } from '../domain/types'
+import type { Page } from '@trackit/domain/types'
 
 export function Header({ page }: { page: Page }) {
     return (

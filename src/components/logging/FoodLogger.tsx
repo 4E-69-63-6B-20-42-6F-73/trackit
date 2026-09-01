@@ -26,8 +26,13 @@ import {
     calendarLocalDateTimeValue,
     calendarTodayKey,
     formatCalendarDate,
-} from '../../domain/calendar'
-import { nutrientsFor, roundedNutrients, type Food, type Nutrients } from '../../domain/nutrition'
+} from '@trackit/domain/calendar'
+import {
+    nutrientsFor,
+    roundedNutrients,
+    type Food,
+    type Nutrients,
+} from '@trackit/domain/nutrition'
 import { useServerData } from '../../hooks/useServerData'
 import {
     createFood,

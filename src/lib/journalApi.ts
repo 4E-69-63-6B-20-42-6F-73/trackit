@@ -1,6 +1,6 @@
 import { environment } from '../app/env'
-import type { JournalDetailView, JournalEvent } from '../domain/types'
-import { friendlySourceName } from '../domain/formatting'
+import type { JournalDetailView, JournalEvent } from '@trackit/domain/types'
+import { friendlySourceName } from '@trackit/domain/formatting'
 import { sharedJsonRequest } from './sharedRequest'
 
 type ApiJournalEntry = {

@@ -1,4 +1,4 @@
-import type { FoodServingOption } from './nutrition'
+import type { FoodServingOption } from '@trackit/domain/nutrition'
 
 export type ServingOptionDraft = {
     id: string

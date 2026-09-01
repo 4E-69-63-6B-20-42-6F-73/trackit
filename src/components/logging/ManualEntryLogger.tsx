@@ -19,8 +19,8 @@ import {
     calendarLocalDateTimeValue,
     calendarTodayKey,
     formatCalendarDate,
-} from '../../domain/calendar'
-import { convertMetricValue, displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
+} from '@trackit/domain/calendar'
+import { convertMetricValue, displayUnitFor, toCanonicalMetricValue } from '@trackit/domain/metrics'
 import { useServerData } from '../../hooks/useServerData'
 import type { CreateObservationInput } from '../../lib/observationApi'
 

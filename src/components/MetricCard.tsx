@@ -2,8 +2,8 @@ import { Badge, Button, Group, Modal, Stack, Text } from '@mantine/core'
 import { IconArrowUpRight } from '@tabler/icons-react'
 import type { IconMoon } from '@tabler/icons-react'
 import { useState } from 'react'
-import type { NumericObservation } from '../domain/health'
-import { friendlySourceName } from '../domain/formatting'
+import type { NumericObservation } from '@trackit/domain/health'
+import { friendlySourceName } from '@trackit/domain/formatting'
 
 export function MetricCard({
     icon: Icon,

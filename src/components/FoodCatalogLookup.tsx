@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { Alert, Badge, Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core'
 import { useMutation } from '@tanstack/react-query'
 import { IconBarcode, IconCamera, IconSearch } from '@tabler/icons-react'
-import type { Food } from '../domain/nutrition'
+import type { Food } from '@trackit/domain/nutrition'
 import { createFood, lookupCatalogBarcode, searchFoodCatalog } from '../lib/nutritionApi'
 import { toast } from './toast'
 

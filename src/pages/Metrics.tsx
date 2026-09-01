@@ -18,8 +18,11 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { MetricRow } from '../components/MetricRow'
-import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
-import { metricCatalog, type MetricDefinition } from '../domain/metricCatalog'
+import {
+    metricSourceDisplayName,
+    type MetricSourceDescriptor,
+} from '@trackit/domain/effectiveMetrics'
+import { metricCatalog, type MetricDefinition } from '@trackit/domain/metricCatalog'
 import {
     detectUnitPreset,
     formatMetricDisplayValue,
@@ -28,7 +31,7 @@ import {
     unitPresentation,
     type DeduplicationPolicy,
     type UnitPreset,
-} from '../domain/metrics'
+} from '@trackit/domain/metrics'
 import { useServerData } from '../hooks/useServerData'
 import { healthQueryKeys } from '../lib/healthQueries'
 import { listMetricSources } from '../lib/observationApi'

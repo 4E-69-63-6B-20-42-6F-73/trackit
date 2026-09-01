@@ -1,4 +1,4 @@
-import type { JournalEvent } from '../domain/types'
+import type { JournalEvent } from '@trackit/domain/types'
 import type { MealRecord } from '../lib/nutritionApi'
 import { FoodLogger } from './logging/FoodLogger'
 import { toast } from './toast'

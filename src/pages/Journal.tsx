@@ -36,8 +36,8 @@ import {
     calendarDayRangeForKey,
     calendarTodayKey,
     formatCalendarDate,
-} from '../domain/calendar'
-import type { Category, JournalEvent } from '../domain/types'
+} from '@trackit/domain/calendar'
+import type { Category, JournalEvent } from '@trackit/domain/types'
 import { useJournal } from '../hooks/useJournal'
 import { useServerData } from '../hooks/useServerData'
 import { getJournalEntry } from '../lib/journalApi'

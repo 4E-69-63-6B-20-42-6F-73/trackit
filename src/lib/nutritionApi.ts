@@ -1,6 +1,6 @@
 import { environment } from '../app/env'
-import type { Food, FoodServingOption, Nutrients } from '../domain/nutrition'
-import type { MealSourceItem } from '../domain/types'
+import type { Food, FoodServingOption, Nutrients } from '@trackit/domain/nutrition'
+import type { MealSourceItem } from '@trackit/domain/types'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 

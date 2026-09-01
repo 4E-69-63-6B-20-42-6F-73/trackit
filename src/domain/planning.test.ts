@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { planStatus, weekDateKeys, weekStartKey, type MealPlanItem } from './planning'
+import { planStatus, weekDateKeys, weekStartKey, type MealPlanItem } from '@trackit/domain/planning'
 
 const item = (changes: Partial<MealPlanItem> = {}): MealPlanItem => ({
     id: 'plan-1',

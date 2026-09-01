@@ -2,7 +2,7 @@ import { useMemo } from 'react'
 import { Button, Group, Text } from '@mantine/core'
 import { useMutation } from '@tanstack/react-query'
 import { IconCalendarStats } from '@tabler/icons-react'
-import type { JournalEvent } from '../domain/types'
+import type { JournalEvent } from '@trackit/domain/types'
 import { updatePreferences } from '../lib/preferencesApi'
 import { useServerData } from '../hooks/useServerData'
 

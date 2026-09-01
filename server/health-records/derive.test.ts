@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { deriveRecord } from './derive.js'
 import type { CanonicalHealthRecord } from './types.js'
-import { metricDefinition } from '../../src/domain/metricCatalog.js'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
 
 const record = (recordType: string, payload: Record<string, unknown>): CanonicalHealthRecord => ({
     id: 'record',

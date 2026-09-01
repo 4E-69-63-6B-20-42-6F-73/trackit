@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JournalEvent } from '../domain/types'
+import type { JournalEvent } from '@trackit/domain/types'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { getJournalEntry, listJournal } from '../lib/journalApi'
 import { createTestQueryClient } from '../test/queryClient'
