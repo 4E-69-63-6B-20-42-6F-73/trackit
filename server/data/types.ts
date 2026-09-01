@@ -49,28 +49,49 @@ const mealServingSchema = z.object({
     unit: z.enum(['g', 'serving']),
 })
 
-export const mealInputSchema = z.object({
-    id: z.string().uuid().optional(),
-    name: z.string().trim().min(1).max(160),
-    mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
-    eatenAt: z.string().datetime(),
-    nutrients: z.record(z.string(), z.number().finite()).default({}),
-    nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
-    favorite: z.boolean().default(false),
-    foodId: z.string().uuid().optional(),
-    serving: mealServingSchema.optional(),
-})
+export const mealInputSchema = z
+    .object({
+        id: z.string().uuid().optional(),
+        name: z.string().trim().min(1).max(160),
+        mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']),
+        eatenAt: z.string().datetime(),
+        nutrients: z.record(z.string(), z.number().finite()).default({}),
+        nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).default('complete'),
+        favorite: z.boolean().default(false),
+        foodId: z.string().uuid().optional(),
+        recipeId: z.string().uuid().optional(),
+        serving: mealServingSchema.optional(),
+    })
+    .superRefine((input, context) => {
+        if (input.foodId && input.recipeId)
+            context.addIssue({
+                code: 'custom',
+                path: ['recipeId'],
+                message: 'A meal can reference either a food or a recipe, not both',
+            })
+    })
 
-export const mealUpdateSchema = z.object({
-    name: z.string().trim().min(1).max(160).optional(),
-    mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']).optional(),
-    eatenAt: z.string().datetime().optional(),
-    nutrients: z.record(z.string(), z.number().finite()).optional(),
-    nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).optional(),
-    favorite: z.boolean().optional(),
-    serving: mealServingSchema.nullable().optional(),
-    version: z.number().int().positive(),
-})
+export const mealUpdateSchema = z
+    .object({
+        name: z.string().trim().min(1).max(160).optional(),
+        mealType: z.enum(['Breakfast', 'Lunch', 'Dinner', 'Snack']).optional(),
+        eatenAt: z.string().datetime().optional(),
+        nutrients: z.record(z.string(), z.number().finite()).optional(),
+        nutritionQuality: z.enum(['complete', 'estimated', 'incomplete']).optional(),
+        favorite: z.boolean().optional(),
+        serving: mealServingSchema.nullable().optional(),
+        foodId: z.string().uuid().nullable().optional(),
+        recipeId: z.string().uuid().nullable().optional(),
+        version: z.number().int().positive(),
+    })
+    .superRefine((input, context) => {
+        if (input.foodId && input.recipeId)
+            context.addIssue({
+                code: 'custom',
+                path: ['recipeId'],
+                message: 'A meal can reference either a food or a recipe, not both',
+            })
+    })
 
 export const preferencesInputSchema = z.object({
     displayName: z.string().trim().min(1).max(100).optional(),
