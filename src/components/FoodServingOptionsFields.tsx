@@ -1,24 +1,6 @@
 import { ActionIcon, Button, Group, NumberInput, Stack, Text, TextInput } from '@mantine/core'
 import { IconPlus, IconTrash } from '@tabler/icons-react'
-import type { FoodServingOption } from '../domain/nutrition'
-
-export type ServingOptionDraft = {
-    id: string
-    label: string
-    grams: number | string
-}
-
-export const servingOptionDrafts = (options: FoodServingOption[] = []): ServingOptionDraft[] =>
-    options.map((option, index) => ({
-        id: `${index}-${option.label}-${option.grams}`,
-        label: option.label,
-        grams: option.grams,
-    }))
-
-export const servingOptionsFromDrafts = (options: ServingOptionDraft[]): FoodServingOption[] =>
-    options
-        .map(option => ({ label: option.label.trim(), grams: Number(option.grams) }))
-        .filter(option => option.label && Number.isFinite(option.grams) && option.grams > 0)
+import type { ServingOptionDraft } from '../domain/foodServingOptions'
 
 export function FoodServingOptionsFields({
     options,
