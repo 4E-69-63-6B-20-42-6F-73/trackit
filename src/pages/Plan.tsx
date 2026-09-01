@@ -182,7 +182,6 @@ export function Plan() {
         schedulesQuery.isError
             ? 'Your meal plan could not be loaded from the server.'
             : ''
-    const [message, setMessage] = useState('')
     const [editor, setEditor] = useState<EditorState | null>(null)
     const [logState, setLogState] = useState<LogState | null>(null)
     const [schedulesOpen, setSchedulesOpen] = useState(false)
@@ -293,23 +292,17 @@ export function Plan() {
             await createPlanMeal(changes)
             return null
         },
-        onMutate: () => setMessage(''),
         onSuccess: destinationDate => {
             setEditor(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
             if (destinationDate && weekStartKey(destinationDate) !== weekStart)
                 navigateDate(destinationDate)
         },
-        onError: error =>
-            setMessage(error instanceof Error ? error.message : 'Could not save this planned meal.'),
     })
 
     const actionMutation = useMutation({
         mutationFn: (action: () => Promise<unknown>) => action(),
-        onMutate: () => setMessage(''),
         onSuccess: () => window.dispatchEvent(new Event('trackit:plan-changed')),
-        onError: error =>
-            setMessage(error instanceof Error ? error.message : 'Your plan could not be updated.'),
     })
 
     const categoryFoods = (item: MealPlanItem) => {
@@ -348,16 +341,25 @@ export function Plan() {
                 foodId: current.foodId ?? undefined,
             })
         },
-        onMutate: () => setMessage(''),
         onSuccess: () => {
             setLogState(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
             window.dispatchEvent(new Event('trackit:nutrition-changed'))
         },
-        onError: error =>
-            setMessage(error instanceof Error ? error.message : 'Could not log this planned meal.'),
     })
     const busy = editorMutation.isPending || actionMutation.isPending || logMutation.isPending
+    const latestMutation = [
+        { result: editorMutation, fallback: 'Could not save this planned meal.' },
+        { result: actionMutation, fallback: 'Your plan could not be updated.' },
+        { result: logMutation, fallback: 'Could not log this planned meal.' },
+    ].reduce((latest, current) =>
+        current.result.submittedAt > latest.result.submittedAt ? current : latest,
+    )
+    const mutationError = latestMutation.result.isError
+        ? latestMutation.result.error instanceof Error
+            ? latestMutation.result.error.message
+            : latestMutation.fallback
+        : ''
 
     const weekLabel = `${formatCalendarDate(dates[0], locale, { month: 'short', day: 'numeric' })} – ${formatCalendarDate(dates[6], locale, { month: 'short', day: 'numeric', year: 'numeric' })}`
 
@@ -677,9 +679,9 @@ export function Plan() {
                 </Group>
             </div>
 
-            {(message || loadError) && (
+            {(mutationError || loadError) && (
                 <Alert color="orange" mb="md">
-                    {message || loadError}
+                    {mutationError || loadError}
                 </Alert>
             )}
 
