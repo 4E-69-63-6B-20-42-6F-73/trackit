@@ -166,7 +166,9 @@ export const derivedObservations = pgTable(
 export const derivedObservationInputs = pgTable(
     'derived_observation_inputs',
     {
-        derivedObservationId: text('id').notNull(),
+        derivedObservationId: text('derived_observation_id')
+            .notNull()
+            .references(() => derivedObservations.id, { onDelete: 'cascade' }),
         inputObservationId: text('input_observation_id').notNull(),
         inputVersion: bigint('input_version', { mode: 'number' }).notNull(),
         role: text('role').notNull().default('input'),
@@ -302,7 +304,7 @@ export const mcpClients = pgTable('mcp_clients', {
     dateTo: timestamp('date_to', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
-    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
