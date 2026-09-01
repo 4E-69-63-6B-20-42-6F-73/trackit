@@ -1,22 +1,12 @@
 import { Notification, Portal } from '@mantine/core'
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-
-type ToastTone = 'success' | 'error' | 'info'
+import { ToastContext, type ToastContextValue, type ToastTone } from './toastContext'
 
 type ToastState = {
     message: string
     tone: ToastTone
 }
-
-type ToastContextValue = {
-    showToast: (message: string, tone?: ToastTone) => void
-    success: (message: string) => void
-    error: (message: string) => void
-    info: (message: string) => void
-}
-
-const ToastContext = createContext<ToastContextValue | null>(null)
 
 export function ToastProvider({ children }: { children: ReactNode }) {
     const [toast, setToast] = useState<ToastState | null>(null)
@@ -88,10 +78,4 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             )}
         </ToastContext.Provider>
     )
-}
-
-export function useToast() {
-    const context = useContext(ToastContext)
-    if (!context) throw new Error('useToast must be used within ToastProvider')
-    return context
 }
