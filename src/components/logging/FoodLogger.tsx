@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -13,6 +13,8 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useDebouncedValue } from '@mantine/hooks'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     IconBarcode,
     IconCamera,
@@ -40,10 +42,22 @@ import {
     type RecipeRecord,
 } from '../../lib/nutritionApi'
 import { setRecipeFavorite } from '../../lib/recipeFavoriteApi'
+import { invalidateNutritionQueries, serverQueryKeys } from '../../lib/serverQueries'
 import { NewFoodModal } from '../NewFoodModal'
 
 type Selection = { kind: 'food'; food: Food } | { kind: 'recipe'; recipe: RecipeRecord }
 type CatalogFood = Omit<Food, 'id' | 'version'>
+type CatalogRequest = { mode: 'search' | 'barcode'; value: string }
+
+type LogVariables = {
+    item: Selection
+    consumedAmount: number
+    closeAfter: boolean
+    mealType: string
+    recordedAt: string
+}
+
+const foodLibraryQueryKey = [...serverQueryKeys.foods, 'library'] as const
 
 const selectionKey = (selection: Selection) =>
     selection.kind === 'food' ? `food:${selection.food.id}` : `recipe:${selection.recipe.id}`
@@ -115,6 +129,7 @@ export function FoodLogger({
     selectedDate?: string | null
     onFeedback?: (message: string) => void
 }) {
+    const queryClient = useQueryClient()
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const locale = preferences?.locale
@@ -129,64 +144,65 @@ export function FoodLogger({
         hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack',
     )
     const [query, setQuery] = useState('')
-    const [libraryFoods, setLibraryFoods] = useState<Food[]>([])
-    const [foodResults, setFoodResults] = useState<Food[]>([])
-    const [recipes, setRecipes] = useState<RecipeRecord[]>([])
     const [selection, setSelection] = useState<Selection | null>(null)
     const [amount, setAmount] = useState<number | string>(100)
     const [detailsOpen, setDetailsOpen] = useState(false)
     const [creating, setCreating] = useState(false)
-    const [loadingLibrary, setLoadingLibrary] = useState(true)
-    const [searching, setSearching] = useState(false)
-    const [loggingKey, setLoggingKey] = useState<string | null>(null)
-    const [favoriteBusy, setFavoriteBusy] = useState<string | null>(null)
-    const [error, setError] = useState('')
     const [catalogMode, setCatalogMode] = useState<'search' | 'barcode' | null>(null)
-    const [catalogResults, setCatalogResults] = useState<CatalogFood[]>([])
-    const [catalogBusy, setCatalogBusy] = useState(false)
-    const [catalogError, setCatalogError] = useState('')
+    const [catalogRequest, setCatalogRequest] = useState<CatalogRequest | null>(null)
+    const [catalogLocalError, setCatalogLocalError] = useState('')
     const [barcode, setBarcode] = useState('')
+    const [cameraBusy, setCameraBusy] = useState(false)
     const searchRef = useRef<HTMLInputElement>(null)
     const cameraInput = useRef<HTMLInputElement>(null)
     const isHistorical = targetDate !== calendarTodayKey(timezone)
     const [recordedDate, recordedTime] = recordedAt.split('T')
+    const searchText = query.trim()
+    const queryValue = searchText.toLowerCase()
+    const [debouncedSearch] = useDebouncedValue(searchText, 220)
 
-    useEffect(() => {
-        if (!opened) return
-        let active = true
-        void Promise.all([searchFoods(''), listRecipes()])
-            .then(([foods, nextRecipes]) => {
-                if (!active) return
-                setLibraryFoods(foods)
-                setRecipes(nextRecipes)
-                setError('')
-            })
-            .catch(() => active && setError('Your food library could not be loaded.'))
-            .finally(() => active && setLoadingLibrary(false))
-        return () => {
-            active = false
-        }
-    }, [opened])
+    const libraryFoodsQuery = useQuery({
+        queryKey: foodLibraryQueryKey,
+        queryFn: ({ signal }) => searchFoods('', signal),
+        enabled: opened,
+    })
+    const recipesQuery = useQuery({
+        queryKey: serverQueryKeys.recipes,
+        queryFn: ({ signal }) => listRecipes(signal),
+        enabled: opened,
+    })
+    const foodSearchQuery = useQuery({
+        queryKey: [...serverQueryKeys.foods, 'search', debouncedSearch],
+        queryFn: ({ signal }) => searchFoods(debouncedSearch, signal),
+        enabled: opened && debouncedSearch.length > 0,
+    })
+    const catalogQuery = useQuery({
+        queryKey: [
+            'server',
+            'food-catalog',
+            catalogRequest?.mode ?? 'idle',
+            catalogRequest?.value ?? '',
+        ],
+        queryFn: async ({ signal }) => {
+            if (!catalogRequest) return [] as CatalogFood[]
+            if (catalogRequest.mode === 'search') {
+                return searchFoodCatalog(catalogRequest.value, signal)
+            }
+            const food = await lookupCatalogBarcode(catalogRequest.value, signal)
+            return food ? [food] : []
+        },
+        enabled: opened && catalogRequest !== null,
+    })
 
-    useEffect(() => {
-        if (!opened) return
-        const value = query.trim()
-        if (!value) return
-        let active = true
-        const timer = window.setTimeout(() => {
-            setSearching(true)
-            void searchFoods(value)
-                .then(foods => active && setFoodResults(foods))
-                .catch(() => active && setError('Food search is temporarily unavailable.'))
-                .finally(() => active && setSearching(false))
-        }, 220)
-        return () => {
-            active = false
-            window.clearTimeout(timer)
-        }
-    }, [opened, query])
+    const libraryFoods = libraryFoodsQuery.data ?? []
+    const recipes = recipesQuery.data ?? []
+    const foodResults =
+        debouncedSearch === searchText && searchText.length > 0 ? (foodSearchQuery.data ?? []) : []
+    const searching =
+        searchText.length > 0 &&
+        (debouncedSearch !== searchText || (debouncedSearch.length > 0 && foodSearchQuery.isFetching))
+    const loadingLibrary = opened && (libraryFoodsQuery.isPending || recipesQuery.isPending)
 
-    const queryValue = query.trim().toLowerCase()
     const recipeResults = useMemo(
         () =>
             queryValue
@@ -212,87 +228,134 @@ export function FoodLogger({
         .map(food => ({ kind: 'food' as const, food }))
     const nutrients = selection ? selectionNutrients(selection, Number(amount) || 0) : null
 
-    const updateFoodState = (updated: Food) => {
-        setLibraryFoods(current => current.map(food => (food.id === updated.id ? updated : food)))
-        setFoodResults(current => current.map(food => (food.id === updated.id ? updated : food)))
-        setSelection(current =>
-            current?.kind === 'food' && current.food.id === updated.id
-                ? { kind: 'food', food: updated }
-                : current,
-        )
-    }
-
-    const updateRecipeState = (updated: RecipeRecord) => {
-        setRecipes(current => current.map(recipe => (recipe.id === updated.id ? updated : recipe)))
-        setSelection(current =>
-            current?.kind === 'recipe' && current.recipe.id === updated.id
-                ? { kind: 'recipe', recipe: updated }
-                : current,
-        )
-    }
-
-    const toggleFavorite = async (item: Selection) => {
-        const key = selectionKey(item)
-        const next = !selectionFavorite(item)
-        setFavoriteBusy(key)
-        setError('')
-        try {
+    const favoriteMutation = useMutation({
+        mutationFn: async ({ item, next }: { item: Selection; next: boolean }) => {
             if (item.kind === 'food') {
-                const updated = await updateFood(item.food, {
+                const food = await updateFood(item.food, {
                     ...foodUpdatePayload(item.food),
                     favorite: next,
                 })
-                updateFoodState(updated)
-            } else {
-                updateRecipeState(await setRecipeFavorite(item.recipe, next))
+                return { kind: 'food' as const, food }
             }
-            onFeedback?.(
-                `${selectionName(item)} ${next ? 'added to favorites' : 'removed from favorites'}.`,
+            const recipe = await setRecipeFavorite(item.recipe, next)
+            return { kind: 'recipe' as const, recipe }
+        },
+        onSuccess: (updated, variables) => {
+            if (updated.kind === 'food') {
+                queryClient.setQueriesData<Food[]>({ queryKey: serverQueryKeys.foods }, current =>
+                    current?.map(food => (food.id === updated.food.id ? updated.food : food)),
+                )
+            } else {
+                queryClient.setQueriesData<RecipeRecord[]>(
+                    { queryKey: serverQueryKeys.recipes },
+                    current =>
+                        current?.map(recipe =>
+                            recipe.id === updated.recipe.id ? updated.recipe : recipe,
+                        ),
+                )
+            }
+            setSelection(current =>
+                current && selectionKey(current) === selectionKey(variables.item) ? updated : current,
             )
-        } catch (reason) {
-            setError(reason instanceof Error ? reason.message : 'Could not update favorite.')
-        } finally {
-            setFavoriteBusy(null)
-        }
-    }
+            onFeedback?.(
+                `${selectionName(updated)} ${variables.next ? 'added to favorites' : 'removed from favorites'}.`,
+            )
+        },
+    })
 
-    const logSelection = async (item: Selection, consumedAmount: number, closeAfter: boolean) => {
-        if (!recordedAt || !Number.isFinite(consumedAmount) || consumedAmount <= 0) return
-        const key = selectionKey(item)
-        setLoggingKey(key)
-        setError('')
-        try {
+    const logMutation = useMutation({
+        mutationFn: async ({ item, consumedAmount, mealType: type, recordedAt: at }: LogVariables) => {
             await logMeal(
                 selectionName(item),
-                mealType,
+                type,
                 selectionNutrients(item, consumedAmount),
                 selectionQuality(item),
                 item.kind === 'food' ? item.food.id : undefined,
-                calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),
+                calendarLocalDateTimeToInstant(at, timezone).toISOString(),
                 { amount: consumedAmount, unit: item.kind === 'food' ? 'g' : 'serving' },
             )
+            return item
+        },
+        onSuccess: async (item, variables) => {
+            await invalidateNutritionQueries()
             window.dispatchEvent(new Event('trackit:nutrition-changed'))
-            onFeedback?.(`${selectionName(item)} logged to ${mealType.toLowerCase()}.`)
+            onFeedback?.(`${selectionName(item)} logged to ${variables.mealType.toLowerCase()}.`)
             if (item.kind === 'food') {
-                setLibraryFoods(current => [
+                queryClient.setQueryData<Food[]>(foodLibraryQueryKey, current => [
                     item.food,
-                    ...current.filter(food => food.id !== item.food.id),
+                    ...(current ?? []).filter(food => food.id !== item.food.id),
                 ])
             }
-            if (closeAfter) close()
-        } catch {
-            setError('This meal could not be saved. Try again.')
-        } finally {
-            setLoggingKey(null)
-        }
-    }
+            if (variables.closeAfter) close()
+        },
+    })
+
+    const saveCatalogMutation = useMutation({
+        mutationFn: (food: CatalogFood) => createFood(food),
+        onSuccess: async created => {
+            queryClient.setQueryData<Food[]>(foodLibraryQueryKey, current => [
+                created,
+                ...(current ?? []).filter(food => food.id !== created.id),
+            ])
+            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
+            setSelection({ kind: 'food', food: created })
+            setAmount(created.servingGrams)
+            setCatalogMode(null)
+            setCatalogRequest(null)
+            setCatalogLocalError('')
+            onFeedback?.(`${created.name} saved to your library.`)
+        },
+    })
+
+    const favoriteBusyKey = favoriteMutation.isPending
+        ? selectionKey(favoriteMutation.variables.item)
+        : null
+    const loggingKey = logMutation.isPending ? selectionKey(logMutation.variables.item) : null
+    const catalogResults = catalogMode && catalogRequest ? (catalogQuery.data ?? []) : []
+    const catalogBusy = catalogQuery.isFetching || saveCatalogMutation.isPending || cameraBusy
+
+    const libraryError =
+        libraryFoodsQuery.isError || recipesQuery.isError
+            ? 'Your food library could not be loaded.'
+            : ''
+    const searchError = foodSearchQuery.isError ? 'Food search is temporarily unavailable.' : ''
+    const actionError = favoriteMutation.isError
+        ? favoriteMutation.error instanceof Error
+            ? favoriteMutation.error.message
+            : 'Could not update favorite.'
+        : logMutation.isError
+          ? 'This meal could not be saved. Try again.'
+          : ''
+    const catalogError = catalogLocalError
+        ? catalogLocalError
+        : saveCatalogMutation.isError
+          ? 'This food could not be saved. It may already exist in your library.'
+          : catalogQuery.isError
+            ? catalogQuery.error instanceof Error
+                ? catalogQuery.error.message
+                : 'Catalog lookup failed.'
+            : catalogRequest && !catalogQuery.isFetching && catalogQuery.data?.length === 0
+              ? catalogRequest.mode === 'search'
+                  ? 'No catalog foods matched that search.'
+                  : 'That barcode was not found.'
+              : ''
+    const error = actionError || searchError || libraryError
 
     const chooseSelection = (item: Selection) => {
         setSelection(item)
         setAmount(selectionDefaultAmount(item))
         setCatalogMode(null)
-        setCatalogResults([])
-        setCatalogError('')
+        setCatalogRequest(null)
+        setCatalogLocalError('')
+    }
+
+    const toggleFavorite = (item: Selection) => {
+        favoriteMutation.mutate({ item, next: !selectionFavorite(item) })
+    }
+
+    const logSelection = (item: Selection, consumedAmount: number, closeAfter: boolean) => {
+        if (!recordedAt || !Number.isFinite(consumedAmount) || consumedAmount <= 0) return
+        logMutation.mutate({ item, consumedAmount, closeAfter, mealType, recordedAt })
     }
 
     const quickLog = (item: Selection) => logSelection(item, selectionDefaultAmount(item), false)
@@ -301,13 +364,91 @@ export function FoodLogger({
         if (!selection) return
         const consumedAmount = Number(amount)
         if (!Number.isFinite(consumedAmount) || consumedAmount <= 0) return
-        void logSelection(selection, consumedAmount, true)
+        logSelection(selection, consumedAmount, true)
+    }
+
+    const startCatalogRequest = (next: CatalogRequest) => {
+        setCatalogLocalError('')
+        saveCatalogMutation.reset()
+        if (catalogRequest?.mode === next.mode && catalogRequest.value === next.value) {
+            void catalogQuery.refetch()
+            return
+        }
+        setCatalogRequest(next)
+    }
+
+    const runCatalogSearch = () => {
+        if (searchText.length < 2) return
+        setCatalogMode('search')
+        startCatalogRequest({ mode: 'search', value: searchText })
+    }
+
+    const runBarcodeLookup = (value = barcode) => {
+        const normalized = value.trim()
+        setCatalogMode('barcode')
+        if (!/^\d{8,14}$/.test(normalized)) {
+            setCatalogRequest(null)
+            setCatalogLocalError('Enter an 8–14 digit EAN or UPC barcode.')
+            return
+        }
+        startCatalogRequest({ mode: 'barcode', value: normalized })
+    }
+
+    const scanImage = async (file: File) => {
+        type Detector = new (options: { formats: string[] }) => {
+            detect: (source: ImageBitmap) => Promise<Array<{ rawValue: string }>>
+        }
+        const DetectorClass = (window as Window & { BarcodeDetector?: Detector }).BarcodeDetector
+        setCatalogMode('barcode')
+        setCatalogRequest(null)
+        setCatalogLocalError('')
+        if (!DetectorClass) {
+            setCatalogLocalError(
+                'Camera barcode detection is not supported here. Type the barcode instead.',
+            )
+            return
+        }
+        setCameraBusy(true)
+        try {
+            const bitmap = await createImageBitmap(file)
+            const matches = await new DetectorClass({
+                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
+            }).detect(bitmap)
+            bitmap.close()
+            const value = matches[0]?.rawValue
+            if (!value) {
+                setCatalogLocalError('No barcode was detected. Try again with the code in focus.')
+            } else {
+                setBarcode(value)
+                startCatalogRequest({ mode: 'barcode', value })
+            }
+        } catch {
+            setCatalogLocalError('The barcode image could not be read. Type the digits instead.')
+        } finally {
+            setCameraBusy(false)
+            if (cameraInput.current) cameraInput.current.value = ''
+        }
+    }
+
+    const openBarcode = () => {
+        setCatalogMode('barcode')
+        setCatalogRequest(null)
+        setCatalogLocalError('')
+        saveCatalogMutation.reset()
+    }
+
+    const closeCatalog = () => {
+        setCatalogMode(null)
+        setCatalogRequest(null)
+        setCatalogLocalError('')
+        saveCatalogMutation.reset()
     }
 
     const favoriteButton = (item: Selection) => {
         const favorite = selectionFavorite(item)
         const name = selectionName(item)
         const key = selectionKey(item)
+        const pending = favoriteBusyKey === key
         return (
             <ActionIcon
                 variant="subtle"
@@ -315,10 +456,10 @@ export function FoodLogger({
                 className={`food-log-favorite${favorite ? ' food-log-favorite-active' : ''}`}
                 aria-label={favorite ? `Remove ${name} from favorites` : `Mark ${name} as favorite`}
                 title={favorite ? 'Remove from favorites' : 'Mark as favorite'}
-                disabled={favoriteBusy === key}
-                onClick={() => void toggleFavorite(item)}
+                disabled={favoriteMutation.isPending}
+                onClick={() => toggleFavorite(item)}
             >
-                {favoriteBusy === key ? (
+                {pending ? (
                     <Loader size={14} />
                 ) : (
                     <IconStar size={19} fill={favorite ? 'currentColor' : 'none'} />
@@ -352,110 +493,13 @@ export function FoodLogger({
                     className="food-log-quick-add"
                     aria-label={`Quick log ${name}`}
                     title={`Log ${item.kind === 'food' ? `${item.food.servingGrams} g` : '1 serving'}`}
-                    disabled={loggingKey !== null}
-                    onClick={() => void quickLog(item)}
+                    disabled={logMutation.isPending}
+                    onClick={() => quickLog(item)}
                 >
                     {loggingKey === key ? <Loader size={14} /> : <IconPlus size={17} />}
                 </ActionIcon>
             </div>
         )
-    }
-
-    const runCatalogSearch = async () => {
-        const value = query.trim()
-        if (value.length < 2) return
-        setCatalogMode('search')
-        setCatalogBusy(true)
-        setCatalogError('')
-        setCatalogResults([])
-        try {
-            const results = await searchFoodCatalog(value)
-            setCatalogResults(results)
-            if (!results.length) setCatalogError('No catalog foods matched that search.')
-        } catch (reason) {
-            setCatalogError(reason instanceof Error ? reason.message : 'Catalog lookup failed.')
-        } finally {
-            setCatalogBusy(false)
-        }
-    }
-
-    const runBarcodeLookup = async (value = barcode) => {
-        const normalized = value.trim()
-        setCatalogMode('barcode')
-        setCatalogError('')
-        setCatalogResults([])
-        if (!/^\d{8,14}$/.test(normalized)) {
-            setCatalogError('Enter an 8–14 digit EAN or UPC barcode.')
-            return
-        }
-        setCatalogBusy(true)
-        try {
-            const result = await lookupCatalogBarcode(normalized)
-            if (!result) setCatalogError('That barcode was not found.')
-            else setCatalogResults([result])
-        } catch (reason) {
-            setCatalogError(reason instanceof Error ? reason.message : 'Catalog lookup failed.')
-        } finally {
-            setCatalogBusy(false)
-        }
-    }
-
-    const scanImage = async (file: File) => {
-        type Detector = new (options: { formats: string[] }) => {
-            detect: (source: ImageBitmap) => Promise<Array<{ rawValue: string }>>
-        }
-        const DetectorClass = (window as Window & { BarcodeDetector?: Detector }).BarcodeDetector
-        if (!DetectorClass) {
-            setCatalogMode('barcode')
-            setCatalogError(
-                'Camera barcode detection is not supported here. Type the barcode instead.',
-            )
-            return
-        }
-        setCatalogMode('barcode')
-        setCatalogBusy(true)
-        setCatalogError('')
-        try {
-            const bitmap = await createImageBitmap(file)
-            const matches = await new DetectorClass({
-                formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e'],
-            }).detect(bitmap)
-            bitmap.close()
-            const value = matches[0]?.rawValue
-            if (!value) {
-                setCatalogError('No barcode was detected. Try again with the code in focus.')
-            } else {
-                setBarcode(value)
-                setCatalogBusy(false)
-                await runBarcodeLookup(value)
-            }
-        } catch {
-            setCatalogError('The barcode image could not be read. Type the digits instead.')
-        } finally {
-            setCatalogBusy(false)
-            if (cameraInput.current) cameraInput.current.value = ''
-        }
-    }
-
-    const saveCatalogFood = async (food: CatalogFood) => {
-        setCatalogBusy(true)
-        setCatalogError('')
-        try {
-            const created = await createFood(food)
-            setLibraryFoods(current => [created, ...current.filter(item => item.id !== created.id)])
-            chooseSelection({ kind: 'food', food: created })
-            onFeedback?.(`${created.name} saved to your library.`)
-        } catch {
-            setCatalogError('This food could not be saved. It may already exist in your library.')
-        } finally {
-            setCatalogBusy(false)
-        }
-    }
-
-    const openBarcode = () => {
-        setCatalogMode('barcode')
-        setCatalogResults([])
-        setCatalogError('')
     }
 
     const historicalLabel = formatCalendarDate(recordedDate, locale, {
@@ -474,6 +518,106 @@ export function FoodLogger({
         Number.isFinite(selectionAmount) &&
         selectionAmount > 0 &&
         Boolean(recordedAt)
+
+    const catalogPanel = catalogMode ? (
+        <div className="food-log-catalog-inline">
+            <div className="food-log-catalog-head">
+                <div>
+                    <Text fw={700}>{catalogMode === 'search' ? 'Catalog results' : 'Scan barcode'}</Text>
+                    {catalogMode === 'search' && (
+                        <Text size="xs" c="dimmed">
+                            Results for “{searchText}”
+                        </Text>
+                    )}
+                </div>
+                <Button variant="subtle" size="compact-xs" color="trackit" onClick={closeCatalog}>
+                    Back
+                </Button>
+            </div>
+
+            {catalogMode === 'barcode' && (
+                <Stack gap="xs" mt="sm">
+                    <TextInput
+                        label="EAN or UPC barcode"
+                        inputMode="numeric"
+                        value={barcode}
+                        leftSection={<IconBarcode size={17} />}
+                        onChange={event => {
+                            setBarcode(event.currentTarget.value)
+                            setCatalogRequest(null)
+                            setCatalogLocalError('')
+                        }}
+                        onKeyDown={event => event.key === 'Enter' && runBarcodeLookup()}
+                    />
+                    <Group grow>
+                        <Button
+                            variant="default"
+                            leftSection={<IconCamera size={17} />}
+                            onClick={() => cameraInput.current?.click()}
+                            loading={cameraBusy}
+                        >
+                            Use camera
+                        </Button>
+                        <Button
+                            color="trackit"
+                            loading={catalogQuery.isFetching}
+                            onClick={() => runBarcodeLookup()}
+                        >
+                            Look up
+                        </Button>
+                    </Group>
+                    <input
+                        ref={cameraInput}
+                        hidden
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        aria-label="Take a barcode photo"
+                        onChange={event => {
+                            const file = event.currentTarget.files?.[0]
+                            if (file) void scanImage(file)
+                        }}
+                    />
+                </Stack>
+            )}
+
+            {catalogQuery.isFetching && catalogMode === 'search' && (
+                <Group justify="center" py="md">
+                    <Loader size="sm" />
+                </Group>
+            )}
+            {catalogError && (
+                <Alert color="orange" mt="sm">
+                    {catalogError}
+                </Alert>
+            )}
+            {catalogResults.length > 0 && (
+                <div className="food-log-catalog-results">
+                    {catalogResults.map(food => {
+                        const preview = roundedNutrients(catalogNutrients(food, food.servingGrams))
+                        return (
+                            <button
+                                type="button"
+                                key={`${food.catalogSource}-${food.catalogId}-${food.name}`}
+                                className="food-log-catalog-result"
+                                disabled={catalogBusy}
+                                onClick={() => saveCatalogMutation.mutate(food)}
+                            >
+                                <span>
+                                    <strong>{food.name}</strong>
+                                    <small>
+                                        {food.brand || 'No brand'} · {Math.round(preview.calories ?? 0)}{' '}
+                                        kcal per {food.servingGrams} g serving
+                                    </small>
+                                </span>
+                                <span>{saveCatalogMutation.isPending ? 'Saving…' : 'Save & choose'}</span>
+                            </button>
+                        )
+                    })}
+                </div>
+            )}
+        </div>
+    ) : null
 
     return (
         <>
@@ -529,9 +673,7 @@ export function FoodLogger({
                                     label="Time"
                                     value={recordedTime}
                                     onChange={event =>
-                                        setRecordedAt(
-                                            `${recordedDate}T${event.currentTarget.value}`,
-                                        )
+                                        setRecordedAt(`${recordedDate}T${event.currentTarget.value}`)
                                     }
                                 />
                             </SimpleGrid>
@@ -552,16 +694,9 @@ export function FoodLogger({
                         leftSection={<IconSearch size={18} />}
                         rightSection={searching ? <Loader size={15} /> : undefined}
                         onChange={event => {
-                            const value = event.currentTarget.value
-                            setQuery(value)
+                            setQuery(event.currentTarget.value)
                             setSelection(null)
-                            setCatalogMode(null)
-                            setCatalogResults([])
-                            setCatalogError('')
-                            if (!value.trim()) {
-                                setFoodResults([])
-                                setSearching(false)
-                            }
+                            closeCatalog()
                         }}
                     />
 
@@ -647,15 +782,11 @@ export function FoodLogger({
                                     <span>kcal</span>
                                 </div>
                                 <div>
-                                    <strong>
-                                        {Math.round((nutrients?.protein ?? 0) * 10) / 10} g
-                                    </strong>
+                                    <strong>{Math.round((nutrients?.protein ?? 0) * 10) / 10} g</strong>
                                     <span>protein</span>
                                 </div>
                                 <div>
-                                    <strong>
-                                        {Math.round((nutrients?.carbs ?? 0) * 10) / 10} g
-                                    </strong>
+                                    <strong>{Math.round((nutrients?.carbs ?? 0) * 10) / 10} g</strong>
                                     <span>carbs</span>
                                 </div>
                                 <div>
@@ -664,12 +795,12 @@ export function FoodLogger({
                                 </div>
                             </div>
                         </div>
-                    ) : queryValue ? (
+                    ) : searchText ? (
                         <>
                             {localResults.length > 0 && (
                                 <section className="food-log-section">
                                     <Text className="food-log-section-title">
-                                        Results for “{query.trim()}”
+                                        Results for “{searchText}”
                                     </Text>
                                     <div className="food-log-result-list">
                                         {localResults.map(resultRow)}
@@ -679,7 +810,7 @@ export function FoodLogger({
 
                             {!searching && localResults.length === 0 && !catalogMode && (
                                 <div className="food-log-empty-search">
-                                    <Text fw={700}>No saved foods match “{query.trim()}”</Text>
+                                    <Text fw={700}>No saved foods match “{searchText}”</Text>
                                     <Text size="sm" c="dimmed">
                                         Keep going without leaving the food logger.
                                     </Text>
@@ -687,15 +818,11 @@ export function FoodLogger({
                                         <button
                                             type="button"
                                             className="food-log-continuation"
-                                            onClick={() => void runCatalogSearch()}
+                                            onClick={runCatalogSearch}
                                         >
                                             <span>
-                                                <strong>
-                                                    Search food catalog for “{query.trim()}”
-                                                </strong>
-                                                <small>
-                                                    Find a branded food and save it as you log
-                                                </small>
+                                                <strong>Search food catalog for “{searchText}”</strong>
+                                                <small>Find a branded food and save it as you log</small>
                                             </span>
                                             <span>→</span>
                                         </button>
@@ -716,7 +843,7 @@ export function FoodLogger({
                                             onClick={() => setCreating(true)}
                                         >
                                             <span>
-                                                <strong>Create “{query.trim()}”</strong>
+                                                <strong>Create “{searchText}”</strong>
                                                 <small>Add a custom food to your library</small>
                                             </span>
                                             <span>→</span>
@@ -725,206 +852,12 @@ export function FoodLogger({
                                 </div>
                             )}
 
-                            {catalogMode && (
-                                <div className="food-log-catalog-inline">
-                                    <div className="food-log-catalog-head">
-                                        <div>
-                                            <Text fw={700}>
-                                                {catalogMode === 'search'
-                                                    ? 'Catalog results'
-                                                    : 'Scan barcode'}
-                                            </Text>
-                                            {catalogMode === 'search' && (
-                                                <Text size="xs" c="dimmed">
-                                                    Results for “{query.trim()}”
-                                                </Text>
-                                            )}
-                                        </div>
-                                        <Button
-                                            variant="subtle"
-                                            size="compact-xs"
-                                            color="trackit"
-                                            onClick={() => {
-                                                setCatalogMode(null)
-                                                setCatalogResults([])
-                                                setCatalogError('')
-                                            }}
-                                        >
-                                            Back
-                                        </Button>
-                                    </div>
-
-                                    {catalogMode === 'barcode' && (
-                                        <Stack gap="xs" mt="sm">
-                                            <TextInput
-                                                label="EAN or UPC barcode"
-                                                inputMode="numeric"
-                                                value={barcode}
-                                                leftSection={<IconBarcode size={17} />}
-                                                onChange={event =>
-                                                    setBarcode(event.currentTarget.value)
-                                                }
-                                                onKeyDown={event =>
-                                                    event.key === 'Enter' && void runBarcodeLookup()
-                                                }
-                                            />
-                                            <Group grow>
-                                                <Button
-                                                    variant="default"
-                                                    leftSection={<IconCamera size={17} />}
-                                                    onClick={() => cameraInput.current?.click()}
-                                                >
-                                                    Use camera
-                                                </Button>
-                                                <Button
-                                                    color="trackit"
-                                                    loading={catalogBusy}
-                                                    onClick={() => void runBarcodeLookup()}
-                                                >
-                                                    Look up
-                                                </Button>
-                                            </Group>
-                                            <input
-                                                ref={cameraInput}
-                                                hidden
-                                                type="file"
-                                                accept="image/*"
-                                                capture="environment"
-                                                aria-label="Take a barcode photo"
-                                                onChange={event => {
-                                                    const file = event.currentTarget.files?.[0]
-                                                    if (file) void scanImage(file)
-                                                }}
-                                            />
-                                        </Stack>
-                                    )}
-
-                                    {catalogBusy && catalogMode === 'search' && (
-                                        <Group justify="center" py="md">
-                                            <Loader size="sm" />
-                                        </Group>
-                                    )}
-                                    {catalogError && (
-                                        <Alert color="orange" mt="sm">
-                                            {catalogError}
-                                        </Alert>
-                                    )}
-                                    {catalogResults.length > 0 && (
-                                        <div className="food-log-catalog-results">
-                                            {catalogResults.map(food => {
-                                                const preview = roundedNutrients(
-                                                    catalogNutrients(food, food.servingGrams),
-                                                )
-                                                return (
-                                                    <button
-                                                        type="button"
-                                                        key={`${food.catalogSource}-${food.catalogId}-${food.name}`}
-                                                        className="food-log-catalog-result"
-                                                        disabled={catalogBusy}
-                                                        onClick={() => void saveCatalogFood(food)}
-                                                    >
-                                                        <span>
-                                                            <strong>{food.name}</strong>
-                                                            <small>
-                                                                {food.brand || 'No brand'} ·{' '}
-                                                                {Math.round(preview.calories ?? 0)}{' '}
-                                                                kcal per {food.servingGrams} g
-                                                                serving
-                                                            </small>
-                                                        </span>
-                                                        <span>Save & choose</span>
-                                                    </button>
-                                                )
-                                            })}
-                                        </div>
-                                    )}
-                                </div>
-                            )}
+                            {catalogPanel}
                         </>
                     ) : catalogMode === 'barcode' ? (
-                        <div className="food-log-catalog-inline">
-                            <div className="food-log-catalog-head">
-                                <Text fw={700}>Scan barcode</Text>
-                                <Button
-                                    variant="subtle"
-                                    size="compact-xs"
-                                    color="trackit"
-                                    onClick={() => {
-                                        setCatalogMode(null)
-                                        setCatalogResults([])
-                                        setCatalogError('')
-                                    }}
-                                >
-                                    Back
-                                </Button>
-                            </div>
-                            <Stack gap="xs" mt="sm">
-                                <TextInput
-                                    label="EAN or UPC barcode"
-                                    inputMode="numeric"
-                                    value={barcode}
-                                    leftSection={<IconBarcode size={17} />}
-                                    onChange={event => setBarcode(event.currentTarget.value)}
-                                    onKeyDown={event =>
-                                        event.key === 'Enter' && void runBarcodeLookup()
-                                    }
-                                />
-                                <Group grow>
-                                    <Button
-                                        variant="default"
-                                        leftSection={<IconCamera size={17} />}
-                                        onClick={() => cameraInput.current?.click()}
-                                    >
-                                        Use camera
-                                    </Button>
-                                    <Button
-                                        color="trackit"
-                                        loading={catalogBusy}
-                                        onClick={() => void runBarcodeLookup()}
-                                    >
-                                        Look up
-                                    </Button>
-                                </Group>
-                                <input
-                                    ref={cameraInput}
-                                    hidden
-                                    type="file"
-                                    accept="image/*"
-                                    capture="environment"
-                                    aria-label="Take a barcode photo"
-                                    onChange={event => {
-                                        const file = event.currentTarget.files?.[0]
-                                        if (file) void scanImage(file)
-                                    }}
-                                />
-                            </Stack>
-                            {catalogError && (
-                                <Alert color="orange" mt="sm">
-                                    {catalogError}
-                                </Alert>
-                            )}
-                            {catalogResults.length > 0 && (
-                                <div className="food-log-catalog-results">
-                                    {catalogResults.map(food => (
-                                        <button
-                                            type="button"
-                                            key={`${food.catalogSource}-${food.catalogId}-${food.name}`}
-                                            className="food-log-catalog-result"
-                                            disabled={catalogBusy}
-                                            onClick={() => void saveCatalogFood(food)}
-                                        >
-                                            <span>
-                                                <strong>{food.name}</strong>
-                                                <small>{food.brand || 'No brand'}</small>
-                                            </span>
-                                            <span>Save & choose</span>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
+                        catalogPanel
                     ) : loadingLibrary ? (
-                        <Group justify="center" py="xl">
+                        <Group justify="center" py="xl" role="status" aria-label="Loading food library">
                             <Loader size="sm" />
                         </Group>
                     ) : (
@@ -945,13 +878,11 @@ export function FoodLogger({
                                     </div>
                                 </section>
                             )}
-                            {recent.length === 0 && favorites.length === 0 && (
+                            {recent.length === 0 && favorites.length === 0 && !libraryError && (
                                 <div className="food-log-empty-library">
                                     <IconCheck size={20} />
                                     <div>
-                                        <Text fw={700}>
-                                            Your food library is ready for its first item
-                                        </Text>
+                                        <Text fw={700}>Your food library is ready for its first item</Text>
                                         <Text size="sm" c="dimmed">
                                             Search above, scan a barcode, or create a custom food.
                                         </Text>
@@ -986,7 +917,7 @@ export function FoodLogger({
                     </Text>
                     <Button
                         color="trackit"
-                        disabled={!selectionValid}
+                        disabled={!selectionValid || logMutation.isPending}
                         loading={selection ? loggingKey === selectionKey(selection) : false}
                         onClick={save}
                     >
@@ -998,7 +929,11 @@ export function FoodLogger({
                 opened={creating}
                 onClose={() => setCreating(false)}
                 onCreate={food => {
-                    setLibraryFoods(current => [food, ...current])
+                    queryClient.setQueryData<Food[]>(foodLibraryQueryKey, current => [
+                        food,
+                        ...(current ?? []).filter(item => item.id !== food.id),
+                    ])
+                    void queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
                     chooseSelection({ kind: 'food', food })
                     setCreating(false)
                 }}
