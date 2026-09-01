@@ -162,13 +162,6 @@
             "when": 1788123000000,
             "tag": "0022_journal_read_path",
             "breakpoints": true
-        },
-        {
-            "idx": 23,
-            "version": "7",
-            "when": 1788264000000,
-            "tag": "0023_food_serving_options",
-            "breakpoints": true
         }
     ]
 }
