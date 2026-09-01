@@ -6,6 +6,9 @@ import { sharedJsonRequest } from './sharedRequest'
 type ApiJournalEntry = {
     id: string
     definitionId: string
+    entityType?: JournalEvent['entityType']
+    entityId?: string
+    editable?: boolean
     category: JournalEvent['category']
     title: string
     detail: string
@@ -31,6 +34,9 @@ const apiUrl = (path: string) => `${environment.VITE_API_URL}${path}`
 const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     id: entry.id,
     definitionId: entry.definitionId,
+    entityType: entry.entityType,
+    entityId: entry.entityId,
+    editable: entry.editable,
     category: entry.category,
     title: entry.title,
     detail: entry.detail,
