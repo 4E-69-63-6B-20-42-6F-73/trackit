@@ -16,6 +16,7 @@ import App from './App'
 import { ServerDataProvider } from './hooks/useServerData'
 import { LoggingProvider } from './logging/LoggingContext'
 import { queryClient } from './lib/queryClient'
+import { installServerQueryInvalidation } from './lib/serverQueries'
 
 const chunkReloadKey = 'trackit:chunk-reload'
 window.addEventListener('vite:preloadError', event => {
@@ -26,20 +27,21 @@ window.addEventListener('vite:preloadError', event => {
     window.location.reload()
 })
 window.setTimeout(() => sessionStorage.removeItem(chunkReloadKey), 10_000)
+installServerQueryInvalidation()
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
         <MantineProvider theme={theme} defaultColorScheme="light">
             <BrowserRouter>
-                <AuthGate>
-                    <QueryClientProvider client={queryClient}>
+                <QueryClientProvider client={queryClient}>
+                    <AuthGate>
                         <ServerDataProvider>
                             <LoggingProvider>
                                 <App />
                             </LoggingProvider>
                         </ServerDataProvider>
-                    </QueryClientProvider>
-                </AuthGate>
+                    </AuthGate>
+                </QueryClientProvider>
             </BrowserRouter>
         </MantineProvider>
     </React.StrictMode>,
