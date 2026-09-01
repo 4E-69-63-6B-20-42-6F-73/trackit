@@ -37,40 +37,77 @@ import {
     searchFoodCatalog,
     searchFoods,
     updateFood,
+    updateMeal,
+    type MealRecord,
     type RecipeRecord,
 } from '../../lib/nutritionApi'
 import { setRecipeFavorite } from '../../lib/recipeFavoriteApi'
 import { NewFoodModal } from '../NewFoodModal'
 
-type Selection = { kind: 'food'; food: Food } | { kind: 'recipe'; recipe: RecipeRecord }
+type Selection =
+    | { kind: 'food'; food: Food }
+    | { kind: 'recipe'; recipe: RecipeRecord }
+    | { kind: 'snapshot'; meal: MealRecord }
 type CatalogFood = Omit<Food, 'id' | 'version'>
 
 const selectionKey = (selection: Selection) =>
-    selection.kind === 'food' ? `food:${selection.food.id}` : `recipe:${selection.recipe.id}`
+    selection.kind === 'food'
+        ? `food:${selection.food.id}`
+        : selection.kind === 'recipe'
+          ? `recipe:${selection.recipe.id}`
+          : `snapshot:${selection.meal.id}`
 
 const selectionName = (selection: Selection) =>
-    selection.kind === 'food' ? selection.food.name : selection.recipe.name
+    selection.kind === 'food'
+        ? selection.food.name
+        : selection.kind === 'recipe'
+          ? selection.recipe.name
+          : selection.meal.name
 
 const selectionFavorite = (selection: Selection) =>
-    selection.kind === 'food' ? selection.food.favorite : selection.recipe.favorite
+    selection.kind === 'food'
+        ? selection.food.favorite
+        : selection.kind === 'recipe'
+          ? selection.recipe.favorite
+          : false
 
 const selectionDefaultAmount = (selection: Selection) =>
-    selection.kind === 'food' ? selection.food.servingGrams : 1
+    selection.kind === 'food'
+        ? selection.food.servingGrams
+        : selection.kind === 'recipe'
+          ? 1
+          : (selection.meal.serving?.amount ?? 1)
 
 const selectionQuality = (selection: Selection) =>
-    selection.kind === 'food' ? selection.food.nutritionQuality : selection.recipe.nutritionQuality
-
-const selectionNutrients = (selection: Selection, amount: number) =>
     selection.kind === 'food'
-        ? roundedNutrients(nutrientsFor(selection.food, amount))
-        : roundedNutrients(
-              Object.fromEntries(
-                  Object.entries(selection.recipe.nutrientsPerServing).map(([key, value]) => [
-                      key,
-                      value * amount,
-                  ]),
-              ) as Nutrients,
-          )
+        ? selection.food.nutritionQuality
+        : selection.kind === 'recipe'
+          ? selection.recipe.nutritionQuality
+          : selection.meal.nutritionQuality
+
+const selectionNutrients = (selection: Selection, amount: number) => {
+    if (selection.kind === 'food') return roundedNutrients(nutrientsFor(selection.food, amount))
+    if (selection.kind === 'recipe')
+        return roundedNutrients(
+            Object.fromEntries(
+                Object.entries(selection.recipe.nutrientsPerServing).map(([key, value]) => [
+                    key,
+                    value * amount,
+                ]),
+            ) as Nutrients,
+        )
+    const factor = amount / (selection.meal.serving?.amount ?? 1)
+    return roundedNutrients(
+        Object.fromEntries(
+            Object.entries(selection.meal.nutrientSnapshot)
+                .filter(
+                    (entry): entry is [string, number] =>
+                        typeof entry[1] === 'number' && Number.isFinite(entry[1]),
+                )
+                .map(([key, value]) => [key, value * factor]),
+        ) as Partial<Nutrients>,
+    )
+}
 
 const catalogNutrients = (food: CatalogFood, amount: number): Partial<Nutrients> => {
     const factor = amount / 100
@@ -102,7 +139,11 @@ const resultSummary = (selection: Selection) => {
 const selectionMeta = (selection: Selection) =>
     selection.kind === 'food'
         ? selection.food.brand || `${selection.food.servingGrams} g serving`
-        : 'Recipe · per serving'
+        : selection.kind === 'recipe'
+          ? 'Recipe · per serving'
+          : selection.meal.serving
+            ? `Current entry · ${selection.meal.serving.amount} ${selection.meal.serving.unit === 'g' ? 'g' : selection.meal.serving.amount === 1 ? 'serving' : 'servings'}`
+            : 'Current journal entry'
 
 const defaultServingLabel = (food: Food) => {
     const label = food.servingName.trim()
@@ -114,31 +155,44 @@ export function FoodLogger({
     close,
     selectedDate,
     onFeedback,
+    editMeal,
+    onSaved,
 }: {
     opened: boolean
     close: () => void
     selectedDate?: string | null
     onFeedback?: (message: string) => void
+    editMeal?: MealRecord
+    onSaved?: () => void
 }) {
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const locale = preferences?.locale
     const nowValue = calendarLocalDateTimeValue(new Date(), timezone)
     const [nowDay, nowTime] = nowValue.split('T')
-    const targetDate = selectedDate ?? calendarTodayKey(timezone)
+    const targetDate = editMeal
+        ? calendarLocalDateTimeValue(new Date(editMeal.eatenAt), timezone).split('T')[0]
+        : (selectedDate ?? calendarTodayKey(timezone))
     const [recordedAt, setRecordedAt] = useState(
-        `${targetDate}T${selectedDate && selectedDate !== nowDay ? '12:00' : nowTime}`,
+        editMeal
+            ? calendarLocalDateTimeValue(new Date(editMeal.eatenAt), timezone)
+            : `${targetDate}T${selectedDate && selectedDate !== nowDay ? '12:00' : nowTime}`,
     )
     const hour = Number(nowTime.slice(0, 2))
     const [mealType, setMealType] = useState(
-        hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack',
+        editMeal?.mealType ??
+            (hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack'),
     )
     const [query, setQuery] = useState('')
     const [libraryFoods, setLibraryFoods] = useState<Food[]>([])
     const [foodResults, setFoodResults] = useState<Food[]>([])
     const [recipes, setRecipes] = useState<RecipeRecord[]>([])
-    const [selection, setSelection] = useState<Selection | null>(null)
-    const [amount, setAmount] = useState<number | string>(100)
+    const [selection, setSelection] = useState<Selection | null>(
+        editMeal ? { kind: 'snapshot', meal: editMeal } : null,
+    )
+    const [amount, setAmount] = useState<number | string>(
+        editMeal?.serving?.amount ?? (editMeal ? 1 : 100),
+    )
     const [detailsOpen, setDetailsOpen] = useState(false)
     const [creating, setCreating] = useState(false)
     const [loadingLibrary, setLoadingLibrary] = useState(true)
@@ -237,6 +291,7 @@ export function FoodLogger({
     }
 
     const toggleFavorite = async (item: Selection) => {
+        if (item.kind === 'snapshot') return
         const key = selectionKey(item)
         const next = !selectionFavorite(item)
         setFavoriteBusy(key)
@@ -267,26 +322,55 @@ export function FoodLogger({
         setLoggingKey(key)
         setError('')
         try {
-            await logMeal(
-                selectionName(item),
-                mealType,
-                selectionNutrients(item, consumedAmount),
-                selectionQuality(item),
-                item.kind === 'food' ? item.food.id : undefined,
-                calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),
-                { amount: consumedAmount, unit: item.kind === 'food' ? 'g' : 'serving' },
-            )
-            window.dispatchEvent(new Event('trackit:nutrition-changed'))
-            onFeedback?.(`${selectionName(item)} logged to ${mealType.toLowerCase()}.`)
-            if (item.kind === 'food') {
-                setLibraryFoods(current => [
-                    item.food,
-                    ...current.filter(food => food.id !== item.food.id),
-                ])
+            const eatenAt = calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
+            const nutrients = selectionNutrients(item, consumedAmount)
+            if (editMeal) {
+                await updateMeal(editMeal.id, editMeal.version, {
+                    name: selectionName(item),
+                    mealType: mealType as MealRecord['mealType'],
+                    eatenAt,
+                    nutrients: nutrients as Record<string, number>,
+                    nutritionQuality: selectionQuality(item) ?? 'complete',
+                    serving:
+                        item.kind === 'snapshot'
+                            ? item.meal.serving
+                                ? { amount: consumedAmount, unit: item.meal.serving.unit }
+                                : { amount: consumedAmount, unit: 'serving' }
+                            : {
+                                  amount: consumedAmount,
+                                  unit: item.kind === 'food' ? 'g' : 'serving',
+                              },
+                })
+                window.dispatchEvent(new Event('trackit:nutrition-changed'))
+                window.dispatchEvent(new Event('trackit:observations-changed'))
+                onFeedback?.(`${selectionName(item)} updated.`)
+                onSaved?.()
+            } else {
+                await logMeal(
+                    selectionName(item),
+                    mealType,
+                    nutrients,
+                    selectionQuality(item),
+                    item.kind === 'food' ? item.food.id : undefined,
+                    eatenAt,
+                    { amount: consumedAmount, unit: item.kind === 'food' ? 'g' : 'serving' },
+                )
+                window.dispatchEvent(new Event('trackit:nutrition-changed'))
+                onFeedback?.(`${selectionName(item)} logged to ${mealType.toLowerCase()}.`)
+                if (item.kind === 'food') {
+                    setLibraryFoods(current => [
+                        item.food,
+                        ...current.filter(food => food.id !== item.food.id),
+                    ])
+                }
             }
             if (closeAfter) close()
         } catch {
-            setError('This meal could not be saved. Try again.')
+            setError(
+                editMeal
+                    ? 'This meal could not be updated. Try again.'
+                    : 'This meal could not be saved. Try again.',
+            )
         } finally {
             setLoggingKey(null)
         }
@@ -300,7 +384,13 @@ export function FoodLogger({
         setCatalogError('')
     }
 
-    const quickLog = (item: Selection) => logSelection(item, selectionDefaultAmount(item), false)
+    const quickLog = (item: Selection) => {
+        if (editMeal) {
+            chooseSelection(item)
+            return
+        }
+        return logSelection(item, selectionDefaultAmount(item), false)
+    }
 
     const save = () => {
         if (!selection) return
@@ -310,6 +400,7 @@ export function FoodLogger({
     }
 
     const favoriteButton = (item: Selection) => {
+        if (item.kind === 'snapshot') return null
         const favorite = selectionFavorite(item)
         const name = selectionName(item)
         const key = selectionKey(item)
@@ -355,12 +446,22 @@ export function FoodLogger({
                     variant="light"
                     color="trackit"
                     className="food-log-quick-add"
-                    aria-label={`Quick log ${name}`}
-                    title={`Log ${item.kind === 'food' ? `${item.food.servingGrams} g` : '1 serving'}`}
+                    aria-label={editMeal ? `Choose ${name}` : `Quick log ${name}`}
+                    title={
+                        editMeal
+                            ? `Choose ${name}`
+                            : `Log ${item.kind === 'food' ? `${item.food.servingGrams} g` : '1 serving'}`
+                    }
                     disabled={loggingKey !== null}
                     onClick={() => void quickLog(item)}
                 >
-                    {loggingKey === key ? <Loader size={14} /> : <IconPlus size={17} />}
+                    {loggingKey === key ? (
+                        <Loader size={14} />
+                    ) : editMeal ? (
+                        <IconCheck size={17} />
+                    ) : (
+                        <IconPlus size={17} />
+                    )}
                 </ActionIcon>
             </div>
         )
@@ -471,7 +572,7 @@ export function FoodLogger({
     })
     const dateLabel = recordedDate === nowDay ? 'Today' : historicalLabel
     const footerLabel = selection
-        ? `Adds to ${mealType.toLowerCase()} · ${dateLabel} at ${recordedTime}`
+        ? `${editMeal ? 'Updates' : 'Adds to'} ${mealType.toLowerCase()} · ${dateLabel} at ${recordedTime}`
         : 'Choose a food to continue.'
     const selectionAmount = Number(amount)
     const selectionValid =
@@ -485,7 +586,7 @@ export function FoodLogger({
             <Modal
                 opened={opened}
                 onClose={close}
-                title={<Text fw={750}>Log food</Text>}
+                title={<Text fw={750}>{editMeal ? 'Edit meal' : 'Log food'}</Text>}
                 size="lg"
                 className="food-logger"
                 centered
@@ -551,7 +652,11 @@ export function FoodLogger({
                         autoFocus
                         size="md"
                         radius="md"
-                        placeholder="Search foods and recipes…"
+                        placeholder={
+                            editMeal
+                                ? 'Search foods and recipes to replace…'
+                                : 'Search foods and recipes…'
+                        }
                         aria-label="Search foods and recipes"
                         value={query}
                         leftSection={<IconSearch size={18} />}
@@ -597,12 +702,24 @@ export function FoodLogger({
 
                             <div className="food-log-amount-row">
                                 <NumberInput
-                                    label={selection.kind === 'food' ? 'Amount' : 'Servings'}
+                                    label={
+                                        selection.kind === 'food' ||
+                                        (selection.kind === 'snapshot' &&
+                                            selection.meal.serving?.unit === 'g')
+                                            ? 'Amount'
+                                            : 'Servings'
+                                    }
                                     value={amount}
                                     onChange={setAmount}
                                     min={0.01}
                                     decimalScale={2}
-                                    suffix={selection.kind === 'food' ? ' g' : undefined}
+                                    suffix={
+                                        selection.kind === 'food' ||
+                                        (selection.kind === 'snapshot' &&
+                                            selection.meal.serving?.unit === 'g')
+                                            ? ' g'
+                                            : undefined
+                                    }
                                 />
                                 <div>
                                     <Text size="xs" fw={700} c="dimmed" mb={6}>
@@ -623,11 +740,19 @@ export function FoodLogger({
                                                       }),
                                                   ),
                                               ]
-                                            : [
-                                                  { label: '½ serving', value: 0.5 },
-                                                  { label: '1 serving', value: 1 },
-                                                  { label: '2 servings', value: 2 },
-                                              ]
+                                            : selection.kind === 'recipe' ||
+                                                selection.meal.serving?.unit !== 'g'
+                                              ? [
+                                                    { label: '½ serving', value: 0.5 },
+                                                    { label: '1 serving', value: 1 },
+                                                    { label: '2 servings', value: 2 },
+                                                ]
+                                              : [
+                                                    {
+                                                        label: 'Original',
+                                                        value: selectionDefaultAmount(selection),
+                                                    },
+                                                ]
                                         ).map(preset => (
                                             <Button
                                                 key={`${preset.label}-${preset.value}`}
@@ -1013,7 +1138,7 @@ export function FoodLogger({
                         loading={selection ? loggingKey === selectionKey(selection) : false}
                         onClick={save}
                     >
-                        Log food
+                        {editMeal ? 'Save changes' : 'Log food'}
                     </Button>
                 </div>
             </Modal>
