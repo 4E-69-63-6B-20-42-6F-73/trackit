@@ -1,10 +1,16 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
+import { getJournalEntry } from '../lib/journalApi'
 import { JournalEventList } from './JournalEventList'
+
+vi.mock('../lib/journalApi', () => ({
+    getJournalEntry: vi.fn(),
+}))
 
 const sleepEvent = {
     id: 'sleep-entry',
@@ -76,17 +82,29 @@ const preferences = {
     units: 'metric' as const,
 }
 
-describe('Journal entry details', () => {
-    it('opens a detailed sleep view directly', async () => {
-        render(
-            <MemoryRouter>
-                <MantineProvider>
+const renderEvents = (events: Array<typeof sleepEvent | typeof mealEvent>) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
+        <MemoryRouter>
+            <MantineProvider>
+                <QueryClientProvider client={queryClient}>
                     <ServerDataProvider initialData={{ preferences }}>
-                        <JournalEventList events={[sleepEvent]} roomy />
+                        <JournalEventList events={events} roomy />
                     </ServerDataProvider>
-                </MantineProvider>
-            </MemoryRouter>,
-        )
+                </QueryClientProvider>
+            </MantineProvider>
+        </MemoryRouter>,
+    )
+}
+
+describe('Journal entry details', () => {
+    beforeEach(() => {
+        vi.mocked(getJournalEntry).mockReset()
+    })
+
+    it('opens a detailed sleep view directly', async () => {
+        vi.mocked(getJournalEntry).mockResolvedValue(sleepEvent)
+        renderEvents([sleepEvent])
 
         await userEvent.click(screen.getByRole('button', { name: /sleep session/i }))
         const dialog = await screen.findByRole('dialog')
@@ -103,15 +121,8 @@ describe('Journal entry details', () => {
     })
 
     it('shows meal size and energy in the Journal row and full nutrition in details', async () => {
-        render(
-            <MemoryRouter>
-                <MantineProvider>
-                    <ServerDataProvider initialData={{ preferences }}>
-                        <JournalEventList events={[mealEvent]} roomy />
-                    </ServerDataProvider>
-                </MantineProvider>
-            </MemoryRouter>,
-        )
+        vi.mocked(getJournalEntry).mockResolvedValue(mealEvent)
+        renderEvents([mealEvent])
 
         expect(screen.getByText('150 g · 95 kcal')).toBeInTheDocument()
         await userEvent.click(screen.getByRole('button', { name: /plain skyr/i }))
