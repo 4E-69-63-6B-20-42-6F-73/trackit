@@ -61,7 +61,6 @@ export function Trends() {
     const [showAnalysis, setShowAnalysis] = useState(false)
     const [granularity, setGranularity] = useState<TrendGranularity>('daily')
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
-    const [actionError, setActionError] = useState('')
     const availableRange = { from: addCalendarDays(todayKey, -179), to: todayKey }
     const availableMetricsQuery = useQuery({
         queryKey: [...healthQueryKeys.dailyMetrics, availableRange],
@@ -215,8 +214,6 @@ export function Trends() {
     const excludeMutation = useMutation({
         mutationFn: ({ observation, excluded }: { observation: NumericObservation; excluded: boolean }) =>
             setObservationExcluded(observation, excluded),
-        onMutate: () => setActionError(''),
-        onError: () => setActionError('The observation could not be updated. Try again.'),
     })
     const saveViewMutation = useMutation({
         mutationFn: async () => {
@@ -229,15 +226,21 @@ export function Trends() {
                 granularity,
             })
         },
-        onMutate: () => setActionError(''),
         onSuccess: saved => {
             queryClient.setQueryData<TrendViewRecord[]>(serverQueryKeys.trendViews, current => [
                 saved,
                 ...(current ?? []).filter(view => view.id !== saved.id),
             ])
         },
-        onError: () => setActionError('The trend view could not be saved. Try again.'),
     })
+    const actionError =
+        excludeMutation.submittedAt >= saveViewMutation.submittedAt
+            ? excludeMutation.isError
+                ? 'The observation could not be updated. Try again.'
+                : ''
+            : saveViewMutation.isError
+              ? 'The trend view could not be saved. Try again.'
+              : ''
 
     const loadView = (id: string) => {
         const view = savedViews.find(item => item.id === id)
@@ -254,6 +257,8 @@ export function Trends() {
 
     const pageEmpty =
         !loading && (availableMetricsQuery.isError || recordedDefinitionIds.length === 0)
+    const rangeUnavailable = Boolean(activeDefinitionId) && observationsQuery.isError
+    const rangeEmpty = !loading && !rangeUnavailable && coveredValues.length === 0
 
     return (
         <div className="page-content trends-page trends-revamp">
@@ -373,6 +378,10 @@ export function Trends() {
                         </div>
                     </div>
 
+                    {savedViewsQuery.isError && (
+                        <Alert color="orange">Saved trend views could not be loaded.</Alert>
+                    )}
+
                     {average !== null && (
                         <div className="trends-summary" aria-label="Trend summary">
                             <div>
@@ -419,7 +428,11 @@ export function Trends() {
                         </div>
                     )}
 
-                    {!loading && coveredValues.length === 0 ? (
+                    {rangeUnavailable ? (
+                        <Alert color="orange">
+                            Trend observations for this range could not be loaded.
+                        </Alert>
+                    ) : rangeEmpty ? (
                         <div className="trend-metric-empty">
                             <Text fw={650}>
                                 No{' '}
@@ -457,7 +470,7 @@ export function Trends() {
                         <TrendChart
                             points={points}
                             loading={loading}
-                            error={error && !isNutritionMetric}
+                            error={error}
                             metric={activeDefinitionId ? metricLabel(activeDefinitionId) : ''}
                             onInspect={isNutritionMetric ? undefined : setInspectedIds}
                             comparisonPoints={comparisonDefinitionId ? comparisonPoints : undefined}
