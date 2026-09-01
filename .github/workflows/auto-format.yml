@@ -34,6 +34,10 @@ jobs:
             - uses: actions/setup-node@v7
               with:
                   node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Generate serving options migration
+              run: npm run db:generate -- --name=food_serving_options
             - name: Format changed files
               env:
                   BASE_SHA: ${{ github.event.pull_request.base.sha }}
@@ -42,12 +46,12 @@ jobs:
                     '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
                     '*.md' '*.css' '*.scss' '*.yaml' '*.yml' \
                     | xargs -0 -r npx --yes prettier@3.9.6 --write
-            - name: Commit formatting
+            - name: Commit formatting and migration
               run: |
                   if ! git diff --quiet; then
                     git config user.name "trackit-formatter"
                     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
                     git add --all
-                    git commit -m "Format with Prettier"
+                    git commit -m "Generate food serving options migration"
                     git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
                   fi
