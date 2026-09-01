@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { Button, Group, Text } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import { IconCalendarStats } from '@tabler/icons-react'
 import type { JournalEvent } from '../domain/types'
 import { updatePreferences } from '../lib/preferencesApi'
@@ -27,7 +28,23 @@ export function WeeklyReflection({
             event => !event.observedAt || new Date(event.observedAt).getTime() >= from,
         )
     }, [currentWeek, events])
-    if (!preferences || preferences.experience?.dismissedWeeklyReflection === currentWeek)
+    const dismissMutation = useMutation({
+        mutationFn: () => {
+            if (!preferences) throw new Error('Preferences unavailable')
+            return updatePreferences({
+                experience: {
+                    ...preferences.experience,
+                    dismissedWeeklyReflection: currentWeek,
+                },
+            })
+        },
+    })
+
+    if (
+        !preferences ||
+        preferences.experience?.dismissedWeeklyReflection === currentWeek ||
+        dismissMutation.isSuccess
+    )
         return null
     const categories = new Set(recent.map(event => event.category)).size
     return (
@@ -50,14 +67,8 @@ export function WeeklyReflection({
                     size="xs"
                     variant="subtle"
                     color="gray"
-                    onClick={async () => {
-                        await updatePreferences({
-                            experience: {
-                                ...preferences.experience,
-                                dismissedWeeklyReflection: currentWeek,
-                            },
-                        })
-                    }}
+                    loading={dismissMutation.isPending}
+                    onClick={() => dismissMutation.mutate()}
                 >
                     Not this week
                 </Button>

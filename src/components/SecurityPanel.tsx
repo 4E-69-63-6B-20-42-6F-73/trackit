@@ -1,6 +1,8 @@
-import { useEffect, useState } from 'react'
-import { Alert, Badge, Button, Divider, Group, Select, Stack, Text } from '@mantine/core'
+import { Alert, Badge, Button, Divider, Group, Select, Skeleton, Stack, Text } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { authRequest } from '../lib/authApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 type Session = {
     id: string
@@ -51,56 +53,82 @@ const actionLabel = (action: string) =>
         'data.exported': 'Data export downloaded',
     })[action] ?? action.replaceAll('.', ' ').replace(/^./, letter => letter.toUpperCase())
 
+const loadSessions = async (signal: AbortSignal) => {
+    const response = await authRequest('/api/auth/sessions', { signal })
+    if (!response.ok) throw new Error('Sessions unavailable')
+    return ((await response.json()) as { data: Session[] }).data
+}
+
+const loadAudit = async (signal: AbortSignal) => {
+    const response = await authRequest('/api/auth/audit', { signal })
+    if (!response.ok) throw new Error('Security activity unavailable')
+    return ((await response.json()) as { data: AuditEvent[] }).data
+}
+
 export function SecurityPanel() {
-    const [sessions, setSessions] = useState<Session[]>([])
-    const [events, setEvents] = useState<AuditEvent[]>([])
-    const [unavailable, setUnavailable] = useState(false)
-    const [message, setMessage] = useState('')
-    const [busy, setBusy] = useState(false)
+    const queryClient = useQueryClient()
     const [auditFilter, setAuditFilter] = useState('all')
     const [visibleEvents, setVisibleEvents] = useState(10)
-
-    const load = () =>
-        Promise.all([authRequest('/api/auth/sessions'), authRequest('/api/auth/audit')])
-            .then(async ([sessionResponse, auditResponse]) => {
-                if (!sessionResponse.ok || !auditResponse.ok) throw new Error('unavailable')
-                setSessions(((await sessionResponse.json()) as { data: Session[] }).data)
-                setEvents(((await auditResponse.json()) as { data: AuditEvent[] }).data)
-            })
-            .catch(() => setUnavailable(true))
-
-    useEffect(() => {
-        void load()
-    }, [])
-
-    const revoke = async (id: string) => {
-        setBusy(true)
-        try {
+    const sessionsQuery = useQuery({
+        queryKey: serverQueryKeys.securitySessions,
+        queryFn: ({ signal }) => loadSessions(signal),
+    })
+    const auditQuery = useQuery({
+        queryKey: serverQueryKeys.securityAudit,
+        queryFn: ({ signal }) => loadAudit(signal),
+    })
+    const revokeMutation = useMutation({
+        mutationFn: async (id: string) => {
             const response = await authRequest(`/api/auth/sessions/${id}`, { method: 'DELETE' })
             if (!response.ok) throw new Error('rejected')
-            setSessions(current => current.filter(session => session.id !== id))
-            setMessage('The session was revoked.')
-        } catch {
-            setMessage('The session could not be revoked. Try again.')
-        } finally {
-            setBusy(false)
-        }
-    }
-
-    const revokeAll = async () => {
-        setBusy(true)
-        try {
+        },
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: serverQueryKeys.securitySessions }),
+                queryClient.invalidateQueries({ queryKey: serverQueryKeys.securityAudit }),
+            ])
+        },
+    })
+    const revokeAllMutation = useMutation({
+        mutationFn: async () => {
             const response = await authRequest('/api/auth/logout-all', { method: 'POST' })
             if (!response.ok) throw new Error('rejected')
-            window.location.reload()
-        } catch {
-            setMessage('Sessions could not be revoked. Try again.')
-            setBusy(false)
-        }
+        },
+        onSuccess: () => window.location.reload(),
+    })
+    const sessions = sessionsQuery.data ?? []
+    const events = auditQuery.data ?? []
+    const unavailable = sessionsQuery.isError || auditQuery.isError
+    const loading = sessionsQuery.isPending || auditQuery.isPending
+    const busy = revokeMutation.isPending || revokeAllMutation.isPending
+    const message = revokeMutation.isSuccess
+        ? 'The session was revoked.'
+        : revokeMutation.isError
+          ? 'The session could not be revoked. Try again.'
+          : revokeAllMutation.isError
+            ? 'Sessions could not be revoked. Try again.'
+            : ''
+
+    const revoke = (id: string) => {
+        revokeAllMutation.reset()
+        revokeMutation.mutate(id)
+    }
+    const revokeAll = () => {
+        revokeMutation.reset()
+        revokeAllMutation.mutate()
     }
 
     if (unavailable) {
         return <Text c="dimmed">Session management is available when connected to the server.</Text>
+    }
+    if (loading) {
+        return (
+            <Stack>
+                <Skeleton height={42} radius="md" />
+                <Skeleton height={72} radius="md" />
+                <Skeleton height={72} radius="md" />
+            </Stack>
+        )
     }
     const filteredEvents = events.filter(event => {
         if (auditFilter === 'all') return true
@@ -119,9 +147,9 @@ export function SecurityPanel() {
                         size="xs"
                         color="red"
                         variant="light"
-                        loading={busy}
+                        loading={revokeAllMutation.isPending}
                         disabled={sessions.length === 0}
-                        onClick={() => void revokeAll()}
+                        onClick={revokeAll}
                     >
                         Sign out all devices
                     </Button>
@@ -155,7 +183,10 @@ export function SecurityPanel() {
                         size="xs"
                         variant="default"
                         disabled={busy || session.current}
-                        onClick={() => void revoke(session.id)}
+                        loading={
+                            revokeMutation.isPending && revokeMutation.variables === session.id
+                        }
+                        onClick={() => revoke(session.id)}
                     >
                         Revoke
                     </Button>

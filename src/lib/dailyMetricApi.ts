@@ -1,23 +1,25 @@
-import { environment } from '../app/env'
-import { sharedJsonRequest } from './sharedRequest'
+import { $api, apiClient } from './apiClient'
+import type { paths } from './api.generated'
+import { queryClient } from './queryClient'
 
-export type DailyMetric = {
-    date: string
-    definitionId: string
-    value: number
-    unit: string
-    derivationVersion: number
-}
+export type DailyMetric =
+    paths['/api/daily-metrics']['get']['responses'][200]['content']['application/json']['data'][number]
+
+export const dailyMetricQueryOptions = (range: { from: string; to: string }) =>
+    $api.queryOptions('get', '/api/daily-metrics', { params: { query: range } })
 
 export async function listDailyMetrics(
     range: { from: string; to: string },
     signal?: AbortSignal,
 ): Promise<DailyMetric[]> {
-    const query = new URLSearchParams(range)
-    return (
-        await sharedJsonRequest<{ data: DailyMetric[] }>(
-            `${environment.VITE_API_URL}/api/daily-metrics?${query}`,
+    if (signal) {
+        const { data, response } = await apiClient.GET('/api/daily-metrics', {
+            params: { query: range },
             signal,
-        )
-    ).data
+        })
+        if (!response.ok || !data) throw new Error('Daily metrics could not be loaded')
+        return data.data
+    }
+    const result = await queryClient.fetchQuery(dailyMetricQueryOptions(range))
+    return result.data
 }

@@ -11,6 +11,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
     deleteOwnerData,
@@ -71,18 +72,34 @@ const localDateKey = (date: Date) => {
 
 export function PrivacyPanel() {
     const [confirmation, setConfirmation] = useState('')
-    const [message, setMessage] = useState('')
-    const [messageColor, setMessageColor] = useState<'green' | 'orange'>('orange')
-    const [busy, setBusy] = useState(false)
-    const [maintenanceBusy, setMaintenanceBusy] = useState<'projections' | 'observations' | null>(
-        null,
-    )
     const [rangeMode, setRangeMode] = useState<RangeMode>('30d')
     const [customFrom, setCustomFrom] = useState('')
     const [customTo, setCustomTo] = useState(localDateKey(new Date()))
     const [recordCategory, setRecordCategory] = useState<RecordCategory>('all')
     const [confirmRederive, setConfirmRederive] = useState(false)
-    const [exporting, setExporting] = useState<'json' | 'csv' | null>(null)
+
+    const exportMutation = useMutation({
+        mutationFn: (format: 'json' | 'csv') => downloadExport(format),
+    })
+    const rebuildMutation = useMutation({
+        mutationFn: ({ range }: { range: MaintenanceDateRange; label: string }) =>
+            rebuildProjections(range),
+    })
+    const rederiveMutation = useMutation({
+        mutationFn: ({ input }: { input: MaintenanceRederiveRequest; scopeLabel: string }) =>
+            rederiveObservations(input),
+    })
+    const deleteMutation = useMutation({
+        mutationFn: (phrase: string) => deleteOwnerData(phrase),
+        onSuccess: () => window.location.reload(),
+    })
+
+    const resetFeedback = () => {
+        exportMutation.reset()
+        rebuildMutation.reset()
+        rederiveMutation.reset()
+        deleteMutation.reset()
+    }
 
     const maintenanceRange = (): MaintenanceDateRange => {
         if (rangeMode === 'all') return {}
@@ -112,78 +129,54 @@ export function PrivacyPanel() {
             ? rangeLabel()
             : `${recordCategories[recordCategory].label.toLowerCase()} in ${rangeLabel()}`
 
-    const exportData = async (format: 'json' | 'csv') => {
-        setExporting(format)
-        setMessage('')
-        try {
-            await downloadExport(format)
-        } catch {
-            setMessageColor('orange')
-            setMessage('The export could not be downloaded. Try again.')
-        } finally {
-            setExporting(null)
-        }
+    const exportData = (format: 'json' | 'csv') => {
+        resetFeedback()
+        exportMutation.mutate(format)
     }
 
-    const rebuild = async () => {
-        setMaintenanceBusy('projections')
-        setMessage('')
-        try {
-            const result = await rebuildProjections(maintenanceRange())
-            setMessageColor('green')
-            setMessage(
-                result.queuedDates
-                    ? `Projection rebuild queued for ${result.queuedDates} day${result.queuedDates === 1 ? '' : 's'} in ${rangeLabel()}.`
-                    : `There are no projection dates to rebuild in ${rangeLabel()}.`,
-            )
-        } catch (error) {
-            setMessageColor('orange')
-            setMessage(
-                error instanceof Error
-                    ? `Projection rebuild could not be queued: ${error.message}`
-                    : 'The projection rebuild could not be queued. Try again.',
-            )
-        } finally {
-            setMaintenanceBusy(null)
-        }
+    const rebuild = () => {
+        resetFeedback()
+        rebuildMutation.mutate({ range: maintenanceRange(), label: rangeLabel() })
     }
 
-    const rederive = async () => {
+    const rederive = () => {
         setConfirmRederive(false)
-        setMaintenanceBusy('observations')
-        setMessage('')
-        try {
-            const result = await rederiveObservations(maintenanceRederiveRequest())
-            setMessageColor('green')
-            setMessage(
-                result.sourceRecords
-                    ? `Re-derived ${result.canonicalObservations} canonical observation${result.canonicalObservations === 1 ? '' : 's'} from ${result.sourceRecords} provider record${result.sourceRecords === 1 ? '' : 's'} for ${rederiveScopeLabel()}. ${result.queuedProjectionDates} affected projection day${result.queuedProjectionDates === 1 ? '' : 's'} queued for refresh.`
-                    : `There are no retained provider records to re-derive for ${rederiveScopeLabel()}.`,
-            )
-        } catch (error) {
-            setMessageColor('orange')
-            setMessage(
-                error instanceof Error
-                    ? `Imported observations could not be re-derived: ${error.message}`
-                    : 'Imported observations could not be re-derived. Try again.',
-            )
-        } finally {
-            setMaintenanceBusy(null)
-        }
+        resetFeedback()
+        rederiveMutation.mutate({
+            input: maintenanceRederiveRequest(),
+            scopeLabel: rederiveScopeLabel(),
+        })
     }
 
-    const removeAll = async () => {
-        setBusy(true)
-        setMessage('')
-        try {
-            await deleteOwnerData(confirmation)
-            window.location.reload()
-        } catch {
-            setMessageColor('orange')
-            setMessage('All data could not be deleted. Check the phrase and try again.')
-            setBusy(false)
-        }
+    const removeAll = () => {
+        resetFeedback()
+        deleteMutation.mutate(confirmation)
     }
+
+    const maintenanceBusy = rebuildMutation.isPending || rederiveMutation.isPending
+    const message = rebuildMutation.isSuccess
+        ? rebuildMutation.data.queuedDates
+            ? `Projection rebuild queued for ${rebuildMutation.data.queuedDates} day${rebuildMutation.data.queuedDates === 1 ? '' : 's'} in ${rebuildMutation.variables.label}.`
+            : `There are no projection dates to rebuild in ${rebuildMutation.variables.label}.`
+        : rebuildMutation.isError
+          ? rebuildMutation.error instanceof Error
+              ? `Projection rebuild could not be queued: ${rebuildMutation.error.message}`
+              : 'The projection rebuild could not be queued. Try again.'
+          : rederiveMutation.isSuccess
+            ? rederiveMutation.data.sourceRecords
+                ? `Re-derived ${rederiveMutation.data.canonicalObservations} canonical observation${rederiveMutation.data.canonicalObservations === 1 ? '' : 's'} from ${rederiveMutation.data.sourceRecords} provider record${rederiveMutation.data.sourceRecords === 1 ? '' : 's'} for ${rederiveMutation.variables.scopeLabel}. ${rederiveMutation.data.queuedProjectionDates} affected projection day${rederiveMutation.data.queuedProjectionDates === 1 ? '' : 's'} queued for refresh.`
+                : `There are no retained provider records to re-derive for ${rederiveMutation.variables.scopeLabel}.`
+            : rederiveMutation.isError
+              ? rederiveMutation.error instanceof Error
+                  ? `Imported observations could not be re-derived: ${rederiveMutation.error.message}`
+                  : 'Imported observations could not be re-derived. Try again.'
+              : exportMutation.isError
+                ? 'The export could not be downloaded. Try again.'
+                : deleteMutation.isError
+                  ? 'All data could not be deleted. Check the phrase and try again.'
+                  : ''
+    const messageColor =
+        rebuildMutation.isSuccess || rederiveMutation.isSuccess ? 'green' : 'orange'
 
     return (
         <Stack gap="xl">
@@ -196,15 +189,15 @@ export function PrivacyPanel() {
                 <Group>
                     <Button
                         variant="default"
-                        loading={exporting === 'json'}
-                        onClick={() => void exportData('json')}
+                        loading={exportMutation.isPending && exportMutation.variables === 'json'}
+                        onClick={() => exportData('json')}
                     >
                         Export JSON
                     </Button>
                     <Button
                         variant="default"
-                        loading={exporting === 'csv'}
-                        onClick={() => void exportData('csv')}
+                        loading={exportMutation.isPending && exportMutation.variables === 'csv'}
+                        onClick={() => exportData('csv')}
                     >
                         Export CSV
                     </Button>
@@ -265,9 +258,9 @@ export function PrivacyPanel() {
                         </Text>
                         <Button
                             variant="default"
-                            loading={maintenanceBusy === 'projections'}
-                            disabled={!rangeValid || maintenanceBusy !== null}
-                            onClick={() => void rebuild()}
+                            loading={rebuildMutation.isPending}
+                            disabled={!rangeValid || maintenanceBusy}
+                            onClick={rebuild}
                         >
                             Rebuild projections
                         </Button>
@@ -301,8 +294,8 @@ export function PrivacyPanel() {
                         />
                         <Button
                             variant="default"
-                            loading={maintenanceBusy === 'observations'}
-                            disabled={!rangeValid || maintenanceBusy !== null}
+                            loading={rederiveMutation.isPending}
+                            disabled={!rangeValid || maintenanceBusy}
                             onClick={() => setConfirmRederive(true)}
                         >
                             Re-derive imported observations
@@ -328,9 +321,9 @@ export function PrivacyPanel() {
                 <Button
                     mt="md"
                     color="red"
-                    loading={busy}
+                    loading={deleteMutation.isPending}
                     disabled={confirmation !== 'DELETE ALL TRACKIT DATA'}
-                    onClick={() => void removeAll()}
+                    onClick={removeAll}
                 >
                     Delete all TrackIt data
                 </Button>
@@ -358,7 +351,11 @@ export function PrivacyPanel() {
                         <Button variant="default" onClick={() => setConfirmRederive(false)}>
                             Cancel
                         </Button>
-                        <Button color="orange" onClick={() => void rederive()}>
+                        <Button
+                            color="orange"
+                            loading={rederiveMutation.isPending}
+                            onClick={rederive}
+                        >
                             Re-derive observations
                         </Button>
                     </Group>

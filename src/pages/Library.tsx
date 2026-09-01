@@ -1,31 +1,23 @@
-import { useEffect, useState } from 'react'
-import { Alert, Group, Paper, SimpleGrid, Text } from '@mantine/core'
+import { Alert, Group, Paper, SimpleGrid, Skeleton, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import { IconApple, IconChartDots, IconChefHat, IconChevronRight } from '@tabler/icons-react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { listRecipes, searchFoods } from '../lib/nutritionApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 export function Library() {
-    const [foodCount, setFoodCount] = useState(0)
-    const [recipeCount, setRecipeCount] = useState(0)
-    const [message, setMessage] = useState('')
-
-    useEffect(() => {
-        let active = true
-        void Promise.all([searchFoods(''), listRecipes()])
-            .then(([foods, recipes]) => {
-                if (!active) return
-                setFoodCount(foods.length)
-                setRecipeCount(recipes.length)
-                setMessage('')
-            })
-            .catch(() => {
-                if (active) setMessage('Your library could not be loaded from the server.')
-            })
-        return () => {
-            active = false
-        }
-    }, [])
+    const foodsQuery = useQuery({
+        queryKey: [...serverQueryKeys.foods, ''],
+        queryFn: () => searchFoods(''),
+    })
+    const recipesQuery = useQuery({
+        queryKey: serverQueryKeys.recipes,
+        queryFn: () => listRecipes(),
+    })
+    const unavailable = foodsQuery.isError || recipesQuery.isError
+    const foodCount = foodsQuery.data?.length ?? 0
+    const recipeCount = recipesQuery.data?.length ?? 0
 
     return (
         <div className="page-content simple-page">
@@ -33,9 +25,9 @@ export function Library() {
                 title="Library"
                 description="Reusable reference data for logging, recipes, and metric behavior."
             />
-            {message && (
+            {unavailable && (
                 <Alert mt="md" color="orange">
-                    {message}
+                    Your library could not be loaded from the server.
                 </Alert>
             )}
 
@@ -51,9 +43,17 @@ export function Library() {
                 >
                     <Group justify="space-between" align="start">
                         <IconApple size={22} />
-                        <Text size="xs" c="dimmed">
-                            {foodCount}
-                        </Text>
+                        {foodsQuery.isPending ? (
+                            <Skeleton height={14} width={24} aria-label="Loading food count" />
+                        ) : foodsQuery.isError ? (
+                            <Text size="xs" c="dimmed">
+                                Unavailable
+                            </Text>
+                        ) : (
+                            <Text size="xs" c="dimmed">
+                                {foodCount}
+                            </Text>
+                        )}
                     </Group>
                     <Text fw={700} mt="sm">
                         Foods
@@ -79,9 +79,17 @@ export function Library() {
                 >
                     <Group justify="space-between" align="start">
                         <IconChefHat size={22} />
-                        <Text size="xs" c="dimmed">
-                            {recipeCount}
-                        </Text>
+                        {recipesQuery.isPending ? (
+                            <Skeleton height={14} width={24} aria-label="Loading recipe count" />
+                        ) : recipesQuery.isError ? (
+                            <Text size="xs" c="dimmed">
+                                Unavailable
+                            </Text>
+                        ) : (
+                            <Text size="xs" c="dimmed">
+                                {recipeCount}
+                            </Text>
+                        )}
                     </Group>
                     <Text fw={700} mt="sm">
                         Recipes

@@ -1,32 +1,36 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Badge, Stack, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import { IconChevronRight, IconCircleCheck, IconDeviceMobile, IconTools } from '@tabler/icons-react'
+import { useNavigate } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
-import { healthConnectStatus, listDevices, type HealthConnectStatus } from '../lib/deviceApi'
+import { healthConnectStatus, listDevices } from '../lib/deviceApi'
 import { getMcpStatus } from '../lib/mcpApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 export function ConnectionsPanel() {
     const navigate = useNavigate()
-    const [mcp, setMcp] = useState(false)
-    const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
-        'Not connected',
-    )
-    const [deviceCount, setDeviceCount] = useState(0)
-    const refreshHealthStatus = useCallback(() => {
-        void listDevices()
-            .then(devices => {
-                setHealthStatus(healthConnectStatus(devices))
-                setDeviceCount(devices.length)
-            })
-            .catch(() => setHealthStatus('Unavailable'))
-    }, [])
-    useEffect(refreshHealthStatus, [refreshHealthStatus])
-    useEffect(() => {
-        void getMcpStatus()
-            .then(status => setMcp(status.enabled))
-            .catch(() => setMcp(false))
-    }, [])
+    const devicesQuery = useQuery({
+        queryKey: serverQueryKeys.devices,
+        queryFn: () => listDevices(),
+    })
+    const mcpQuery = useQuery({
+        queryKey: serverQueryKeys.mcpStatus,
+        queryFn: () => getMcpStatus(),
+    })
+    const devices = devicesQuery.data ?? []
+    const healthStatus = devicesQuery.isPending
+        ? 'Checking…'
+        : devicesQuery.isError
+          ? 'Unavailable'
+          : healthConnectStatus(devices)
+    const mcpStatus = mcpQuery.isPending
+        ? 'Checking…'
+        : mcpQuery.isError
+          ? 'Unavailable'
+          : mcpQuery.data.enabled
+            ? 'Enabled'
+            : 'Disabled'
+    const deviceCount = devices.length
 
     const cards = [
         {
@@ -41,7 +45,7 @@ export function ConnectionsPanel() {
             key: 'mcp' as const,
             icon: IconTools,
             title: 'MCP server',
-            status: mcp ? 'Enabled' : 'Disabled',
+            status: mcpStatus,
             desc: 'Give compatible assistants scoped, auditable access to selected TrackIt capabilities.',
             color: 'violet',
         },
@@ -72,7 +76,7 @@ export function ConnectionsPanel() {
                                 variant="light"
                                 color={
                                     key === 'mcp'
-                                        ? mcp
+                                        ? status === 'Enabled'
                                             ? 'trackit'
                                             : 'gray'
                                         : status === 'Up to date'
@@ -109,8 +113,12 @@ export function ConnectionsPanel() {
                                                     ? 'Sync in progress'
                                                     : healthStatus === 'Connected'
                                                       ? 'Waiting for first sync'
-                                                      : 'Connect device'
-                                    : 'Manage assistants'}
+                                                      : healthStatus === 'Checking…'
+                                                        ? 'Checking devices'
+                                                        : 'Connect device'
+                                    : mcpStatus === 'Checking…'
+                                      ? 'Checking assistant access'
+                                      : 'Manage assistants'}
                             </Text>
                             <IconChevronRight size={18} />
                         </div>

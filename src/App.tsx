@@ -84,7 +84,12 @@ export default function App() {
     const routeDate = new URLSearchParams(location.search).get('date')
     const todayDate = routeDate ?? calendarTodayKey(timezone)
     const todayRange = calendarDayRangeForKey(todayDate, timezone)
-    const { events, syncFailure, retry } = useJournal(
+    const {
+        events,
+        status: todayJournalStatus,
+        syncFailure,
+        retry,
+    } = useJournal(
         {
             from: todayRange.from.toISOString(),
             to: todayRange.to.toISOString(),
@@ -92,7 +97,8 @@ export default function App() {
         },
         page === 'Today',
     )
-    const { add, remove, update, commandFailure, retryCommand } = useObservationCommands()
+    const { add, remove, update, commandFailure, commandPending, retryCommand } =
+        useObservationCommands()
     const [lastAdded, setLastAdded] = useState<{ id: string; title: string } | null>(null)
     const mainRef = useRef<HTMLElement>(null)
     const previousPath = useRef(location.pathname)
@@ -103,9 +109,10 @@ export default function App() {
     }, [location.pathname])
 
     const openPage = (nextPage: Exclude<Page, 'Settings'>) => navigate(pagePaths[nextPage])
-    const addQuick = (input: CreateObservationInput) => {
-        add(input)
-        setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
+    const addQuick = async (input: CreateObservationInput) => {
+        const saved = await add(input)
+        if (saved) setLastAdded({ id: input.id!, title: input.title ?? input.definitionId })
+        return saved
     }
 
     const loading =
@@ -147,6 +154,7 @@ export default function App() {
                                 element={
                                     <Today
                                         events={events}
+                                        journalStatus={todayJournalStatus}
                                         openJournal={date => navigate(`/journal?date=${date}`)}
                                         openTrends={definitionId =>
                                             navigate(
@@ -166,7 +174,8 @@ export default function App() {
                                 path="/journal"
                                 element={
                                     <Journal
-                                        remove={remove}
+                                        remove={id => void remove(id)}
+                                        commandPending={commandPending}
                                         update={(event, changes) =>
                                             update(event.id, {
                                                 ...changes,
@@ -268,6 +277,8 @@ export default function App() {
             )}
             <LoggerHost
                 add={addQuick}
+                pending={commandPending}
+                error={commandFailure}
                 selectedDate={page === 'Today' ? todayDate : page === 'Journal' ? routeDate : null}
             />
             <GlobalLogFab />
@@ -286,8 +297,9 @@ export default function App() {
                         size="compact-xs"
                         variant="subtle"
                         color="trackit"
+                        loading={commandPending}
                         onClick={() => {
-                            remove(lastAdded.id)
+                            void remove(lastAdded.id)
                             setLastAdded(null)
                         }}
                     >

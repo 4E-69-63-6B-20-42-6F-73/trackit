@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
@@ -48,16 +49,20 @@ const observations: NumericObservation[] = [79, 80, 81, 80].map((value, index) =
     excluded: false,
     version: 1,
 }))
-const renderPanel = (goals: Goal[] = [], savedPreferences = preferences) =>
-    render(
+const renderPanel = (goals: Goal[] = [], savedPreferences = preferences) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    return render(
         <MemoryRouter>
             <MantineProvider>
-                <ServerDataProvider initialData={{ preferences: savedPreferences, goals }}>
-                    <GoalsPanel />
-                </ServerDataProvider>
+                <QueryClientProvider client={queryClient}>
+                    <ServerDataProvider initialData={{ preferences: savedPreferences, goals }}>
+                        <GoalsPanel />
+                    </ServerDataProvider>
+                </QueryClientProvider>
             </MantineProvider>
         </MemoryRouter>,
     )
+}
 const choose = async (user: ReturnType<typeof userEvent.setup>, label: string, option: string) => {
     await user.click(screen.getByRole('combobox', { name: label }))
     const match = screen

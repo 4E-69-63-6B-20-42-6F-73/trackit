@@ -1,6 +1,8 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { createContext, useContext, useMemo, type ReactNode } from 'react'
 import { listGoals, type GoalRecord } from '../lib/goalApi'
 import { getPreferences, type Preferences } from '../lib/preferencesApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 type ServerData = {
     preferences: Preferences | null
@@ -10,17 +12,6 @@ type ServerData = {
 }
 
 const ServerDataContext = createContext<ServerData | null>(null)
-let preferencesRequest: Promise<Preferences> | null = null
-let goalsRequest: Promise<GoalRecord[]> | null = null
-
-const loadPreferences = () =>
-    (preferencesRequest ??= getPreferences().finally(() => {
-        preferencesRequest = null
-    }))
-const loadGoals = () =>
-    (goalsRequest ??= listGoals().finally(() => {
-        goalsRequest = null
-    }))
 
 export function ServerDataProvider({
     children,
@@ -29,71 +20,23 @@ export function ServerDataProvider({
     children: ReactNode
     initialData?: { preferences: Preferences; goals?: GoalRecord[] }
 }) {
-    const [preferences, setPreferences] = useState<Preferences | null>(
-        initialData?.preferences ?? null,
-    )
-    const [goals, setGoals] = useState<GoalRecord[]>(initialData?.goals ?? [])
-    const [loading, setLoading] = useState(!initialData)
-    const [unavailable, setUnavailable] = useState(false)
-
-    useEffect(() => {
-        if (initialData) return
-        let active = true
-        const refreshPreferences = () =>
-            void loadPreferences()
-                .then(value => {
-                    if (!active) return
-                    setPreferences(value)
-                    setUnavailable(false)
-                })
-                .catch(() => {
-                    if (active) setUnavailable(true)
-                })
-        const refreshGoals = () =>
-            void loadGoals()
-                .then(value => {
-                    if (!active) return
-                    setGoals(value)
-                    setUnavailable(false)
-                })
-                .catch(() => {
-                    if (active) setUnavailable(true)
-                })
-        const savedPreferences = (event: Event) => {
-            if (active) setPreferences((event as CustomEvent<Preferences>).detail)
-        }
-        const savedGoal = (event: Event) => {
-            if (!active) return
-            const goal = (event as CustomEvent<GoalRecord>).detail
-            setGoals(current => [goal, ...current.filter(item => item.id !== goal.id)])
-        }
-        const deletedGoal = (event: Event) => {
-            const id = (event as CustomEvent<string>).detail
-            if (active) setGoals(current => current.filter(item => item.id !== id))
-        }
-        void Promise.all([loadPreferences(), loadGoals()])
-            .then(([savedPreferences, savedGoals]) => {
-                if (!active) return
-                setPreferences(savedPreferences)
-                setGoals(savedGoals)
-                setUnavailable(false)
-            })
-            .catch(() => active && setUnavailable(true))
-            .finally(() => active && setLoading(false))
-        window.addEventListener('trackit:preferences-changed', refreshPreferences)
-        window.addEventListener('trackit:preferences-saved', savedPreferences)
-        window.addEventListener('trackit:goals-changed', refreshGoals)
-        window.addEventListener('trackit:goal-saved', savedGoal)
-        window.addEventListener('trackit:goal-deleted', deletedGoal as EventListener)
-        return () => {
-            active = false
-            window.removeEventListener('trackit:preferences-changed', refreshPreferences)
-            window.removeEventListener('trackit:preferences-saved', savedPreferences)
-            window.removeEventListener('trackit:goals-changed', refreshGoals)
-            window.removeEventListener('trackit:goal-saved', savedGoal)
-            window.removeEventListener('trackit:goal-deleted', deletedGoal as EventListener)
-        }
-    }, [initialData])
+    const seeded = Boolean(initialData)
+    const preferencesQuery = useQuery({
+        queryKey: serverQueryKeys.preferences,
+        queryFn: ({ signal }) => getPreferences(signal),
+        initialData: initialData?.preferences,
+        staleTime: seeded ? Infinity : undefined,
+    })
+    const goalsQuery = useQuery({
+        queryKey: serverQueryKeys.goals,
+        queryFn: ({ signal }) => listGoals(signal),
+        initialData: initialData ? (initialData.goals ?? []) : undefined,
+        staleTime: seeded ? Infinity : undefined,
+    })
+    const preferences = preferencesQuery.data ?? null
+    const goals = goalsQuery.data ?? []
+    const loading = preferencesQuery.isPending || goalsQuery.isPending
+    const unavailable = preferencesQuery.isError || goalsQuery.isError
 
     const value = useMemo(
         () => ({ preferences, goals, loading, unavailable }),
@@ -102,8 +45,6 @@ export function ServerDataProvider({
     return <ServerDataContext.Provider value={value}>{children}</ServerDataContext.Provider>
 }
 
-// The provider and its companion hook intentionally share this small module.
-// eslint-disable-next-line react-refresh/only-export-components
 export function useServerData() {
     const value = useContext(ServerDataContext)
     if (!value) throw new Error('useServerData must be used inside ServerDataProvider')

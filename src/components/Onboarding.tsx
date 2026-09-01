@@ -10,6 +10,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
     updatePreferences,
@@ -18,13 +19,13 @@ import {
 } from '../lib/preferencesApi'
 import { useServerData } from '../hooks/useServerData'
 
+type SaveKind = 'experience' | 'profile'
+
 export function Onboarding() {
     const navigate = useNavigate()
     const { preferences: sharedPreferences, loading, unavailable } = useServerData()
     const [preferences, setPreferences] = useState<Preferences | null>(sharedPreferences)
     const [step, setStep] = useState(0)
-    const [saving, setSaving] = useState(false)
-    const [error, setError] = useState('')
     const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const detectedLocale = Intl.DateTimeFormat().resolvedOptions().locale
     const timezones =
@@ -33,55 +34,56 @@ export function Onboarding() {
             : [detectedTimezone]
     const locales = [...new Set([detectedLocale, 'en-US', 'en-GB', 'nl-NL', 'de-DE', 'fr-FR'])]
 
+    const saveMutation = useMutation({
+        mutationFn: ({
+            update,
+        }: {
+            kind: SaveKind
+            update: Parameters<typeof updatePreferences>[0]
+        }) => updatePreferences(update),
+        onSuccess: saved => setPreferences(saved),
+    })
+
     useEffect(() => {
         queueMicrotask(() => {
-            if (!sharedPreferences) {
-                if (unavailable) setError('TrackIt could not load setup from your server.')
-                return
-            }
-            setError('')
+            if (!sharedPreferences) return
             setPreferences(sharedPreferences)
             setStep(Math.min(sharedPreferences.experience?.onboardingStep ?? 0, 2))
         })
-    }, [sharedPreferences, unavailable])
+    }, [sharedPreferences])
 
     if (loading || preferences?.experience?.onboardingComplete) return null
 
     const saveExperience = async (next: ExperiencePreferences) => {
         if (!preferences) return false
-        setSaving(true)
-        setError('')
+        saveMutation.reset()
         try {
-            const saved = await updatePreferences({
-                experience: { ...preferences.experience, ...next },
+            await saveMutation.mutateAsync({
+                kind: 'experience',
+                update: { experience: { ...preferences.experience, ...next } },
             })
-            setPreferences(saved)
             return true
         } catch {
-            setError('Setup could not be saved to your server. Nothing was stored in this browser.')
             return false
-        } finally {
-            setSaving(false)
         }
     }
 
     const saveProfile = async () => {
         if (!preferences) return
-        setSaving(true)
-        setError('')
+        saveMutation.reset()
         try {
-            const saved = await updatePreferences({
-                displayName: preferences.displayName,
-                timezone: preferences.timezone,
-                locale: preferences.locale,
-                experience: { ...preferences.experience, onboardingStep: 2 },
+            await saveMutation.mutateAsync({
+                kind: 'profile',
+                update: {
+                    displayName: preferences.displayName,
+                    timezone: preferences.timezone,
+                    locale: preferences.locale,
+                    experience: { ...preferences.experience, onboardingStep: 2 },
+                },
             })
-            setPreferences(saved)
             setStep(2)
         } catch {
-            setError('Your profile could not be saved to the server.')
-        } finally {
-            setSaving(false)
+            return
         }
     }
 
@@ -97,6 +99,16 @@ export function Onboarding() {
     const connectSource = async () => {
         if (await finish()) navigate('/settings/connections')
     }
+
+    const error =
+        !preferences && unavailable
+            ? 'TrackIt could not load setup from your server.'
+            : saveMutation.isError
+              ? saveMutation.variables?.kind === 'profile'
+                  ? 'Your profile could not be saved to the server.'
+                  : 'Setup could not be saved to your server. Nothing was stored in this browser.'
+              : ''
+    const saving = saveMutation.isPending
 
     return (
         <Modal
@@ -120,10 +132,9 @@ export function Onboarding() {
                     {error}
                     {!preferences && (
                         <Button
-                            onClick={() => {
-                                setError('')
+                            onClick={() =>
                                 window.dispatchEvent(new Event('trackit:preferences-changed'))
-                            }}
+                            }
                             size="xs"
                             ml="sm"
                         >

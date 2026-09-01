@@ -1,10 +1,12 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from './App'
 import { ServerDataProvider } from './hooks/useServerData'
 import { LoggingProvider } from './logging/LoggingContext'
+import { createTestQueryClient } from './test/queryClient'
 
 const initialData = {
     preferences: {
@@ -17,18 +19,22 @@ const initialData = {
     goals: [],
 }
 
-const renderApp = (entry: string) =>
-    render(
+const renderApp = (entry: string) => {
+    const queryClient = createTestQueryClient()
+    return render(
         <MantineProvider>
             <MemoryRouter initialEntries={[entry]}>
-                <ServerDataProvider initialData={initialData}>
-                    <LoggingProvider>
-                        <App />
-                    </LoggingProvider>
-                </ServerDataProvider>
+                <QueryClientProvider client={queryClient}>
+                    <ServerDataProvider initialData={initialData}>
+                        <LoggingProvider>
+                            <App />
+                        </LoggingProvider>
+                    </ServerDataProvider>
+                </QueryClientProvider>
             </MemoryRouter>
         </MantineProvider>,
     )
+}
 
 describe('App routing', () => {
     it('renders a bookmarkable journal route', async () => {

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react'
+import { Fragment, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -18,6 +18,7 @@ import {
     TextInput,
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
     IconCheck,
     IconChevronLeft,
@@ -37,7 +38,7 @@ import {
     calendarTodayKey,
     formatCalendarDate,
 } from '../domain/calendar'
-import { nutrientsFor, roundedNutrients, type Food, type Nutrients } from '../domain/nutrition'
+import { nutrientsFor, roundedNutrients, type Nutrients } from '../domain/nutrition'
 import {
     addPlanDays,
     formatPlanAmount,
@@ -50,8 +51,8 @@ import {
     weekStartKey,
 } from '../domain/planning'
 import { useServerData } from '../hooks/useServerData'
-import { listFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
-import { listRecipes, searchFoods, type RecipeRecord } from '../lib/nutritionApi'
+import { listFoodCategories } from '../lib/foodCategoryApi'
+import { listRecipes, searchFoods } from '../lib/nutritionApi'
 import {
     createPlanMeal,
     createPlanSchedule,
@@ -64,6 +65,7 @@ import {
     updatePlanMeal,
     type PlanSchedule,
 } from '../lib/planApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 import '../plan.css'
 
 const mealTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
@@ -129,17 +131,6 @@ const formatScheduleAmount = (schedule: PlanSchedule) =>
         ? `${Math.round(schedule.meal.amount * 10) / 10} g`
         : `${Math.round(schedule.meal.amount * 100) / 100} ${schedule.meal.amount === 1 ? 'serving' : 'servings'}`
 
-const loadPlanWeek = (weekStart: string) => {
-    const range = weekDateKeys(weekStart)
-    return Promise.all([
-        listPlanItems({ from: range[0], to: range[6] }),
-        searchFoods(''),
-        listRecipes(),
-        listFoodCategories(),
-        listPlanSchedules(),
-    ])
-}
-
 export function Plan() {
     const [params, setParams] = useSearchParams()
     const compact = useMediaQuery('(max-width: 62em)')
@@ -151,48 +142,51 @@ export function Plan() {
     const weekStart = weekStartKey(routeDate)
     const dates = weekDateKeys(weekStart)
     const selectedDate = dates.includes(routeDate) ? routeDate : dates[0]
-    const [items, setItems] = useState<MealPlanItem[]>([])
-    const [foods, setFoods] = useState<Food[]>([])
-    const [recipes, setRecipes] = useState<RecipeRecord[]>([])
-    const [categories, setCategories] = useState<FoodCategory[]>([])
-    const [schedules, setSchedules] = useState<PlanSchedule[]>([])
-    const [loading, setLoading] = useState(true)
-    const [message, setMessage] = useState('')
+    const planRange = { from: dates[0], to: dates[6] }
+    const itemsQuery = useQuery({
+        queryKey: [...serverQueryKeys.planItems, planRange],
+        queryFn: ({ signal }) => listPlanItems(planRange, signal),
+    })
+    const foodsQuery = useQuery({
+        queryKey: [...serverQueryKeys.foods, ''],
+        queryFn: () => searchFoods(''),
+    })
+    const recipesQuery = useQuery({
+        queryKey: serverQueryKeys.recipes,
+        queryFn: () => listRecipes(),
+    })
+    const categoriesQuery = useQuery({
+        queryKey: serverQueryKeys.foodCategories,
+        queryFn: ({ signal }) => listFoodCategories(signal),
+    })
+    const schedulesQuery = useQuery({
+        queryKey: serverQueryKeys.planSchedules,
+        queryFn: ({ signal }) => listPlanSchedules(signal),
+    })
+    const items = itemsQuery.data ?? []
+    const foods = foodsQuery.data ?? []
+    const recipes = recipesQuery.data ?? []
+    const categories = categoriesQuery.data ?? []
+    const schedules = schedulesQuery.data ?? []
+    const loading =
+        itemsQuery.isPending ||
+        foodsQuery.isPending ||
+        recipesQuery.isPending ||
+        categoriesQuery.isPending ||
+        schedulesQuery.isPending
+    const loadError =
+        itemsQuery.isError ||
+        foodsQuery.isError ||
+        recipesQuery.isError ||
+        categoriesQuery.isError ||
+        schedulesQuery.isError
+            ? 'Your meal plan could not be loaded from the server.'
+            : ''
     const [editor, setEditor] = useState<EditorState | null>(null)
     const [logState, setLogState] = useState<LogState | null>(null)
     const [schedulesOpen, setSchedulesOpen] = useState(false)
-    const [busy, setBusy] = useState(false)
-
-    const applyLoadedWeek = ([
-        nextItems,
-        nextFoods,
-        nextRecipes,
-        nextCategories,
-        nextSchedules,
-    ]: Awaited<ReturnType<typeof loadPlanWeek>>) => {
-        setItems(nextItems)
-        setFoods(nextFoods)
-        setRecipes(nextRecipes)
-        setCategories(nextCategories)
-        setSchedules(nextSchedules)
-        setMessage('')
-    }
-
-    const refresh = () =>
-        loadPlanWeek(weekStart)
-            .then(applyLoadedWeek)
-            .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
-            .finally(() => setLoading(false))
-
-    useEffect(() => {
-        void loadPlanWeek(weekStart)
-            .then(applyLoadedWeek)
-            .catch(() => setMessage('Your meal plan could not be loaded from the server.'))
-            .finally(() => setLoading(false))
-    }, [weekStart])
 
     const navigateDate = (date: string) => {
-        if (weekStartKey(date) !== weekStart) setLoading(true)
         const next = new URLSearchParams(params)
         if (date === todayKey) next.delete('date')
         else next.set('date', date)
@@ -265,60 +259,51 @@ export function Plan() {
         })
     }
 
-    const saveEditor = async () => {
-        if (!editor?.selection) return
-        const amount = Number(editor.amount)
-        if (!Number.isFinite(amount) || amount <= 0) return
-        const [type, id] = editor.selection.split(':') as [PlanReferenceType, string]
-        const weekdays = editor.weekdays.map(Number)
-        if (!editor.item && editor.repeat === 'weekly' && weekdays.length === 0) return
-        setBusy(true)
-        try {
+    const editorMutation = useMutation({
+        mutationFn: async (current: EditorState) => {
+            if (!current.selection) return null
+            const amount = Number(current.amount)
+            if (!Number.isFinite(amount) || amount <= 0) return null
+            const [type, id] = current.selection.split(':') as [PlanReferenceType, string]
+            const weekdays = current.weekdays.map(Number)
+            if (!current.item && current.repeat === 'weekly' && weekdays.length === 0) return null
             const changes = {
-                scheduledDate: editor.date,
-                scheduledTime: editor.time || null,
-                mealType: editor.mealType,
+                scheduledDate: current.date,
+                scheduledTime: current.time || null,
+                mealType: current.mealType,
                 reference: { type, id },
                 amount,
             }
-            let destinationDate: string | null = null
-            if (editor.item) await updatePlanMeal(editor.item, changes)
-            else if (editor.repeat === 'weekly') {
+            if (current.item) {
+                await updatePlanMeal(current.item, changes)
+                return null
+            }
+            if (current.repeat === 'weekly') {
                 await createPlanSchedule({
-                    startDate: editor.date,
-                    scheduledTime: editor.time || null,
-                    mealType: editor.mealType,
+                    startDate: current.date,
+                    scheduledTime: current.time || null,
+                    mealType: current.mealType,
                     reference: { type, id },
                     amount,
                     weekdays,
                 })
-                destinationDate = nextScheduleDate(editor.date, weekdays)
-            } else await createPlanMeal(changes)
+                return nextScheduleDate(current.date, weekdays)
+            }
+            await createPlanMeal(changes)
+            return null
+        },
+        onSuccess: destinationDate => {
             setEditor(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
             if (destinationDate && weekStartKey(destinationDate) !== weekStart)
                 navigateDate(destinationDate)
-            else await refresh()
-        } catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Could not save this planned meal.')
-        } finally {
-            setBusy(false)
-        }
-    }
+        },
+    })
 
-    const mutate = async (action: () => Promise<unknown>) => {
-        setBusy(true)
-        try {
-            await action()
-            window.dispatchEvent(new Event('trackit:plan-changed'))
-            setMessage('')
-            await refresh()
-        } catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Your plan could not be updated.')
-        } finally {
-            setBusy(false)
-        }
-    }
+    const actionMutation = useMutation({
+        mutationFn: (action: () => Promise<unknown>) => action(),
+        onSuccess: () => window.dispatchEvent(new Event('trackit:plan-changed')),
+    })
 
     const categoryFoods = (item: MealPlanItem) => {
         if (item.meal.reference.type !== 'category') return []
@@ -342,31 +327,36 @@ export function Plan() {
         })
     }
 
-    const saveLog = async () => {
-        if (!logState) return
-        const amount = Number(logState.amount)
-        if (!Number.isFinite(amount) || amount <= 0 || !logState.recordedAt) return
-        if (logState.item.meal.reference.type === 'category' && !logState.foodId) return
-        setBusy(true)
-        try {
-            await logPlannedMeal(logState.item, {
-                eatenAt: calendarLocalDateTimeToInstant(
-                    logState.recordedAt,
-                    timezone,
-                ).toISOString(),
+    const logMutation = useMutation({
+        mutationFn: async (current: LogState) => {
+            const amount = Number(current.amount)
+            if (!Number.isFinite(amount) || amount <= 0 || !current.recordedAt) return
+            if (current.item.meal.reference.type === 'category' && !current.foodId) return
+            await logPlannedMeal(current.item, {
+                eatenAt: calendarLocalDateTimeToInstant(current.recordedAt, timezone).toISOString(),
                 amount,
-                foodId: logState.foodId ?? undefined,
+                foodId: current.foodId ?? undefined,
             })
+        },
+        onSuccess: () => {
             setLogState(null)
             window.dispatchEvent(new Event('trackit:plan-changed'))
             window.dispatchEvent(new Event('trackit:nutrition-changed'))
-            await refresh()
-        } catch (error) {
-            setMessage(error instanceof Error ? error.message : 'Could not log this planned meal.')
-        } finally {
-            setBusy(false)
-        }
-    }
+        },
+    })
+    const busy = editorMutation.isPending || actionMutation.isPending || logMutation.isPending
+    const latestMutation = [
+        { result: editorMutation, fallback: 'Could not save this planned meal.' },
+        { result: actionMutation, fallback: 'Your plan could not be updated.' },
+        { result: logMutation, fallback: 'Could not log this planned meal.' },
+    ].reduce((latest, current) =>
+        current.result.submittedAt > latest.result.submittedAt ? current : latest,
+    )
+    const mutationError = latestMutation.result.isError
+        ? latestMutation.result.error instanceof Error
+            ? latestMutation.result.error.message
+            : latestMutation.fallback
+        : ''
 
     const weekLabel = `${formatCalendarDate(dates[0], locale, { month: 'short', day: 'numeric' })} – ${formatCalendarDate(dates[6], locale, { month: 'short', day: 'numeric', year: 'numeric' })}`
 
@@ -440,7 +430,9 @@ export function Plan() {
                         {status === 'planned' && (
                             <Menu.Item
                                 leftSection={<IconX size={15} />}
-                                onClick={() => void mutate(() => setPlanMealSkipped(item, true))}
+                                onClick={() =>
+                                    actionMutation.mutate(() => setPlanMealSkipped(item, true))
+                                }
                             >
                                 Skip
                             </Menu.Item>
@@ -448,7 +440,9 @@ export function Plan() {
                         {status === 'skipped' && (
                             <Menu.Item
                                 leftSection={<IconRestore size={15} />}
-                                onClick={() => void mutate(() => setPlanMealSkipped(item, false))}
+                                onClick={() =>
+                                    actionMutation.mutate(() => setPlanMealSkipped(item, false))
+                                }
                             >
                                 Restore
                             </Menu.Item>
@@ -457,7 +451,7 @@ export function Plan() {
                         <Menu.Item
                             color="red"
                             leftSection={<IconTrash size={15} />}
-                            onClick={() => void mutate(() => deletePlanMeal(item))}
+                            onClick={() => actionMutation.mutate(() => deletePlanMeal(item))}
                         >
                             Remove from plan
                         </Menu.Item>
@@ -682,9 +676,9 @@ export function Plan() {
                 </Group>
             </div>
 
-            {message && (
+            {(mutationError || loadError) && (
                 <Alert color="orange" mb="md">
-                    {message}
+                    {mutationError || loadError}
                 </Alert>
             )}
 
@@ -871,14 +865,14 @@ export function Plan() {
                             </Button>
                             <Button
                                 color="trackit"
-                                loading={busy}
+                                loading={editorMutation.isPending}
                                 disabled={
                                     !editor.selection ||
                                     !editor.date ||
                                     Number(editor.amount) <= 0 ||
                                     (editor.repeat === 'weekly' && editor.weekdays.length === 0)
                                 }
-                                onClick={() => void saveEditor()}
+                                onClick={() => editorMutation.mutate(editor)}
                             >
                                 {editor.item
                                     ? 'Save changes'
@@ -925,9 +919,11 @@ export function Plan() {
                                         variant="subtle"
                                         color="red"
                                         size="xs"
-                                        loading={busy}
+                                        loading={actionMutation.isPending}
                                         onClick={() =>
-                                            void mutate(() => stopPlanSchedule(schedule, todayKey))
+                                            actionMutation.mutate(() =>
+                                                stopPlanSchedule(schedule, todayKey),
+                                            )
                                         }
                                     >
                                         Stop repeating
@@ -1008,12 +1004,12 @@ export function Plan() {
                             </Button>
                             <Button
                                 color="trackit"
-                                loading={busy}
+                                loading={logMutation.isPending}
                                 disabled={
                                     logState.item.meal.reference.type === 'category' &&
                                     !logState.foodId
                                 }
-                                onClick={() => void saveLog()}
+                                onClick={() => logMutation.mutate(logState)}
                             >
                                 {logState.item.meal.reference.type === 'category'
                                     ? 'Log progress'

@@ -17,6 +17,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import {
     IconChevronDown,
     IconChevronUp,
@@ -24,7 +25,7 @@ import {
     IconTargetArrow,
     IconTrash,
 } from '@tabler/icons-react'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { calendarDayRangeForKey, calendarTodayKey, formatCalendarDate } from '../domain/calendar'
 import { validateGoal, type Goal, type GoalEvaluation, type GoalPeriod } from '../domain/goals'
@@ -50,6 +51,7 @@ import {
     updateGoal,
     type GoalRecord,
 } from '../lib/goalApi'
+import { healthQueryKeys } from '../lib/healthQueries'
 
 const weekdays = [
     { value: '1', label: 'Monday' },
@@ -167,6 +169,8 @@ function TargetValueInput({
 function GoalCard({
     goal,
     evaluation,
+    evaluationUnavailable,
+    retiring,
     timezone,
     locale,
     metricPreferences,
@@ -177,6 +181,8 @@ function GoalCard({
 }: {
     goal: GoalRecord
     evaluation?: GoalEvaluation
+    evaluationUnavailable?: boolean
+    retiring?: boolean
     timezone: string
     locale?: string
     metricPreferences?: Parameters<typeof formatMetric>[2]
@@ -248,7 +254,7 @@ function GoalCard({
                 <Group gap="xs">
                     <Badge
                         color={
-                            retired || upcoming
+                            retired || upcoming || evaluationUnavailable
                                 ? 'gray'
                                 : result.met === null
                                   ? 'gray'
@@ -262,11 +268,13 @@ function GoalCard({
                             ? 'Past'
                             : upcoming
                               ? 'Upcoming'
-                              : result.met === null
-                                ? 'No data'
-                                : result.met
-                                  ? 'On target'
-                                  : 'Not on target'}
+                              : evaluationUnavailable
+                                ? 'Unavailable'
+                                : result.met === null
+                                  ? 'No data'
+                                  : result.met
+                                    ? 'On target'
+                                    : 'Not on target'}
                     </Badge>
                     <Menu>
                         <Menu.Target>
@@ -283,8 +291,12 @@ function GoalCard({
                             {!retired ? (
                                 <>
                                     <Menu.Item onClick={onEdit}>Edit goal</Menu.Item>
-                                    <Menu.Item color="orange" onClick={() => void onRetire()}>
-                                        Retire goal today
+                                    <Menu.Item
+                                        color="orange"
+                                        disabled={retiring}
+                                        onClick={() => void onRetire()}
+                                    >
+                                        {retiring ? 'Retiring goal…' : 'Retire goal today'}
                                     </Menu.Item>
                                 </>
                             ) : (
@@ -301,11 +313,13 @@ function GoalCard({
                 </Group>
             </Group>
             <Text className="goal-target">
-                {result.value === null
-                    ? upcoming
-                        ? 'Starts soon'
-                        : 'Nothing recorded yet'
-                    : formatMetric(goal.metricId, result.value, metricPreferences, locale)}
+                {evaluationUnavailable
+                    ? 'Progress unavailable'
+                    : result.value === null
+                      ? upcoming
+                          ? 'Starts soon'
+                          : 'Nothing recorded yet'
+                      : formatMetric(goal.metricId, result.value, metricPreferences, locale)}
             </Text>
             <Text size="sm">Target: {targetLabel}</Text>
             {timingLabel && (
@@ -313,7 +327,11 @@ function GoalCard({
                     {timingLabel}
                 </Text>
             )}
-            {upcoming ? (
+            {evaluationUnavailable ? (
+                <Text size="sm" c="dimmed">
+                    Goal progress could not be loaded.
+                </Text>
+            ) : upcoming ? (
                 <Text size="sm" c="dimmed">
                     Starts{' '}
                     {new Date(goal.effectiveFrom).toLocaleDateString(locale, {
@@ -334,7 +352,7 @@ function GoalCard({
                     {differenceLabel ? ` · ${differenceLabel}` : ''}
                 </Text>
             )}
-            {result.progress !== null && (
+            {!evaluationUnavailable && result.progress !== null && (
                 <Progress
                     value={result.progress * 100}
                     color="trackit"
@@ -347,7 +365,12 @@ function GoalCard({
 
 export function GoalsPanel() {
     const navigate = useNavigate()
-    const { goals, preferences, loading } = useServerData()
+    const {
+        goals,
+        preferences,
+        loading: serverLoading,
+        unavailable: serverUnavailable,
+    } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const today = calendarTodayKey(timezone)
     const goalMetrics = metricCatalog.filter(item => item.goalCapabilities)
@@ -363,22 +386,20 @@ export function GoalsPanel() {
     const [advanced, setAdvanced] = useState(false)
     const [editing, setEditing] = useState<GoalRecord | null>(null)
     const [deleting, setDeleting] = useState<GoalRecord | null>(null)
-    const [evaluations, setEvaluations] = useState<Record<string, GoalEvaluation>>({})
-    const [saving, setSaving] = useState(false)
-    const [message, setMessage] = useState('')
-    const [error, setError] = useState('')
+    const [validationError, setValidationError] = useState('')
+    const evaluationsQuery = useQuery({
+        queryKey: [...healthQueryKeys.goalEvaluations, 'goals-page'],
+        enabled: goals.length > 0,
+        queryFn: ({ signal }) => listGoalEvaluations(signal),
+    })
+    const evaluations = evaluationsQuery.data ?? {}
+    const loading = serverLoading || (goals.length > 0 && evaluationsQuery.isPending)
+    const evaluationError = evaluationsQuery.isError ? 'Goal observations could not be loaded.' : ''
     const definition = metricDefinition(metricId)!
     const displayUnit = displayUnitFor(metricId, preferences?.metricPreferences, preferences?.units)
     const options = measurements(metricId)
     const selectedMeasurement =
         options.find(item => item.value === measurement) ?? preferredMeasurement(metricId, options)!
-
-    useEffect(() => {
-        if (!goals.length) return
-        void listGoalEvaluations()
-            .then(setEvaluations)
-            .catch(() => setError('Goal observations could not be loaded.'))
-    }, [goals])
 
     const resetForMetric = (next: string) => {
         setMetricId(next)
@@ -394,7 +415,7 @@ export function GoalsPanel() {
         setComparator(nextComparator)
         setTarget(nextTarget)
         setRangeMax(nextTarget + Math.max(1, Math.abs(nextTarget) * 0.05))
-        setError('')
+        setValidationError('')
     }
     const resetForm = () => {
         setEditing(null)
@@ -408,7 +429,7 @@ export function GoalsPanel() {
         setScheduleMode('every-day')
         setSelectedWeekdays(everyDay)
         setAdvanced(false)
-        setError('')
+        setValidationError('')
     }
     const edit = (goal: GoalRecord) => {
         setEditing(goal)
@@ -480,26 +501,56 @@ export function GoalsPanel() {
         if (mode === 'weekends') setSelectedWeekdays(weekendSchedule)
         if (mode === 'custom' && selectedWeekdays.length === 0) setSelectedWeekdays(weekdaySchedule)
     }
-    const save = async (event: FormEvent) => {
+    const saveMutation = useMutation({
+        mutationFn: async ({
+            goal,
+            input,
+        }: {
+            goal: GoalRecord | null
+            input: Omit<Goal, 'id'>
+        }) => {
+            if (goal) return updateGoal(goal.id, input)
+            return createGoal(input)
+        },
+        onSuccess: () => resetForm(),
+    })
+    const retireMutation = useMutation({
+        mutationFn: retireGoal,
+    })
+    const deleteMutation = useMutation({
+        mutationFn: deleteGoal,
+        onSuccess: () => setDeleting(null),
+    })
+    const latestMutation = [
+        {
+            result: saveMutation,
+            error: 'The goal could not be saved. Check the values and try again.',
+            success: saveMutation.variables?.goal ? 'Goal updated.' : 'Goal added.',
+        },
+        {
+            result: retireMutation,
+            error: 'The goal could not be retired.',
+            success: 'Goal retired.',
+        },
+        {
+            result: deleteMutation,
+            error: 'The retired goal could not be deleted.',
+            success: 'Retired goal deleted.',
+        },
+    ].reduce((latest, current) =>
+        current.result.submittedAt > latest.result.submittedAt ? current : latest,
+    )
+    const mutationError = latestMutation.result.isError ? latestMutation.error : ''
+    const mutationMessage = latestMutation.result.isSuccess ? latestMutation.success : ''
+    const save = (event: FormEvent) => {
         event.preventDefault()
         const errors = validation()
         if (errors.length) {
-            setError(errors[0])
+            setValidationError(errors[0])
             return
         }
-        setSaving(true)
-        setError('')
-        try {
-            const input = draft()
-            if (editing) await updateGoal(editing.id, input)
-            else await createGoal(input)
-            setMessage(editing ? 'Goal updated.' : 'Goal added.')
-            resetForm()
-        } catch {
-            setError('The goal could not be saved. Check the values and try again.')
-        } finally {
-            setSaving(false)
-        }
+        setValidationError('')
+        saveMutation.mutate({ goal: editing, input: draft() })
     }
     const activeGoals = useMemo(
         () => goals.filter(goal => !goal.effectiveTo || new Date(goal.effectiveTo) > new Date()),
@@ -507,26 +558,10 @@ export function GoalsPanel() {
     )
     const pastGoals = goals.filter(goal => !activeGoals.includes(goal))
     const retire = async (goal: GoalRecord) => {
-        try {
-            await retireGoal(goal)
-            setMessage('Goal retired.')
-        } catch {
-            setError('The goal could not be retired.')
-        }
+        await retireMutation.mutateAsync(goal)
     }
-    const remove = async () => {
-        if (!deleting) return
-        setSaving(true)
-        setError('')
-        try {
-            await deleteGoal(deleting)
-            setDeleting(null)
-            setMessage('Retired goal deleted.')
-        } catch {
-            setError('The retired goal could not be deleted.')
-        } finally {
-            setSaving(false)
-        }
+    const remove = () => {
+        if (deleting) deleteMutation.mutate(deleting)
     }
     const targetPreview =
         comparator === 'between'
@@ -545,7 +580,7 @@ export function GoalsPanel() {
                         </Text>
                     </div>
                 </div>
-                <form onSubmit={event => void save(event)}>
+                <form onSubmit={save}>
                     <Stack>
                         <Select
                             label="What do you want to track?"
@@ -693,14 +728,16 @@ export function GoalsPanel() {
                                 )}
                             </Stack>
                         </Collapse>
-                        {error && <Alert color="orange">{error}</Alert>}
+                        {(validationError || mutationError) && (
+                            <Alert color="orange">{validationError || mutationError}</Alert>
+                        )}
                         <Group justify="flex-end">
                             {editing && (
                                 <Button type="button" variant="default" onClick={resetForm}>
                                     Cancel
                                 </Button>
                             )}
-                            <Button type="submit" loading={saving}>
+                            <Button type="submit" loading={saveMutation.isPending}>
                                 {editing ? 'Save changes' : 'Create goal'}
                             </Button>
                         </Group>
@@ -713,15 +750,18 @@ export function GoalsPanel() {
                 <Text size="sm" c="dimmed" mb="md">
                     Current status is calculated from recorded observations.
                 </Text>
-                {message && (
+                {mutationMessage && (
                     <Alert color="teal" role="status">
-                        {message}
+                        {mutationMessage}
                     </Alert>
                 )}
+                {evaluationError && <Alert color="orange">{evaluationError}</Alert>}
                 {loading ? (
                     <Stack role="status" aria-label="Loading goals">
                         <Skeleton height={150} />
                     </Stack>
+                ) : serverUnavailable ? (
+                    <Alert color="orange">Goals could not be loaded from the server.</Alert>
                 ) : goals.length === 0 ? (
                     <div className="goal-empty">
                         <IconTargetArrow size={28} />
@@ -738,6 +778,11 @@ export function GoalsPanel() {
                                 key={goal.id}
                                 goal={goal}
                                 evaluation={evaluations[goal.id]}
+                                evaluationUnavailable={evaluationsQuery.isError}
+                                retiring={
+                                    retireMutation.isPending &&
+                                    retireMutation.variables?.id === goal.id
+                                }
                                 timezone={timezone}
                                 locale={preferences?.locale}
                                 metricPreferences={preferences?.metricPreferences}
@@ -755,6 +800,11 @@ export function GoalsPanel() {
                                 key={goal.id}
                                 goal={goal}
                                 evaluation={evaluations[goal.id]}
+                                evaluationUnavailable={evaluationsQuery.isError}
+                                retiring={
+                                    retireMutation.isPending &&
+                                    retireMutation.variables?.id === goal.id
+                                }
                                 timezone={timezone}
                                 locale={preferences?.locale}
                                 metricPreferences={preferences?.metricPreferences}
@@ -785,7 +835,7 @@ export function GoalsPanel() {
                     <Button variant="default" onClick={() => setDeleting(null)}>
                         Keep goal
                     </Button>
-                    <Button color="red" loading={saving} onClick={() => void remove()}>
+                    <Button color="red" loading={deleteMutation.isPending} onClick={remove}>
                         Delete goal
                     </Button>
                 </Group>

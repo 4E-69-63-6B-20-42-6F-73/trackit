@@ -64,8 +64,8 @@ export async function createPairingCode() {
     return (await response.json()) as { code: string; expiresAt: string; serverIdentity: string }
 }
 
-export async function listDevices(): Promise<DeviceRecord[]> {
-    const response = await authRequest('/api/devices')
+export async function listDevices(signal?: AbortSignal): Promise<DeviceRecord[]> {
+    const response = await authRequest('/api/devices', { signal })
     if (!response.ok) throw new Error('Devices unavailable')
     return ((await response.json()) as { data: DeviceRecord[] }).data
 }
