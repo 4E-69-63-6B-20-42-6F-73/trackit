@@ -169,6 +169,13 @@
             "when": 1788261756427,
             "tag": "0023_food_serving_options",
             "breakpoints": true
+        },
+        {
+            "idx": 24,
+            "version": "7",
+            "when": 1788296400000,
+            "tag": "0024_domain_consistency_cleanup",
+            "breakpoints": true
         }
     ]
 }
