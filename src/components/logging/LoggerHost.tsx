@@ -1,4 +1,4 @@
-import { useToast } from '../toastContext'
+import { toast } from '../toast'
 import type { CreateObservationInput } from '../../lib/observationApi'
 import { useLogger } from '../../logging/LoggingContext'
 import type { LogActionId } from '../../logging/logActions'
@@ -29,7 +29,6 @@ export function LoggerHost({
     selectedDate?: string | null
 }) {
     const { activeLogger, closeLogger } = useLogger()
-    const toast = useToast()
     const addWithFeedback = (input: CreateObservationInput) => {
         add(input)
         if (activeLogger && activeLogger !== 'food') toast.success(feedback[activeLogger])
