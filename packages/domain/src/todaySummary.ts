@@ -1,4 +1,4 @@
-import type { MetricDefinition } from './metricCatalog'
+import type { MetricDefinition } from './metricCatalog.js'
 
 const headlinePriority = new Map([
     ['sleep', 0],
