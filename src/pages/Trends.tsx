@@ -1,4 +1,5 @@
 import { Alert, Badge, Button, Menu, SegmentedControl, Select, Text } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     IconAdjustments,
     IconBookmark,
@@ -6,7 +7,7 @@ import {
     IconChevronDown,
     IconPlugConnected,
 } from '@tabler/icons-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { CorrelationNote } from '../components/CorrelationNote'
 import { ObservationRecords } from '../components/ObservationRecords'
@@ -32,8 +33,10 @@ import {
     unitPresentation,
 } from '../domain/metrics'
 import { useServerData } from '../hooks/useServerData'
-import { listDailyMetrics, type DailyMetric } from '../lib/dailyMetricApi'
+import { listDailyMetrics } from '../lib/dailyMetricApi'
+import { healthQueryKeys } from '../lib/healthQueries'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
 import '../trends.css'
 
@@ -45,24 +48,66 @@ const metricLabel = (definitionId: string) =>
 
 export function Trends() {
     const navigate = useNavigate()
+    const queryClient = useQueryClient()
     const [params, setParams] = useSearchParams()
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const todayKey = calendarTodayKey(timezone)
     const requestedMetric = params.get('metric')
-    const [observations, setObservations] = useState<NumericObservation[]>([])
-    const [availableMetrics, setAvailableMetrics] = useState<DailyMetric[]>([])
     const [range, setRange] = useState<keyof typeof ranges>('30 days')
     const [definitionId, setDefinitionIdState] = useState<string | null>(requestedMetric)
     const [comparisonDefinitionId, setComparisonDefinitionId] = useState<string | null>(null)
     const [showCompare, setShowCompare] = useState(false)
     const [showAnalysis, setShowAnalysis] = useState(false)
     const [granularity, setGranularity] = useState<TrendGranularity>('daily')
-    const [loading, setLoading] = useState(true)
-    const [error, setError] = useState(false)
-    const [savedViews, setSavedViews] = useState<TrendViewRecord[]>([])
     const [inspectedIds, setInspectedIds] = useState<string[] | null>(null)
     const [actionError, setActionError] = useState('')
+    const availableRange = { from: addCalendarDays(todayKey, -179), to: todayKey }
+    const availableMetricsQuery = useQuery({
+        queryKey: [...healthQueryKeys.dailyMetrics, availableRange],
+        queryFn: ({ signal }) => listDailyMetrics(availableRange, signal),
+    })
+    const savedViewsQuery = useQuery({
+        queryKey: serverQueryKeys.trendViews,
+        queryFn: () => listTrendViews(),
+    })
+    const availableMetrics = availableMetricsQuery.data ?? []
+    const savedViews = savedViewsQuery.data ?? []
+    const recordedDefinitionIds = useMemo(
+        () => [...new Set(availableMetrics.map(record => record.definitionId))],
+        [availableMetrics],
+    )
+    const preferredDefinitionId = ['sleep', 'steps', 'weight', 'resting_heart_rate', 'energy'].find(
+        candidate => recordedDefinitionIds.includes(candidate),
+    )
+    const activeDefinitionId =
+        definitionId && recordedDefinitionIds.includes(definitionId)
+            ? definitionId
+            : requestedMetric && recordedDefinitionIds.includes(requestedMetric)
+              ? requestedMetric
+              : (preferredDefinitionId ?? recordedDefinitionIds[0] ?? null)
+    const days = ranges[range]
+    const observationFromKey = addCalendarDays(todayKey, -(days * 2 - 1))
+    const observationRange = {
+        from: calendarDayRangeForKey(observationFromKey, timezone).from.toISOString(),
+        to: calendarDayRangeForKey(todayKey, timezone).to.toISOString(),
+        definitionIds: activeDefinitionId
+            ? [
+                  activeDefinitionId,
+                  ...(comparisonDefinitionId ? [comparisonDefinitionId] : []),
+              ]
+            : [],
+    }
+    const observationsQuery = useQuery({
+        queryKey: [...healthQueryKeys.observations, observationRange],
+        enabled: Boolean(activeDefinitionId) && !availableMetricsQuery.isPending,
+        queryFn: ({ signal }) => listObservations(observationRange, signal),
+    })
+    const observations = observationsQuery.data ?? []
+    const loading =
+        availableMetricsQuery.isPending ||
+        (Boolean(activeDefinitionId) && observationsQuery.isPending)
+    const error = availableMetricsQuery.isError || observationsQuery.isError
 
     const setDefinitionId = (value: string | null) => {
         setDefinitionIdState(value)
@@ -72,56 +117,6 @@ export function Trends() {
         setParams(next, { replace: true })
     }
 
-    useEffect(() => {
-        const from = addCalendarDays(todayKey, -179)
-        void listDailyMetrics({ from, to: todayKey })
-            .then(records => {
-                setAvailableMetrics(records)
-                const recorded = [...new Set(records.map(record => record.definitionId))]
-                const preferred = ['sleep', 'steps', 'weight', 'resting_heart_rate', 'energy'].find(
-                    candidate => recorded.includes(candidate),
-                )
-                const requested =
-                    requestedMetric && recorded.includes(requestedMetric) ? requestedMetric : null
-                setDefinitionId(requested ?? preferred ?? recorded[0] ?? null)
-                setError(false)
-            })
-            .catch(() => setError(true))
-            .finally(() => setLoading(false))
-        void listTrendViews()
-            .then(setSavedViews)
-            .catch(() => undefined)
-        // requestedMetric is intentionally only used as the initial route preference.
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [todayKey])
-
-    useEffect(() => {
-        if (!definitionId) return
-        const days = ranges[range]
-        const fromKey = addCalendarDays(todayKey, -(days * 2 - 1))
-        const from = calendarDayRangeForKey(fromKey, timezone).from
-        const to = calendarDayRangeForKey(todayKey, timezone).to
-        queueMicrotask(() => setLoading(true))
-        void listObservations({
-            from: from.toISOString(),
-            to: to.toISOString(),
-            definitionIds: [
-                definitionId,
-                ...(comparisonDefinitionId ? [comparisonDefinitionId] : []),
-            ],
-        })
-            .then(records => {
-                setObservations(records)
-                setError(false)
-            })
-            .catch(() => setError(true))
-            .finally(() => setLoading(false))
-    }, [comparisonDefinitionId, definitionId, range, timezone, todayKey])
-
-    const recordedDefinitionIds = useMemo(
-        () => [...new Set(availableMetrics.map(record => record.definitionId))],
-        [availableMetrics],
-    )
     const metricOptions = useMemo(() => {
         const grouped = new Map<string, Array<{ value: string; label: string }>>()
         for (const id of recordedDefinitionIds) {
@@ -136,34 +131,42 @@ export function Trends() {
         }))
     }, [recordedDefinitionIds])
 
-    const days = ranges[range]
     const currentStartKey = addCalendarDays(todayKey, -(days - 1))
     const previousStartKey = addCalendarDays(todayKey, -(days * 2 - 1))
     const currentStart = calendarDateFromKey(currentStartKey, timezone)
     const previousStart = calendarDateFromKey(previousStartKey, timezone)
     const primaryRecords = observations.filter(
-        record => record.definitionId === definitionId && !record.excluded,
+        record => record.definitionId === activeDefinitionId && !record.excluded,
     )
     const comparisonRecords = observations.filter(
         record => record.definitionId === comparisonDefinitionId && !record.excluded,
     )
-    const displayUnit = definitionId
-        ? displayUnitFor(definitionId, preferences?.metricPreferences, preferences?.units)
+    const displayUnit = activeDefinitionId
+        ? displayUnitFor(
+              activeDefinitionId,
+              preferences?.metricPreferences,
+              preferences?.units,
+          )
         : undefined
     const convert = (value: number) =>
-        definitionId &&
-        metricDefinition(definitionId) &&
+        activeDefinitionId &&
+        metricDefinition(activeDefinitionId) &&
         primaryRecords[0]?.canonicalUnit &&
         displayUnit
-            ? convertMetricValue(definitionId, value, primaryRecords[0].canonicalUnit, displayUnit)
+            ? convertMetricValue(
+                  activeDefinitionId,
+                  value,
+                  primaryRecords[0].canonicalUnit,
+                  displayUnit,
+              )
             : value
     const formatDisplayValue = (
         value: number,
         options?: { signed?: boolean; withUnit?: boolean },
     ) =>
-        definitionId && displayUnit
+        activeDefinitionId && displayUnit
             ? formatMetricDisplayValue(
-                  definitionId,
+                  activeDefinitionId,
                   value,
                   displayUnit,
                   preferences?.metricPreferences,
@@ -202,41 +205,39 @@ export function Trends() {
             : coverageRatio >= 0.4
               ? 'Partial coverage'
               : 'Low coverage'
-    const isNutritionMetric = definitionId
-        ? metricDefinition(definitionId)?.source === 'meal'
+    const isNutritionMetric = activeDefinitionId
+        ? metricDefinition(activeDefinitionId)?.source === 'meal'
         : false
-    const isManualMetric = definitionId
-        ? metricDefinition(definitionId)?.source === 'manual'
+    const isManualMetric = activeDefinitionId
+        ? metricDefinition(activeDefinitionId)?.source === 'manual'
         : false
 
-    const toggleExcluded = async (observation: NumericObservation) => {
-        try {
-            const updated = await setObservationExcluded(observation, !observation.excluded)
-            setObservations(current =>
-                current.map(record => (record.id === updated.id ? updated : record)),
-            )
-            setActionError('')
-        } catch {
-            setActionError('The observation could not be updated. Try again.')
-        }
-    }
-
-    const saveView = async () => {
-        if (!definitionId) return
-        try {
-            const saved = await saveTrendView({
-                name: `${metricLabel(definitionId)} · ${range}`,
-                metric: definitionId,
+    const excludeMutation = useMutation({
+        mutationFn: ({ observation, excluded }: { observation: NumericObservation; excluded: boolean }) =>
+            setObservationExcluded(observation, excluded),
+        onMutate: () => setActionError(''),
+        onError: () => setActionError('The observation could not be updated. Try again.'),
+    })
+    const saveViewMutation = useMutation({
+        mutationFn: async () => {
+            if (!activeDefinitionId) throw new Error('No metric selected')
+            return saveTrendView({
+                name: `${metricLabel(activeDefinitionId)} · ${range}`,
+                metric: activeDefinitionId,
                 comparisonMetric: comparisonDefinitionId ?? undefined,
                 rangeDays: days,
                 granularity,
             })
-            setSavedViews(current => [saved, ...current])
-            setActionError('')
-        } catch {
-            setActionError('The trend view could not be saved. Try again.')
-        }
-    }
+        },
+        onMutate: () => setActionError(''),
+        onSuccess: saved => {
+            queryClient.setQueryData<TrendViewRecord[]>(serverQueryKeys.trendViews, current => [
+                saved,
+                ...(current ?? []).filter(view => view.id !== saved.id),
+            ])
+        },
+        onError: () => setActionError('The trend view could not be saved. Try again.'),
+    })
 
     const loadView = (id: string) => {
         const view = savedViews.find(item => item.id === id)
@@ -251,7 +252,8 @@ export function Trends() {
         if (nextRange) setRange(nextRange as keyof typeof ranges)
     }
 
-    const pageEmpty = !loading && (error || recordedDefinitionIds.length === 0)
+    const pageEmpty =
+        !loading && (availableMetricsQuery.isError || recordedDefinitionIds.length === 0)
 
     return (
         <div className="page-content trends-page trends-revamp">
@@ -260,9 +262,13 @@ export function Trends() {
             {pageEmpty ? (
                 <section className="panel page-empty">
                     <IconChartLine size={28} />
-                    <h2>{error ? 'Trends are unavailable' : 'No trends to show yet'}</h2>
+                    <h2>
+                        {availableMetricsQuery.isError
+                            ? 'Trends are unavailable'
+                            : 'No trends to show yet'}
+                    </h2>
                     <Text c="dimmed" size="sm">
-                        {error
+                        {availableMetricsQuery.isError
                             ? 'TrackIt could not load your observations. Review the server and connection status.'
                             : 'Trends appear after observations have been recorded or imported.'}
                     </Text>
@@ -280,7 +286,7 @@ export function Trends() {
                             <Select
                                 label="Metric"
                                 aria-label="Trend metric"
-                                value={definitionId}
+                                value={activeDefinitionId}
                                 onChange={value => {
                                     setDefinitionId(value)
                                     if (value === comparisonDefinitionId)
@@ -356,7 +362,10 @@ export function Trends() {
                                         />
                                     </Menu.Item>
                                     <Menu.Divider />
-                                    <Menu.Item onClick={() => void saveView()}>
+                                    <Menu.Item
+                                        disabled={saveViewMutation.isPending}
+                                        onClick={() => saveViewMutation.mutate()}
+                                    >
                                         Save current view
                                     </Menu.Item>
                                 </Menu.Dropdown>
@@ -414,7 +423,9 @@ export function Trends() {
                         <div className="trend-metric-empty">
                             <Text fw={650}>
                                 No{' '}
-                                {definitionId ? metricLabel(definitionId).toLowerCase() : 'metric'}{' '}
+                                {activeDefinitionId
+                                    ? metricLabel(activeDefinitionId).toLowerCase()
+                                    : 'metric'}{' '}
                                 data in this range
                             </Text>
                             <Text size="sm" c="dimmed">
@@ -447,7 +458,7 @@ export function Trends() {
                             points={points}
                             loading={loading}
                             error={error && !isNutritionMetric}
-                            metric={definitionId ? metricLabel(definitionId) : ''}
+                            metric={activeDefinitionId ? metricLabel(activeDefinitionId) : ''}
                             onInspect={isNutritionMetric ? undefined : setInspectedIds}
                             comparisonPoints={comparisonDefinitionId ? comparisonPoints : undefined}
                             comparisonLabel={
@@ -457,8 +468,8 @@ export function Trends() {
                             }
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
                             valueLabel={
-                                definitionId && displayUnit
-                                    ? `${metricLabel(definitionId)} (${unitPresentation(displayUnit).label})`
+                                activeDefinitionId && displayUnit
+                                    ? `${metricLabel(activeDefinitionId)} (${unitPresentation(displayUnit).label})`
                                     : undefined
                             }
                             formatValue={value => formatDisplayValue(value, { withUnit: false })}
@@ -487,7 +498,7 @@ export function Trends() {
                                     setShowAnalysis(false)
                                 }}
                                 data={recordedDefinitionIds
-                                    .filter(id => id !== definitionId)
+                                    .filter(id => id !== activeDefinitionId)
                                     .map(id => ({ value: id, label: metricLabel(id) }))}
                                 placeholder="Choose a recorded metric"
                             />
@@ -503,11 +514,11 @@ export function Trends() {
                         )}
                     </div>
 
-                    {showAnalysis && definitionId && comparisonDefinitionId && (
+                    {showAnalysis && activeDefinitionId && comparisonDefinitionId && (
                         <div className="trends-analysis">
                             <CorrelationNote
                                 observations={observations}
-                                metric={definitionId}
+                                metric={activeDefinitionId}
                                 comparisonMetric={comparisonDefinitionId}
                                 start={currentStart}
                                 days={days}
@@ -522,7 +533,7 @@ export function Trends() {
                         </Alert>
                     )}
 
-                    {inspectedIds && definitionId && (
+                    {inspectedIds && activeDefinitionId && (
                         <div className="trends-inspector">
                             <div className="trends-inspector-heading">
                                 <div>
@@ -543,10 +554,15 @@ export function Trends() {
                             <ObservationRecords
                                 observations={observations.filter(
                                     record =>
-                                        record.definitionId === definitionId &&
+                                        record.definitionId === activeDefinitionId &&
                                         inspectedIds.includes(record.id),
                                 )}
-                                onToggleExcluded={observation => void toggleExcluded(observation)}
+                                onToggleExcluded={observation =>
+                                    excludeMutation.mutate({
+                                        observation,
+                                        excluded: !observation.excluded,
+                                    })
+                                }
                                 showAll
                             />
                         </div>
