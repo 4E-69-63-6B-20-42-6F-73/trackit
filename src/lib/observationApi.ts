@@ -1,6 +1,7 @@
 import type { NumericObservation } from '../domain/health'
 import { $api, apiClient } from './apiClient'
 import type { paths } from './api.generated'
+import { invalidateHealthQueries } from './healthQueries'
 import { queryClient } from './queryClient'
 
 export type MetricSourceSummary =
@@ -24,26 +25,27 @@ const observationParams = (range: {
     },
 })
 
-const invalidateObservationQueries = async () => {
-    await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['get', '/api/observations'] }),
-        queryClient.invalidateQueries({ queryKey: ['get', '/api/metric-sources'] }),
-    ])
-}
+export const observationQueryOptions = (
+    range: { from?: string; to?: string; definitionIds?: string[] } = {},
+) => $api.queryOptions('get', '/api/observations', observationParams(range))
+
+export const metricSourcesQueryOptions = () => $api.queryOptions('get', '/api/metric-sources')
 
 export async function createObservation(input: CreateObservationInput) {
-    const { response } = await apiClient.POST('/api/observations', { body: input })
-    if (!response.ok) throw new Error('Observation could not be saved')
-    await invalidateObservationQueries()
+    const { data, response } = await apiClient.POST('/api/observations', { body: input })
+    if (!response.ok || !data) throw new Error('Observation could not be saved')
+    await invalidateHealthQueries()
+    return data.data
 }
 
-export async function updateObservation(id: string, input: UpdateObservationInput): Promise<void> {
-    const { response } = await apiClient.PATCH('/api/observations/{id}', {
+export async function updateObservation(id: string, input: UpdateObservationInput) {
+    const { data, response } = await apiClient.PATCH('/api/observations/{id}', {
         params: { path: { id } },
         body: input,
     })
-    if (!response.ok) throw new Error(`Observation update failed (${response.status})`)
-    await invalidateObservationQueries()
+    if (!response.ok || !data) throw new Error(`Observation update failed (${response.status})`)
+    await invalidateHealthQueries()
+    return data.data
 }
 
 export async function deleteObservation(id: string): Promise<void> {
@@ -52,7 +54,7 @@ export async function deleteObservation(id: string): Promise<void> {
     })
     if (!response.ok && response.status !== 404)
         throw new Error(`Observation delete failed (${response.status})`)
-    await invalidateObservationQueries()
+    await invalidateHealthQueries()
 }
 
 export async function listObservations(
@@ -68,9 +70,7 @@ export async function listObservations(
         if (!response.ok || !data) throw new Error('Observations could not be loaded')
         return data.data
     }
-    const result = await queryClient.fetchQuery(
-        $api.queryOptions('get', '/api/observations', options),
-    )
+    const result = await queryClient.fetchQuery(observationQueryOptions(range))
     return result.data
 }
 
@@ -80,7 +80,7 @@ export async function listMetricSources(signal?: AbortSignal): Promise<MetricSou
         if (!response.ok || !data) throw new Error('Metric sources could not be loaded')
         return data.data
     }
-    const result = await queryClient.fetchQuery($api.queryOptions('get', '/api/metric-sources'))
+    const result = await queryClient.fetchQuery(metricSourcesQueryOptions())
     return result.data
 }
 
@@ -89,7 +89,7 @@ export async function setObservationExcluded(observation: NumericObservation, ex
         params: { path: { id: observation.id } },
         body: { excluded, version: observation.version },
     })
-    if (!response.ok) throw new Error('Could not update observation')
-    await invalidateObservationQueries()
-    return data?.data as NumericObservation
+    if (!response.ok || !data) throw new Error('Could not update observation')
+    await invalidateHealthQueries()
+    return data.data
 }
