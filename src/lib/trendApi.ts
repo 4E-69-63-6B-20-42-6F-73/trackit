@@ -3,8 +3,8 @@ import { authRequest } from './authApi'
 export type TrendViewRecord = {
     id: string
     name: string
-    metric: string
-    comparisonMetric: string | null
+    definitionId: string
+    comparisonDefinitionId: string | null
     rangeDays: number
     granularity: 'daily' | 'weekly'
 }
@@ -17,8 +17,8 @@ export async function listTrendViews(): Promise<TrendViewRecord[]> {
 
 export async function saveTrendView(input: {
     name: string
-    metric: string
-    comparisonMetric?: string
+    definitionId: string
+    comparisonDefinitionId?: string
     rangeDays: number
     granularity: 'daily' | 'weekly'
 }) {
