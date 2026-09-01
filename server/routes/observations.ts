@@ -8,6 +8,7 @@ import {
     validatorCompiler,
 } from 'fastify-type-provider-zod'
 import {
+    type DailyMetricResponse,
     dailyMetricListResponseSchema,
     dailyMetricRangeQuerySchema,
     errorResponseSchema,
@@ -62,7 +63,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
     await app.register(swagger, {
         openapi: {
             info: openApiContract.info,
-            servers: openApiContract.servers,
+            servers: [...openApiContract.servers],
         },
         transform: jsonSchemaTransform,
     })
@@ -146,12 +147,18 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
                 86_400_000
             if (days < 0 || days > 365)
                 return badRequest(request, reply, { error: 'range_too_large' })
+            const rows = ((await data.listDailyMetrics?.({
+                from: request.query.from,
+                to: request.query.to,
+            })) ?? []) as DailyMetricResponse[]
             return {
-                data:
-                    (await data.listDailyMetrics?.({
-                        from: request.query.from,
-                        to: request.query.to,
-                    })) ?? [],
+                data: rows.map(row => ({
+                    date: row.date,
+                    definitionId: row.definitionId,
+                    value: row.value,
+                    unit: row.unit,
+                    derivationVersion: row.derivationVersion,
+                })),
             }
         },
     )
