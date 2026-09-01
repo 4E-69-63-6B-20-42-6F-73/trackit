@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -12,6 +12,7 @@ import {
     Text,
     Title,
 } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     IconArrowLeft,
     IconChevronRight,
@@ -30,8 +31,8 @@ import {
     rejectDevice,
     revokeDevice,
     type DeviceRecord,
-    type HealthConnectStatus,
 } from '../../../lib/deviceApi'
+import { serverQueryKeys } from '../../../lib/serverQueries'
 
 const statusLabel = (status: string) => {
     switch (status) {
@@ -76,43 +77,55 @@ const relativeDate = (value: string) => {
     return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(days, 'day')
 }
 
+type DeviceAction = 'approve' | 'reject' | 'disconnect' | 'delete'
+
 export function Devices() {
     const navigate = useNavigate()
-    const [devices, setDevices] = useState<DeviceRecord[]>([])
-    const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
-        'Not connected',
-    )
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(true)
-    const [busyDeviceId, setBusyDeviceId] = useState<string | null>(null)
+    const queryClient = useQueryClient()
+    const [actionError, setActionError] = useState('')
     const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null)
     const [confirmation, setConfirmation] = useState<{
         device: DeviceRecord
         action: 'reject' | 'disconnect' | 'delete'
     } | null>(null)
-    const hasLoaded = useRef(false)
-
-    const refresh = useCallback(async () => {
-        setLoading(true)
-        try {
-            const nextDevices = await listDevices()
-            setDevices(nextDevices)
-            setHealthStatus(healthConnectStatus(nextDevices))
-            setError('')
-        } catch {
-            setError('Devices unavailable. Try refreshing the list.')
-            setHealthStatus('Unavailable')
-        } finally {
-            setLoading(false)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (!hasLoaded.current) {
-            hasLoaded.current = true
-            void refresh()
-        }
-    }, [refresh])
+    const devicesQuery = useQuery({
+        queryKey: serverQueryKeys.devices,
+        queryFn: ({ signal }) => listDevices(signal),
+    })
+    const devices = devicesQuery.data ?? []
+    const loading = devicesQuery.isPending
+    const healthStatus = devicesQuery.isError ? 'Unavailable' : healthConnectStatus(devices)
+    const error = devicesQuery.isError
+        ? 'Devices unavailable. Try refreshing the list.'
+        : actionError
+    const deviceMutation = useMutation({
+        mutationFn: async ({ device, action }: { device: DeviceRecord; action: DeviceAction }) => {
+            if (action === 'approve') await confirmDevice(device.id)
+            else if (action === 'reject') await rejectDevice(device.id)
+            else if (action === 'disconnect') await revokeDevice(device.id)
+            else await deleteDevice(device.id)
+        },
+        onMutate: () => setActionError(''),
+        onSuccess: async (_, { action }) => {
+            if (action !== 'approve') {
+                setConfirmation(null)
+                setSelectedDevice(null)
+            }
+            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.devices })
+        },
+        onError: (_, { device, action }) => {
+            setActionError(
+                action === 'approve'
+                    ? `Could not approve ${device.name}. Try again.`
+                    : action === 'reject'
+                      ? `Could not reject ${device.name}. Try again.`
+                      : action === 'disconnect'
+                        ? `Could not disconnect ${device.name}. Try again.`
+                        : `Could not delete ${device.name}. Try again.`,
+            )
+        },
+    })
+    const busyDeviceId = deviceMutation.isPending ? deviceMutation.variables?.device.id : null
 
     const orderedDevices = useMemo(
         () =>
@@ -151,40 +164,9 @@ export function Devices() {
         return { tone: 'gray', text: 'No active devices' }
     })()
 
-    const approve = async (device: DeviceRecord) => {
-        setBusyDeviceId(device.id)
-        try {
-            await confirmDevice(device.id)
-            await refresh()
-        } catch {
-            setError(`Could not approve ${device.name}. Try again.`)
-        } finally {
-            setBusyDeviceId(null)
-        }
-    }
-
-    const runConfirmedAction = async () => {
+    const runConfirmedAction = () => {
         if (!confirmation) return
-        const { device, action } = confirmation
-        setBusyDeviceId(device.id)
-        try {
-            if (action === 'reject') await rejectDevice(device.id)
-            else if (action === 'disconnect') await revokeDevice(device.id)
-            else await deleteDevice(device.id)
-            setConfirmation(null)
-            setSelectedDevice(null)
-            await refresh()
-        } catch {
-            setError(
-                action === 'reject'
-                    ? `Could not reject ${device.name}. Try again.`
-                    : action === 'disconnect'
-                      ? `Could not disconnect ${device.name}. Try again.`
-                      : `Could not delete ${device.name}. Try again.`,
-            )
-        } finally {
-            setBusyDeviceId(null)
-        }
+        deviceMutation.mutate({ device: confirmation.device, action: confirmation.action })
     }
 
     return (
@@ -241,8 +223,8 @@ export function Devices() {
                     variant="subtle"
                     color="gray"
                     aria-label="Refresh devices"
-                    loading={loading}
-                    onClick={() => void refresh()}
+                    loading={devicesQuery.isFetching}
+                    onClick={() => void devicesQuery.refetch()}
                 >
                     <IconRefresh size={17} />
                 </ActionIcon>
@@ -309,7 +291,7 @@ export function Devices() {
                                         loading={busyDeviceId === device.id}
                                         onClick={event => {
                                             event.stopPropagation()
-                                            void approve(device)
+                                            deviceMutation.mutate({ device, action: 'approve' })
                                         }}
                                     >
                                         Approve
@@ -535,7 +517,7 @@ export function Devices() {
                     <Button
                         color="red"
                         loading={Boolean(confirmation && busyDeviceId === confirmation.device.id)}
-                        onClick={() => void runConfirmedAction()}
+                        onClick={runConfirmedAction}
                     >
                         {confirmation?.action === 'reject'
                             ? 'Reject pairing'
