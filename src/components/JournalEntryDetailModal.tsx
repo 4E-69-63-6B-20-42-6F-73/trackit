@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Badge, Button, Divider, Group, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Alert, Badge, Button, Divider, Group, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import type { JournalEvent, SleepStageDetail } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 import { getJournalEntry } from '../lib/journalApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 const stageLabels: Record<SleepStageDetail['type'], string> = {
     awake: 'Awake',
@@ -67,9 +68,7 @@ function SleepDetail({
     return (
         <Stack gap="lg">
             <div>
-                <Text fw={700} size="xl">
-                    Sleep phases
-                </Text>
+                <Text fw={700} size="xl">Sleep phases</Text>
                 {event.startedAt && event.endedAt && (
                     <Text size="sm" c="dimmed">
                         {formatTime(event.startedAt)} – {formatTime(event.endedAt)}
@@ -87,9 +86,7 @@ function SleepDetail({
                             alignItems: 'center',
                         }}
                     >
-                        <Text size="xs" c="dimmed">
-                            {stageLabels[type]}
-                        </Text>
+                        <Text size="xs" c="dimmed">{stageLabels[type]}</Text>
                         <div
                             style={{
                                 position: 'relative',
@@ -173,12 +170,8 @@ function MealDetail({
         <Stack gap="lg">
             <Group justify="space-between" align="flex-start">
                 <div>
-                    <Text size="xs" c="dimmed">
-                        Meal
-                    </Text>
-                    <Text fw={700} size="xl">
-                        {detail.mealType}
-                    </Text>
+                    <Text size="xs" c="dimmed">Meal</Text>
+                    <Text fw={700} size="xl">{detail.mealType}</Text>
                 </div>
                 {detail.nutritionQuality !== 'complete' && (
                     <Badge
@@ -193,15 +186,11 @@ function MealDetail({
             </Group>
             <SimpleGrid cols={{ base: 2, xs: 3 }} spacing="md">
                 <div>
-                    <Text size="xs" c="dimmed">
-                        Amount
-                    </Text>
+                    <Text size="xs" c="dimmed">Amount</Text>
                     <Text fw={650}>{serving}</Text>
                 </div>
                 <div>
-                    <Text size="xs" c="dimmed">
-                        Energy
-                    </Text>
+                    <Text size="xs" c="dimmed">Energy</Text>
                     <Text fw={650}>
                         {typeof detail.nutrients.calories === 'number'
                             ? `${number(detail.nutrients.calories)} kcal`
@@ -209,23 +198,17 @@ function MealDetail({
                     </Text>
                 </div>
                 <div>
-                    <Text size="xs" c="dimmed">
-                        Date and time
-                    </Text>
+                    <Text size="xs" c="dimmed">Date and time</Text>
                     <Text fw={650}>{recordedAt}</Text>
                 </div>
             </SimpleGrid>
             <div>
-                <Text fw={650} mb="sm">
-                    Nutrition
-                </Text>
+                <Text fw={650} mb="sm">Nutrition</Text>
                 {nutrients.length ? (
                     <SimpleGrid cols={{ base: 2, xs: 4 }} spacing="md">
                         {nutrients.map(([key, label, unit]) => (
                             <div key={key}>
-                                <Text size="xs" c="dimmed">
-                                    {label}
-                                </Text>
+                                <Text size="xs" c="dimmed">{label}</Text>
                                 <Text fw={650}>
                                     {number(detail.nutrients[key])} {unit}
                                 </Text>
@@ -233,9 +216,7 @@ function MealDetail({
                         ))}
                     </SimpleGrid>
                 ) : (
-                    <Text size="sm" c="dimmed">
-                        No additional nutrition was recorded.
-                    </Text>
+                    <Text size="sm" c="dimmed">No additional nutrition was recorded.</Text>
                 )}
             </div>
         </Stack>
@@ -252,19 +233,13 @@ export function JournalEntryDetailModal({
     const { preferences } = useServerData()
     const locale = preferences?.locale
     const timezone = preferences?.timezone ?? 'UTC'
-    const [detailEvent, setDetailEvent] = useState<JournalEvent | null>(null)
     const eventId = event?.id
-
-    useEffect(() => {
-        if (!eventId) return
-        const controller = new AbortController()
-        void getJournalEntry(eventId, controller.signal)
-            .then(setDetailEvent)
-            .catch(() => undefined)
-        return () => controller.abort()
-    }, [eventId])
-
-    const shownEvent = detailEvent?.id === eventId ? detailEvent : event
+    const detailQuery = useQuery({
+        queryKey: [...serverQueryKeys.journal, 'detail', eventId ?? 'closed'],
+        queryFn: ({ signal }) => getJournalEntry(eventId!, signal),
+        enabled: Boolean(eventId),
+    })
+    const shownEvent = detailQuery.data ?? event
     const hasDetailedView =
         shownEvent?.detailView?.kind === 'meal' ||
         (shownEvent?.detailView?.kind === 'sleep' && shownEvent.detailView.stages.length > 0)
@@ -291,6 +266,16 @@ export function JournalEntryDetailModal({
             centered
             size={hasDetailedView ? 'lg' : 'md'}
         >
+            {detailQuery.isFetching && (
+                <Text size="xs" c="dimmed" mb="sm" role="status">
+                    Loading latest entry details…
+                </Text>
+            )}
+            {detailQuery.isError && (
+                <Alert color="orange" mb="sm">
+                    Detailed entry data could not be loaded. Showing the journal summary instead.
+                </Alert>
+            )}
             {shownEvent && hasDetailedView ? (
                 <Stack gap="md">
                     {shownEvent.detailView?.kind === 'meal' ? (
@@ -302,35 +287,23 @@ export function JournalEntryDetailModal({
                     <Group justify="space-between" align="flex-end">
                         <Group gap="xl">
                             <div>
-                                <Text size="xs" c="dimmed">
-                                    Source
-                                </Text>
-                                <Text size="sm" fw={600}>
-                                    {shownEvent.source}
-                                </Text>
+                                <Text size="xs" c="dimmed">Source</Text>
+                                <Text size="sm" fw={600}>{shownEvent.source}</Text>
                             </div>
                             {shownEvent.deviceName && (
                                 <div>
-                                    <Text size="xs" c="dimmed">
-                                        Device
-                                    </Text>
-                                    <Text size="sm" fw={600}>
-                                        {shownEvent.deviceName}
-                                    </Text>
+                                    <Text size="xs" c="dimmed">Device</Text>
+                                    <Text size="sm" fw={600}>{shownEvent.deviceName}</Text>
                                 </div>
                             )}
                         </Group>
-                        <Button variant="default" onClick={onClose}>
-                            Close
-                        </Button>
+                        <Button variant="default" onClick={onClose}>Close</Button>
                     </Group>
                 </Stack>
             ) : shownEvent ? (
                 <Stack gap="md">
                     <div>
-                        <Text fw={700} size="xl">
-                            {shownEvent.detail}
-                        </Text>
+                        <Text fw={700} size="xl">{shownEvent.detail}</Text>
                         <Text size="sm" c="dimmed" mt={4}>
                             {shownEvent.startedAt &&
                             shownEvent.endedAt &&
@@ -341,27 +314,17 @@ export function JournalEntryDetailModal({
                     </div>
                     <Divider />
                     <div>
-                        <Text size="xs" c="dimmed">
-                            Source
-                        </Text>
-                        <Text size="sm" fw={600}>
-                            {shownEvent.source}
-                        </Text>
+                        <Text size="xs" c="dimmed">Source</Text>
+                        <Text size="sm" fw={600}>{shownEvent.source}</Text>
                     </div>
                     {shownEvent.deviceName && (
                         <div>
-                            <Text size="xs" c="dimmed">
-                                Device
-                            </Text>
-                            <Text size="sm" fw={600}>
-                                {shownEvent.deviceName}
-                            </Text>
+                            <Text size="xs" c="dimmed">Device</Text>
+                            <Text size="sm" fw={600}>{shownEvent.deviceName}</Text>
                         </div>
                     )}
                     <Group justify="flex-end">
-                        <Button variant="default" onClick={onClose}>
-                            Close
-                        </Button>
+                        <Button variant="default" onClick={onClose}>Close</Button>
                     </Group>
                 </Stack>
             ) : null}
