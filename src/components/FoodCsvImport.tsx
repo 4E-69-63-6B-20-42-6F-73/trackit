@@ -25,7 +25,7 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
             await queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
             const refreshed = await queryClient.fetchQuery({
                 queryKey: [...serverQueryKeys.foods, ''],
-                queryFn: ({ signal }) => searchFoods('', signal),
+                queryFn: () => searchFoods(''),
             })
             onImported(refreshed)
         },
