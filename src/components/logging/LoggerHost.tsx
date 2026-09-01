@@ -38,7 +38,12 @@ export function LoggerHost({
     return (
         <>
             {activeLogger === 'food' && (
-                <FoodLogger opened close={closeLogger} selectedDate={selectedDate} />
+                <FoodLogger
+                    opened
+                    close={closeLogger}
+                    selectedDate={selectedDate}
+                    onFeedback={toast.success}
+                />
             )}
             {activeLogger && activeLogger !== 'food' && (
                 <ManualEntryLogger
