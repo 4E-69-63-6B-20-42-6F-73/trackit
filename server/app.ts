@@ -20,8 +20,6 @@ import {
     goalUpdateSchema,
     mealInputSchema,
     mealUpdateSchema,
-    observationInputSchema,
-    observationUpdateSchema,
     preferencesInputSchema,
     recipeInputSchema,
     recipeUpdateSchema,
@@ -36,6 +34,7 @@ import type { CanonicalHealthRecordInput } from './health-records/types.js'
 import type { DataDeletionService } from './data-lifecycle/deletion.js'
 import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
+import { observationRoutes } from './routes/observations.js'
 import { config } from './config.js'
 import { evaluateGoal, type Goal } from '../src/domain/goals.js'
 import type { NumericObservation } from '../src/domain/health.js'
@@ -821,68 +820,7 @@ export async function createApp(
                 .pipe(z.array(z.string().trim().min(1).max(100)).max(50))
                 .optional(),
         })
-        app.get<{ Querystring: { from?: string; to?: string; definitionIds?: string } }>(
-            '/api/observations',
-            async (request, reply) => {
-                const range = recordRangeSchema.safeParse(request.query)
-                if (!range.success)
-                    return badRequest(request, reply, {
-                        error: 'invalid_range',
-                        validation: range.error,
-                    })
-                const bounded = { ...range.data }
-                if (!bounded.from) {
-                    const from = new Date()
-                    from.setUTCDate(from.getUTCDate() - 365)
-                    bounded.from = from.toISOString()
-                }
-                bounded.to ??= new Date().toISOString()
-                if (
-                    new Date(bounded.to).getTime() <= new Date(bounded.from).getTime() ||
-                    new Date(bounded.to).getTime() - new Date(bounded.from).getTime() >
-                        366 * 86_400_000
-                )
-                    return badRequest(request, reply, { error: 'range_too_large' })
-                return { data: await data.listObservations(bounded) }
-            },
-        )
-        app.get('/api/metric-sources', async () => ({
-            data: (await data.listMetricSources?.()) ?? [],
-        }))
-        app.get<{ Querystring: { from?: string; to?: string } }>(
-            '/api/daily-metrics',
-            async (request, reply) => {
-                const dateRange = z
-                    .object({
-                        from: z.string().date().optional(),
-                        to: z.string().date().optional(),
-                    })
-                    .safeParse(request.query)
-                if (!dateRange.success)
-                    return badRequest(request, reply, { validation: dateRange.error })
-                if (!dateRange.data.from || !dateRange.data.to)
-                    return badRequest(request, reply, { error: 'date_range_required' })
-                const days =
-                    (new Date(`${dateRange.data.to}T00:00:00.000Z`).getTime() -
-                        new Date(`${dateRange.data.from}T00:00:00.000Z`).getTime()) /
-                    86_400_000
-                if (days < 0 || days > 365)
-                    return badRequest(request, reply, { error: 'range_too_large' })
-                return { data: (await data.listDailyMetrics?.(dateRange.data)) ?? [] }
-            },
-        )
-        app.post('/api/observations', async (request, reply) => {
-            const input = observationInputSchema.safeParse(request.body)
-            if (!input.success) return badRequest(request, reply, { validation: input.error })
-            return reply.code(201).send({ data: await data.createObservation(input.data) })
-        })
-        app.patch<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
-            const input = observationUpdateSchema.safeParse(request.body)
-            if (!input.success) return badRequest(request, reply, { validation: input.error })
-            const updated = await data.updateObservation(request.params.id, input.data)
-            if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-            return { data: updated }
-        })
+        await app.register(observationRoutes, { data, badRequest })
         app.get<{ Querystring: { from?: string; to?: string } }>(
             '/api/meals',
             async (request, reply) => {
