@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { addCalendarDays, calendarDateKey, calendarDayRangeForKey } from '../domain/calendar'
 import type { GoalEvaluation } from '../domain/goals'
 import type { NumericObservation } from '../domain/health'
@@ -30,12 +30,13 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         loading: sharedLoading,
         unavailable: sharedUnavailable,
     } = useServerData()
+    const [currentTime] = useState(() => Date.now())
     const timezone = preferences?.timezone ?? 'UTC'
     const selectedKey = calendarDateKey(selectedDate, timezone)
     const day = calendarDayRangeForKey(selectedKey, timezone)
     const dailyRange = { from: addCalendarDays(selectedKey, -29), to: selectedKey }
     const observationRange = { from: day.from.toISOString(), to: day.to.toISOString() }
-    const evaluationAt = new Date(Math.min(day.to.getTime() - 1, Date.now())).toISOString()
+    const evaluationAt = new Date(Math.min(day.to.getTime() - 1, currentTime)).toISOString()
     const dailyQuery = useQuery({
         queryKey: [...healthQueryKeys.dailyMetrics, dailyRange],
         queryFn: ({ signal }) => listDailyMetrics(dailyRange, signal),
