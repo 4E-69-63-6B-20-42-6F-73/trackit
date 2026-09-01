@@ -7,6 +7,7 @@ import {
     Radio,
     SegmentedControl,
     Select,
+    Skeleton,
     Stack,
     Switch,
     Text,
@@ -34,7 +35,7 @@ import { listMetricSources } from '../lib/observationApi'
 import { updatePreferences } from '../lib/preferencesApi'
 
 export function Metrics() {
-    const { preferences, loading } = useServerData()
+    const { preferences, loading: sharedLoading } = useServerData()
     const [editing, setEditing] = useState<MetricDefinition | null>(null)
     const [draftUnit, setDraftUnit] = useState('')
     const [draftPrecision, setDraftPrecision] = useState<number | null>(null)
@@ -47,6 +48,7 @@ export function Metrics() {
         queryKey: healthQueryKeys.metricSources,
         queryFn: ({ signal }) => listMetricSources(signal),
     })
+    const loading = sharedLoading || sourceQuery.isPending
     const sourceSummaries = sourceQuery.data ?? []
     const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
     const preset = detectUnitPreset(selected)
@@ -151,37 +153,51 @@ export function Metrics() {
                     {message}
                 </Alert>
             )}
-            {categories.map(category => (
-                <section
-                    className="metric-category"
-                    key={category}
-                    aria-labelledby={`metric-${category}`}
-                >
-                    <Text id={`metric-${category}`} fw={700} mb="sm">
-                        {category}
-                    </Text>
-                    <div className="metric-row-list">
-                        {metricCatalog
-                            .filter(metric => metric.category === category)
-                            .map(metric => {
-                                const configurable =
-                                    metric.displayUnits.length > 1 ||
-                                    metric.precision > 0 ||
-                                    Boolean(metric.derived) ||
-                                    (metricSources[metric.id]?.length ?? 0) > 1
-                                return (
-                                    <MetricRow
-                                        key={metric.id}
-                                        metric={metric}
-                                        displayUnit={selected[metric.id].displayUnit}
-                                        clickable={configurable && !saving}
-                                        onClick={() => openMetric(metric)}
-                                    />
-                                )
-                            })}
-                    </div>
-                </section>
-            ))}
+            {sourceQuery.isError && (
+                <Alert mt="md" color="orange">
+                    Metric source information could not be loaded. Try again later.
+                </Alert>
+            )}
+            {loading ? (
+                <Skeleton
+                    role="status"
+                    height={320}
+                    radius="lg"
+                    aria-label="Loading metric configuration"
+                />
+            ) : (
+                categories.map(category => (
+                    <section
+                        className="metric-category"
+                        key={category}
+                        aria-labelledby={`metric-${category}`}
+                    >
+                        <Text id={`metric-${category}`} fw={700} mb="sm">
+                            {category}
+                        </Text>
+                        <div className="metric-row-list">
+                            {metricCatalog
+                                .filter(metric => metric.category === category)
+                                .map(metric => {
+                                    const configurable =
+                                        metric.displayUnits.length > 1 ||
+                                        metric.precision > 0 ||
+                                        Boolean(metric.derived) ||
+                                        (metricSources[metric.id]?.length ?? 0) > 1
+                                    return (
+                                        <MetricRow
+                                            key={metric.id}
+                                            metric={metric}
+                                            displayUnit={selected[metric.id].displayUnit}
+                                            clickable={configurable && !saving}
+                                            onClick={() => openMetric(metric)}
+                                        />
+                                    )
+                                })}
+                        </div>
+                    </section>
+                ))
+            )}
             <Modal opened={Boolean(editing)} onClose={() => setEditing(null)} title={editing?.name}>
                 {editing && editing.displayUnits.length > 1 && (
                     <Radio.Group label="Display unit" value={draftUnit} onChange={setDraftUnit}>
