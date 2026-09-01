@@ -1,11 +1,12 @@
-import { useEffect, useState } from 'react'
 import { Badge, Button, Divider, Group, Progress, SimpleGrid, Stack, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { calendarDateKey } from '../domain/calendar'
-import { formatPlanAmount, planStatus, type MealPlanItem } from '../domain/planning'
+import { formatPlanAmount, planStatus } from '../domain/planning'
 import { useDailyNutrition } from '../hooks/useDailyNutrition'
 import { useServerData } from '../hooks/useServerData'
 import { listPlanItems } from '../lib/planApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 import { NutritionSkeleton } from './LoadingSkeletons'
 
 export function DailyNutritionPanel({
@@ -18,30 +19,21 @@ export function DailyNutritionPanel({
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const dateKey = calendarDateKey(selectedDate, timezone)
-    const [plannedMeals, setPlannedMeals] = useState<MealPlanItem[]>([])
+    const planQuery = useQuery({
+        queryKey: [...serverQueryKeys.planItems, dateKey, dateKey],
+        queryFn: ({ signal }) => listPlanItems({ from: dateKey, to: dateKey }, signal),
+    })
+    const plannedMeals = planQuery.data ?? []
     const {
         nutrients,
         mealCount,
-        loading,
+        loading: nutritionLoading,
         unavailable,
         proteinGoal,
         hasProteinGoal,
         nutritionQuality,
     } = useDailyNutrition(selectedDate)
-
-    useEffect(() => {
-        let active = true
-        const refresh = () =>
-            void listPlanItems({ from: dateKey, to: dateKey })
-                .then(items => active && setPlannedMeals(items))
-                .catch(() => active && setPlannedMeals([]))
-        refresh()
-        window.addEventListener('trackit:plan-changed', refresh)
-        return () => {
-            active = false
-            window.removeEventListener('trackit:plan-changed', refresh)
-        }
-    }, [dateKey])
+    const loading = nutritionLoading || planQuery.isPending
 
     if (loading) return <NutritionSkeleton />
 
@@ -64,7 +56,11 @@ export function DailyNutritionPanel({
                     Open plan
                 </Button>
             </Group>
-            {plannedMeals.length ? (
+            {planQuery.isError ? (
+                <Text size="sm" c="dimmed">
+                    Planned meals are unavailable right now. Open Plan to retry.
+                </Text>
+            ) : plannedMeals.length ? (
                 <Stack gap={6}>
                     {plannedMeals.map(item => {
                         const status = planStatus(item)
