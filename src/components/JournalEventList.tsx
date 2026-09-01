@@ -28,7 +28,7 @@ export function JournalEventList({
         <Fragment>
             {events.map(event => {
                 const { icon: Icon, tone } = eventVisual(event.category)
-                const actions = event.source === 'You' ? renderActions?.(event) : null
+                const actions = event.editable ? renderActions?.(event) : null
                 return (
                     <div
                         className={`event${journalStyle ? ' roomy' : ''} event-selectable`}
