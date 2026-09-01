@@ -15,7 +15,6 @@ export function Library() {
         queryKey: serverQueryKeys.recipes,
         queryFn: () => listRecipes(),
     })
-    const loading = foodsQuery.isPending || recipesQuery.isPending
     const unavailable = foodsQuery.isError || recipesQuery.isError
     const foodCount = foodsQuery.data?.length ?? 0
     const recipeCount = recipesQuery.data?.length ?? 0
@@ -44,8 +43,12 @@ export function Library() {
                 >
                     <Group justify="space-between" align="start">
                         <IconApple size={22} />
-                        {loading ? (
+                        {foodsQuery.isPending ? (
                             <Skeleton height={14} width={24} aria-label="Loading food count" />
+                        ) : foodsQuery.isError ? (
+                            <Text size="xs" c="dimmed">
+                                Unavailable
+                            </Text>
                         ) : (
                             <Text size="xs" c="dimmed">
                                 {foodCount}
@@ -76,8 +79,12 @@ export function Library() {
                 >
                     <Group justify="space-between" align="start">
                         <IconChefHat size={22} />
-                        {loading ? (
+                        {recipesQuery.isPending ? (
                             <Skeleton height={14} width={24} aria-label="Loading recipe count" />
+                        ) : recipesQuery.isError ? (
+                            <Text size="xs" c="dimmed">
+                                Unavailable
+                            </Text>
                         ) : (
                             <Text size="xs" c="dimmed">
                                 {recipeCount}
