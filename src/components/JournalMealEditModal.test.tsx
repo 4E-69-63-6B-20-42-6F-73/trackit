@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -52,11 +53,16 @@ describe('JournalMealEditModal', () => {
     it('writes edited meal fields through the meal observation command', async () => {
         const user = userEvent.setup()
         const onSaved = vi.fn()
+        const queryClient = new QueryClient({
+            defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        })
         render(
             <MantineProvider>
-                <ServerDataProvider initialData={{ preferences }}>
-                    <JournalMealEditModal event={meal} onClose={vi.fn()} onSaved={onSaved} />
-                </ServerDataProvider>
+                <QueryClientProvider client={queryClient}>
+                    <ServerDataProvider initialData={{ preferences }}>
+                        <JournalMealEditModal event={meal} onClose={vi.fn()} onSaved={onSaved} />
+                    </ServerDataProvider>
+                </QueryClientProvider>
             </MantineProvider>,
         )
 
