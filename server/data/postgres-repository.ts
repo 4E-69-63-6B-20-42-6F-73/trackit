@@ -19,7 +19,7 @@ import {
     savedTrendViews,
 } from '../db/schema.js'
 import type { DataRepository, RecordRange } from './types.js'
-import type { MetricPreferences } from '../../src/domain/metrics.js'
+import { convertMetricValue, type MetricPreferences } from '@trackit/domain/metrics'
 import {
     EFFECTIVE_DAILY_DERIVATION_VERSION,
     rebuildEffectiveDailyMetric,
@@ -27,8 +27,7 @@ import {
 import { dateKeyInTimezone, datesThrough, localDayRange } from './timezone.js'
 import { getEffectiveMetricSeries } from './effective-series.js'
 import { markProjectionDatesDirty } from './projection-state.js'
-import { observationDefinition } from '../../src/domain/observationDefinitions.js'
-import { convertMetricValue } from '../../src/domain/metrics.js'
+import { observationDefinition } from '@trackit/domain/observationDefinitions'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -317,6 +316,16 @@ export class PostgresDataRepository implements DataRepository {
         if (!definition) throw new Error(`Unknown observation definition: ${input.definitionId}`)
         if (definition.valueType !== valueType)
             throw new Error(`${input.definitionId} observations require ${definition.valueType}`)
+        if (
+            valueType === 'number' &&
+            input.value !== undefined &&
+            definition.metric?.validRange &&
+            (input.value < definition.metric.validRange.min ||
+                input.value > definition.metric.validRange.max)
+        )
+            throw new Error(
+                `${input.definitionId} must be between ${definition.metric.validRange.min} and ${definition.metric.validRange.max}`,
+            )
         const canonicalValue =
             valueType === 'number' && input.value !== undefined && input.unit && definition.metric
                 ? convertMetricValue(
@@ -386,12 +395,6 @@ export class PostgresDataRepository implements DataRepository {
             .update(observations)
             .set({
                 excluded: input.excluded,
-                state:
-                    input.excluded === undefined
-                        ? undefined
-                        : input.excluded
-                          ? 'excluded'
-                          : 'active',
                 title: input.title,
                 textValue: input.textValue,
                 attributes:
@@ -735,7 +738,7 @@ export class PostgresDataRepository implements DataRepository {
         return this.database.transaction(async transaction => {
             const [root] = await transaction
                 .update(observations)
-                .set({ state: 'deleted', deletedAt: new Date(), updatedAt: new Date() })
+                .set({ deletedAt: new Date(), updatedAt: new Date() })
                 .where(and(eq(observations.id, id), isNull(observations.deletedAt)))
                 .returning({ id: observations.id, eatenAt: observations.observedAt })
             if (root) {
@@ -746,7 +749,7 @@ export class PostgresDataRepository implements DataRepository {
                 if (components.length)
                     await transaction
                         .update(observations)
-                        .set({ state: 'deleted', deletedAt: new Date(), updatedAt: new Date() })
+                        .set({ deletedAt: new Date(), updatedAt: new Date() })
                         .where(
                             inArray(
                                 observations.id,
@@ -778,7 +781,6 @@ export class PostgresDataRepository implements DataRepository {
         locale?: string
         units?: 'metric' | 'imperial'
         metricPreferences?: MetricPreferences
-        goals?: Record<string, number>
         mcpEnabled?: boolean
         experience?: Record<string, unknown>
     }) {
@@ -1028,7 +1030,7 @@ export class PostgresDataRepository implements DataRepository {
     }
 
     async createGoal(input: {
-        metricId: string
+        definitionId: string
         aggregation: 'latest' | 'average' | 'total'
         comparator: 'gte' | 'lte' | 'between'
         target: { value: number } | { min: number; max: number }
@@ -1042,7 +1044,6 @@ export class PostgresDataRepository implements DataRepository {
             .insert(goals)
             .values({
                 ...input,
-                legacyTargetValue: 'value' in input.target ? input.target.value : input.target.min,
                 effectiveFrom: new Date(input.effectiveFrom),
                 effectiveTo: input.effectiveTo ? new Date(input.effectiveTo) : null,
             })
@@ -1062,7 +1063,7 @@ export class PostgresDataRepository implements DataRepository {
     async updateGoal(
         id: string,
         input: {
-            metricId?: string
+            definitionId?: string
             aggregation?: 'latest' | 'average' | 'total'
             comparator?: 'gte' | 'lte' | 'between'
             target?: { value: number } | { min: number; max: number }
@@ -1077,11 +1078,6 @@ export class PostgresDataRepository implements DataRepository {
             .update(goals)
             .set({
                 ...input,
-                legacyTargetValue: input.target
-                    ? 'value' in input.target
-                        ? input.target.value
-                        : input.target.min
-                    : undefined,
                 effectiveFrom: input.effectiveFrom ? new Date(input.effectiveFrom) : undefined,
                 effectiveTo:
                     input.effectiveTo === null
@@ -1110,8 +1106,8 @@ export class PostgresDataRepository implements DataRepository {
 
     async createSavedTrendView(input: {
         name: string
-        metric: string
-        comparisonMetric?: string
+        definitionId: string
+        comparisonDefinitionId?: string
         rangeDays: number
         granularity: 'daily' | 'weekly'
     }) {
