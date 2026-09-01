@@ -10,6 +10,7 @@ import {
     TextInput,
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
+import { useMutation } from '@tanstack/react-query'
 import { useState } from 'react'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
@@ -31,23 +32,10 @@ export function NewFoodModal({
     const [servingName, setServingName] = useState('serving')
     const [servingGrams, setServingGrams] = useState<number | string>(100)
     const [nutrients, setNutrients] = useState<Partial<Nutrients>>({})
-    const [error, setError] = useState('')
-    const [saving, setSaving] = useState(false)
 
-    const setNutrient = (key: keyof Nutrients, value: number | string) => {
-        setNutrients(current => {
-            const next = { ...current }
-            if (value === '') delete next[key]
-            else next[key] = Number(value)
-            return next
-        })
-    }
-
-    const save = async () => {
-        setSaving(true)
-        setError('')
-        try {
-            const food = await createFood({
+    const createMutation = useMutation({
+        mutationFn: () =>
+            createFood({
                 name: name.trim(),
                 brand: brand.trim() || undefined,
                 barcode: barcode.trim() || undefined,
@@ -58,7 +46,8 @@ export function NewFoodModal({
                 nutritionQuality: foodNutrientKeys.every(key => nutrients[key] !== undefined)
                     ? 'complete'
                     : 'incomplete',
-            })
+            }),
+        onSuccess: food => {
             onCreate(food)
             setName('')
             setBrand('')
@@ -67,11 +56,16 @@ export function NewFoodModal({
             setServingGrams(100)
             setNutrients({})
             onClose()
-        } catch {
-            setError('The food could not be saved to your server. No local copy was created.')
-        } finally {
-            setSaving(false)
-        }
+        },
+    })
+
+    const setNutrient = (key: keyof Nutrients, value: number | string) => {
+        setNutrients(current => {
+            const next = { ...current }
+            if (value === '') delete next[key]
+            else next[key] = Number(value)
+            return next
+        })
     }
 
     return (
@@ -84,7 +78,11 @@ export function NewFoodModal({
             size="md"
         >
             <Stack>
-                {error && <Alert color="orange">{error}</Alert>}
+                {createMutation.isError && (
+                    <Alert color="orange">
+                        The food could not be saved to your server. No local copy was created.
+                    </Alert>
+                )}
                 <Text fw={650}>Basics</Text>
                 <TextInput
                     label="Name"
@@ -137,13 +135,13 @@ export function NewFoodModal({
                         paddingBottom: 'var(--mantine-spacing-xs)',
                     }}
                 >
-                    <Button variant="default" disabled={saving} onClick={onClose}>
+                    <Button variant="default" disabled={createMutation.isPending} onClick={onClose}>
                         Cancel
                     </Button>
                     <Button
-                        loading={saving}
+                        loading={createMutation.isPending}
                         disabled={!name.trim() || !servingName.trim() || Number(servingGrams) <= 0}
-                        onClick={() => void save()}
+                        onClick={() => createMutation.mutate()}
                     >
                         Create food
                     </Button>
