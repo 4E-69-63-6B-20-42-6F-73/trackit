@@ -43,7 +43,11 @@ describe('App routing', () => {
         expect(
             await screen.findByRole('heading', { name: 'Journal' }, { timeout: 5_000 }),
         ).toBeInTheDocument()
-        expect(screen.getByText('Your journal is ready')).toBeInTheDocument()
+        expect(
+            screen.getByText(
+                'Your observations in chronological order, with their recorded source and detail intact.',
+            ),
+        ).toBeInTheDocument()
     })
 
     it('renders a bookmarkable plan route', async () => {
