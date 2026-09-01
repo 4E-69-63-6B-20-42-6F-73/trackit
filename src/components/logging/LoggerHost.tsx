@@ -16,9 +16,13 @@ const kinds: Record<Exclude<LogActionId, 'food'>, ManualEntryKind> = {
 
 export function LoggerHost({
     add,
+    pending,
+    error,
     selectedDate,
 }: {
-    add: (input: CreateObservationInput) => void
+    add: (input: CreateObservationInput) => Promise<boolean>
+    pending: boolean
+    error: string
     selectedDate?: string | null
 }) {
     const { activeLogger, closeLogger } = useLogger()
@@ -46,6 +50,8 @@ export function LoggerHost({
                     opened
                     close={closeLogger}
                     add={add}
+                    pending={pending}
+                    serverError={error}
                     initialKind={kinds[activeLogger]}
                     selectedDate={selectedDate}
                 />
