@@ -82,7 +82,7 @@ export function McpAccess() {
     const [originDraft, setOriginDraft] = useState('')
     const [draftOrigins, setDraftOrigins] = useState<string[] | null>(null)
     const [originError, setOriginError] = useState('')
-    const [actionError, setActionError] = useState('')
+    const [clipboardError, setClipboardError] = useState('')
     const [copied, setCopied] = useState(false)
     const [revoking, setRevoking] = useState<McpClientRecord | null>(null)
     const [deleting, setDeleting] = useState<McpClientRecord | null>(null)
@@ -103,26 +103,21 @@ export function McpAccess() {
     const queryError = statusQuery.isError || eventsQuery.isError
         ? 'Assistant access settings are unavailable. Try again.'
         : ''
-    const error = actionError || queryError
 
     const refresh = async () => {
-        setActionError('')
         await Promise.all([statusQuery.refetch(), eventsQuery.refetch()])
     }
     const toggleMutation = useMutation({
         mutationFn: setMcpEnabled,
-        onMutate: () => setActionError(''),
         onSuccess: async () => {
             await queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpStatus })
         },
-        onError: () => setActionError('Assistant access could not be updated. Try again.'),
     })
     const clientMutation = useMutation({
         mutationFn: async ({ client, action }: { client: McpClientRecord; action: 'revoke' | 'delete' }) => {
             if (action === 'revoke') await revokeMcpClient(client.id)
             else await deleteMcpClient(client.id)
         },
-        onMutate: () => setActionError(''),
         onSuccess: async (_, { action }) => {
             if (action === 'revoke') setRevoking(null)
             else setDeleting(null)
@@ -131,16 +126,9 @@ export function McpAccess() {
                 queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpAccessEvents }),
             ])
         },
-        onError: (_, { client, action }) =>
-            setActionError(
-                action === 'revoke'
-                    ? `Could not revoke ${client.name}. Try again.`
-                    : `Could not delete ${client.name}. Try again.`,
-            ),
     })
     const originsMutation = useMutation({
         mutationFn: setMcpAllowedOrigins,
-        onMutate: () => setActionError(''),
         onSuccess: result => {
             queryClient.setQueryData<typeof status>(serverQueryKeys.mcpStatus, current =>
                 current ? { ...current, allowedOrigins: result.allowedOrigins } : current,
@@ -148,10 +136,23 @@ export function McpAccess() {
             setDraftOrigins(null)
             setOriginError('')
         },
-        onError: () => setActionError('Browser origins could not be updated. Try again.'),
     })
     const saving =
         toggleMutation.isPending || clientMutation.isPending || originsMutation.isPending
+    const clientMutationMessage = clientMutation.variables
+        ? clientMutation.variables.action === 'revoke'
+            ? `Could not revoke ${clientMutation.variables.client.name}. Try again.`
+            : `Could not delete ${clientMutation.variables.client.name}. Try again.`
+        : 'Assistant access could not be updated. Try again.'
+    const latestMutation = [
+        { result: toggleMutation, fallback: 'Assistant access could not be updated. Try again.' },
+        { result: clientMutation, fallback: clientMutationMessage },
+        { result: originsMutation, fallback: 'Browser origins could not be updated. Try again.' },
+    ].reduce((latest, current) =>
+        current.result.submittedAt > latest.result.submittedAt ? current : latest,
+    )
+    const mutationError = latestMutation.result.isError ? latestMutation.fallback : ''
+    const error = clipboardError || mutationError || queryError
 
     const orderedClients = useMemo(
         () =>
@@ -171,8 +172,9 @@ export function McpAccess() {
         try {
             await navigator.clipboard.writeText(`${window.location.origin}/mcp`)
             setCopied(true)
+            setClipboardError('')
         } catch {
-            setActionError('The endpoint could not be copied automatically.')
+            setClipboardError('The endpoint could not be copied automatically.')
         }
     }
     const addOrigin = () => {
@@ -452,7 +454,8 @@ export function McpAccess() {
                     )}
                 </div>
             ) : (
-                !loading && (
+                !statusQuery.isPending &&
+                !statusQuery.isError && (
                     <Card withBorder padding="xl" radius="md" ta="center" className="mcp-empty">
                         <IconRobot size={36} />
                         <Text fw={650}>No assistants connected</Text>
@@ -504,7 +507,11 @@ export function McpAccess() {
                         })
                     ) : (
                         <Text size="sm" c="dimmed" p="lg">
-                            {loading ? 'Loading assistant activity…' : 'No assistant requests recorded yet.'}
+                            {eventsQuery.isPending
+                                ? 'Loading assistant activity…'
+                                : eventsQuery.isError
+                                  ? 'Assistant activity is unavailable.'
+                                  : 'No assistant requests recorded yet.'}
                         </Text>
                     )}
                 </Card>
