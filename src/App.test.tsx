@@ -1,11 +1,12 @@
 import { MantineProvider } from '@mantine/core'
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it } from 'vitest'
 import App from './App'
 import { ServerDataProvider } from './hooks/useServerData'
 import { LoggingProvider } from './logging/LoggingContext'
+import { createTestQueryClient } from './test/queryClient'
 
 const initialData = {
     preferences: {
@@ -19,7 +20,7 @@ const initialData = {
 }
 
 const renderApp = (entry: string) => {
-    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const queryClient = createTestQueryClient()
     return render(
         <MantineProvider>
             <MemoryRouter initialEntries={[entry]}>
