@@ -37,6 +37,7 @@ jobs:
                   cache: npm
             - run: npm ci
             - run: npm run build:domain
+            - run: node scripts/stabilize-domain-schema.mjs
             - name: Regenerate OpenAPI types
               run: npm run api:types
             - name: Regenerate Drizzle migrations
