@@ -96,6 +96,10 @@ export default tseslint.config(
         rules: {
             ...reactHooks.configs.recommended.rules,
             ...reactRefresh.configs.vite.rules,
+            'react-refresh/only-export-components': [
+                'error',
+                { allowConstantExport: true, allowExportNames: ['useServerData'] },
+            ],
             '@typescript-eslint/consistent-type-imports': 'error',
             '@typescript-eslint/no-unused-vars': [
                 'error',
