@@ -13,16 +13,16 @@ import {
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useEffect, useState } from 'react'
-import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
-import { listFoodCategories, setFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
-import { FoodNutritionFields } from './FoodNutritionFields'
 import {
-    FoodServingOptionsFields,
     servingOptionDrafts,
     servingOptionsFromDrafts,
     type ServingOptionDraft,
-} from './FoodServingOptionsFields'
-import { useToast } from './ToastProvider'
+} from '../domain/foodServingOptions'
+import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
+import { listFoodCategories, setFoodCategories, type FoodCategory } from '../lib/foodCategoryApi'
+import { FoodNutritionFields } from './FoodNutritionFields'
+import { FoodServingOptionsFields } from './FoodServingOptionsFields'
+import { useToast } from './toastContext'
 
 export function FoodEditModal({
     food,
