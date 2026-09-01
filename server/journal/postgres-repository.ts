@@ -9,6 +9,7 @@ import type {
     JournalListQuery,
     JournalRepository,
     MealServingDetail,
+    MealSourceItem,
 } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -47,6 +48,7 @@ type JournalListRow = {
     version: number
     createdAt: Date
     updatedAt: Date
+    origin: string
     source: string
     projectedSummary: string | null
     projectedStartedAt: string | null
@@ -97,6 +99,14 @@ const mealServing = (value: unknown): MealServingDetail | undefined => {
     }
 }
 
+const mealSourceItem = (value: unknown): MealSourceItem | undefined => {
+    if (!value || typeof value !== 'object') return undefined
+    const metadata = value as Record<string, unknown>
+    if (typeof metadata.foodId === 'string') return { kind: 'food', id: metadata.foodId }
+    if (typeof metadata.recipeId === 'string') return { kind: 'recipe', id: metadata.recipeId }
+    return undefined
+}
+
 const mealDetailView = (row: typeof observations.$inferSelect): MealDetailView | undefined => {
     if (row.definitionId !== 'meal') return undefined
     const attributes = row.attributes as MealAttributes
@@ -112,6 +122,7 @@ const mealDetailView = (row: typeof observations.$inferSelect): MealDetailView |
         serving: mealServing(attributes.serving),
         nutrients,
         nutritionQuality: attributes.nutritionQuality ?? 'complete',
+        sourceItem: mealSourceItem(row.metadata),
     }
 }
 
@@ -177,6 +188,7 @@ const toEntry = (row: typeof observations.$inferSelect): JournalEntry => {
         updatedAt: row.updatedAt.toISOString(),
         entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
         entityId: row.id,
+        editable: row.origin === 'manual',
         detailView: mealDetail ?? projection?.detailView,
     }
 }
@@ -224,6 +236,7 @@ const toListEntry = (row: JournalListRow): JournalEntry => {
         updatedAt: row.updatedAt.toISOString(),
         entityType: row.definitionId === 'meal' ? 'meal' : 'observation',
         entityId: row.id,
+        editable: row.origin === 'manual',
     }
 }
 
@@ -310,6 +323,7 @@ export class PostgresJournalRepository implements JournalRepository {
                 version: observations.version,
                 createdAt: observations.createdAt,
                 updatedAt: observations.updatedAt,
+                origin: observations.origin,
                 source,
                 projectedSummary: sql<
                     string | null

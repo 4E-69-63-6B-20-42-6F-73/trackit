@@ -1,5 +1,6 @@
 import { environment } from '../app/env'
 import type { Food, FoodServingOption, Nutrients } from '../domain/nutrition'
+import type { MealSourceItem } from '../domain/types'
 import { authRequest } from './authApi'
 import { sharedJsonRequest } from './sharedRequest'
 
@@ -37,6 +38,7 @@ export type MealRecord = {
     version: number
     nutritionQuality: 'complete' | 'estimated' | 'incomplete'
     serving?: { amount: number; unit: 'g' | 'serving' }
+    sourceItem?: MealSourceItem
 }
 
 export type RecipeRecord = {
@@ -285,6 +287,7 @@ export async function logMeal(
     foodId?: string,
     eatenAt = new Date().toISOString(),
     serving?: { amount: number; unit: 'g' | 'serving' },
+    recipeId?: string,
 ) {
     const response = await authRequest('/api/meals', {
         method: 'POST',
@@ -298,6 +301,7 @@ export async function logMeal(
             nutritionQuality,
             favorite: false,
             foodId,
+            recipeId,
             serving,
         }),
     })
@@ -315,6 +319,8 @@ export async function updateMeal(
         favorite: boolean
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
         serving: { amount: number; unit: 'g' | 'serving' } | null
+        foodId: string | null
+        recipeId: string | null
     }>,
 ) {
     const response = await authRequest(`/api/meals/${id}`, {

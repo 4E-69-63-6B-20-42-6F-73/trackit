@@ -29,6 +29,7 @@ export function JournalMealEditModal({
         version: mealEvent.version ?? 1,
         nutritionQuality: mealEvent.detailView.nutritionQuality,
         serving: mealEvent.detailView.serving,
+        sourceItem: mealEvent.detailView.sourceItem,
     }
 
     return (

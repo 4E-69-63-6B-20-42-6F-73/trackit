@@ -41,6 +41,19 @@ type MealAttributes = {
     serving?: { amount: number; unit: 'g' | 'serving' }
 }
 
+type MealSourceItem = {
+    kind: 'food' | 'recipe'
+    id: string
+}
+
+const mealSourceItem = (value: unknown): MealSourceItem | undefined => {
+    if (!value || typeof value !== 'object') return undefined
+    const metadata = value as Record<string, unknown>
+    if (typeof metadata.foodId === 'string') return { kind: 'food', id: metadata.foodId }
+    if (typeof metadata.recipeId === 'string') return { kind: 'recipe', id: metadata.recipeId }
+    return undefined
+}
+
 const mealFromObservation = (
     record: typeof observations.$inferSelect,
     nutrientSnapshot?: Record<string, number>,
@@ -55,6 +68,7 @@ const mealFromObservation = (
         nutritionQuality: attributes.nutritionQuality ?? 'complete',
         favorite: attributes.favorite ?? false,
         serving: attributes.serving,
+        sourceItem: mealSourceItem(record.metadata),
         sourceId: record.sourceId,
         version: Number(record.version),
         createdAt: record.createdAt,
@@ -478,6 +492,7 @@ export class PostgresDataRepository implements DataRepository {
         favorite: boolean
         nutritionQuality: 'complete' | 'estimated' | 'incomplete'
         foodId?: string
+        recipeId?: string
         serving?: { amount: number; unit: 'g' | 'serving' }
     }) {
         const projectionDate = await this.projectionDate(new Date(input.eatenAt))
@@ -501,7 +516,11 @@ export class PostgresDataRepository implements DataRepository {
                     category: 'Meals',
                     observedAt: new Date(input.eatenAt),
                     attributes,
-                    metadata: { foodId: input.foodId },
+                    metadata: input.foodId
+                        ? { foodId: input.foodId }
+                        : input.recipeId
+                          ? { recipeId: input.recipeId }
+                          : {},
                 })
                 .onConflictDoNothing({ target: observations.id })
                 .returning()
@@ -568,6 +587,8 @@ export class PostgresDataRepository implements DataRepository {
             favorite?: boolean
             nutritionQuality?: 'complete' | 'estimated' | 'incomplete'
             serving?: { amount: number; unit: 'g' | 'serving' } | null
+            foodId?: string | null
+            recipeId?: string | null
             version: number
         },
     ) {
@@ -592,12 +613,23 @@ export class PostgresDataRepository implements DataRepository {
                 serving:
                     input.serving === undefined ? previous.serving : (input.serving ?? undefined),
             }
+            const sourceChanged = input.foodId !== undefined || input.recipeId !== undefined
+            const metadata = sourceChanged
+                ? { ...(before.metadata as Record<string, unknown>) }
+                : undefined
+            if (metadata) {
+                delete metadata.foodId
+                delete metadata.recipeId
+                if (input.foodId) metadata.foodId = input.foodId
+                else if (input.recipeId) metadata.recipeId = input.recipeId
+            }
             const [record] = await transaction
                 .update(observations)
                 .set({
                     title: input.name,
                     observedAt: input.eatenAt ? new Date(input.eatenAt) : undefined,
                     attributes,
+                    metadata,
                     version: input.version + 1,
                     updatedAt: new Date(),
                 })
@@ -677,6 +709,12 @@ export class PostgresDataRepository implements DataRepository {
                                     components.map(item => item.id),
                                 ),
                             )
+                }
+                if (input.foodId) {
+                    await transaction
+                        .update(foods)
+                        .set({ lastUsedAt: record.observedAt })
+                        .where(eq(foods.id, input.foodId))
                 }
                 const dates = new Set([
                     dateKeyInTimezone(record.observedAt, timezone),
