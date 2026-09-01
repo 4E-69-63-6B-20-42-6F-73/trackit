@@ -58,6 +58,16 @@ export const observationListResponseSchema = z.object({
     data: z.array(numericObservationSchema),
 })
 
+export const observationMutationResultSchema = z.object({
+    id: z.string(),
+    version: z.number().int().positive(),
+    excluded: z.boolean(),
+})
+
+export const observationMutationResponseSchema = z.object({
+    data: observationMutationResultSchema,
+})
+
 export const metricSourceSummarySchema = z.object({
     definitionId: z.string(),
     provider: z.string(),
@@ -68,16 +78,22 @@ export const metricSourceListResponseSchema = z.object({
     data: z.array(metricSourceSummarySchema),
 })
 
-export const dailyMetricListResponseSchema = z.object({
-    data: z.array(z.unknown()),
+export const dailyMetricSchema = z.object({
+    date: z.string().date(),
+    definitionId: z.string(),
+    value: z.number().finite(),
+    unit: z.string(),
+    derivationVersion: z.number().int().positive(),
 })
 
-export const unknownDataResponseSchema = z.object({
-    data: z.unknown(),
+export const dailyMetricListResponseSchema = z.object({
+    data: z.array(dailyMetricSchema),
 })
 
 export type NumericObservationResponse = z.output<typeof numericObservationSchema>
+export type ObservationMutationResult = z.output<typeof observationMutationResultSchema>
 export type MetricSourceSummary = z.output<typeof metricSourceSummarySchema>
+export type DailyMetricResponse = z.output<typeof dailyMetricSchema>
 
 export const observationOpenApiPaths = {
     '/api/observations': {
