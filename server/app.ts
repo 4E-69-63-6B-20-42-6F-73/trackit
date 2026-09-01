@@ -8,6 +8,8 @@ import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { evaluateGoal, type Goal } from '@trackit/domain/goals'
+import type { NumericObservation } from '@trackit/domain/health'
 import type { AuthService } from './auth/service.js'
 import type { DataRepository } from './data/types.js'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -36,8 +38,6 @@ import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
 import { observationRoutes } from './routes/observations.js'
 import { config } from './config.js'
-import { evaluateGoal, type Goal } from '../src/domain/goals.js'
-import type { NumericObservation } from '../src/domain/health.js'
 
 export async function createApp(
     repository: JournalRepository,
@@ -347,7 +347,6 @@ export async function createApp(
 
     app.get('/api/health', async () => ({ status: 'ok' }))
     app.get('/api/openapi.json', async () => openApiContract)
-
     if (options?.dataRepository) {
         const exports = new ExportService(options.dataRepository, repository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
@@ -925,12 +924,12 @@ export async function createApp(
                     data.listGoals() as Promise<Goal[]>,
                     data.getPreferences() as Promise<{ timezone?: string }>,
                 ])
-                const metrics = [...new Set(storedGoals.map(goal => goal.metricId))]
-                const records = metrics.length
+                const definitions = [...new Set(storedGoals.map(goal => goal.definitionId))]
+                const records = definitions.length
                     ? ((await data.listObservations({
                           from: from.toISOString(),
                           to: now.toISOString(),
-                          definitionIds: metrics,
+                          definitionIds: definitions,
                       })) as NumericObservation[])
                     : []
                 return {
