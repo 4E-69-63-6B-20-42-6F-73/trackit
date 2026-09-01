@@ -55,14 +55,16 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
         nutritionQuality: 'estimated',
         version: 1,
     }
+    let deleted = false
     await page.route('**/api/foods*', route => {
         if (route.request().method() === 'DELETE') {
+            deleted = true
             return route.fulfill({ status: 204, body: '' })
         }
         return route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ data: [food] }),
+            body: JSON.stringify({ data: deleted ? [] : [food] }),
         })
     })
 
