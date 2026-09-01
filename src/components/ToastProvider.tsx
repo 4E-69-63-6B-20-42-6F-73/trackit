@@ -1,15 +1,10 @@
 import { Notification, Portal } from '@mantine/core'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
-import { ToastContext, type ToastContextValue, type ToastTone } from './toastContext'
-
-type ToastState = {
-    message: string
-    tone: ToastTone
-}
+import { subscribeToToasts, type ToastEvent } from './toast'
 
 export function ToastProvider({ children }: { children: ReactNode }) {
-    const [toast, setToast] = useState<ToastState | null>(null)
+    const [toast, setToast] = useState<ToastEvent | null>(null)
     const timeoutRef = useRef<number | null>(null)
 
     const dismiss = useCallback(() => {
@@ -18,34 +13,25 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         setToast(null)
     }, [])
 
-    const showToast = useCallback((message: string, tone: ToastTone = 'success') => {
+    const showToast = useCallback((nextToast: ToastEvent) => {
         if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current)
-        setToast({ message, tone })
+        setToast(nextToast)
         timeoutRef.current = window.setTimeout(() => {
             timeoutRef.current = null
             setToast(null)
         }, 3200)
     }, [])
 
-    useEffect(
-        () => () => {
+    useEffect(() => {
+        const unsubscribe = subscribeToToasts(showToast)
+        return () => {
+            unsubscribe()
             if (timeoutRef.current !== null) window.clearTimeout(timeoutRef.current)
-        },
-        [],
-    )
-
-    const value = useMemo<ToastContextValue>(
-        () => ({
-            showToast,
-            success: message => showToast(message, 'success'),
-            error: message => showToast(message, 'error'),
-            info: message => showToast(message, 'info'),
-        }),
-        [showToast],
-    )
+        }
+    }, [showToast])
 
     return (
-        <ToastContext.Provider value={value}>
+        <>
             {children}
             {toast && (
                 <Portal>
@@ -76,6 +62,6 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                     </div>
                 </Portal>
             )}
-        </ToastContext.Provider>
+        </>
     )
 }
