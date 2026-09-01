@@ -114,6 +114,11 @@ export async function useAuthenticatedServer(
                 options.observations.unshift(saved)
                 options.journal?.unshift({
                     id: input.id,
+                    definitionId: input.definitionId,
+                    entityType: 'observation',
+                    entityId: input.id,
+                    editable: true,
+                    time: input.time ?? '',
                     category: input.category,
                     title: input.title,
                     detail: input.textValue ?? '',
