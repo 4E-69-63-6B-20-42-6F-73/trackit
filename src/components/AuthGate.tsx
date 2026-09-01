@@ -208,8 +208,8 @@ export function AuthGate({ children }: { children: ReactNode }) {
                         </Alert>
                         <Text size="sm" c="#555b56">
                             For the full application, start PostgreSQL and the API with{' '}
-                            <code>docker compose up --build</code>, or run <code>npm run dev:api</code>{' '}
-                            beside Vite.
+                            <code>docker compose up --build</code>, or run{' '}
+                            <code>npm run dev:api</code> beside Vite.
                         </Text>
                         <Button
                             loading={statusQuery.isFetching}
