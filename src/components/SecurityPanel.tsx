@@ -67,7 +67,6 @@ const loadAudit = async (signal: AbortSignal) => {
 
 export function SecurityPanel() {
     const queryClient = useQueryClient()
-    const [message, setMessage] = useState('')
     const [auditFilter, setAuditFilter] = useState('all')
     const [visibleEvents, setVisibleEvents] = useState(10)
     const sessionsQuery = useQuery({
@@ -83,30 +82,41 @@ export function SecurityPanel() {
             const response = await authRequest(`/api/auth/sessions/${id}`, { method: 'DELETE' })
             if (!response.ok) throw new Error('rejected')
         },
-        onMutate: () => setMessage(''),
         onSuccess: async () => {
-            setMessage('The session was revoked.')
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: serverQueryKeys.securitySessions }),
                 queryClient.invalidateQueries({ queryKey: serverQueryKeys.securityAudit }),
             ])
         },
-        onError: () => setMessage('The session could not be revoked. Try again.'),
     })
     const revokeAllMutation = useMutation({
         mutationFn: async () => {
             const response = await authRequest('/api/auth/logout-all', { method: 'POST' })
             if (!response.ok) throw new Error('rejected')
         },
-        onMutate: () => setMessage(''),
         onSuccess: () => window.location.reload(),
-        onError: () => setMessage('Sessions could not be revoked. Try again.'),
     })
     const sessions = sessionsQuery.data ?? []
     const events = auditQuery.data ?? []
     const unavailable = sessionsQuery.isError || auditQuery.isError
     const loading = sessionsQuery.isPending || auditQuery.isPending
     const busy = revokeMutation.isPending || revokeAllMutation.isPending
+    const message = revokeMutation.isSuccess
+        ? 'The session was revoked.'
+        : revokeMutation.isError
+          ? 'The session could not be revoked. Try again.'
+          : revokeAllMutation.isError
+            ? 'Sessions could not be revoked. Try again.'
+            : ''
+
+    const revoke = (id: string) => {
+        revokeAllMutation.reset()
+        revokeMutation.mutate(id)
+    }
+    const revokeAll = () => {
+        revokeMutation.reset()
+        revokeAllMutation.mutate()
+    }
 
     if (unavailable) {
         return <Text c="dimmed">Session management is available when connected to the server.</Text>
@@ -139,7 +149,7 @@ export function SecurityPanel() {
                         variant="light"
                         loading={revokeAllMutation.isPending}
                         disabled={sessions.length === 0}
-                        onClick={() => revokeAllMutation.mutate()}
+                        onClick={revokeAll}
                     >
                         Sign out all devices
                     </Button>
@@ -173,7 +183,8 @@ export function SecurityPanel() {
                         size="xs"
                         variant="default"
                         disabled={busy || session.current}
-                        onClick={() => revokeMutation.mutate(session.id)}
+                        loading={revokeMutation.isPending && revokeMutation.variables === session.id}
+                        onClick={() => revoke(session.id)}
                     >
                         Revoke
                     </Button>
