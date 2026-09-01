@@ -41,9 +41,16 @@ type ObservationRouteOptions = {
     badRequest: BadRequest
 }
 
-const mutationResult = (value: unknown): ObservationMutationResult => {
-    const record = value as { id: string; version: number; excluded: boolean }
-    return { id: record.id, version: record.version, excluded: record.excluded }
+const mutationResult = (
+    value: unknown,
+    defaults?: Pick<ObservationMutationResult, 'version' | 'excluded'>,
+): ObservationMutationResult => {
+    const record = value as { id: string; version?: number; excluded?: boolean }
+    return {
+        id: record.id,
+        version: record.version ?? defaults?.version ?? 1,
+        excluded: record.excluded ?? defaults?.excluded ?? false,
+    }
 }
 
 export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = async (
@@ -164,7 +171,9 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
         async (request, reply) => {
             if (request.validationError) return badRequest(request, reply)
             const created = await data.createObservation(request.body)
-            return reply.code(201).send({ data: mutationResult(created) })
+            return reply
+                .code(201)
+                .send({ data: mutationResult(created, { version: 1, excluded: false }) })
         },
     )
 
