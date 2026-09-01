@@ -14,7 +14,7 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { useMutation } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import {
     IconChevronLeft,
     IconChevronRight,
@@ -41,8 +41,11 @@ import type { Category, JournalEvent } from '../domain/types'
 import { useJournal } from '../hooks/useJournal'
 import { useServerData } from '../hooks/useServerData'
 import { getJournalEntry } from '../lib/journalApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 const categories = ['All', 'Meals', 'Activity', 'Sleep', 'Measurements', 'Check-ins'] as const
+const isMealEdit = (event: JournalEvent | null) =>
+    Boolean(event && (event.definitionId === 'meal' || event.detailView?.kind === 'meal'))
 
 export function Journal({
     remove,
@@ -71,9 +74,10 @@ export function Journal({
     const [deleting, setDeleting] = useState<JournalEvent | null>(null)
     const [draftTitle, setDraftTitle] = useState('')
     const [draftDetail, setDraftDetail] = useState('')
-
-    const mealEditMutation = useMutation({
-        mutationFn: (event: JournalEvent) => getJournalEntry(event.id),
+    const mealEditQuery = useQuery({
+        queryKey: [...serverQueryKeys.journal, 'detail', editing?.id ?? 'closed'],
+        queryFn: ({ signal }) => getJournalEntry(editing!.id, signal),
+        enabled: Boolean(editing && isMealEdit(editing)),
     })
 
     const selectedRange = selectedDate ? calendarDayRangeForKey(selectedDate, timezone) : null
@@ -175,27 +179,19 @@ export function Journal({
         ).map(([, group]) => group)
     }, [locale, shown, timezone, todayKey])
 
-    const isMealEdit = (event: JournalEvent | null) =>
-        Boolean(event && (event.definitionId === 'meal' || event.detailView?.kind === 'meal'))
     const detailedEditing =
-        editing && isMealEdit(editing) && mealEditMutation.data?.id === editing.id
-            ? mealEditMutation.data
+        editing && isMealEdit(editing) && mealEditQuery.data?.id === editing.id
+            ? mealEditQuery.data
             : editing
 
     const beginEdit = (event: JournalEvent) => {
-        mealEditMutation.reset()
         setEditing(event)
-        if (isMealEdit(event)) {
-            mealEditMutation.mutate(event)
-            return
+        if (!isMealEdit(event)) {
+            setDraftTitle(event.title)
+            setDraftDetail(event.detail)
         }
-        setDraftTitle(event.title)
-        setDraftDetail(event.detail)
     }
-    const closeEditing = () => {
-        setEditing(null)
-        mealEditMutation.reset()
-    }
+    const closeEditing = () => setEditing(null)
     const moveDay = (days: number) => {
         const current = selectedDate ?? todayKey
         const next = addCalendarDays(current, days)
@@ -458,7 +454,7 @@ export function Journal({
                                         {event.source === 'You' && (
                                             <>
                                                 <Menu.Item
-                                                    disabled={mealEditMutation.isPending}
+                                                    disabled={mealEditQuery.isFetching}
                                                     onClick={() => beginEdit(event)}
                                                 >
                                                     Edit
@@ -517,7 +513,7 @@ export function Journal({
             </section>
 
             <Modal
-                opened={Boolean(editing && isMealEdit(editing) && mealEditMutation.isPending)}
+                opened={Boolean(editing && isMealEdit(editing) && mealEditQuery.isPending)}
                 onClose={closeEditing}
                 title="Loading meal"
                 centered
@@ -525,11 +521,13 @@ export function Journal({
             >
                 <Group justify="center" py="lg" role="status" aria-label="Loading meal details">
                     <Loader size="sm" />
-                    <Text size="sm" c="dimmed">Loading the latest meal details…</Text>
+                    <Text size="sm" c="dimmed">
+                        Loading the latest meal details…
+                    </Text>
                 </Group>
             </Modal>
             <Modal
-                opened={Boolean(editing && isMealEdit(editing) && mealEditMutation.isError)}
+                opened={Boolean(editing && isMealEdit(editing) && mealEditQuery.isError)}
                 onClose={closeEditing}
                 title="Meal unavailable"
                 centered
@@ -540,10 +538,12 @@ export function Journal({
                         The latest meal details could not be loaded. Try again before editing.
                     </Alert>
                     <Group justify="flex-end">
-                        <Button variant="default" onClick={closeEditing}>Cancel</Button>
+                        <Button variant="default" onClick={closeEditing}>
+                            Cancel
+                        </Button>
                         <Button
-                            loading={mealEditMutation.isPending}
-                            onClick={() => editing && mealEditMutation.mutate(editing)}
+                            loading={mealEditQuery.isFetching}
+                            onClick={() => void mealEditQuery.refetch()}
                         >
                             Retry
                         </Button>
@@ -551,7 +551,11 @@ export function Journal({
                 </Stack>
             </Modal>
             <JournalMealEditModal
-                event={detailedEditing?.detailView?.kind === 'meal' ? detailedEditing : null}
+                event={
+                    detailedEditing?.detailView?.kind === 'meal' && mealEditQuery.isSuccess
+                        ? detailedEditing
+                        : null
+                }
                 onClose={closeEditing}
                 onSaved={closeEditing}
             />
