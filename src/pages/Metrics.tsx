@@ -11,25 +11,27 @@ import {
     Switch,
     Text,
 } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import { IconArrowDown, IconArrowLeft, IconArrowUp } from '@tabler/icons-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { MetricRow } from '../components/MetricRow'
+import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
 import { metricCatalog, type MetricDefinition } from '../domain/metricCatalog'
 import {
     detectUnitPreset,
+    formatMetricDisplayValue,
     normalizedMetricPreferences,
     preferencesForPreset,
-    formatMetricDisplayValue,
     unitPresentation,
+    type DeduplicationPolicy,
     type UnitPreset,
 } from '../domain/metrics'
 import { useServerData } from '../hooks/useServerData'
+import { healthQueryKeys } from '../lib/healthQueries'
+import { listMetricSources } from '../lib/observationApi'
 import { updatePreferences } from '../lib/preferencesApi'
-import { listMetricSources, type MetricSourceSummary } from '../lib/observationApi'
-import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
-import type { DeduplicationPolicy } from '../domain/metrics'
 
 export function Metrics() {
     const { preferences, loading } = useServerData()
@@ -41,7 +43,11 @@ export function Metrics() {
     const [draftDisabledSources, setDraftDisabledSources] = useState<string[]>([])
     const [saving, setSaving] = useState(false)
     const [message, setMessage] = useState('')
-    const [sourceSummaries, setSourceSummaries] = useState<MetricSourceSummary[]>([])
+    const sourceQuery = useQuery({
+        queryKey: healthQueryKeys.metricSources,
+        queryFn: ({ signal }) => listMetricSources(signal),
+    })
+    const sourceSummaries = sourceQuery.data ?? []
     const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
     const preset = detectUnitPreset(selected)
     const categories = useMemo(() => [...new Set(metricCatalog.map(metric => metric.category))], [])
@@ -58,13 +64,6 @@ export function Metrics() {
             }, {}),
         [sourceSummaries],
     )
-    useEffect(() => {
-        const controller = new AbortController()
-        void listMetricSources(controller.signal)
-            .then(setSourceSummaries)
-            .catch(() => undefined)
-        return () => controller.abort()
-    }, [])
     const save = async (metricPreferences: typeof selected, close = true) => {
         if (!preferences) return
         setSaving(true)
