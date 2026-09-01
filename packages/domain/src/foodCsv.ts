@@ -1,4 +1,4 @@
-import type { Food } from './nutrition'
+import type { Food } from './nutrition.js'
 
 export const foodCsvHeaders = [
     'name',
