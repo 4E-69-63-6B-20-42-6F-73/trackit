@@ -91,10 +91,7 @@ export function Trends() {
         from: calendarDayRangeForKey(observationFromKey, timezone).from.toISOString(),
         to: calendarDayRangeForKey(todayKey, timezone).to.toISOString(),
         definitionIds: activeDefinitionId
-            ? [
-                  activeDefinitionId,
-                  ...(comparisonDefinitionId ? [comparisonDefinitionId] : []),
-              ]
+            ? [activeDefinitionId, ...(comparisonDefinitionId ? [comparisonDefinitionId] : [])]
             : [],
     }
     const observationsQuery = useQuery({
@@ -141,11 +138,7 @@ export function Trends() {
         record => record.definitionId === comparisonDefinitionId && !record.excluded,
     )
     const displayUnit = activeDefinitionId
-        ? displayUnitFor(
-              activeDefinitionId,
-              preferences?.metricPreferences,
-              preferences?.units,
-          )
+        ? displayUnitFor(activeDefinitionId, preferences?.metricPreferences, preferences?.units)
         : undefined
     const convert = (value: number) =>
         activeDefinitionId &&
@@ -212,8 +205,13 @@ export function Trends() {
         : false
 
     const excludeMutation = useMutation({
-        mutationFn: ({ observation, excluded }: { observation: NumericObservation; excluded: boolean }) =>
-            setObservationExcluded(observation, excluded),
+        mutationFn: ({
+            observation,
+            excluded,
+        }: {
+            observation: NumericObservation
+            excluded: boolean
+        }) => setObservationExcluded(observation, excluded),
     })
     const saveViewMutation = useMutation({
         mutationFn: async () => {

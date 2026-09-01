@@ -4,12 +4,7 @@ import { IconArrowLeft } from '@tabler/icons-react'
 import { QRCodeSVG } from 'qrcode.react'
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import {
-    confirmDevice,
-    createPairingCode,
-    listDevices,
-    rejectDevice,
-} from '../../../lib/deviceApi'
+import { confirmDevice, createPairingCode, listDevices, rejectDevice } from '../../../lib/deviceApi'
 import { serverQueryKeys } from '../../../lib/serverQueries'
 
 export type PairingUiState = 'showing_qr' | 'pending_approval' | 'approved' | 'expired' | 'error'
@@ -69,15 +64,16 @@ export function DeviceNew() {
         return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     }
 
-    const pairingState: PairingUiState = createMutation.isError || actionMutation.isError
-        ? 'error'
-        : actionMutation.isSuccess && actionMutation.data === 'approve'
-          ? 'approved'
-          : expired
-            ? 'expired'
-            : pendingDevice
-              ? 'pending_approval'
-              : 'showing_qr'
+    const pairingState: PairingUiState =
+        createMutation.isError || actionMutation.isError
+            ? 'error'
+            : actionMutation.isSuccess && actionMutation.data === 'approve'
+              ? 'approved'
+              : expired
+                ? 'expired'
+                : pendingDevice
+                  ? 'pending_approval'
+                  : 'showing_qr'
 
     const error = createMutation.isError
         ? 'A pairing code could not be generated.'

@@ -95,7 +95,7 @@ export function Devices() {
     const loading = devicesQuery.isPending
     const selectedDevice = devices.find(device => device.id === selectedDeviceId) ?? null
     const confirmationDevice = confirmation
-        ? devices.find(device => device.id === confirmation.deviceId) ?? null
+        ? (devices.find(device => device.id === confirmation.deviceId) ?? null)
         : null
     const healthStatus = devicesQuery.isError ? 'Unavailable' : healthConnectStatus(devices)
     const deviceMutation = useMutation({
@@ -182,7 +182,9 @@ export function Devices() {
 
             <Group className="devices-heading" justify="space-between" align="flex-end">
                 <div>
-                    <Title order={1} mb={4}>Devices</Title>
+                    <Title order={1} mb={4}>
+                        Devices
+                    </Title>
                     <Text c="dimmed">Manage Android devices that sync Health Connect data.</Text>
                 </div>
                 <Button
@@ -206,12 +208,16 @@ export function Devices() {
             )}
 
             {error && (
-                <Alert color="orange" variant="light" mt="lg">{error}</Alert>
+                <Alert color="orange" variant="light" mt="lg">
+                    {error}
+                </Alert>
             )}
 
             <div className="device-health-summary" role="status">
                 <span className={`device-health-dot ${healthSummary.tone}`} />
-                <Text size="sm" fw={600}>{healthSummary.text}</Text>
+                <Text size="sm" fw={600}>
+                    {healthSummary.text}
+                </Text>
                 <ActionIcon
                     ml="auto"
                     variant="subtle"
@@ -228,7 +234,9 @@ export function Devices() {
                 <>
                     <Card className="device-list" withBorder padding={0} radius="md">
                         <Group className="device-list-heading" justify="space-between">
-                            <Text size="sm" fw={700}>Your devices</Text>
+                            <Text size="sm" fw={700}>
+                                Your devices
+                            </Text>
                         </Group>
                         {currentDevices.map(device => (
                             <div
@@ -321,7 +329,10 @@ export function Devices() {
                                             color="red"
                                             leftSection={<IconTrash size={15} />}
                                             onClick={() =>
-                                                setConfirmation({ deviceId: device.id, action: 'delete' })
+                                                setConfirmation({
+                                                    deviceId: device.id,
+                                                    action: 'delete',
+                                                })
                                             }
                                         >
                                             Delete device
@@ -350,14 +361,19 @@ export function Devices() {
                                                     Disconnected
                                                 </Badge>
                                             </Group>
-                                            <Text size="xs" c="dimmed">Disconnected device</Text>
+                                            <Text size="xs" c="dimmed">
+                                                Disconnected device
+                                            </Text>
                                         </div>
                                         <Button
                                             variant="subtle"
                                             color="red"
                                             size="compact-sm"
                                             onClick={() =>
-                                                setConfirmation({ deviceId: device.id, action: 'delete' })
+                                                setConfirmation({
+                                                    deviceId: device.id,
+                                                    action: 'delete',
+                                                })
                                             }
                                         >
                                             Delete
@@ -403,16 +419,22 @@ export function Devices() {
                         </Group>
                         <div className="device-detail-grid">
                             <div>
-                                <Text size="xs" c="dimmed">Paired</Text>
+                                <Text size="xs" c="dimmed">
+                                    Paired
+                                </Text>
                                 <Text size="sm">{formatDate(selectedDevice.createdAt)}</Text>
                             </div>
                             <div>
-                                <Text size="xs" c="dimmed">Configured</Text>
+                                <Text size="xs" c="dimmed">
+                                    Configured
+                                </Text>
                                 <Text size="sm">{formatDate(selectedDevice.configuredAt)}</Text>
                             </div>
                         </div>
                         <div>
-                            <Text size="sm" fw={650} mb="xs">Sync details</Text>
+                            <Text size="sm" fw={650} mb="xs">
+                                Sync details
+                            </Text>
                             {selectedDevice.sync.length > 0 ? (
                                 <Stack className="device-sync-list" gap={0}>
                                     {selectedDevice.sync.map(cursor => (
@@ -427,7 +449,9 @@ export function Devices() {
                                                         : 'No data received yet'}
                                                 </Text>
                                                 {cursor.diagnostic && (
-                                                    <Text size="xs" c="orange">{cursor.diagnostic}</Text>
+                                                    <Text size="xs" c="orange">
+                                                        {cursor.diagnostic}
+                                                    </Text>
                                                 )}
                                             </div>
                                             <Badge
@@ -447,12 +471,16 @@ export function Devices() {
                                     ))}
                                 </Stack>
                             ) : (
-                                <Text size="sm" c="dimmed">No sync details available yet.</Text>
+                                <Text size="sm" c="dimmed">
+                                    No sync details available yet.
+                                </Text>
                             )}
                         </div>
                         <details className="device-advanced">
                             <summary>Advanced details</summary>
-                            <Text size="xs" c="dimmed" mt="xs">Key fingerprint</Text>
+                            <Text size="xs" c="dimmed" mt="xs">
+                                Key fingerprint
+                            </Text>
                             <Text size="xs" className="device-fingerprint">
                                 {selectedDevice.keyFingerprint}
                             </Text>
@@ -496,7 +524,9 @@ export function Devices() {
                     </Button>
                     <Button
                         color="red"
-                        loading={Boolean(confirmationDevice && busyDeviceId === confirmationDevice.id)}
+                        loading={Boolean(
+                            confirmationDevice && busyDeviceId === confirmationDevice.id,
+                        )}
                         onClick={runConfirmedAction}
                     >
                         {confirmation?.action === 'reject'

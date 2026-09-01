@@ -35,8 +35,12 @@ export function Onboarding() {
     const locales = [...new Set([detectedLocale, 'en-US', 'en-GB', 'nl-NL', 'de-DE', 'fr-FR'])]
 
     const saveMutation = useMutation({
-        mutationFn: ({ update }: { kind: SaveKind; update: Parameters<typeof updatePreferences>[0] }) =>
-            updatePreferences(update),
+        mutationFn: ({
+            update,
+        }: {
+            kind: SaveKind
+            update: Parameters<typeof updatePreferences>[0]
+        }) => updatePreferences(update),
         onSuccess: saved => setPreferences(saved),
     })
 
@@ -96,13 +100,14 @@ export function Onboarding() {
         if (await finish()) navigate('/settings/connections')
     }
 
-    const error = !preferences && unavailable
-        ? 'TrackIt could not load setup from your server.'
-        : saveMutation.isError
-          ? saveMutation.variables?.kind === 'profile'
-              ? 'Your profile could not be saved to the server.'
-              : 'Setup could not be saved to your server. Nothing was stored in this browser.'
-          : ''
+    const error =
+        !preferences && unavailable
+            ? 'TrackIt could not load setup from your server.'
+            : saveMutation.isError
+              ? saveMutation.variables?.kind === 'profile'
+                  ? 'Your profile could not be saved to the server.'
+                  : 'Setup could not be saved to your server. Nothing was stored in this browser.'
+              : ''
     const saving = saveMutation.isPending
 
     return (
@@ -206,7 +211,11 @@ export function Onboarding() {
                                 </Text>
                             </div>
                             <Group grow align="stretch">
-                                <Button size="md" onClick={() => void startLogging()} loading={saving}>
+                                <Button
+                                    size="md"
+                                    onClick={() => void startLogging()}
+                                    loading={saving}
+                                >
                                     Log something
                                 </Button>
                                 <Button

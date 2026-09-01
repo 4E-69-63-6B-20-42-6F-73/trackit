@@ -66,31 +66,29 @@ export function LibraryRecipes() {
                     </Button>
                 </Group>
                 <Stack gap="xs">
-                    {loading ? (
-                        Array.from({ length: 3 }, (_, index) => (
-                            <Skeleton key={index} height={58} radius="md" />
-                        ))
-                    ) : (
-                        recipes.map(recipe => (
-                            <button
-                                className="food-row"
-                                key={recipe.id}
-                                onClick={() => setEditingRecipe(recipe)}
-                            >
-                                <div>
-                                    <Text fw={600} size="sm">
-                                        {recipe.name}
-                                    </Text>
-                                    <Text size="xs" c="dimmed">
-                                        {recipe.servings}{' '}
-                                        {recipe.servings === 1 ? 'serving' : 'servings'} ·{' '}
-                                        {Math.round(recipe.nutrientsPerServing.calories)} kcal per
-                                        serving
-                                    </Text>
-                                </div>
-                            </button>
-                        ))
-                    )}
+                    {loading
+                        ? Array.from({ length: 3 }, (_, index) => (
+                              <Skeleton key={index} height={58} radius="md" />
+                          ))
+                        : recipes.map(recipe => (
+                              <button
+                                  className="food-row"
+                                  key={recipe.id}
+                                  onClick={() => setEditingRecipe(recipe)}
+                              >
+                                  <div>
+                                      <Text fw={600} size="sm">
+                                          {recipe.name}
+                                      </Text>
+                                      <Text size="xs" c="dimmed">
+                                          {recipe.servings}{' '}
+                                          {recipe.servings === 1 ? 'serving' : 'servings'} ·{' '}
+                                          {Math.round(recipe.nutrientsPerServing.calories)} kcal per
+                                          serving
+                                      </Text>
+                                  </div>
+                              </button>
+                          ))}
                     {!loading && recipes.length === 0 && !unavailable && (
                         <div className="compact-empty">
                             <Text fw={650}>No recipes yet</Text>

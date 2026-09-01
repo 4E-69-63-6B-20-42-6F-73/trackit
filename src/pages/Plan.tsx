@@ -333,10 +333,7 @@ export function Plan() {
             if (!Number.isFinite(amount) || amount <= 0 || !current.recordedAt) return
             if (current.item.meal.reference.type === 'category' && !current.foodId) return
             await logPlannedMeal(current.item, {
-                eatenAt: calendarLocalDateTimeToInstant(
-                    current.recordedAt,
-                    timezone,
-                ).toISOString(),
+                eatenAt: calendarLocalDateTimeToInstant(current.recordedAt, timezone).toISOString(),
                 amount,
                 foodId: current.foodId ?? undefined,
             })

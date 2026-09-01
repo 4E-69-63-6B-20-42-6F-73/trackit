@@ -86,7 +86,9 @@ export function NewRecipeModal({
                     value={name}
                     onChange={event => setName(event.currentTarget.value)}
                 />
-                <Text fw={650} size="sm">Ingredients</Text>
+                <Text fw={650} size="sm">
+                    Ingredients
+                </Text>
                 {items.map((item, index) => (
                     <Group key={item.id} align="end" wrap="nowrap">
                         <Select

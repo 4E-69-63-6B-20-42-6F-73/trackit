@@ -251,8 +251,12 @@ export function ManualEntryLogger({
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                                 styles={{ label: { flexDirection: 'column', gap: 2 } }}
                             >
-                                <Text size="lg" fw={700} lh={1}>{water100.amount}</Text>
-                                <Text size="xs" fw={600}>{waterUnit}</Text>
+                                <Text size="lg" fw={700} lh={1}>
+                                    {water100.amount}
+                                </Text>
+                                <Text size="xs" fw={600}>
+                                    {waterUnit}
+                                </Text>
                             </Button>
                             <Button
                                 variant={waterChoice === '250' ? 'light' : 'default'}
@@ -263,8 +267,12 @@ export function ManualEntryLogger({
                                 style={{ aspectRatio: '1 / 1', height: 'auto' }}
                                 styles={{ label: { flexDirection: 'column', gap: 2 } }}
                             >
-                                <Text size="lg" fw={700} lh={1}>{water250.amount}</Text>
-                                <Text size="xs" fw={600}>{waterUnit}</Text>
+                                <Text size="lg" fw={700} lh={1}>
+                                    {water250.amount}
+                                </Text>
+                                <Text size="xs" fw={600}>
+                                    {waterUnit}
+                                </Text>
                             </Button>
                             <Button
                                 variant={waterChoice === 'custom' ? 'light' : 'default'}
@@ -306,8 +314,12 @@ export function ManualEntryLogger({
                     <>
                         <Stack gap={6} pb="xs">
                             <Group justify="space-between" align="baseline">
-                                <Text size="sm" fw={600}>How is your energy?</Text>
-                                <Text size="sm" fw={700}>{energy} · {energyLabel(energy)}</Text>
+                                <Text size="sm" fw={600}>
+                                    How is your energy?
+                                </Text>
+                                <Text size="sm" fw={700}>
+                                    {energy} · {energyLabel(energy)}
+                                </Text>
                             </Group>
                             <Slider
                                 color="trackit"
@@ -352,8 +364,12 @@ export function ManualEntryLogger({
                         />
                         <Stack gap={6} pb="xs">
                             <Group justify="space-between" align="baseline">
-                                <Text size="sm" fw={600}>Severity</Text>
-                                <Text size="sm" fw={700}>{severity} · {severityLabel(severity)}</Text>
+                                <Text size="sm" fw={600}>
+                                    Severity
+                                </Text>
+                                <Text size="sm" fw={700}>
+                                    {severity} · {severityLabel(severity)}
+                                </Text>
                             </Group>
                             <Slider
                                 color="orange"
@@ -379,7 +395,9 @@ export function ManualEntryLogger({
                             />
                         </Stack>
                         <Stack gap={6}>
-                            <Text size="sm" fw={600}>Duration (optional)</Text>
+                            <Text size="sm" fw={600}>
+                                Duration (optional)
+                            </Text>
                             <SimpleGrid cols={2} spacing="sm">
                                 <NumberInput
                                     label="Amount"

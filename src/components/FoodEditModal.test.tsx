@@ -39,12 +39,7 @@ const renderEditor = (onSave = vi.fn().mockResolvedValue(undefined), onDelete = 
     render(
         <MantineProvider>
             <QueryClientProvider client={queryClient}>
-                <FoodEditModal
-                    food={food}
-                    onClose={onClose}
-                    onSave={onSave}
-                    onDelete={onDelete}
-                />
+                <FoodEditModal food={food} onClose={onClose} onSave={onSave} onDelete={onDelete} />
             </QueryClientProvider>
         </MantineProvider>,
     )

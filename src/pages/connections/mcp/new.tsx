@@ -127,7 +127,9 @@ export function McpNew() {
             setCopied(true)
             setCopyError('')
         } catch {
-            setCopyError('The token could not be copied automatically. Select and copy it manually.')
+            setCopyError(
+                'The token could not be copied automatically. Select and copy it manually.',
+            )
         }
     }
 
@@ -166,7 +168,9 @@ export function McpNew() {
             >
                 Back to Assistants
             </Button>
-            <Title order={1} mb={4}>Add assistant</Title>
+            <Title order={1} mb={4}>
+                Add assistant
+            </Title>
             <Text c="dimmed" mb="xl">
                 Create a unique, limited credential for one assistant.
             </Text>
@@ -183,7 +187,9 @@ export function McpNew() {
                 </Alert>
             )}
             {error && (
-                <Alert color="orange" mb="lg">{error}</Alert>
+                <Alert color="orange" mb="lg">
+                    {error}
+                </Alert>
             )}
 
             {token ? (
@@ -223,7 +229,9 @@ export function McpNew() {
                         <div>
                             <Group justify="space-between" mb="xs">
                                 <div>
-                                    <Text size="sm" fw={600}>Permissions</Text>
+                                    <Text size="sm" fw={600}>
+                                        Permissions
+                                    </Text>
                                     <Text size="xs" c="dimmed">
                                         Read access can reveal sensitive personal data. Grant only
                                         what this assistant needs.
@@ -233,7 +241,9 @@ export function McpNew() {
                                     <Button
                                         size="compact-xs"
                                         variant="subtle"
-                                        onClick={() => setSelectedScopes(scopes.map(scope => scope.value))}
+                                        onClick={() =>
+                                            setSelectedScopes(scopes.map(scope => scope.value))
+                                        }
                                     >
                                         Enable all
                                     </Button>
@@ -249,7 +259,9 @@ export function McpNew() {
                             </Group>
                             {['View and analyze', 'Change data'].map(group => (
                                 <div className="mcp-permission-group" key={group}>
-                                    <Text size="xs" fw={700} c="dimmed" tt="uppercase">{group}</Text>
+                                    <Text size="xs" fw={700} c="dimmed" tt="uppercase">
+                                        {group}
+                                    </Text>
                                     <div className="mcp-permission-list">
                                         {scopes
                                             .filter(scope => scope.group === group)
@@ -264,7 +276,10 @@ export function McpNew() {
                                                         setSelectedScopes(current =>
                                                             checked
                                                                 ? [...current, scope.value]
-                                                                : current.filter(value => value !== scope.value),
+                                                                : current.filter(
+                                                                      value =>
+                                                                          value !== scope.value,
+                                                                  ),
                                                         )
                                                     }}
                                                 />
@@ -281,14 +296,20 @@ export function McpNew() {
                         )}
                         <details className="mcp-access-limits">
                             <summary>
-                                <span>Access limits <small>Optional</small></span>
-                                <Text size="xs" c="dimmed">Limit dates and credential lifetime</Text>
+                                <span>
+                                    Access limits <small>Optional</small>
+                                </span>
+                                <Text size="xs" c="dimmed">
+                                    Limit dates and credential lifetime
+                                </Text>
                             </summary>
                             <div className="mcp-access-limit-fields">
                                 <div className="mcp-optional-field">
                                     <Switch
                                         checked={dateFromEnabled}
-                                        onChange={event => setDateFromEnabled(event.currentTarget.checked)}
+                                        onChange={event =>
+                                            setDateFromEnabled(event.currentTarget.checked)
+                                        }
                                         label="Limit earliest accessible date"
                                     />
                                     {dateFromEnabled && (
@@ -296,7 +317,9 @@ export function McpNew() {
                                             type="date"
                                             label="Earliest accessible date"
                                             value={dateFrom}
-                                            onChange={event => setDateFrom(event.currentTarget.value)}
+                                            onChange={event =>
+                                                setDateFrom(event.currentTarget.value)
+                                            }
                                             required
                                         />
                                     )}
@@ -304,7 +327,9 @@ export function McpNew() {
                                 <div className="mcp-optional-field">
                                     <Switch
                                         checked={dateToEnabled}
-                                        onChange={event => setDateToEnabled(event.currentTarget.checked)}
+                                        onChange={event =>
+                                            setDateToEnabled(event.currentTarget.checked)
+                                        }
                                         label="Limit latest accessible date"
                                     />
                                     {dateToEnabled && (
@@ -321,7 +346,9 @@ export function McpNew() {
                                 <div className="mcp-optional-field">
                                     <Switch
                                         checked={expiryEnabled}
-                                        onChange={event => setExpiryEnabled(event.currentTarget.checked)}
+                                        onChange={event =>
+                                            setExpiryEnabled(event.currentTarget.checked)
+                                        }
                                         label="Credential expires"
                                     />
                                     {expiryEnabled && (
@@ -330,7 +357,9 @@ export function McpNew() {
                                             label="Credential end date"
                                             min={new Date().toISOString().slice(0, 10)}
                                             value={expiresOn}
-                                            onChange={event => setExpiresOn(event.currentTarget.value)}
+                                            onChange={event =>
+                                                setExpiresOn(event.currentTarget.value)
+                                            }
                                             required
                                         />
                                     )}

@@ -55,7 +55,9 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
             setInspection(inspectFoodCsv(await file.text()))
             setFileName(file.name)
         } catch (error) {
-            setInspectionError(error instanceof Error ? error.message : 'The CSV could not be imported.')
+            setInspectionError(
+                error instanceof Error ? error.message : 'The CSV could not be imported.',
+            )
         }
     }
 
@@ -99,17 +101,26 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                         <>
                             <div className="import-summary">
                                 <div>
-                                    <Text size="xs" c="dimmed">File</Text>
+                                    <Text size="xs" c="dimmed">
+                                        File
+                                    </Text>
                                     <Text fw={650}>{fileName}</Text>
                                 </div>
                                 <div>
-                                    <Text size="xs" c="dimmed">Ready</Text>
+                                    <Text size="xs" c="dimmed">
+                                        Ready
+                                    </Text>
                                     <Text fw={650}>{inspection.foods.length}</Text>
                                 </div>
                                 <div>
-                                    <Text size="xs" c="dimmed">Invalid</Text>
+                                    <Text size="xs" c="dimmed">
+                                        Invalid
+                                    </Text>
                                     <Text fw={650}>
-                                        {inspection.rows.filter(row => row.status === 'invalid').length}
+                                        {
+                                            inspection.rows.filter(row => row.status === 'invalid')
+                                                .length
+                                        }
                                     </Text>
                                 </div>
                             </div>
@@ -141,7 +152,9 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                                             {row.status}
                                         </Badge>
                                         {row.message && (
-                                            <Text size="xs" c="orange">{row.message}</Text>
+                                            <Text size="xs" c="orange">
+                                                {row.message}
+                                            </Text>
                                         )}
                                     </div>
                                 ))}
@@ -174,7 +187,13 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                             </Button>
                         </>
                     )}
-                    {status && <Alert color={importMutation.isError || inspectionError ? 'orange' : undefined}>{status}</Alert>}
+                    {status && (
+                        <Alert
+                            color={importMutation.isError || inspectionError ? 'orange' : undefined}
+                        >
+                            {status}
+                        </Alert>
+                    )}
                     {result?.failed ? (
                         <Alert color="orange">
                             Failed rows:{' '}

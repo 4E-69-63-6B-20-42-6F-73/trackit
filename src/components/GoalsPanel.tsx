@@ -394,9 +394,7 @@ export function GoalsPanel() {
     })
     const evaluations = evaluationsQuery.data ?? {}
     const loading = serverLoading || (goals.length > 0 && evaluationsQuery.isPending)
-    const evaluationError = evaluationsQuery.isError
-        ? 'Goal observations could not be loaded.'
-        : ''
+    const evaluationError = evaluationsQuery.isError ? 'Goal observations could not be loaded.' : ''
     const definition = metricDefinition(metricId)!
     const displayUnit = displayUnitFor(metricId, preferences?.metricPreferences, preferences?.units)
     const options = measurements(metricId)
@@ -504,7 +502,13 @@ export function GoalsPanel() {
         if (mode === 'custom' && selectedWeekdays.length === 0) setSelectedWeekdays(weekdaySchedule)
     }
     const saveMutation = useMutation({
-        mutationFn: async ({ goal, input }: { goal: GoalRecord | null; input: Omit<Goal, 'id'> }) => {
+        mutationFn: async ({
+            goal,
+            input,
+        }: {
+            goal: GoalRecord | null
+            input: Omit<Goal, 'id'>
+        }) => {
             if (goal) return updateGoal(goal.id, input)
             return createGoal(input)
         },
@@ -776,7 +780,8 @@ export function GoalsPanel() {
                                 evaluation={evaluations[goal.id]}
                                 evaluationUnavailable={evaluationsQuery.isError}
                                 retiring={
-                                    retireMutation.isPending && retireMutation.variables?.id === goal.id
+                                    retireMutation.isPending &&
+                                    retireMutation.variables?.id === goal.id
                                 }
                                 timezone={timezone}
                                 locale={preferences?.locale}
@@ -797,7 +802,8 @@ export function GoalsPanel() {
                                 evaluation={evaluations[goal.id]}
                                 evaluationUnavailable={evaluationsQuery.isError}
                                 retiring={
-                                    retireMutation.isPending && retireMutation.variables?.id === goal.id
+                                    retireMutation.isPending &&
+                                    retireMutation.variables?.id === goal.id
                                 }
                                 timezone={timezone}
                                 locale={preferences?.locale}

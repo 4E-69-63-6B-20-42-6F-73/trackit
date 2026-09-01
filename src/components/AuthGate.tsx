@@ -67,9 +67,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 credentials: 'same-origin',
                 headers: {
                     'content-type': 'application/json',
-                    ...(state === 'setup'
-                        ? { 'x-trackit-bootstrap-secret': bootstrapSecret }
-                        : {}),
+                    ...(state === 'setup' ? { 'x-trackit-bootstrap-secret': bootstrapSecret } : {}),
                 },
                 body: JSON.stringify({ password }),
             })

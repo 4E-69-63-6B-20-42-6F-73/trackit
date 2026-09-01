@@ -183,7 +183,9 @@ export function SecurityPanel() {
                         size="xs"
                         variant="default"
                         disabled={busy || session.current}
-                        loading={revokeMutation.isPending && revokeMutation.variables === session.id}
+                        loading={
+                            revokeMutation.isPending && revokeMutation.variables === session.id
+                        }
                         onClick={() => revoke(session.id)}
                     >
                         Revoke

@@ -68,7 +68,9 @@ function SleepDetail({
     return (
         <Stack gap="lg">
             <div>
-                <Text fw={700} size="xl">Sleep phases</Text>
+                <Text fw={700} size="xl">
+                    Sleep phases
+                </Text>
                 {event.startedAt && event.endedAt && (
                     <Text size="sm" c="dimmed">
                         {formatTime(event.startedAt)} – {formatTime(event.endedAt)}
@@ -86,7 +88,9 @@ function SleepDetail({
                             alignItems: 'center',
                         }}
                     >
-                        <Text size="xs" c="dimmed">{stageLabels[type]}</Text>
+                        <Text size="xs" c="dimmed">
+                            {stageLabels[type]}
+                        </Text>
                         <div
                             style={{
                                 position: 'relative',
@@ -170,8 +174,12 @@ function MealDetail({
         <Stack gap="lg">
             <Group justify="space-between" align="flex-start">
                 <div>
-                    <Text size="xs" c="dimmed">Meal</Text>
-                    <Text fw={700} size="xl">{detail.mealType}</Text>
+                    <Text size="xs" c="dimmed">
+                        Meal
+                    </Text>
+                    <Text fw={700} size="xl">
+                        {detail.mealType}
+                    </Text>
                 </div>
                 {detail.nutritionQuality !== 'complete' && (
                     <Badge
@@ -186,11 +194,15 @@ function MealDetail({
             </Group>
             <SimpleGrid cols={{ base: 2, xs: 3 }} spacing="md">
                 <div>
-                    <Text size="xs" c="dimmed">Amount</Text>
+                    <Text size="xs" c="dimmed">
+                        Amount
+                    </Text>
                     <Text fw={650}>{serving}</Text>
                 </div>
                 <div>
-                    <Text size="xs" c="dimmed">Energy</Text>
+                    <Text size="xs" c="dimmed">
+                        Energy
+                    </Text>
                     <Text fw={650}>
                         {typeof detail.nutrients.calories === 'number'
                             ? `${number(detail.nutrients.calories)} kcal`
@@ -198,17 +210,23 @@ function MealDetail({
                     </Text>
                 </div>
                 <div>
-                    <Text size="xs" c="dimmed">Date and time</Text>
+                    <Text size="xs" c="dimmed">
+                        Date and time
+                    </Text>
                     <Text fw={650}>{recordedAt}</Text>
                 </div>
             </SimpleGrid>
             <div>
-                <Text fw={650} mb="sm">Nutrition</Text>
+                <Text fw={650} mb="sm">
+                    Nutrition
+                </Text>
                 {nutrients.length ? (
                     <SimpleGrid cols={{ base: 2, xs: 4 }} spacing="md">
                         {nutrients.map(([key, label, unit]) => (
                             <div key={key}>
-                                <Text size="xs" c="dimmed">{label}</Text>
+                                <Text size="xs" c="dimmed">
+                                    {label}
+                                </Text>
                                 <Text fw={650}>
                                     {number(detail.nutrients[key])} {unit}
                                 </Text>
@@ -216,7 +234,9 @@ function MealDetail({
                         ))}
                     </SimpleGrid>
                 ) : (
-                    <Text size="sm" c="dimmed">No additional nutrition was recorded.</Text>
+                    <Text size="sm" c="dimmed">
+                        No additional nutrition was recorded.
+                    </Text>
                 )}
             </div>
         </Stack>
@@ -287,23 +307,35 @@ export function JournalEntryDetailModal({
                     <Group justify="space-between" align="flex-end">
                         <Group gap="xl">
                             <div>
-                                <Text size="xs" c="dimmed">Source</Text>
-                                <Text size="sm" fw={600}>{shownEvent.source}</Text>
+                                <Text size="xs" c="dimmed">
+                                    Source
+                                </Text>
+                                <Text size="sm" fw={600}>
+                                    {shownEvent.source}
+                                </Text>
                             </div>
                             {shownEvent.deviceName && (
                                 <div>
-                                    <Text size="xs" c="dimmed">Device</Text>
-                                    <Text size="sm" fw={600}>{shownEvent.deviceName}</Text>
+                                    <Text size="xs" c="dimmed">
+                                        Device
+                                    </Text>
+                                    <Text size="sm" fw={600}>
+                                        {shownEvent.deviceName}
+                                    </Text>
                                 </div>
                             )}
                         </Group>
-                        <Button variant="default" onClick={onClose}>Close</Button>
+                        <Button variant="default" onClick={onClose}>
+                            Close
+                        </Button>
                     </Group>
                 </Stack>
             ) : shownEvent ? (
                 <Stack gap="md">
                     <div>
-                        <Text fw={700} size="xl">{shownEvent.detail}</Text>
+                        <Text fw={700} size="xl">
+                            {shownEvent.detail}
+                        </Text>
                         <Text size="sm" c="dimmed" mt={4}>
                             {shownEvent.startedAt &&
                             shownEvent.endedAt &&
@@ -314,17 +346,27 @@ export function JournalEntryDetailModal({
                     </div>
                     <Divider />
                     <div>
-                        <Text size="xs" c="dimmed">Source</Text>
-                        <Text size="sm" fw={600}>{shownEvent.source}</Text>
+                        <Text size="xs" c="dimmed">
+                            Source
+                        </Text>
+                        <Text size="sm" fw={600}>
+                            {shownEvent.source}
+                        </Text>
                     </div>
                     {shownEvent.deviceName && (
                         <div>
-                            <Text size="xs" c="dimmed">Device</Text>
-                            <Text size="sm" fw={600}>{shownEvent.deviceName}</Text>
+                            <Text size="xs" c="dimmed">
+                                Device
+                            </Text>
+                            <Text size="sm" fw={600}>
+                                {shownEvent.deviceName}
+                            </Text>
                         </div>
                     )}
                     <Group justify="flex-end">
-                        <Button variant="default" onClick={onClose}>Close</Button>
+                        <Button variant="default" onClick={onClose}>
+                            Close
+                        </Button>
                     </Group>
                 </Stack>
             ) : null}

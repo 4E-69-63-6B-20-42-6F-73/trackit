@@ -175,7 +175,8 @@ export function PrivacyPanel() {
                 : deleteMutation.isError
                   ? 'All data could not be deleted. Check the phrase and try again.'
                   : ''
-    const messageColor = rebuildMutation.isSuccess || rederiveMutation.isSuccess ? 'green' : 'orange'
+    const messageColor =
+        rebuildMutation.isSuccess || rederiveMutation.isSuccess ? 'green' : 'orange'
 
     return (
         <Stack gap="xl">
@@ -350,7 +351,11 @@ export function PrivacyPanel() {
                         <Button variant="default" onClick={() => setConfirmRederive(false)}>
                             Cancel
                         </Button>
-                        <Button color="orange" loading={rederiveMutation.isPending} onClick={rederive}>
+                        <Button
+                            color="orange"
+                            loading={rederiveMutation.isPending}
+                            onClick={rederive}
+                        >
                             Re-derive observations
                         </Button>
                     </Group>

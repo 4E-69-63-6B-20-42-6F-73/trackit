@@ -28,8 +28,7 @@ export function LibraryFoods() {
     })
     const foods = foodsQuery.data ?? []
 
-    const refreshFoods = () =>
-        queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
+    const refreshFoods = () => queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
 
     const addFoodLocally = (food: Food) => {
         if (!debouncedQuery || food.name.toLowerCase().includes(debouncedQuery.toLowerCase())) {
@@ -88,37 +87,35 @@ export function LibraryFoods() {
                     leftSection={<IconSearch size={17} />}
                 />
                 <Stack gap="xs" mt="md">
-                    {foodsQuery.isPending ? (
-                        Array.from({ length: 4 }, (_, index) => (
-                            <Skeleton key={index} height={58} radius="md" />
-                        ))
-                    ) : (
-                        foods.map(food => (
-                            <button
-                                className="food-row"
-                                key={food.id}
-                                onClick={() => setEditingFood(food)}
-                            >
-                                <div className="food-icon">
-                                    <IconApple size={18} />
-                                </div>
-                                <div>
-                                    <Text fw={600} size="sm">
-                                        {food.name}
-                                    </Text>
-                                    <Text size="xs" c="dimmed">
-                                        {food.brand ? `${food.brand} · ` : ''}
-                                        {food.per100g.calories ?? '—'} kcal per 100 g
-                                    </Text>
-                                </div>
-                                {food.nutritionQuality !== 'complete' && (
-                                    <Badge size="xs" variant="light">
-                                        {nutritionStatusLabel(food.nutritionQuality)}
-                                    </Badge>
-                                )}
-                            </button>
-                        ))
-                    )}
+                    {foodsQuery.isPending
+                        ? Array.from({ length: 4 }, (_, index) => (
+                              <Skeleton key={index} height={58} radius="md" />
+                          ))
+                        : foods.map(food => (
+                              <button
+                                  className="food-row"
+                                  key={food.id}
+                                  onClick={() => setEditingFood(food)}
+                              >
+                                  <div className="food-icon">
+                                      <IconApple size={18} />
+                                  </div>
+                                  <div>
+                                      <Text fw={600} size="sm">
+                                          {food.name}
+                                      </Text>
+                                      <Text size="xs" c="dimmed">
+                                          {food.brand ? `${food.brand} · ` : ''}
+                                          {food.per100g.calories ?? '—'} kcal per 100 g
+                                      </Text>
+                                  </div>
+                                  {food.nutritionQuality !== 'complete' && (
+                                      <Badge size="xs" variant="light">
+                                          {nutritionStatusLabel(food.nutritionQuality)}
+                                      </Badge>
+                                  )}
+                              </button>
+                          ))}
                     {!foodsQuery.isPending && foods.length === 0 && !foodsQuery.isError && (
                         <div className="compact-empty">
                             <Text fw={650}>

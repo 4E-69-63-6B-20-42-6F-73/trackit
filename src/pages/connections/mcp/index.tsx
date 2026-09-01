@@ -100,9 +100,10 @@ export function McpAccess() {
     const events = eventsQuery.data ?? []
     const allowedOrigins = draftOrigins ?? status?.allowedOrigins ?? []
     const loading = statusQuery.isPending || eventsQuery.isPending
-    const queryError = statusQuery.isError || eventsQuery.isError
-        ? 'Assistant access settings are unavailable. Try again.'
-        : ''
+    const queryError =
+        statusQuery.isError || eventsQuery.isError
+            ? 'Assistant access settings are unavailable. Try again.'
+            : ''
 
     const refresh = async () => {
         await Promise.all([statusQuery.refetch(), eventsQuery.refetch()])
@@ -114,7 +115,13 @@ export function McpAccess() {
         },
     })
     const clientMutation = useMutation({
-        mutationFn: async ({ client, action }: { client: McpClientRecord; action: 'revoke' | 'delete' }) => {
+        mutationFn: async ({
+            client,
+            action,
+        }: {
+            client: McpClientRecord
+            action: 'revoke' | 'delete'
+        }) => {
             if (action === 'revoke') await revokeMcpClient(client.id)
             else await deleteMcpClient(client.id)
         },
@@ -137,8 +144,7 @@ export function McpAccess() {
             setOriginError('')
         },
     })
-    const saving =
-        toggleMutation.isPending || clientMutation.isPending || originsMutation.isPending
+    const saving = toggleMutation.isPending || clientMutation.isPending || originsMutation.isPending
     const clientMutationMessage = clientMutation.variables
         ? clientMutation.variables.action === 'revoke'
             ? `Could not revoke ${clientMutation.variables.client.name}. Try again.`
@@ -534,8 +540,14 @@ export function McpAccess() {
                     </Button>
                     <Button
                         color="red"
-                        loading={clientMutation.isPending && clientMutation.variables?.action === 'revoke'}
-                        onClick={() => revoking && clientMutation.mutate({ client: revoking, action: 'revoke' })}
+                        loading={
+                            clientMutation.isPending &&
+                            clientMutation.variables?.action === 'revoke'
+                        }
+                        onClick={() =>
+                            revoking &&
+                            clientMutation.mutate({ client: revoking, action: 'revoke' })
+                        }
                     >
                         Revoke access
                     </Button>
@@ -558,8 +570,14 @@ export function McpAccess() {
                     </Button>
                     <Button
                         color="red"
-                        loading={clientMutation.isPending && clientMutation.variables?.action === 'delete'}
-                        onClick={() => deleting && clientMutation.mutate({ client: deleting, action: 'delete' })}
+                        loading={
+                            clientMutation.isPending &&
+                            clientMutation.variables?.action === 'delete'
+                        }
+                        onClick={() =>
+                            deleting &&
+                            clientMutation.mutate({ client: deleting, action: 'delete' })
+                        }
                     >
                         Delete assistant
                     </Button>

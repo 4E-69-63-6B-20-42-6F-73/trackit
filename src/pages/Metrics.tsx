@@ -47,8 +47,12 @@ export function Metrics() {
         queryFn: ({ signal }) => listMetricSources(signal),
     })
     const saveMutation = useMutation({
-        mutationFn: ({ metricPreferences }: { metricPreferences: ReturnType<typeof normalizedMetricPreferences>; close: boolean }) =>
-            updatePreferences({ metricPreferences }),
+        mutationFn: ({
+            metricPreferences,
+        }: {
+            metricPreferences: ReturnType<typeof normalizedMetricPreferences>
+            close: boolean
+        }) => updatePreferences({ metricPreferences }),
         onSuccess: (_saved, variables) => {
             if (variables.close) setEditing(null)
         },
@@ -393,7 +397,11 @@ export function Metrics() {
                     editing.precision > 0 ||
                     (metricSources[editing.id]?.length ?? 0) > 1 ? (
                         <Group justify="flex-end" mt="xl">
-                            <Button variant="default" disabled={saving} onClick={() => setEditing(null)}>
+                            <Button
+                                variant="default"
+                                disabled={saving}
+                                onClick={() => setEditing(null)}
+                            >
                                 Cancel
                             </Button>
                             <Button
