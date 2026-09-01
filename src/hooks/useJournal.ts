@@ -28,10 +28,14 @@ export function useJournal(query: JournalQuery & { limit: number }, enabled = tr
     })
     const events = useMemo(() => {
         const known = new Set<string>()
-        return (journalQuery.data?.pages.flat() ?? []).filter(event => {
-            if (known.has(event.id)) return false
+        return (journalQuery.data?.pages.flat() ?? []).flatMap(event => {
+            if (known.has(event.id)) return []
             known.add(event.id)
-            return true
+            return [
+                event.entityType === 'meal' && event.definitionId !== 'meal'
+                    ? { ...event, definitionId: 'meal' }
+                    : event,
+            ]
         })
     }, [journalQuery.data])
     const status: ServerStatus = !enabled
