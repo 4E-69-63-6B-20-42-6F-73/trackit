@@ -1,10 +1,11 @@
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listDailyMetrics } from '../lib/dailyMetricApi'
 import { listGoalEvaluations } from '../lib/goalApi'
 import { listObservations } from '../lib/observationApi'
+import { createTestQueryClient } from '../test/queryClient'
 import { ServerDataProvider } from './useServerData'
 import { useTodayHealth } from './useTodayHealth'
 
@@ -12,7 +13,7 @@ vi.mock('../lib/dailyMetricApi', () => ({ listDailyMetrics: vi.fn() }))
 vi.mock('../lib/observationApi', () => ({ listObservations: vi.fn() }))
 vi.mock('../lib/goalApi', () => ({ listGoalEvaluations: vi.fn() }))
 
-const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+let queryClient = createTestQueryClient()
 
 const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>
@@ -34,6 +35,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
                         },
                     },
                 },
+                goals: [],
             }}
         >
             {children}
@@ -43,7 +45,7 @@ const wrapper = ({ children }: { children: ReactNode }) => (
 
 describe('useTodayHealth effective totals', () => {
     beforeEach(() => {
-        queryClient.clear()
+        queryClient = createTestQueryClient()
         vi.mocked(listGoalEvaluations).mockResolvedValue({})
         vi.mocked(listDailyMetrics).mockResolvedValue([
             {
