@@ -1,5 +1,12 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import {
+    effectiveBaseMetricSeries,
+    effectiveMetricSeriesInTimezone,
+} from '@trackit/domain/effectiveMetrics'
+import type { NumericObservation } from '@trackit/domain/health'
+import type { MetricPreferences } from '@trackit/domain/metrics'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
 import type * as schemaType from '../db/schema.js'
 import {
     dailyProjectionRuns,
@@ -9,14 +16,7 @@ import {
     preferences,
     projectionDirtyDates,
 } from '../db/schema.js'
-import {
-    effectiveBaseMetricSeries,
-    effectiveMetricSeriesInTimezone,
-} from '../../src/domain/effectiveMetrics.js'
-import type { NumericObservation } from '../../src/domain/health.js'
-import type { MetricPreferences } from '../../src/domain/metrics.js'
 import type { RecordRange } from './types.js'
-import { metricDefinition } from '../../src/domain/metricCatalog.js'
 import { DERIVED_OBSERVATION_CACHE_VERSION } from './derived-observation-cache.js'
 import { dateKeyInTimezone, datesThrough } from './timezone.js'
 
