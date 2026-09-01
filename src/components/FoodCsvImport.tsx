@@ -1,19 +1,44 @@
 import { useRef, useState } from 'react'
 import { Alert, Badge, Button, Group, Modal, Progress, Select, Stack, Text } from '@mantine/core'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IconDownload, IconUpload } from '@tabler/icons-react'
 import { foodCsvTemplate, inspectFoodCsv, type FoodCsvInspection } from '../domain/foodCsv'
 import type { Food } from '../domain/nutrition'
-import { importFoods, searchFoods, type FoodImportResult } from '../lib/nutritionApi'
+import { importFoods, searchFoods } from '../lib/nutritionApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => void }) {
+    const queryClient = useQueryClient()
     const input = useRef<HTMLInputElement>(null)
     const [opened, setOpened] = useState(false)
-    const [status, setStatus] = useState('')
-    const [busy, setBusy] = useState(false)
     const [inspection, setInspection] = useState<FoodCsvInspection | null>(null)
-    const [result, setResult] = useState<FoodImportResult | null>(null)
     const [strategy, setStrategy] = useState<'skip' | 'update' | 'create'>('skip')
     const [fileName, setFileName] = useState('')
+    const [inspectionError, setInspectionError] = useState('')
+
+    const importMutation = useMutation({
+        mutationFn: () => {
+            if (!inspection?.foods.length) throw new Error('No valid foods to import.')
+            return importFoods(inspection.foods, strategy)
+        },
+        onSuccess: async () => {
+            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.foods })
+            const refreshed = await queryClient.fetchQuery({
+                queryKey: [...serverQueryKeys.foods, ''],
+                queryFn: ({ signal }) => searchFoods('', signal),
+            })
+            onImported(refreshed)
+        },
+    })
+
+    const result = importMutation.data
+    const status = result
+        ? `${result.created} created, ${result.updated} updated, ${result.skipped} skipped, ${result.failed} failed.`
+        : importMutation.isError
+          ? importMutation.error instanceof Error
+              ? importMutation.error.message
+              : 'The CSV could not be imported.'
+          : inspectionError
 
     const downloadTemplate = () => {
         const link = document.createElement('a')
@@ -24,32 +49,13 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
     }
 
     const inspectFile = async (file: File) => {
-        setStatus('')
-        setResult(null)
+        setInspectionError('')
+        importMutation.reset()
         try {
             setInspection(inspectFoodCsv(await file.text()))
             setFileName(file.name)
         } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'The CSV could not be imported.')
-        }
-    }
-
-    const commit = async () => {
-        if (!inspection?.foods.length) return
-        setBusy(true)
-        setStatus('')
-        try {
-            const imported = await importFoods(inspection.foods, strategy)
-            setResult(imported)
-            const refreshed = await searchFoods()
-            onImported(refreshed)
-            setStatus(
-                `${imported.created} created, ${imported.updated} updated, ${imported.skipped} skipped, ${imported.failed} failed.`,
-            )
-        } catch (error) {
-            setStatus(error instanceof Error ? error.message : 'The CSV could not be imported.')
-        } finally {
-            setBusy(false)
+            setInspectionError(error instanceof Error ? error.message : 'The CSV could not be imported.')
         }
     }
 
@@ -93,26 +99,17 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                         <>
                             <div className="import-summary">
                                 <div>
-                                    <Text size="xs" c="dimmed">
-                                        File
-                                    </Text>
+                                    <Text size="xs" c="dimmed">File</Text>
                                     <Text fw={650}>{fileName}</Text>
                                 </div>
                                 <div>
-                                    <Text size="xs" c="dimmed">
-                                        Ready
-                                    </Text>
+                                    <Text size="xs" c="dimmed">Ready</Text>
                                     <Text fw={650}>{inspection.foods.length}</Text>
                                 </div>
                                 <div>
-                                    <Text size="xs" c="dimmed">
-                                        Invalid
-                                    </Text>
+                                    <Text size="xs" c="dimmed">Invalid</Text>
                                     <Text fw={650}>
-                                        {
-                                            inspection.rows.filter(row => row.status === 'invalid')
-                                                .length
-                                        }
+                                        {inspection.rows.filter(row => row.status === 'invalid').length}
                                     </Text>
                                 </div>
                             </div>
@@ -138,15 +135,13 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                                 {inspection.rows.slice(0, 12).map(row => (
                                     <div key={row.row}>
                                         <Text size="sm">
-                                            <strong>Row {row.row}</strong> Â· {row.name}
+                                            <strong>Row {row.row}</strong> · {row.name}
                                         </Text>
                                         <Badge color={row.status === 'ready' ? 'teal' : 'orange'}>
                                             {row.status}
                                         </Badge>
                                         {row.message && (
-                                            <Text size="xs" c="orange">
-                                                {row.message}
-                                            </Text>
+                                            <Text size="xs" c="orange">{row.message}</Text>
                                         )}
                                     </div>
                                 ))}
@@ -162,7 +157,7 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                                 ]}
                                 allowDeselect={false}
                             />
-                            {busy && (
+                            {importMutation.isPending && (
                                 <Progress
                                     value={100}
                                     animated
@@ -170,16 +165,16 @@ export function FoodCsvImport({ onImported }: { onImported: (foods: Food[]) => v
                                 />
                             )}
                             <Button
-                                loading={busy}
+                                loading={importMutation.isPending}
                                 disabled={inspection.foods.length === 0}
-                                onClick={() => void commit()}
+                                onClick={() => importMutation.mutate()}
                             >
                                 Import {inspection.foods.length} valid{' '}
                                 {inspection.foods.length === 1 ? 'food' : 'foods'}
                             </Button>
                         </>
                     )}
-                    {status && <Alert>{status}</Alert>}
+                    {status && <Alert color={importMutation.isError || inspectionError ? 'orange' : undefined}>{status}</Alert>}
                     {result?.failed ? (
                         <Alert color="orange">
                             Failed rows:{' '}
