@@ -7,41 +7,59 @@ import {
     Radio,
     SegmentedControl,
     Select,
+    Skeleton,
     Stack,
     Switch,
     Text,
 } from '@mantine/core'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { IconArrowDown, IconArrowLeft, IconArrowUp } from '@tabler/icons-react'
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { MetricRow } from '../components/MetricRow'
+import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
 import { metricCatalog, type MetricDefinition } from '../domain/metricCatalog'
 import {
     detectUnitPreset,
+    formatMetricDisplayValue,
     normalizedMetricPreferences,
     preferencesForPreset,
-    formatMetricDisplayValue,
     unitPresentation,
+    type DeduplicationPolicy,
     type UnitPreset,
 } from '../domain/metrics'
 import { useServerData } from '../hooks/useServerData'
+import { healthQueryKeys } from '../lib/healthQueries'
+import { listMetricSources } from '../lib/observationApi'
 import { updatePreferences } from '../lib/preferencesApi'
-import { listMetricSources, type MetricSourceSummary } from '../lib/observationApi'
-import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
-import type { DeduplicationPolicy } from '../domain/metrics'
 
 export function Metrics() {
-    const { preferences, loading } = useServerData()
+    const { preferences, loading: sharedLoading } = useServerData()
     const [editing, setEditing] = useState<MetricDefinition | null>(null)
     const [draftUnit, setDraftUnit] = useState('')
     const [draftPrecision, setDraftPrecision] = useState<number | null>(null)
     const [draftPolicy, setDraftPolicy] = useState<DeduplicationPolicy>('keep_all')
     const [draftSourcePriority, setDraftSourcePriority] = useState<string[]>([])
     const [draftDisabledSources, setDraftDisabledSources] = useState<string[]>([])
-    const [saving, setSaving] = useState(false)
-    const [message, setMessage] = useState('')
-    const [sourceSummaries, setSourceSummaries] = useState<MetricSourceSummary[]>([])
+    const sourceQuery = useQuery({
+        queryKey: healthQueryKeys.metricSources,
+        queryFn: ({ signal }) => listMetricSources(signal),
+    })
+    const saveMutation = useMutation({
+        mutationFn: ({
+            metricPreferences,
+        }: {
+            metricPreferences: ReturnType<typeof normalizedMetricPreferences>
+            close: boolean
+        }) => updatePreferences({ metricPreferences }),
+        onSuccess: (_saved, variables) => {
+            if (variables.close) setEditing(null)
+        },
+    })
+    const saving = saveMutation.isPending
+    const loading = sharedLoading || sourceQuery.isPending
+    const sourceSummaries = sourceQuery.data ?? []
     const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
     const preset = detectUnitPreset(selected)
     const categories = useMemo(() => [...new Set(metricCatalog.map(metric => metric.category))], [])
@@ -58,30 +76,14 @@ export function Metrics() {
             }, {}),
         [sourceSummaries],
     )
-    useEffect(() => {
-        const controller = new AbortController()
-        void listMetricSources(controller.signal)
-            .then(setSourceSummaries)
-            .catch(() => undefined)
-        return () => controller.abort()
-    }, [])
-    const save = async (metricPreferences: typeof selected, close = true) => {
+    const save = (metricPreferences: typeof selected, close = true) => {
         if (!preferences) return
-        setSaving(true)
-        setMessage('')
-        try {
-            await updatePreferences({ metricPreferences })
-            if (close) setEditing(null)
-        } catch {
-            setMessage('Your Metric Center preference could not be saved. Try again.')
-        } finally {
-            setSaving(false)
-        }
+        saveMutation.mutate({ metricPreferences, close })
     }
     const applyPreset = (next: string) => {
         if (next === 'custom' || !preferences) return
         const presetPreferences = preferencesForPreset(next as Exclude<UnitPreset, 'custom'>)
-        void save(
+        save(
             Object.fromEntries(
                 Object.entries(presetPreferences).map(([id, preference]) => [
                     id,
@@ -92,6 +94,7 @@ export function Metrics() {
         )
     }
     const openMetric = (metric: MetricDefinition) => {
+        saveMutation.reset()
         setEditing(metric)
         setDraftUnit(selected[metric.id].displayUnit)
         setDraftPrecision(selected[metric.id].precision ?? metric.precision)
@@ -147,42 +150,56 @@ export function Metrics() {
                     ]}
                 />
             </section>
-            {message && (
+            {saveMutation.isError && (
                 <Alert mt="md" color="orange">
-                    {message}
+                    Your Metric Center preference could not be saved. Try again.
                 </Alert>
             )}
-            {categories.map(category => (
-                <section
-                    className="metric-category"
-                    key={category}
-                    aria-labelledby={`metric-${category}`}
-                >
-                    <Text id={`metric-${category}`} fw={700} mb="sm">
-                        {category}
-                    </Text>
-                    <div className="metric-row-list">
-                        {metricCatalog
-                            .filter(metric => metric.category === category)
-                            .map(metric => {
-                                const configurable =
-                                    metric.displayUnits.length > 1 ||
-                                    metric.precision > 0 ||
-                                    Boolean(metric.derived) ||
-                                    (metricSources[metric.id]?.length ?? 0) > 1
-                                return (
-                                    <MetricRow
-                                        key={metric.id}
-                                        metric={metric}
-                                        displayUnit={selected[metric.id].displayUnit}
-                                        clickable={configurable && !saving}
-                                        onClick={() => openMetric(metric)}
-                                    />
-                                )
-                            })}
-                    </div>
-                </section>
-            ))}
+            {sourceQuery.isError && (
+                <Alert mt="md" color="orange">
+                    Metric source information could not be loaded. Try again later.
+                </Alert>
+            )}
+            {loading ? (
+                <Skeleton
+                    role="status"
+                    height={320}
+                    radius="lg"
+                    aria-label="Loading metric configuration"
+                />
+            ) : (
+                categories.map(category => (
+                    <section
+                        className="metric-category"
+                        key={category}
+                        aria-labelledby={`metric-${category}`}
+                    >
+                        <Text id={`metric-${category}`} fw={700} mb="sm">
+                            {category}
+                        </Text>
+                        <div className="metric-row-list">
+                            {metricCatalog
+                                .filter(metric => metric.category === category)
+                                .map(metric => {
+                                    const configurable =
+                                        metric.displayUnits.length > 1 ||
+                                        metric.precision > 0 ||
+                                        Boolean(metric.derived) ||
+                                        (metricSources[metric.id]?.length ?? 0) > 1
+                                    return (
+                                        <MetricRow
+                                            key={metric.id}
+                                            metric={metric}
+                                            displayUnit={selected[metric.id].displayUnit}
+                                            clickable={configurable && !saving}
+                                            onClick={() => openMetric(metric)}
+                                        />
+                                    )
+                                })}
+                        </div>
+                    </section>
+                ))
+            )}
             <Modal opened={Boolean(editing)} onClose={() => setEditing(null)} title={editing?.name}>
                 {editing && editing.displayUnits.length > 1 && (
                     <Radio.Group label="Display unit" value={draftUnit} onChange={setDraftUnit}>
@@ -380,13 +397,17 @@ export function Metrics() {
                     editing.precision > 0 ||
                     (metricSources[editing.id]?.length ?? 0) > 1 ? (
                         <Group justify="flex-end" mt="xl">
-                            <Button variant="default" onClick={() => setEditing(null)}>
+                            <Button
+                                variant="default"
+                                disabled={saving}
+                                onClick={() => setEditing(null)}
+                            >
                                 Cancel
                             </Button>
                             <Button
                                 loading={saving}
                                 onClick={() =>
-                                    void save({
+                                    save({
                                         ...selected,
                                         [editing.id]: {
                                             ...selected[editing.id],

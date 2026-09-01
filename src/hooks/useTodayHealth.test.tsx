@@ -1,43 +1,51 @@
+import { QueryClientProvider } from '@tanstack/react-query'
 import { renderHook, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { listDailyMetrics } from '../lib/dailyMetricApi'
+import { listGoalEvaluations } from '../lib/goalApi'
+import { listObservations } from '../lib/observationApi'
+import { createTestQueryClient } from '../test/queryClient'
 import { ServerDataProvider } from './useServerData'
 import { useTodayHealth } from './useTodayHealth'
-import { listDailyMetrics } from '../lib/dailyMetricApi'
-import { listObservations } from '../lib/observationApi'
-import { listGoalEvaluations } from '../lib/goalApi'
 
 vi.mock('../lib/dailyMetricApi', () => ({ listDailyMetrics: vi.fn() }))
 vi.mock('../lib/observationApi', () => ({ listObservations: vi.fn() }))
 vi.mock('../lib/goalApi', () => ({ listGoalEvaluations: vi.fn() }))
 
+let queryClient = createTestQueryClient()
+
 const wrapper = ({ children }: { children: ReactNode }) => (
-    <ServerDataProvider
-        initialData={{
-            preferences: {
-                displayName: 'Alex',
-                timezone: 'UTC',
-                locale: 'en-US',
-                units: 'metric',
-                metricPreferences: {
-                    steps: {
-                        displayUnit: 'count',
-                        deduplication: {
-                            policy: 'prefer_priority',
-                            sourcePriority: ['Health Connect::Garmin'],
-                            disabledSources: ['Health Connect::Samsung Health'],
+    <QueryClientProvider client={queryClient}>
+        <ServerDataProvider
+            initialData={{
+                preferences: {
+                    displayName: 'Alex',
+                    timezone: 'UTC',
+                    locale: 'en-US',
+                    units: 'metric',
+                    metricPreferences: {
+                        steps: {
+                            displayUnit: 'count',
+                            deduplication: {
+                                policy: 'prefer_priority',
+                                sourcePriority: ['Health Connect::Garmin'],
+                                disabledSources: ['Health Connect::Samsung Health'],
+                            },
                         },
                     },
                 },
-            },
-        }}
-    >
-        {children}
-    </ServerDataProvider>
+                goals: [],
+            }}
+        >
+            {children}
+        </ServerDataProvider>
+    </QueryClientProvider>
 )
 
 describe('useTodayHealth effective totals', () => {
     beforeEach(() => {
+        queryClient = createTestQueryClient()
         vi.mocked(listGoalEvaluations).mockResolvedValue({})
         vi.mocked(listDailyMetrics).mockResolvedValue([
             {

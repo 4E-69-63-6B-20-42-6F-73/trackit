@@ -55,14 +55,16 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
         nutritionQuality: 'estimated',
         version: 1,
     }
-    await page.route('**/api/foods*', route => {
+    let deleted = false
+    await page.route('**/api/foods**', route => {
         if (route.request().method() === 'DELETE') {
+            deleted = true
             return route.fulfill({ status: 204, body: '' })
         }
         return route.fulfill({
             status: 200,
             contentType: 'application/json',
-            body: JSON.stringify({ data: [food] }),
+            body: JSON.stringify({ data: deleted ? [] : [food] }),
         })
     })
 
@@ -85,7 +87,8 @@ test('food editor fits a narrow viewport and can permanently delete a food', asy
 
     expect(request.postDataJSON()).toEqual({ version: 1 })
     await expect(dialog).toBeHidden()
-    await expect(page.getByText('Plain Skyr')).toHaveCount(0)
+    await expect(page.locator('.food-row', { hasText: 'Plain Skyr' })).toHaveCount(0)
+    await expect(page.getByText('Plain Skyr deleted.', { exact: true })).toBeVisible()
 })
 
 test('legacy nutrition route redirects to Library', async ({ page }) => {

@@ -1,19 +1,22 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import {
     Alert,
     Button,
     Card,
     Code,
     Group,
+    Skeleton,
     Stack,
     Switch,
     Text,
     TextInput,
     Title,
 } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconArrowLeft, IconCopy, IconRobot } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
 import { getMcpStatus, issueMcpClient } from '../../../lib/mcpApi'
+import { serverQueryKeys } from '../../../lib/serverQueries'
 
 const scopes = [
     {
@@ -69,7 +72,7 @@ const defaultExpiryDate = () => {
 
 export function McpNew() {
     const navigate = useNavigate()
-    const [enabled, setEnabled] = useState<boolean | null>(null)
+    const queryClient = useQueryClient()
     const [name, setName] = useState('')
     const [selectedScopes, setSelectedScopes] = useState<string[]>(['observations'])
     const [dateFromEnabled, setDateFromEnabled] = useState(false)
@@ -78,21 +81,16 @@ export function McpNew() {
     const [dateTo, setDateTo] = useState('')
     const [expiryEnabled, setExpiryEnabled] = useState(true)
     const [expiresOn, setExpiresOn] = useState(defaultExpiryDate)
-    const [token, setToken] = useState('')
-    const [saving, setSaving] = useState(false)
     const [copied, setCopied] = useState(false)
-    const [error, setError] = useState('')
+    const [copyError, setCopyError] = useState('')
 
-    useEffect(() => {
-        void getMcpStatus()
-            .then(status => setEnabled(status.enabled))
-            .catch(() => setEnabled(false))
-    }, [])
-
-    const issue = async () => {
-        setSaving(true)
-        try {
-            const result = await issueMcpClient({
+    const statusQuery = useQuery({
+        queryKey: serverQueryKeys.mcpStatus,
+        queryFn: getMcpStatus,
+    })
+    const issueMutation = useMutation({
+        mutationFn: () =>
+            issueMcpClient({
                 name: name.trim(),
                 scopes: selectedScopes,
                 expiresAt: expiryEnabled
@@ -106,22 +104,32 @@ export function McpNew() {
                     dateToEnabled && dateTo
                         ? new Date(`${dateTo}T23:59:59.999`).toISOString()
                         : undefined,
-            })
-            setToken(result.token)
-            setError('')
-        } catch {
-            setError('The assistant credential could not be created. Try again.')
-        } finally {
-            setSaving(false)
-        }
-    }
+            }),
+        onSuccess: async () => {
+            await Promise.all([
+                queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpStatus }),
+                queryClient.invalidateQueries({ queryKey: serverQueryKeys.mcpAccessEvents }),
+            ])
+        },
+    })
+
+    const enabled = statusQuery.data?.enabled ?? false
+    const token = issueMutation.data?.token ?? ''
+    const error = statusQuery.isError
+        ? 'Assistant access settings are unavailable. Try again.'
+        : issueMutation.isError
+          ? 'The assistant credential could not be created. Try again.'
+          : copyError
 
     const copy = async () => {
         try {
             await navigator.clipboard.writeText(token)
             setCopied(true)
+            setCopyError('')
         } catch {
-            setError('The token could not be copied automatically. Select and copy it manually.')
+            setCopyError(
+                'The token could not be copied automatically. Select and copy it manually.',
+            )
         }
     }
 
@@ -134,8 +142,9 @@ export function McpNew() {
         setDateTo('')
         setExpiryEnabled(true)
         setExpiresOn(defaultExpiryDate())
-        setToken('')
         setCopied(false)
+        setCopyError('')
+        issueMutation.reset()
     }
 
     const hasWriteScope = selectedScopes.some(
@@ -166,7 +175,12 @@ export function McpNew() {
                 Create a unique, limited credential for one assistant.
             </Text>
 
-            {enabled === false && (
+            {statusQuery.isPending && (
+                <Stack mb="lg" role="status" aria-label="Loading assistant access settings">
+                    <Skeleton height={42} radius="md" />
+                </Stack>
+            )}
+            {!statusQuery.isPending && !statusQuery.isError && !enabled && (
                 <Alert color="orange" mb="lg">
                     Enable the MCP endpoint on the Assistant access page before creating a
                     credential.
@@ -206,7 +220,10 @@ export function McpNew() {
                             description="Use a recognizable name, such as Claude Desktop or Nutrition coach."
                             placeholder="My assistant"
                             value={name}
-                            onChange={event => setName(event.currentTarget.value)}
+                            onChange={event => {
+                                issueMutation.reset()
+                                setName(event.currentTarget.value)
+                            }}
                             required
                         />
                         <div>
@@ -354,9 +371,9 @@ export function McpNew() {
                                 Cancel
                             </Button>
                             <Button
-                                disabled={!enabled || !valid}
-                                loading={saving}
-                                onClick={() => void issue()}
+                                disabled={statusQuery.isPending || !enabled || !valid}
+                                loading={issueMutation.isPending}
+                                onClick={() => issueMutation.mutate()}
                             >
                                 Create assistant credential
                             </Button>

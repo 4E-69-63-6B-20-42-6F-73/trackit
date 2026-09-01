@@ -49,12 +49,16 @@ export function ManualEntryLogger({
     opened,
     close,
     add,
+    pending,
+    serverError,
     initialKind,
     selectedDate,
 }: {
     opened: boolean
     close: () => void
-    add: (input: CreateObservationInput) => void
+    add: (input: CreateObservationInput) => Promise<boolean>
+    pending: boolean
+    serverError: string
     initialKind: ManualEntryKind
     selectedDate?: string | null
 }) {
@@ -83,7 +87,7 @@ export function ManualEntryLogger({
     const [recordedAt, setRecordedAt] = useState(
         `${targetDate}T${selectedDate && selectedDate !== initialDay ? '12:00' : initialTime}`,
     )
-    const [error, setError] = useState('')
+    const [validationError, setValidationError] = useState('')
     const isHistorical = targetDate !== todayKey
     const selectedTimestamp = () =>
         calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()
@@ -110,14 +114,14 @@ export function ManualEntryLogger({
         .filter(Boolean)
         .map(value => `#${value.replace(/^#/, '')}`)
 
-    const submit = () => {
-        setError('')
+    const submit = async () => {
+        setValidationError('')
         if (!recordedAt) {
-            setError('Choose a date and time for this observation.')
+            setValidationError('Choose a date and time for this observation.')
             return
         }
         if (kind === 'Water' && waterChoice === 'custom' && Number(customWaterAmount) <= 0) {
-            setError('Enter the amount of water you want to record.')
+            setValidationError('Enter the amount of water you want to record.')
             return
         }
         const observedAt = selectedTimestamp()
@@ -173,7 +177,7 @@ export function ManualEntryLogger({
             }
         } else if (kind === 'Symptom') {
             if (!symptom.trim()) {
-                setError('Enter the symptom you want to record.')
+                setValidationError('Enter the symptom you want to record.')
                 return
             }
             input = {
@@ -209,17 +213,18 @@ export function ManualEntryLogger({
                 observedAt,
             }
         }
-        add(input)
-        close()
+        if (await add(input)) close()
     }
+
+    const error = validationError || serverError
 
     return (
         <Modal
             opened={opened}
-            onClose={close}
+            onClose={() => !pending && close()}
             centered
             radius="lg"
-            closeButtonProps={{ 'aria-label': 'Close logger' }}
+            closeButtonProps={{ 'aria-label': 'Close logger', disabled: pending }}
             title={
                 <div>
                     <Text fw={700} size="lg">
@@ -456,16 +461,18 @@ export function ManualEntryLogger({
                 />
                 {error && <Alert color="orange">{error}</Alert>}
                 <Group justify="flex-end">
-                    <Button variant="subtle" color="gray" onClick={close}>
+                    <Button variant="subtle" color="gray" disabled={pending} onClick={close}>
                         Cancel
                     </Button>
                     <Button
                         color="trackit"
-                        onClick={submit}
+                        onClick={() => void submit()}
+                        loading={pending}
                         disabled={
-                            kind === 'Water' &&
-                            waterChoice === 'custom' &&
-                            Number(customWaterAmount) <= 0
+                            pending ||
+                            (kind === 'Water' &&
+                                waterChoice === 'custom' &&
+                                Number(customWaterAmount) <= 0)
                         }
                     >
                         {kind === 'Water'

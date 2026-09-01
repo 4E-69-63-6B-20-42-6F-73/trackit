@@ -1,3 +1,5 @@
+import { observationOpenApiPaths } from './contracts/observations.js'
+
 export const openApiContract = {
     openapi: '3.1.0',
     info: {
@@ -21,43 +23,7 @@ export const openApiContract = {
         '/api/journal': {
             get: { responses: { '200': { description: 'Journal entries' } } },
         },
-        '/api/observations': {
-            get: {
-                description:
-                    'Bounded effective metric series after source resolution and derived metric calculation',
-                responses: { '200': { description: 'Effective observations' } },
-            },
-            post: { responses: { '201': { description: 'Created' } } },
-        },
-        '/api/observations/{id}': {
-            patch: {
-                responses: {
-                    '200': { description: 'Updated' },
-                    '409': { description: 'Conflict' },
-                },
-            },
-            delete: {
-                description:
-                    'Deletes the canonical observation; compound meals also delete their nutrient component observations',
-                responses: {
-                    '204': { description: 'Deleted' },
-                    '404': { description: 'Observation not found' },
-                },
-            },
-        },
-        '/api/daily-metrics': {
-            get: {
-                description:
-                    'Requires inclusive owner-local from/to dates with a maximum 366-day window',
-                responses: {
-                    '200': {
-                        description:
-                            'Versioned effective daily metric projections in the owner timezone',
-                    },
-                    '400': { description: 'Missing, reversed, or oversized date range' },
-                },
-            },
-        },
+        ...observationOpenApiPaths,
         '/api/device/health-records': {
             post: {
                 security: [],
@@ -152,9 +118,6 @@ export const openApiContract = {
             get: { responses: { '200': { description: 'Preferences' } } },
             patch: { responses: { '200': { description: 'Updated' } } },
         },
-        '/api/metric-sources': {
-            get: { responses: { '200': { description: 'Distinct metric source summaries' } } },
-        },
         '/api/goals/evaluations': {
             get: {
                 responses: {
@@ -191,3 +154,25 @@ export const openApiContract = {
         },
     },
 } as const
+
+const generatedObservationMethods = {
+    '/api/observations': ['get', 'post'],
+    '/api/observations/{id}': ['patch'],
+    '/api/daily-metrics': ['get'],
+    '/api/metric-sources': ['get'],
+} as const
+
+export function mergeGeneratedObservationPaths(generated: {
+    paths?: Record<string, Record<string, unknown>>
+}) {
+    const paths = openApiContract.paths as Record<string, Record<string, unknown>>
+    for (const [path, methods] of Object.entries(generatedObservationMethods)) {
+        const source = generated.paths?.[path]
+        if (!source) continue
+        const target = (paths[path] ??= {})
+        for (const method of methods) {
+            const operation = source[method]
+            if (operation) target[method] = operation
+        }
+    }
+}

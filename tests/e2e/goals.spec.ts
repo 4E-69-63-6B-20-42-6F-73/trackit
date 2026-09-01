@@ -31,7 +31,7 @@ test('creates, persists, evaluates, and edits a seven-day average weight goal', 
     await page.getByLabel('Value').fill('80')
     await page.getByRole('button', { name: 'Create goal' }).click()
 
-    await expect(page.getByRole('status')).toContainText('Goal added.')
+    await expect(page.getByText('Goal added.', { exact: true })).toBeVisible()
     await expect(page.getByText('On target')).toBeVisible()
     await expect(page.locator('.goal-card .goal-target')).toHaveText('80.0 kg')
     expect(goals[0]).toMatchObject({
@@ -50,7 +50,7 @@ test('creates, persists, evaluates, and edits a seven-day average weight goal', 
     await expect(page.getByRole('heading', { name: 'Edit goal' })).toBeVisible()
     await page.getByLabel('Value').fill('79')
     await page.getByRole('button', { name: 'Save changes' }).click()
-    await expect(page.getByRole('status')).toContainText('Goal updated.')
+    await expect(page.getByText('Goal updated.', { exact: true })).toBeVisible()
     expect(goals[0]).toMatchObject({ target: { value: 79 } })
 })
 
@@ -149,6 +149,6 @@ test('permanently deletes a retired goal after confirmation', async ({ page }) =
     await page.getByText('Delete goal').click()
     await expect(page.getByRole('dialog', { name: 'Delete this retired goal?' })).toBeVisible()
     await page.getByRole('dialog').getByRole('button', { name: 'Delete goal' }).click()
-    await expect(page.getByRole('status')).toContainText('Retired goal deleted.')
+    await expect(page.getByText('Retired goal deleted.', { exact: true })).toBeVisible()
     expect(goals).toEqual([])
 })

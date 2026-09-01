@@ -29,12 +29,21 @@ const provider = (
 describe('ManualEntryLogger', () => {
     it('creates a canonical water observation and closes the dialog', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
         const close = vi.fn()
 
         render(
             <MantineProvider>
-                {provider(<ManualEntryLogger opened close={close} add={add} initialKind="Water" />)}
+                {provider(
+                    <ManualEntryLogger
+                        opened
+                        close={close}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Water"
+                    />,
+                )}
             </MantineProvider>,
         )
 
@@ -69,12 +78,19 @@ describe('ManualEntryLogger', () => {
 
     it('supports 100 ml and custom water amounts', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
                 {provider(
-                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Water" />,
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Water"
+                    />,
                 )}
             </MantineProvider>,
         )
@@ -101,12 +117,19 @@ describe('ManualEntryLogger', () => {
 
     it('uses the Metric Center water unit for presets', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
                 {provider(
-                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Water" />,
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Water"
+                    />,
                     { water: { displayUnit: 'L' } },
                 )}
             </MantineProvider>,
@@ -137,12 +160,19 @@ describe('ManualEntryLogger', () => {
 
     it('converts custom water using the Metric Center water unit', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
                 {provider(
-                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Water" />,
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Water"
+                    />,
                     { water: { displayUnit: 'L' } },
                 )}
             </MantineProvider>,
@@ -165,12 +195,19 @@ describe('ManualEntryLogger', () => {
 
     it('uses a discrete low-to-high slider for energy check-ins', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
                 {provider(
-                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Check-in" />,
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Check-in"
+                    />,
                 )}
             </MantineProvider>,
         )
@@ -203,12 +240,19 @@ describe('ManualEntryLogger', () => {
 
     it('uses a severity slider, duration amount and unit, and tag pills for symptoms', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
                 {provider(
-                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Symptom" />,
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Symptom"
+                    />,
                 )}
             </MantineProvider>,
         )
@@ -253,12 +297,19 @@ describe('ManualEntryLogger', () => {
 
     it('uses a textarea and comma-created tag pills for notes', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
                 {provider(
-                    <ManualEntryLogger opened close={vi.fn()} add={add} initialKind="Note" />,
+                    <ManualEntryLogger
+                        opened
+                        close={vi.fn()}
+                        add={add}
+                        pending={false}
+                        serverError=""
+                        initialKind="Note"
+                    />,
                 )}
             </MantineProvider>,
         )
@@ -284,7 +335,7 @@ describe('ManualEntryLogger', () => {
 
     it('records against the day selected in the current page', async () => {
         const user = userEvent.setup()
-        const add = vi.fn()
+        const add = vi.fn().mockResolvedValue(true)
 
         render(
             <MantineProvider>
@@ -293,6 +344,8 @@ describe('ManualEntryLogger', () => {
                         opened
                         close={vi.fn()}
                         add={add}
+                        pending={false}
+                        serverError=""
                         initialKind="Weight"
                         selectedDate="2026-08-20"
                     />,

@@ -20,15 +20,19 @@ export type McpAccessEvent = {
     createdAt: string
 }
 
-export async function listMcpAccessEvents(): Promise<McpAccessEvent[]> {
-    const response = await authRequest('/api/mcp/access-log')
+type SignalInput = AbortSignal | { signal: AbortSignal }
+
+const signalFrom = (input?: SignalInput) => (input && 'signal' in input ? input.signal : input)
+
+export async function listMcpAccessEvents(signal?: AbortSignal): Promise<McpAccessEvent[]> {
+    const response = await authRequest('/api/mcp/access-log', { signal })
     if (!response.ok) throw new Error('MCP access log unavailable')
     const events = (await response.json()) as { data: McpAccessEvent[] }
     return events.data
 }
 
-export async function getMcpStatus() {
-    const response = await authRequest('/api/mcp/status')
+export async function getMcpStatus(input?: SignalInput) {
+    const response = await authRequest('/api/mcp/status', { signal: signalFrom(input) })
     if (!response.ok) throw new Error('MCP settings unavailable')
     return (await response.json()) as {
         enabled: boolean

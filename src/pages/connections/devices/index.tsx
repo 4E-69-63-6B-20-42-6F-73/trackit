@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
     ActionIcon,
     Alert,
@@ -12,6 +12,7 @@ import {
     Text,
     Title,
 } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
     IconArrowLeft,
     IconChevronRight,
@@ -30,8 +31,8 @@ import {
     rejectDevice,
     revokeDevice,
     type DeviceRecord,
-    type HealthConnectStatus,
 } from '../../../lib/deviceApi'
+import { serverQueryKeys } from '../../../lib/serverQueries'
 
 const statusLabel = (status: string) => {
     switch (status) {
@@ -76,43 +77,55 @@ const relativeDate = (value: string) => {
     return new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' }).format(days, 'day')
 }
 
+type DeviceAction = 'approve' | 'reject' | 'disconnect' | 'delete'
+
 export function Devices() {
     const navigate = useNavigate()
-    const [devices, setDevices] = useState<DeviceRecord[]>([])
-    const [healthStatus, setHealthStatus] = useState<HealthConnectStatus | 'Unavailable'>(
-        'Not connected',
-    )
-    const [error, setError] = useState('')
-    const [loading, setLoading] = useState(true)
-    const [busyDeviceId, setBusyDeviceId] = useState<string | null>(null)
-    const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null)
+    const queryClient = useQueryClient()
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
     const [confirmation, setConfirmation] = useState<{
-        device: DeviceRecord
+        deviceId: string
         action: 'reject' | 'disconnect' | 'delete'
     } | null>(null)
-    const hasLoaded = useRef(false)
-
-    const refresh = useCallback(async () => {
-        setLoading(true)
-        try {
-            const nextDevices = await listDevices()
-            setDevices(nextDevices)
-            setHealthStatus(healthConnectStatus(nextDevices))
-            setError('')
-        } catch {
-            setError('Devices unavailable. Try refreshing the list.')
-            setHealthStatus('Unavailable')
-        } finally {
-            setLoading(false)
-        }
-    }, [])
-
-    useEffect(() => {
-        if (!hasLoaded.current) {
-            hasLoaded.current = true
-            void refresh()
-        }
-    }, [refresh])
+    const devicesQuery = useQuery({
+        queryKey: serverQueryKeys.devices,
+        queryFn: ({ signal }) => listDevices(signal),
+    })
+    const devices = devicesQuery.data ?? []
+    const loading = devicesQuery.isPending
+    const selectedDevice = devices.find(device => device.id === selectedDeviceId) ?? null
+    const confirmationDevice = confirmation
+        ? (devices.find(device => device.id === confirmation.deviceId) ?? null)
+        : null
+    const healthStatus = devicesQuery.isError ? 'Unavailable' : healthConnectStatus(devices)
+    const deviceMutation = useMutation({
+        mutationFn: async ({ device, action }: { device: DeviceRecord; action: DeviceAction }) => {
+            if (action === 'approve') await confirmDevice(device.id)
+            else if (action === 'reject') await rejectDevice(device.id)
+            else if (action === 'disconnect') await revokeDevice(device.id)
+            else await deleteDevice(device.id)
+        },
+        onSuccess: async (_, { action }) => {
+            if (action !== 'approve') {
+                setConfirmation(null)
+                setSelectedDeviceId(null)
+            }
+            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.devices })
+        },
+    })
+    const busyDeviceId = deviceMutation.isPending ? deviceMutation.variables?.device.id : null
+    const actionError = deviceMutation.isError
+        ? deviceMutation.variables?.action === 'approve'
+            ? `Could not approve ${deviceMutation.variables.device.name}. Try again.`
+            : deviceMutation.variables?.action === 'reject'
+              ? `Could not reject ${deviceMutation.variables.device.name}. Try again.`
+              : deviceMutation.variables?.action === 'disconnect'
+                ? `Could not disconnect ${deviceMutation.variables.device.name}. Try again.`
+                : `Could not delete ${deviceMutation.variables?.device.name ?? 'this device'}. Try again.`
+        : ''
+    const error = devicesQuery.isError
+        ? 'Devices unavailable. Try refreshing the list.'
+        : actionError
 
     const orderedDevices = useMemo(
         () =>
@@ -151,40 +164,9 @@ export function Devices() {
         return { tone: 'gray', text: 'No active devices' }
     })()
 
-    const approve = async (device: DeviceRecord) => {
-        setBusyDeviceId(device.id)
-        try {
-            await confirmDevice(device.id)
-            await refresh()
-        } catch {
-            setError(`Could not approve ${device.name}. Try again.`)
-        } finally {
-            setBusyDeviceId(null)
-        }
-    }
-
-    const runConfirmedAction = async () => {
-        if (!confirmation) return
-        const { device, action } = confirmation
-        setBusyDeviceId(device.id)
-        try {
-            if (action === 'reject') await rejectDevice(device.id)
-            else if (action === 'disconnect') await revokeDevice(device.id)
-            else await deleteDevice(device.id)
-            setConfirmation(null)
-            setSelectedDevice(null)
-            await refresh()
-        } catch {
-            setError(
-                action === 'reject'
-                    ? `Could not reject ${device.name}. Try again.`
-                    : action === 'disconnect'
-                      ? `Could not disconnect ${device.name}. Try again.`
-                      : `Could not delete ${device.name}. Try again.`,
-            )
-        } finally {
-            setBusyDeviceId(null)
-        }
+    const runConfirmedAction = () => {
+        if (!confirmation || !confirmationDevice) return
+        deviceMutation.mutate({ device: confirmationDevice, action: confirmation.action })
     }
 
     return (
@@ -241,8 +223,8 @@ export function Devices() {
                     variant="subtle"
                     color="gray"
                     aria-label="Refresh devices"
-                    loading={loading}
-                    onClick={() => void refresh()}
+                    loading={devicesQuery.isFetching}
+                    onClick={() => void devicesQuery.refetch()}
                 >
                     <IconRefresh size={17} />
                 </ActionIcon>
@@ -268,7 +250,7 @@ export function Devices() {
                                         : `View ${device.name} details`
                                 }
                                 onClick={() =>
-                                    device.status !== 'pending' && setSelectedDevice(device)
+                                    device.status !== 'pending' && setSelectedDeviceId(device.id)
                                 }
                                 onKeyDown={event => {
                                     if (
@@ -276,7 +258,7 @@ export function Devices() {
                                         (event.key === 'Enter' || event.key === ' ')
                                     ) {
                                         event.preventDefault()
-                                        setSelectedDevice(device)
+                                        setSelectedDeviceId(device.id)
                                     }
                                 }}
                             >
@@ -309,7 +291,7 @@ export function Devices() {
                                         loading={busyDeviceId === device.id}
                                         onClick={event => {
                                             event.stopPropagation()
-                                            void approve(device)
+                                            deviceMutation.mutate({ device, action: 'approve' })
                                         }}
                                     >
                                         Approve
@@ -327,7 +309,7 @@ export function Devices() {
                                         </ActionIcon>
                                     </Menu.Target>
                                     <Menu.Dropdown onClick={event => event.stopPropagation()}>
-                                        <Menu.Item onClick={() => setSelectedDevice(device)}>
+                                        <Menu.Item onClick={() => setSelectedDeviceId(device.id)}>
                                             View details
                                         </Menu.Item>
                                         {device.status === 'active' && (
@@ -335,7 +317,7 @@ export function Devices() {
                                                 color="red"
                                                 onClick={() =>
                                                     setConfirmation({
-                                                        device,
+                                                        deviceId: device.id,
                                                         action: 'disconnect',
                                                     })
                                                 }
@@ -347,7 +329,10 @@ export function Devices() {
                                             color="red"
                                             leftSection={<IconTrash size={15} />}
                                             onClick={() =>
-                                                setConfirmation({ device, action: 'delete' })
+                                                setConfirmation({
+                                                    deviceId: device.id,
+                                                    action: 'delete',
+                                                })
                                             }
                                         >
                                             Delete device
@@ -385,7 +370,10 @@ export function Devices() {
                                             color="red"
                                             size="compact-sm"
                                             onClick={() =>
-                                                setConfirmation({ device, action: 'delete' })
+                                                setConfirmation({
+                                                    deviceId: device.id,
+                                                    action: 'delete',
+                                                })
                                             }
                                         >
                                             Delete
@@ -396,28 +384,26 @@ export function Devices() {
                         </details>
                     )}
                 </>
-            ) : (
-                !loading && (
-                    <Card className="device-empty" withBorder padding="xl" radius="md" ta="center">
-                        <IconDeviceMobile size={38} />
-                        <Text fw={650}>No devices paired</Text>
-                        <Text size="sm" c="dimmed">
-                            Pair an Android device to start syncing Health Connect data.
-                        </Text>
-                        <Button
-                            mt="sm"
-                            color="trackit"
-                            onClick={() => navigate('/connections/devices/new')}
-                        >
-                            Pair your first device
-                        </Button>
-                    </Card>
-                )
-            )}
+            ) : !loading && !devicesQuery.isError ? (
+                <Card className="device-empty" withBorder padding="xl" radius="md" ta="center">
+                    <IconDeviceMobile size={38} />
+                    <Text fw={650}>No devices paired</Text>
+                    <Text size="sm" c="dimmed">
+                        Pair an Android device to start syncing Health Connect data.
+                    </Text>
+                    <Button
+                        mt="sm"
+                        color="trackit"
+                        onClick={() => navigate('/connections/devices/new')}
+                    >
+                        Pair your first device
+                    </Button>
+                </Card>
+            ) : null}
 
             <Modal
                 opened={Boolean(selectedDevice)}
-                onClose={() => setSelectedDevice(null)}
+                onClose={() => setSelectedDeviceId(null)}
                 title={selectedDevice?.name ?? 'Device details'}
                 size="md"
             >
@@ -500,7 +486,7 @@ export function Devices() {
                             </Text>
                         </details>
                         <Group justify="flex-end">
-                            <Button variant="default" onClick={() => setSelectedDevice(null)}>
+                            <Button variant="default" onClick={() => setSelectedDeviceId(null)}>
                                 Close
                             </Button>
                         </Group>
@@ -509,7 +495,7 @@ export function Devices() {
             </Modal>
 
             <Modal
-                opened={Boolean(confirmation)}
+                opened={Boolean(confirmation && confirmationDevice)}
                 onClose={() => setConfirmation(null)}
                 title={
                     confirmation?.action === 'reject'
@@ -523,19 +509,25 @@ export function Devices() {
             >
                 <Text size="sm">
                     {confirmation?.action === 'reject'
-                        ? `Reject the pairing request from ${confirmation.device.name}?`
+                        ? `Reject the pairing request from ${confirmationDevice?.name}?`
                         : confirmation?.action === 'disconnect'
-                          ? `Disconnect ${confirmation.device.name}? It will no longer be able to sync health data.`
-                          : `Permanently delete ${confirmation?.device.name}? Its saved connection and sync diagnostics will be removed.`}
+                          ? `Disconnect ${confirmationDevice?.name}? It will no longer be able to sync health data.`
+                          : `Permanently delete ${confirmationDevice?.name}? Its saved connection and sync diagnostics will be removed.`}
                 </Text>
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setConfirmation(null)}>
+                    <Button
+                        variant="default"
+                        disabled={deviceMutation.isPending}
+                        onClick={() => setConfirmation(null)}
+                    >
                         Cancel
                     </Button>
                     <Button
                         color="red"
-                        loading={Boolean(confirmation && busyDeviceId === confirmation.device.id)}
-                        onClick={() => void runConfirmedAction()}
+                        loading={Boolean(
+                            confirmationDevice && busyDeviceId === confirmationDevice.id,
+                        )}
+                        onClick={runConfirmedAction}
                     >
                         {confirmation?.action === 'reject'
                             ? 'Reject pairing'

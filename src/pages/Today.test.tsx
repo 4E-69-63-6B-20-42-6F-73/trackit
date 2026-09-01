@@ -1,10 +1,12 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JournalEvent } from '../domain/types'
 import { ServerDataProvider } from '../hooks/useServerData'
+import { createTestQueryClient } from '../test/queryClient'
 import { Today } from './Today'
 
 const todayHealthState = vi.hoisted(() => ({
@@ -56,6 +58,10 @@ vi.mock('../hooks/useDailyNutrition', () => ({
     }),
 }))
 
+vi.mock('../lib/planApi', () => ({
+    listPlanItems: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('../lib/journalApi', () => ({
     getJournalEntry: vi.fn().mockRejectedValue(new Error('not available')),
     listJournal: vi.fn().mockResolvedValue([
@@ -79,16 +85,25 @@ const preferences = {
     units: 'metric' as const,
 }
 
-const renderToday = (events: JournalEvent[] = [], openTrends = vi.fn()) =>
-    render(
+const renderToday = (events: JournalEvent[] = [], openTrends = vi.fn()) => {
+    const queryClient = createTestQueryClient()
+    return render(
         <MemoryRouter>
             <MantineProvider>
-                <ServerDataProvider initialData={{ preferences }}>
-                    <Today events={events} openJournal={vi.fn()} openTrends={openTrends} />
-                </ServerDataProvider>
+                <QueryClientProvider client={queryClient}>
+                    <ServerDataProvider initialData={{ preferences, goals: [] }}>
+                        <Today
+                            events={events}
+                            journalStatus="online"
+                            openJournal={vi.fn()}
+                            openTrends={openTrends}
+                        />
+                    </ServerDataProvider>
+                </QueryClientProvider>
             </MantineProvider>
         </MemoryRouter>,
     )
+}
 
 describe('Today', () => {
     beforeEach(() => {
@@ -108,7 +123,7 @@ describe('Today', () => {
         expect(screen.getByText('No key observations recorded')).toBeInTheDocument()
         expect(screen.queryByText('Not much was recorded for this day.')).not.toBeInTheDocument()
         expect(screen.getAllByText('Nutrition')).toHaveLength(1)
-        expect(screen.getByText('640 kcal')).toBeInTheDocument()
+        expect(await screen.findByText('640 kcal')).toBeInTheDocument()
         expect(screen.getByText('42 / 120 g')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Check in now' })).not.toBeInTheDocument()
         expect(screen.queryByText('No sleep trend yet')).not.toBeInTheDocument()

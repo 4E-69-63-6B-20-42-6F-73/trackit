@@ -1,9 +1,16 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Food } from '../domain/nutrition'
+import { listFoodCategories, setFoodCategories } from '../lib/foodCategoryApi'
 import { FoodEditModal } from './FoodEditModal'
+
+vi.mock('../lib/foodCategoryApi', () => ({
+    listFoodCategories: vi.fn(),
+    setFoodCategories: vi.fn(),
+}))
 
 const food: Food = {
     id: 'food-1',
@@ -26,15 +33,25 @@ const food: Food = {
 
 const renderEditor = (onSave = vi.fn().mockResolvedValue(undefined), onDelete = vi.fn()) => {
     const onClose = vi.fn()
+    const queryClient = new QueryClient({
+        defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+    })
     render(
         <MantineProvider>
-            <FoodEditModal food={food} onClose={onClose} onSave={onSave} onDelete={onDelete} />
+            <QueryClientProvider client={queryClient}>
+                <FoodEditModal food={food} onClose={onClose} onSave={onSave} onDelete={onDelete} />
+            </QueryClientProvider>
         </MantineProvider>,
     )
     return { onClose, onSave, onDelete }
 }
 
 describe('FoodEditModal', () => {
+    beforeEach(() => {
+        vi.mocked(listFoodCategories).mockResolvedValue([])
+        vi.mocked(setFoodCategories).mockResolvedValue(undefined)
+    })
+
     it('uses the food form language and keeps a cleared nutrient unknown', async () => {
         const user = userEvent.setup()
         const { onSave } = renderEditor()

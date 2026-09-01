@@ -1,4 +1,5 @@
 import { Alert, Button, Select, Skeleton, Stack, Text, TextInput } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import { useEffect, useState } from 'react'
 import { updatePreferences, type Preferences } from '../lib/preferencesApi'
 import { useServerData } from '../hooks/useServerData'
@@ -6,8 +7,6 @@ import { useServerData } from '../hooks/useServerData'
 export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
     const { preferences, loading } = useServerData()
     const [value, setValue] = useState<Preferences | null>(preferences)
-    const [message, setMessage] = useState('')
-    const [saving, setSaving] = useState(false)
     const detectedTimezone = Intl.DateTimeFormat().resolvedOptions().timeZone
     const detectedLocale = Intl.DateTimeFormat().resolvedOptions().locale
     const timezones =
@@ -16,6 +15,19 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
             : [detectedTimezone]
     const locales = [...new Set([detectedLocale, 'en-US', 'en-GB', 'nl-NL', 'de-DE', 'fr-FR'])]
     const accessibleDescriptionStyles = { description: { color: 'var(--muted)' } }
+
+    const saveMutation = useMutation({
+        mutationFn: async (next: Preferences) =>
+            updatePreferences({
+                displayName: next.displayName,
+                timezone: next.timezone,
+                locale: next.locale,
+            }),
+        onSuccess: saved => {
+            setValue(saved)
+            onSaved?.()
+        },
+    })
 
     useEffect(() => {
         queueMicrotask(() => setValue(preferences))
@@ -33,29 +45,11 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
     if (!value)
         return (
             <Alert color="orange">
-                {message || 'Preferences are unavailable. Connect to the server and retry.'}
+                {saveMutation.isError
+                    ? 'Preferences could not be saved. Check the connection and try again.'
+                    : 'Preferences are unavailable. Connect to the server and retry.'}
             </Alert>
         )
-
-    const save = async () => {
-        setSaving(true)
-        setMessage('')
-        try {
-            setValue(
-                await updatePreferences({
-                    displayName: value.displayName,
-                    timezone: value.timezone,
-                    locale: value.locale,
-                }),
-            )
-            setMessage('Preferences saved.')
-            onSaved?.()
-        } catch {
-            setMessage('Preferences could not be saved. Check the connection and try again.')
-        } finally {
-            setSaving(false)
-        }
-    }
 
     return (
         <Stack>
@@ -63,14 +57,21 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                 required
                 label="Display name"
                 value={value.displayName}
-                onChange={event => setValue({ ...value, displayName: event.currentTarget.value })}
+                onChange={event => {
+                    saveMutation.reset()
+                    setValue({ ...value, displayName: event.currentTarget.value })
+                }}
             />
             <Select
                 label="Timezone"
                 description={`Browser recommendation: ${detectedTimezone}. Changing this can move observations between days.`}
                 styles={accessibleDescriptionStyles}
                 value={value.timezone}
-                onChange={timezone => timezone && setValue({ ...value, timezone })}
+                onChange={timezone => {
+                    if (!timezone) return
+                    saveMutation.reset()
+                    setValue({ ...value, timezone })
+                }}
                 data={timezones}
                 searchable
             />
@@ -79,7 +80,11 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                 description={`Browser recommendation: ${detectedLocale}`}
                 styles={accessibleDescriptionStyles}
                 value={value.locale}
-                onChange={locale => locale && setValue({ ...value, locale })}
+                onChange={locale => {
+                    if (!locale) return
+                    saveMutation.reset()
+                    setValue({ ...value, locale })
+                }}
                 data={locales}
                 searchable
             />
@@ -95,15 +100,18 @@ export function PreferencesPanel({ onSaved }: { onSaved?: () => void }) {
                     }).format(new Date())}
                 </Text>
             </div>
-            {message && (
-                <Alert color={message.endsWith('saved.') ? 'teal' : 'orange'}>{message}</Alert>
+            {saveMutation.isSuccess && <Alert color="teal">Preferences saved.</Alert>}
+            {saveMutation.isError && (
+                <Alert color="orange">
+                    Preferences could not be saved. Check the connection and try again.
+                </Alert>
             )}
             <Button
-                loading={saving}
+                loading={saveMutation.isPending}
                 disabled={
                     !value.displayName.trim() || !value.timezone.trim() || !value.locale.trim()
                 }
-                onClick={() => void save()}
+                onClick={() => saveMutation.mutate(value)}
             >
                 Save changes
             </Button>

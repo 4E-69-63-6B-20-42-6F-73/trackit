@@ -23,15 +23,20 @@ const feedback: Record<Exclude<LogActionId, 'food'>, string> = {
 
 export function LoggerHost({
     add,
+    pending,
+    error,
     selectedDate,
 }: {
-    add: (input: CreateObservationInput) => void
+    add: (input: CreateObservationInput) => Promise<boolean>
+    pending: boolean
+    error: string
     selectedDate?: string | null
 }) {
     const { activeLogger, closeLogger } = useLogger()
-    const addWithFeedback = (input: CreateObservationInput) => {
-        add(input)
-        if (activeLogger && activeLogger !== 'food') toast.success(feedback[activeLogger])
+    const addWithFeedback = async (input: CreateObservationInput) => {
+        const saved = await add(input)
+        if (saved && activeLogger && activeLogger !== 'food') toast.success(feedback[activeLogger])
+        return saved
     }
 
     return (
@@ -50,6 +55,8 @@ export function LoggerHost({
                     opened
                     close={closeLogger}
                     add={addWithFeedback}
+                    pending={pending}
+                    serverError={error}
                     initialKind={kinds[activeLogger]}
                     selectedDate={selectedDate}
                 />

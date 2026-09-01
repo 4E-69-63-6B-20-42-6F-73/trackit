@@ -1,4 +1,5 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
@@ -24,11 +25,16 @@ describe('PreferencesPanel', () => {
             ...preferences,
             ...value,
         }))
+        const queryClient = new QueryClient({
+            defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        })
         render(
             <MantineProvider>
-                <ServerDataProvider initialData={{ preferences }}>
-                    <PreferencesPanel />
-                </ServerDataProvider>
+                <QueryClientProvider client={queryClient}>
+                    <ServerDataProvider initialData={{ preferences }}>
+                        <PreferencesPanel />
+                    </ServerDataProvider>
+                </QueryClientProvider>
             </MantineProvider>,
         )
         const user = userEvent.setup()

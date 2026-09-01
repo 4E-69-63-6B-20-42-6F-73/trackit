@@ -29,9 +29,15 @@ class FiveYearData implements DataRepository {
             Date.UTC(2021, 0, 1) + index * 24 * 60 * 60 * 1000,
         ).toISOString()
         return {
-            id: index,
+            id: String(index),
             definitionId: 'steps',
+            canonicalValue: 7000,
+            canonicalUnit: 'count',
+            originalValue: 7000,
+            originalUnit: 'count',
             observedAt,
+            excluded: false,
+            version: 1,
             eatenAt: observedAt,
             nutrientSnapshot: { calories: 2000, protein: 100 },
         }
@@ -142,7 +148,19 @@ class FiveYearData implements DataRepository {
 describe('large-history performance', () => {
     it('does not allow the observations API to bypass the effective series', async () => {
         const data = new FiveYearData()
-        const effective = [{ id: 'effective', metric: 'steps', canonicalValue: 7000 }]
+        const effective = [
+            {
+                id: 'effective',
+                definitionId: 'steps',
+                canonicalValue: 7000,
+                canonicalUnit: 'count',
+                originalValue: 7000,
+                originalUnit: 'count',
+                observedAt: '2026-01-01T00:00:00.000Z',
+                excluded: false,
+                version: 1,
+            },
+        ]
         data.listObservations = vi.fn().mockResolvedValue(effective)
         data.listRawObservations = vi.fn().mockResolvedValue([
             { id: 'raw-garmin', metric: 'steps', canonicalValue: 7000 },

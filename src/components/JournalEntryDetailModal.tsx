@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react'
-import { Badge, Button, Divider, Group, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
+import { Alert, Badge, Button, Divider, Group, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
+import { useQuery } from '@tanstack/react-query'
 import type { JournalEvent, SleepStageDetail } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 import { getJournalEntry } from '../lib/journalApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 
 const stageLabels: Record<SleepStageDetail['type'], string> = {
     awake: 'Awake',
@@ -252,19 +253,13 @@ export function JournalEntryDetailModal({
     const { preferences } = useServerData()
     const locale = preferences?.locale
     const timezone = preferences?.timezone ?? 'UTC'
-    const [detailEvent, setDetailEvent] = useState<JournalEvent | null>(null)
     const eventId = event?.id
-
-    useEffect(() => {
-        if (!eventId) return
-        const controller = new AbortController()
-        void getJournalEntry(eventId, controller.signal)
-            .then(setDetailEvent)
-            .catch(() => undefined)
-        return () => controller.abort()
-    }, [eventId])
-
-    const shownEvent = detailEvent?.id === eventId ? detailEvent : event
+    const detailQuery = useQuery({
+        queryKey: [...serverQueryKeys.journal, 'detail', eventId ?? 'closed'],
+        queryFn: ({ signal }) => getJournalEntry(eventId!, signal),
+        enabled: Boolean(eventId),
+    })
+    const shownEvent = detailQuery.data ?? event
     const hasDetailedView =
         shownEvent?.detailView?.kind === 'meal' ||
         (shownEvent?.detailView?.kind === 'sleep' && shownEvent.detailView.stages.length > 0)
@@ -291,6 +286,16 @@ export function JournalEntryDetailModal({
             centered
             size={hasDetailedView ? 'lg' : 'md'}
         >
+            {detailQuery.isFetching && (
+                <Text size="xs" c="dimmed" mb="sm" role="status">
+                    Loading latest entry details…
+                </Text>
+            )}
+            {detailQuery.isError && (
+                <Alert color="orange" mb="sm">
+                    Detailed entry data could not be loaded. Showing the journal summary instead.
+                </Alert>
+            )}
             {shownEvent && hasDetailedView ? (
                 <Stack gap="md">
                     {shownEvent.detailView?.kind === 'meal' ? (

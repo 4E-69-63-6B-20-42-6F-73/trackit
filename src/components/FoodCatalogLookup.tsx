@@ -1,19 +1,74 @@
 import { useRef, useState } from 'react'
 import { Alert, Badge, Button, Group, Modal, Stack, Text, TextInput } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import { IconBarcode, IconCamera, IconSearch } from '@tabler/icons-react'
 import type { Food } from '../domain/nutrition'
 import { createFood, lookupCatalogBarcode, searchFoodCatalog } from '../lib/nutritionApi'
 import { toast } from './toast'
+
+type CatalogFood = Omit<Food, 'id' | 'version'>
 
 export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => void }) {
     const cameraInput = useRef<HTMLInputElement>(null)
     const [opened, setOpened] = useState(false)
     const [mode, setMode] = useState<'barcode' | 'search'>('barcode')
     const [value, setValue] = useState('')
-    const [results, setResults] = useState<Array<Omit<Food, 'id' | 'version'>>>([])
-    const [selected, setSelected] = useState<Omit<Food, 'id' | 'version'> | null>(null)
-    const [error, setError] = useState('')
-    const [busy, setBusy] = useState(false)
+    const [selected, setSelected] = useState<CatalogFood | null>(null)
+    const [localError, setLocalError] = useState('')
+    const [cameraBusy, setCameraBusy] = useState(false)
+
+    const lookupMutation = useMutation({
+        mutationFn: async ({
+            lookupMode,
+            term,
+        }: {
+            lookupMode: 'barcode' | 'search'
+            term: string
+        }) => {
+            if (lookupMode === 'barcode') {
+                const food = await lookupCatalogBarcode(term)
+                return food ? [food] : []
+            }
+            return searchFoodCatalog(term)
+        },
+        onSuccess: results => {
+            setSelected(results.length === 1 ? results[0] : null)
+        },
+        onError: reason =>
+            toast.error(reason instanceof Error ? reason.message : 'Catalog lookup failed.'),
+    })
+
+    const saveMutation = useMutation({
+        mutationFn: (food: CatalogFood) => createFood(food),
+        onSuccess: created => {
+            onCreated(created)
+            toast.success(`${created.name} saved to your library.`)
+            setOpened(false)
+            setValue('')
+            setSelected(null)
+            setLocalError('')
+            lookupMutation.reset()
+        },
+        onError: () =>
+            toast.error('This food could not be saved. It may already exist in your library.'),
+    })
+
+    const results = lookupMutation.data ?? []
+    const busy = lookupMutation.isPending || saveMutation.isPending || cameraBusy
+    const serverError = lookupMutation.isError
+        ? lookupMutation.error instanceof Error
+            ? lookupMutation.error.message
+            : 'Catalog lookup failed.'
+        : saveMutation.isError
+          ? 'This food could not be saved. It may already exist in your library.'
+          : ''
+    const emptyError =
+        lookupMutation.isSuccess && results.length === 0
+            ? mode === 'barcode'
+                ? 'That barcode was not found. You can still create the food manually.'
+                : 'No catalog foods matched that search.'
+            : ''
+    const error = localError || serverError || emptyError
 
     const scanImage = async (file: File) => {
         type Detector = new (options: { formats: string[] }) => {
@@ -21,13 +76,13 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
         }
         const DetectorClass = (window as Window & { BarcodeDetector?: Detector }).BarcodeDetector
         if (!DetectorClass) {
-            setError(
+            setLocalError(
                 'Camera barcode detection is not supported in this browser. Type the barcode instead.',
             )
             return
         }
-        setBusy(true)
-        setError('')
+        setCameraBusy(true)
+        setLocalError('')
         try {
             const bitmap = await createImageBitmap(file)
             const matches = await new DetectorClass({
@@ -36,71 +91,40 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
             bitmap.close()
             const barcode = matches[0]?.rawValue
             if (!barcode)
-                setError('No barcode was detected. Try again with the code centered and in focus.')
+                setLocalError(
+                    'No barcode was detected. Try again with the code centered and in focus.',
+                )
             else setValue(barcode)
         } catch {
-            setError('The barcode image could not be read. Type the digits instead.')
+            setLocalError('The barcode image could not be read. Type the digits instead.')
         } finally {
-            setBusy(false)
+            setCameraBusy(false)
             if (cameraInput.current) cameraInput.current.value = ''
         }
     }
 
-    const lookup = async () => {
-        setBusy(true)
-        setError('')
-        setResults([])
+    const lookup = () => {
+        const term = value.trim()
+        setLocalError('')
         setSelected(null)
-        try {
-            if (mode === 'barcode') {
-                if (!/^\d{8,14}$/.test(value.trim())) {
-                    setError('Enter an 8–14 digit EAN or UPC barcode.')
-                    return
-                }
-                const food = await lookupCatalogBarcode(value.trim())
-                if (!food)
-                    setError('That barcode was not found. You can still create the food manually.')
-                else {
-                    setResults([food])
-                    setSelected(food)
-                }
-            } else {
-                if (value.trim().length < 2) {
-                    setError('Enter at least two characters.')
-                    return
-                }
-                const foods = await searchFoodCatalog(value.trim())
-                setResults(foods)
-                if (foods.length === 0) setError('No catalog foods matched that search.')
-            }
-        } catch (reason) {
-            const message = reason instanceof Error ? reason.message : 'Catalog lookup failed.'
-            setError(message)
-            toast.error(message)
-        } finally {
-            setBusy(false)
+        saveMutation.reset()
+        if (mode === 'barcode' && !/^\d{8,14}$/.test(term)) {
+            setLocalError('Enter an 8–14 digit EAN or UPC barcode.')
+            return
         }
+        if (mode === 'search' && term.length < 2) {
+            setLocalError('Enter at least two characters.')
+            return
+        }
+        lookupMutation.mutate({ lookupMode: mode, term })
     }
 
-    const save = async () => {
-        if (!selected) return
-        setBusy(true)
-        setError('')
-        try {
-            const created = await createFood(selected)
-            onCreated(created)
-            toast.success(`${created.name} saved to your library.`)
-            setOpened(false)
-            setValue('')
-            setResults([])
-            setSelected(null)
-        } catch {
-            const message = 'This food could not be saved. It may already exist in your library.'
-            setError(message)
-            toast.error(message)
-        } finally {
-            setBusy(false)
-        }
+    const changeMode = (next: 'barcode' | 'search') => {
+        setMode(next)
+        setSelected(null)
+        setLocalError('')
+        lookupMutation.reset()
+        saveMutation.reset()
     }
 
     return (
@@ -134,13 +158,13 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                     <Group gap="xs">
                         <Button
                             variant={mode === 'barcode' ? 'light' : 'default'}
-                            onClick={() => setMode('barcode')}
+                            onClick={() => changeMode('barcode')}
                         >
                             Barcode
                         </Button>
                         <Button
                             variant={mode === 'search' ? 'light' : 'default'}
-                            onClick={() => setMode('search')}
+                            onClick={() => changeMode('search')}
                         >
                             Name search
                         </Button>
@@ -154,8 +178,14 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                         }
                         inputMode={mode === 'barcode' ? 'numeric' : 'search'}
                         value={value}
-                        onChange={event => setValue(event.currentTarget.value)}
-                        onKeyDown={event => event.key === 'Enter' && void lookup()}
+                        onChange={event => {
+                            setValue(event.currentTarget.value)
+                            setSelected(null)
+                            setLocalError('')
+                            lookupMutation.reset()
+                            saveMutation.reset()
+                        }}
+                        onKeyDown={event => event.key === 'Enter' && lookup()}
                         leftSection={
                             mode === 'barcode' ? (
                                 <IconBarcode size={17} />
@@ -169,6 +199,7 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                             <Button
                                 variant="default"
                                 leftSection={<IconCamera size={17} />}
+                                loading={cameraBusy}
                                 onClick={() => cameraInput.current?.click()}
                             >
                                 Scan with camera
@@ -187,7 +218,7 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                             />
                         </>
                     )}
-                    <Button loading={busy} onClick={() => void lookup()}>
+                    <Button loading={lookupMutation.isPending} onClick={lookup}>
                         Look up on server
                     </Button>
                     {error && <Alert color="orange">{error}</Alert>}
@@ -231,10 +262,14 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                         </Alert>
                     )}
                     <Group justify="flex-end">
-                        <Button variant="default" onClick={() => setOpened(false)}>
+                        <Button variant="default" disabled={busy} onClick={() => setOpened(false)}>
                             Cancel
                         </Button>
-                        <Button loading={busy} disabled={!selected} onClick={() => void save()}>
+                        <Button
+                            loading={saveMutation.isPending}
+                            disabled={!selected || busy}
+                            onClick={() => selected && saveMutation.mutate(selected)}
+                        >
                             Save to my library
                         </Button>
                     </Group>
