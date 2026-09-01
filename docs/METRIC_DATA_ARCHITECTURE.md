@@ -46,8 +46,9 @@ semantics associated with metric definitions, including:
 - supported aggregation/comparison behavior;
 - source-resolution configuration where applicable.
 
-The same observation-definition mechanism also covers non-numeric facts such as meals, notes,
-symptoms, and events. Conversion simply does not apply to those definitions.
+The same observation-definition mechanism also covers non-numeric facts such as meals, notes, and
+events. Symptom severity is a numeric metric definition with canonical unit `score` and a valid range
+of 1–10; the symptom name remains observation context rather than a second metric identity.
 
 A second stored `metric` identity must not be introduced. Projections and goal/trend configuration
 should reference definition identity.
