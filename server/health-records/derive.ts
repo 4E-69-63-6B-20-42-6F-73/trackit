@@ -1,6 +1,6 @@
 import type { CanonicalHealthRecord, DerivedObservation, JsonObject } from './types.js'
-import { metricDefinition } from '../../src/domain/metricCatalog.js'
-import { toCanonicalMetricValue } from '../../src/domain/metrics.js'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
+import { toCanonicalMetricValue } from '@trackit/domain/metrics'
 
 const hours = (start: Date, end: Date) => Math.max(0, end.getTime() - start.getTime()) / 3_600_000
 const minutes = (start: Date, end: Date) => Math.max(0, end.getTime() - start.getTime()) / 60_000
