@@ -84,7 +84,7 @@ export default function App() {
     const routeDate = new URLSearchParams(location.search).get('date')
     const todayDate = routeDate ?? calendarTodayKey(timezone)
     const todayRange = calendarDayRangeForKey(todayDate, timezone)
-    const { events, syncFailure, retry } = useJournal(
+    const { events, status: todayJournalStatus, syncFailure, retry } = useJournal(
         {
             from: todayRange.from.toISOString(),
             to: todayRange.to.toISOString(),
@@ -149,6 +149,7 @@ export default function App() {
                                 element={
                                     <Today
                                         events={events}
+                                        journalStatus={todayJournalStatus}
                                         openJournal={date => navigate(`/journal?date=${date}`)}
                                         openTrends={definitionId =>
                                             navigate(
