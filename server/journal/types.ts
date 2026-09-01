@@ -18,6 +18,11 @@ export type MealServingDetail = {
     unit: 'g' | 'serving'
 }
 
+export type MealSourceItem = {
+    kind: 'food' | 'recipe'
+    id: string
+}
+
 export type JournalDetailView =
     | {
           kind: 'sleep'
@@ -29,6 +34,7 @@ export type JournalDetailView =
           serving?: MealServingDetail
           nutrients: Record<string, number>
           nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+          sourceItem?: MealSourceItem
       }
 
 export type JournalEntry = {
@@ -46,6 +52,7 @@ export type JournalEntry = {
     createdAt: string
     updatedAt: string
     deviceName?: string
+    editable: boolean
     detailView?: JournalDetailView
 } & JournalEntityLink
 
