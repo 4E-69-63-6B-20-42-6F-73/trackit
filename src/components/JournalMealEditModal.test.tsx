@@ -1,5 +1,5 @@
 import { MantineProvider } from '@mantine/core'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { JournalEvent } from '../domain/types'
@@ -8,31 +8,38 @@ import { updateMeal } from '../lib/nutritionApi'
 import { JournalMealEditModal } from './JournalMealEditModal'
 
 vi.mock('../lib/nutritionApi', () => ({
-    updateMeal: vi.fn(),
+    createFood: vi.fn(),
+    listRecipes: vi.fn().mockResolvedValue([]),
+    logMeal: vi.fn(),
+    lookupCatalogBarcode: vi.fn(),
+    searchFoodCatalog: vi.fn(),
+    searchFoods: vi.fn().mockResolvedValue([]),
+    updateFood: vi.fn(),
+    updateMeal: vi.fn().mockResolvedValue(undefined),
 }))
 
-const meal: JournalEvent = {
-    id: '10000000-0000-4000-8000-000000000001',
-    definitionId: 'calories',
-    time: '08:00',
+const event: JournalEvent = {
+    id: 'meal-1',
+    definitionId: 'meal',
+    time: '12:30',
     category: 'Meals',
-    title: 'Oats',
-    detail: '150 g · 420 kcal',
+    title: 'Chicken bowl',
+    detail: '75 g · 300 kcal',
     source: 'You',
-    observedAt: '2026-08-23T08:00:00.000Z',
-    version: 3,
+    observedAt: '2026-08-23T12:30:00.000Z',
+    version: 4,
     detailView: {
         kind: 'meal',
-        mealType: 'Breakfast',
-        serving: { amount: 150, unit: 'g' },
+        mealType: 'Lunch',
+        serving: { amount: 75, unit: 'g' },
         nutrients: {
-            calories: 420,
-            protein: 16,
-            carbs: 64,
-            fat: 10,
-            cholesterol: 30,
+            calories: 300,
+            protein: 24,
+            carbs: 30,
+            fat: 9,
+            fiber: 4,
         },
-        nutritionQuality: 'estimated',
+        nutritionQuality: 'complete',
     },
 }
 
@@ -45,55 +52,50 @@ const preferences = {
 
 describe('JournalMealEditModal', () => {
     beforeEach(() => {
-        vi.mocked(updateMeal).mockReset()
-        vi.mocked(updateMeal).mockResolvedValue({} as never)
+        vi.mocked(updateMeal).mockClear()
     })
 
-    it('writes edited meal fields through the meal observation command', async () => {
-        const user = userEvent.setup()
+    it('reuses the food logger and scales the existing nutrition snapshot when the amount changes', async () => {
+        const onClose = vi.fn()
         const onSaved = vi.fn()
         render(
             <MantineProvider>
                 <ServerDataProvider initialData={{ preferences }}>
-                    <JournalMealEditModal event={meal} onClose={vi.fn()} onSaved={onSaved} />
+                    <JournalMealEditModal event={event} onClose={onClose} onSaved={onSaved} />
                 </ServerDataProvider>
             </MantineProvider>,
         )
 
-        expect(screen.getByRole('dialog', { name: 'Edit meal' })).toBeVisible()
-        expect(screen.getByLabelText('Amount')).toHaveValue('150')
+        const dialog = await screen.findByRole('dialog')
+        expect(within(dialog).getByText('Edit meal')).toBeInTheDocument()
+        expect(within(dialog).getByText('Chicken bowl')).toBeInTheDocument()
+        expect(within(dialog).getByText(/Current entry/)).toBeInTheDocument()
 
-        await user.clear(screen.getByLabelText('Name'))
-        await user.type(screen.getByLabelText('Name'), 'Evening oats')
-        await user.click(screen.getByText('Dinner'))
-        fireEvent.change(screen.getByLabelText('Date and time'), {
-            target: { value: '2026-08-23T19:15' },
-        })
-        await user.clear(screen.getByLabelText('Amount'))
-        await user.type(screen.getByLabelText('Amount'), '200')
-        await user.clear(screen.getByLabelText('Energy'))
-        await user.type(screen.getByLabelText('Energy'), '500')
-        await user.clear(screen.getByLabelText('Protein'))
-        await user.type(screen.getByLabelText('Protein'), '20')
-        await user.click(screen.getByRole('button', { name: 'Save changes' }))
+        const user = userEvent.setup()
+        const amount = within(dialog).getByLabelText('Amount')
+        await user.clear(amount)
+        await user.type(amount, '150')
+        await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))
 
-        await waitFor(() => expect(updateMeal).toHaveBeenCalledOnce())
-        expect(updateMeal).toHaveBeenCalledWith(
-            meal.id,
-            3,
-            expect.objectContaining({
-                name: 'Evening oats',
-                mealType: 'Dinner',
-                eatenAt: '2026-08-23T19:15:00.000Z',
-                serving: { amount: 200, unit: 'g' },
-                nutritionQuality: 'estimated',
-                nutrients: expect.objectContaining({
-                    calories: 500,
-                    protein: 20,
-                    cholesterol: 30,
+        await waitFor(() =>
+            expect(updateMeal).toHaveBeenCalledWith(
+                'meal-1',
+                4,
+                expect.objectContaining({
+                    name: 'Chicken bowl',
+                    mealType: 'Lunch',
+                    serving: { amount: 150, unit: 'g' },
+                    nutrients: expect.objectContaining({
+                        calories: 600,
+                        protein: 48,
+                        carbs: 60,
+                        fat: 18,
+                        fiber: 8,
+                    }),
                 }),
-            }),
+            ),
         )
-        expect(onSaved).toHaveBeenCalledOnce()
+        expect(onSaved).toHaveBeenCalledTimes(1)
+        expect(onClose).toHaveBeenCalledTimes(1)
     })
 })
