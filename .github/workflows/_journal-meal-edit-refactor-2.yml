@@ -1,0 +1,51 @@
+name: Journal meal edit refactor retry
+
+on:
+  push:
+    branches:
+      - feature/journal-meal-edit-logger
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/journal-meal-edit-logger
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply refactor
+        shell: bash
+        run: |
+          git show f0f0e6de821958c86327523c49886269d3643bc2:.github/workflows/_journal-meal-edit-refactor.yml > /tmp/original-refactor.yml
+          sed -n "/python3 - <<'PY'/,/^          PY$/p" /tmp/original-refactor.yml | sed '1d;$d;s/^          //' > /tmp/refactor.py
+          python3 /tmp/refactor.py
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path('src/components/logging/FoodLogger.tsx')
+          text = path.read_text()
+          old = """    const toggleFavorite = async (item: Selection) => {\n        const key = selectionKey(item)"""
+          new = """    const toggleFavorite = async (item: Selection) => {\n        if (item.kind === 'snapshot') return\n        const key = selectionKey(item)"""
+          if old not in text:
+              raise SystemExit('missing toggleFavorite target')
+          path.write_text(text.replace(old, new, 1))
+          PY
+      - run: npx prettier --write src/components/logging/FoodLogger.tsx src/components/JournalMealEditModal.tsx src/components/JournalMealEditModal.test.tsx
+      - run: npm run lint
+      - run: npx vitest run src/components/JournalMealEditModal.test.tsx
+      - run: npm run build
+      - name: Commit refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/logging/FoodLogger.tsx src/components/JournalMealEditModal.tsx src/components/JournalMealEditModal.test.tsx
+          git commit -m "Reuse food logger for journal meal edits"
+          git push origin HEAD:feature/journal-meal-edit-logger
