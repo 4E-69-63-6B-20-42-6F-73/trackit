@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMutation } from '@tanstack/react-query'
 import {
     createObservation,
     deleteObservation,
@@ -7,43 +7,55 @@ import {
     type UpdateObservationInput,
 } from '../lib/observationApi'
 
+type Command = {
+    run: () => Promise<void>
+    message: string
+}
+
 export function useObservationCommands() {
-    const [failure, setFailure] = useState<{ message: string; retry: () => Promise<void> } | null>(
-        null,
-    )
-    const run = async (command: () => Promise<void>, message: string) => {
-        try {
-            await command()
-            setFailure(null)
+    const commandMutation = useMutation({
+        mutationFn: (command: Command) => command.run(),
+        onSuccess: () => {
             window.dispatchEvent(new Event('trackit:observations-changed'))
+        },
+    })
+
+    const run = async (command: Command) => {
+        try {
+            await commandMutation.mutateAsync(command)
             return true
         } catch {
-            setFailure({ message, retry: async () => void (await run(command, message)) })
             return false
         }
     }
+
     const add = (input: CreateObservationInput) => {
-        void run(
-            () => createObservation(input),
-            'The observation was not saved. Reconnect and retry.',
-        )
+        void run({
+            run: () => createObservation(input),
+            message: 'The observation was not saved. Reconnect and retry.',
+        })
     }
     const update = (id: string, input: UpdateObservationInput) =>
-        run(
-            () => updateObservation(id, input),
-            'The observation edit was not saved. Reconnect and retry.',
-        )
+        run({
+            run: () => updateObservation(id, input),
+            message: 'The observation edit was not saved. Reconnect and retry.',
+        })
     const remove = (id: string) => {
-        void run(
-            () => deleteObservation(id),
-            'The observation was not deleted. Reconnect and retry.',
-        )
+        void run({
+            run: () => deleteObservation(id),
+            message: 'The observation was not deleted. Reconnect and retry.',
+        })
     }
+    const retryCommand = () => {
+        if (commandMutation.variables) void run(commandMutation.variables)
+    }
+
     return {
         add,
         update,
         remove,
-        commandFailure: failure?.message ?? '',
-        retryCommand: () => void failure?.retry(),
+        commandFailure: commandMutation.isError ? (commandMutation.variables?.message ?? '') : '',
+        commandPending: commandMutation.isPending,
+        retryCommand,
     }
 }
