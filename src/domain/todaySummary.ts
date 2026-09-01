@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/todaySummary.js'
+export * from '@trackit/domain/todaySummary'

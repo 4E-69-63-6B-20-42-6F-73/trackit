@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/planning.js'
+export * from '@trackit/domain/planning'

@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/calendar.js'
+export * from '@trackit/domain/calendar'

@@ -19,6 +19,7 @@ RUN npm ci --omit=dev \
 
 COPY --chown=node:node --from=build /app/dist ./dist-seed
 COPY --chown=node:node --from=build /app/build ./build
+COPY --chown=node:node --from=build /app/packages/domain/dist ./packages/domain/dist
 COPY --chown=node:node --from=build /app/server/db/migrations ./server/db/migrations
 COPY --chown=node:node scripts/container-entrypoint.sh ./container-entrypoint.sh
 RUN mkdir -p /app/dist \

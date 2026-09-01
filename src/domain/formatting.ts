@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/formatting.js'
+export * from '@trackit/domain/formatting'

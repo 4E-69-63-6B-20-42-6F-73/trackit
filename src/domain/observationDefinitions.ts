@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/observationDefinitions.js'
+export * from '@trackit/domain/observationDefinitions'

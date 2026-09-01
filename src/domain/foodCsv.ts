@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/foodCsv.js'
+export * from '@trackit/domain/foodCsv'

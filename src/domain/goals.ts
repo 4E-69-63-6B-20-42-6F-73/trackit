@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/goals.js'
+export * from '@trackit/domain/goals'

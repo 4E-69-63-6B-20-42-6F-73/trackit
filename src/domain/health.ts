@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/health.js'
+export * from '@trackit/domain/health'

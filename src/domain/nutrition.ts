@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/nutrition.js'
+export * from '@trackit/domain/nutrition'

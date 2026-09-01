@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/types.js'
+export * from '@trackit/domain/types'

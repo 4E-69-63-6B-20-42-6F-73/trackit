@@ -1,1 +1,1 @@
-export * from '../../packages/domain/src/metrics.js'
+export * from '@trackit/domain/metrics'
