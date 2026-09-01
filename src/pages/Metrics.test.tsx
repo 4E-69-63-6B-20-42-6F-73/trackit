@@ -43,7 +43,7 @@ describe('Metric Center', () => {
         const back = screen.getByRole('link', { name: 'Back to Library' })
         expect(back).toHaveAttribute('href', '/library')
         expect(back.closest('.page-header-copy')).not.toBeNull()
-        expect(screen.getByText('Resting heart rate')).toBeInTheDocument()
+        expect(await screen.findByText('Resting heart rate')).toBeInTheDocument()
         expect(screen.getByText('min')).toBeInTheDocument()
         expect(screen.getAllByText('h').length).toBeGreaterThan(0)
         expect(screen.getByText('steps').closest('.metric-row')).not.toHaveAttribute('disabled')
@@ -63,7 +63,7 @@ describe('Metric Center', () => {
     it('persists display precision for weight', async () => {
         vi.mocked(updatePreferences).mockResolvedValue(base)
         renderPage()
-        await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
+        await userEvent.click(await screen.findByRole('button', { name: /Configure Weight/ }))
         await userEvent.click(await screen.findByRole('radio', { name: /2 — 80.00 kg/ }))
         await userEvent.click(screen.getByRole('button', { name: 'Save' }))
         await waitFor(() =>
@@ -79,7 +79,7 @@ describe('Metric Center', () => {
     it('restores a persisted custom unit', async () => {
         renderPage({ ...base, metricPreferences: { weight: { displayUnit: 'lb' } } })
         expect(screen.getAllByText('Custom')).not.toHaveLength(0)
-        expect(screen.getByRole('radio', { name: 'Custom' })).toBeEnabled()
+        await waitFor(() => expect(screen.getByRole('radio', { name: 'Custom' })).toBeEnabled())
         await userEvent.click(screen.getByRole('button', { name: /Configure Weight/ }))
         expect(await screen.findByRole('radio', { name: 'Pounds (lb)' })).toBeChecked()
     })
