@@ -1,29 +1,20 @@
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest } from 'fastify'
-import { z } from 'zod'
+import type { ZodError } from 'zod'
+import {
+    dailyMetricRangeQuerySchema,
+    observationRangeQuerySchema,
+    type DailyMetricRangeQuery,
+    type ObservationRangeQuery,
+} from '../contracts/observations.js'
 import type { DataRepository } from '../data/types.js'
 import { observationInputSchema, observationUpdateSchema } from '../data/types.js'
-
-const recordRangeSchema = z.object({
-    from: z.string().datetime().optional(),
-    to: z.string().datetime().optional(),
-    definitionIds: z
-        .string()
-        .transform(value => value.split(',').filter(Boolean))
-        .pipe(z.array(z.string().trim().min(1).max(100)).max(50))
-        .optional(),
-})
-
-const dailyMetricRangeSchema = z.object({
-    from: z.string().date().optional(),
-    to: z.string().date().optional(),
-})
 
 type BadRequest = (
     request: FastifyRequest,
     reply: FastifyReply,
     options?: {
         error?: string
-        validation?: z.ZodError
+        validation?: ZodError
         includeIssues?: boolean
     },
 ) => FastifyReply
@@ -37,10 +28,10 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
     app,
     { data, badRequest },
 ) => {
-    app.get<{ Querystring: { from?: string; to?: string; definitionIds?: string } }>(
+    app.get<{ Querystring: ObservationRangeQuery }>(
         '/api/observations',
         async (request, reply) => {
-            const range = recordRangeSchema.safeParse(request.query)
+            const range = observationRangeQuerySchema.safeParse(request.query)
             if (!range.success)
                 return badRequest(request, reply, {
                     error: 'invalid_range',
@@ -67,10 +58,10 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
         data: (await data.listMetricSources?.()) ?? [],
     }))
 
-    app.get<{ Querystring: { from?: string; to?: string } }>(
+    app.get<{ Querystring: DailyMetricRangeQuery }>(
         '/api/daily-metrics',
         async (request, reply) => {
-            const dateRange = dailyMetricRangeSchema.safeParse(request.query)
+            const dateRange = dailyMetricRangeQuerySchema.safeParse(request.query)
             if (!dateRange.success)
                 return badRequest(request, reply, { validation: dateRange.error })
             if (!dateRange.data.from || !dateRange.data.to)
