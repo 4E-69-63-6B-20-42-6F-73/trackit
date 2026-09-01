@@ -1,11 +1,14 @@
 import type { NumericObservation } from '../domain/health'
 import { $api, apiClient } from './apiClient'
-import type { components } from './api.generated'
+import type { paths } from './api.generated'
 import { queryClient } from './queryClient'
 
-export type MetricSourceSummary = components['schemas']['MetricSourceSummary']
-export type CreateObservationInput = components['schemas']['CreateObservation']
-export type UpdateObservationInput = components['schemas']['UpdateObservation']
+export type MetricSourceSummary =
+    paths['/api/metric-sources']['get']['responses'][200]['content']['application/json']['data'][number]
+export type CreateObservationInput =
+    paths['/api/observations']['post']['requestBody']['content']['application/json']
+export type UpdateObservationInput =
+    paths['/api/observations/{id}']['patch']['requestBody']['content']['application/json']
 
 const observationParams = (range: {
     from?: string
