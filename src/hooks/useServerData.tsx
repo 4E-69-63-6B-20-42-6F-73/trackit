@@ -20,15 +20,18 @@ export function ServerDataProvider({
     children: ReactNode
     initialData?: { preferences: Preferences; goals?: GoalRecord[] }
 }) {
+    const seeded = Boolean(initialData)
     const preferencesQuery = useQuery({
         queryKey: serverQueryKeys.preferences,
         queryFn: ({ signal }) => getPreferences(signal),
         initialData: initialData?.preferences,
+        staleTime: seeded ? Infinity : undefined,
     })
     const goalsQuery = useQuery({
         queryKey: serverQueryKeys.goals,
         queryFn: ({ signal }) => listGoals(signal),
-        initialData: initialData?.goals,
+        initialData: initialData ? (initialData.goals ?? []) : undefined,
+        staleTime: seeded ? Infinity : undefined,
     })
     const preferences = preferencesQuery.data ?? null
     const goals = goalsQuery.data ?? []
