@@ -229,7 +229,7 @@ describe('GoalsPanel', () => {
         vi.mocked(deleteGoal).mockResolvedValue(undefined)
         renderPanel([retired])
 
-        await user.click(screen.getByRole('button', { name: 'Actions for Weight' }))
+        await user.click(await screen.findByRole('button', { name: 'Actions for Weight' }))
         await user.click(await screen.findByText('Delete goal'))
         await waitFor(() =>
             expect(screen.getByRole('dialog', { name: 'Delete this retired goal?' })).toBeVisible(),
