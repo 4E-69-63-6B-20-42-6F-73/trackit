@@ -11,10 +11,7 @@ import {
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useState } from 'react'
-import {
-    servingOptionsFromDrafts,
-    type ServingOptionDraft,
-} from '../domain/foodServingOptions'
+import { servingOptionsFromDrafts, type ServingOptionDraft } from '../domain/foodServingOptions'
 import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
 import { createFood } from '../lib/nutritionApi'
 import { FoodNutritionFields } from './FoodNutritionFields'
