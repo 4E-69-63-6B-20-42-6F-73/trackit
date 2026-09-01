@@ -82,10 +82,9 @@ type DeviceAction = 'approve' | 'reject' | 'disconnect' | 'delete'
 export function Devices() {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
-    const [actionError, setActionError] = useState('')
-    const [selectedDevice, setSelectedDevice] = useState<DeviceRecord | null>(null)
+    const [selectedDeviceId, setSelectedDeviceId] = useState<string | null>(null)
     const [confirmation, setConfirmation] = useState<{
-        device: DeviceRecord
+        deviceId: string
         action: 'reject' | 'disconnect' | 'delete'
     } | null>(null)
     const devicesQuery = useQuery({
@@ -94,10 +93,11 @@ export function Devices() {
     })
     const devices = devicesQuery.data ?? []
     const loading = devicesQuery.isPending
+    const selectedDevice = devices.find(device => device.id === selectedDeviceId) ?? null
+    const confirmationDevice = confirmation
+        ? devices.find(device => device.id === confirmation.deviceId) ?? null
+        : null
     const healthStatus = devicesQuery.isError ? 'Unavailable' : healthConnectStatus(devices)
-    const error = devicesQuery.isError
-        ? 'Devices unavailable. Try refreshing the list.'
-        : actionError
     const deviceMutation = useMutation({
         mutationFn: async ({ device, action }: { device: DeviceRecord; action: DeviceAction }) => {
             if (action === 'approve') await confirmDevice(device.id)
@@ -105,27 +105,27 @@ export function Devices() {
             else if (action === 'disconnect') await revokeDevice(device.id)
             else await deleteDevice(device.id)
         },
-        onMutate: () => setActionError(''),
         onSuccess: async (_, { action }) => {
             if (action !== 'approve') {
                 setConfirmation(null)
-                setSelectedDevice(null)
+                setSelectedDeviceId(null)
             }
             await queryClient.invalidateQueries({ queryKey: serverQueryKeys.devices })
         },
-        onError: (_, { device, action }) => {
-            setActionError(
-                action === 'approve'
-                    ? `Could not approve ${device.name}. Try again.`
-                    : action === 'reject'
-                      ? `Could not reject ${device.name}. Try again.`
-                      : action === 'disconnect'
-                        ? `Could not disconnect ${device.name}. Try again.`
-                        : `Could not delete ${device.name}. Try again.`,
-            )
-        },
     })
     const busyDeviceId = deviceMutation.isPending ? deviceMutation.variables?.device.id : null
+    const actionError = deviceMutation.isError
+        ? deviceMutation.variables?.action === 'approve'
+            ? `Could not approve ${deviceMutation.variables.device.name}. Try again.`
+            : deviceMutation.variables?.action === 'reject'
+              ? `Could not reject ${deviceMutation.variables.device.name}. Try again.`
+              : deviceMutation.variables?.action === 'disconnect'
+                ? `Could not disconnect ${deviceMutation.variables.device.name}. Try again.`
+                : `Could not delete ${deviceMutation.variables?.device.name ?? 'this device'}. Try again.`
+        : ''
+    const error = devicesQuery.isError
+        ? 'Devices unavailable. Try refreshing the list.'
+        : actionError
 
     const orderedDevices = useMemo(
         () =>
@@ -165,8 +165,8 @@ export function Devices() {
     })()
 
     const runConfirmedAction = () => {
-        if (!confirmation) return
-        deviceMutation.mutate({ device: confirmation.device, action: confirmation.action })
+        if (!confirmation || !confirmationDevice) return
+        deviceMutation.mutate({ device: confirmationDevice, action: confirmation.action })
     }
 
     return (
@@ -182,9 +182,7 @@ export function Devices() {
 
             <Group className="devices-heading" justify="space-between" align="flex-end">
                 <div>
-                    <Title order={1} mb={4}>
-                        Devices
-                    </Title>
+                    <Title order={1} mb={4}>Devices</Title>
                     <Text c="dimmed">Manage Android devices that sync Health Connect data.</Text>
                 </div>
                 <Button
@@ -208,16 +206,12 @@ export function Devices() {
             )}
 
             {error && (
-                <Alert color="orange" variant="light" mt="lg">
-                    {error}
-                </Alert>
+                <Alert color="orange" variant="light" mt="lg">{error}</Alert>
             )}
 
             <div className="device-health-summary" role="status">
                 <span className={`device-health-dot ${healthSummary.tone}`} />
-                <Text size="sm" fw={600}>
-                    {healthSummary.text}
-                </Text>
+                <Text size="sm" fw={600}>{healthSummary.text}</Text>
                 <ActionIcon
                     ml="auto"
                     variant="subtle"
@@ -234,9 +228,7 @@ export function Devices() {
                 <>
                     <Card className="device-list" withBorder padding={0} radius="md">
                         <Group className="device-list-heading" justify="space-between">
-                            <Text size="sm" fw={700}>
-                                Your devices
-                            </Text>
+                            <Text size="sm" fw={700}>Your devices</Text>
                         </Group>
                         {currentDevices.map(device => (
                             <div
@@ -250,7 +242,7 @@ export function Devices() {
                                         : `View ${device.name} details`
                                 }
                                 onClick={() =>
-                                    device.status !== 'pending' && setSelectedDevice(device)
+                                    device.status !== 'pending' && setSelectedDeviceId(device.id)
                                 }
                                 onKeyDown={event => {
                                     if (
@@ -258,7 +250,7 @@ export function Devices() {
                                         (event.key === 'Enter' || event.key === ' ')
                                     ) {
                                         event.preventDefault()
-                                        setSelectedDevice(device)
+                                        setSelectedDeviceId(device.id)
                                     }
                                 }}
                             >
@@ -309,7 +301,7 @@ export function Devices() {
                                         </ActionIcon>
                                     </Menu.Target>
                                     <Menu.Dropdown onClick={event => event.stopPropagation()}>
-                                        <Menu.Item onClick={() => setSelectedDevice(device)}>
+                                        <Menu.Item onClick={() => setSelectedDeviceId(device.id)}>
                                             View details
                                         </Menu.Item>
                                         {device.status === 'active' && (
@@ -317,7 +309,7 @@ export function Devices() {
                                                 color="red"
                                                 onClick={() =>
                                                     setConfirmation({
-                                                        device,
+                                                        deviceId: device.id,
                                                         action: 'disconnect',
                                                     })
                                                 }
@@ -329,7 +321,7 @@ export function Devices() {
                                             color="red"
                                             leftSection={<IconTrash size={15} />}
                                             onClick={() =>
-                                                setConfirmation({ device, action: 'delete' })
+                                                setConfirmation({ deviceId: device.id, action: 'delete' })
                                             }
                                         >
                                             Delete device
@@ -358,16 +350,14 @@ export function Devices() {
                                                     Disconnected
                                                 </Badge>
                                             </Group>
-                                            <Text size="xs" c="dimmed">
-                                                Disconnected device
-                                            </Text>
+                                            <Text size="xs" c="dimmed">Disconnected device</Text>
                                         </div>
                                         <Button
                                             variant="subtle"
                                             color="red"
                                             size="compact-sm"
                                             onClick={() =>
-                                                setConfirmation({ device, action: 'delete' })
+                                                setConfirmation({ deviceId: device.id, action: 'delete' })
                                             }
                                         >
                                             Delete
@@ -378,28 +368,26 @@ export function Devices() {
                         </details>
                     )}
                 </>
-            ) : (
-                !loading && (
-                    <Card className="device-empty" withBorder padding="xl" radius="md" ta="center">
-                        <IconDeviceMobile size={38} />
-                        <Text fw={650}>No devices paired</Text>
-                        <Text size="sm" c="dimmed">
-                            Pair an Android device to start syncing Health Connect data.
-                        </Text>
-                        <Button
-                            mt="sm"
-                            color="trackit"
-                            onClick={() => navigate('/connections/devices/new')}
-                        >
-                            Pair your first device
-                        </Button>
-                    </Card>
-                )
-            )}
+            ) : !loading && !devicesQuery.isError ? (
+                <Card className="device-empty" withBorder padding="xl" radius="md" ta="center">
+                    <IconDeviceMobile size={38} />
+                    <Text fw={650}>No devices paired</Text>
+                    <Text size="sm" c="dimmed">
+                        Pair an Android device to start syncing Health Connect data.
+                    </Text>
+                    <Button
+                        mt="sm"
+                        color="trackit"
+                        onClick={() => navigate('/connections/devices/new')}
+                    >
+                        Pair your first device
+                    </Button>
+                </Card>
+            ) : null}
 
             <Modal
                 opened={Boolean(selectedDevice)}
-                onClose={() => setSelectedDevice(null)}
+                onClose={() => setSelectedDeviceId(null)}
                 title={selectedDevice?.name ?? 'Device details'}
                 size="md"
             >
@@ -415,22 +403,16 @@ export function Devices() {
                         </Group>
                         <div className="device-detail-grid">
                             <div>
-                                <Text size="xs" c="dimmed">
-                                    Paired
-                                </Text>
+                                <Text size="xs" c="dimmed">Paired</Text>
                                 <Text size="sm">{formatDate(selectedDevice.createdAt)}</Text>
                             </div>
                             <div>
-                                <Text size="xs" c="dimmed">
-                                    Configured
-                                </Text>
+                                <Text size="xs" c="dimmed">Configured</Text>
                                 <Text size="sm">{formatDate(selectedDevice.configuredAt)}</Text>
                             </div>
                         </div>
                         <div>
-                            <Text size="sm" fw={650} mb="xs">
-                                Sync details
-                            </Text>
+                            <Text size="sm" fw={650} mb="xs">Sync details</Text>
                             {selectedDevice.sync.length > 0 ? (
                                 <Stack className="device-sync-list" gap={0}>
                                     {selectedDevice.sync.map(cursor => (
@@ -445,9 +427,7 @@ export function Devices() {
                                                         : 'No data received yet'}
                                                 </Text>
                                                 {cursor.diagnostic && (
-                                                    <Text size="xs" c="orange">
-                                                        {cursor.diagnostic}
-                                                    </Text>
+                                                    <Text size="xs" c="orange">{cursor.diagnostic}</Text>
                                                 )}
                                             </div>
                                             <Badge
@@ -467,22 +447,18 @@ export function Devices() {
                                     ))}
                                 </Stack>
                             ) : (
-                                <Text size="sm" c="dimmed">
-                                    No sync details available yet.
-                                </Text>
+                                <Text size="sm" c="dimmed">No sync details available yet.</Text>
                             )}
                         </div>
                         <details className="device-advanced">
                             <summary>Advanced details</summary>
-                            <Text size="xs" c="dimmed" mt="xs">
-                                Key fingerprint
-                            </Text>
+                            <Text size="xs" c="dimmed" mt="xs">Key fingerprint</Text>
                             <Text size="xs" className="device-fingerprint">
                                 {selectedDevice.keyFingerprint}
                             </Text>
                         </details>
                         <Group justify="flex-end">
-                            <Button variant="default" onClick={() => setSelectedDevice(null)}>
+                            <Button variant="default" onClick={() => setSelectedDeviceId(null)}>
                                 Close
                             </Button>
                         </Group>
@@ -491,7 +467,7 @@ export function Devices() {
             </Modal>
 
             <Modal
-                opened={Boolean(confirmation)}
+                opened={Boolean(confirmation && confirmationDevice)}
                 onClose={() => setConfirmation(null)}
                 title={
                     confirmation?.action === 'reject'
@@ -505,18 +481,22 @@ export function Devices() {
             >
                 <Text size="sm">
                     {confirmation?.action === 'reject'
-                        ? `Reject the pairing request from ${confirmation.device.name}?`
+                        ? `Reject the pairing request from ${confirmationDevice?.name}?`
                         : confirmation?.action === 'disconnect'
-                          ? `Disconnect ${confirmation.device.name}? It will no longer be able to sync health data.`
-                          : `Permanently delete ${confirmation?.device.name}? Its saved connection and sync diagnostics will be removed.`}
+                          ? `Disconnect ${confirmationDevice?.name}? It will no longer be able to sync health data.`
+                          : `Permanently delete ${confirmationDevice?.name}? Its saved connection and sync diagnostics will be removed.`}
                 </Text>
                 <Group justify="flex-end" mt="lg">
-                    <Button variant="default" onClick={() => setConfirmation(null)}>
+                    <Button
+                        variant="default"
+                        disabled={deviceMutation.isPending}
+                        onClick={() => setConfirmation(null)}
+                    >
                         Cancel
                     </Button>
                     <Button
                         color="red"
-                        loading={Boolean(confirmation && busyDeviceId === confirmation.device.id)}
+                        loading={Boolean(confirmationDevice && busyDeviceId === confirmationDevice.id)}
                         onClick={runConfirmedAction}
                     >
                         {confirmation?.action === 'reject'
