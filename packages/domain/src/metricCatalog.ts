@@ -27,6 +27,7 @@ export type MetricDefinition = {
     canonicalUnit: string
     displayUnits: readonly string[]
     inputUnits?: readonly string[]
+    validRange?: { min: number; max: number }
     metricUnit: string
     imperialUnit: string
     precision: number
@@ -165,7 +166,12 @@ export const metricCatalog: MetricDefinition[] = [
     }),
     {
         ...shared('energy', 'Energy', 'Wellbeing', 'score', 'manual'),
+        validRange: { min: 1, max: 10 },
         goalCapabilities: measuredGoals,
+    },
+    {
+        ...shared('symptom', 'Symptom severity', 'Wellbeing', 'score', 'manual'),
+        validRange: { min: 1, max: 10 },
     },
     {
         ...shared('calories', 'Calories', 'Nutrition', 'kcal', 'meal'),
