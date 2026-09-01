@@ -8,7 +8,7 @@ import {
 } from '../lib/observationApi'
 
 type Command = {
-    run: () => Promise<void>
+    run: () => Promise<unknown>
     message: string
 }
 
