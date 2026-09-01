@@ -61,7 +61,6 @@ export const observations = pgTable(
         definitionVersion: integer('definition_version').notNull().default(1),
         valueType: text('value_type').notNull().default('number'),
         origin: text('origin').notNull().default('manual'),
-        state: text('state').notNull().default('active'),
         canonicalValue: doublePrecision('canonical_value'),
         canonicalUnit: text('canonical_unit'),
         originalValue: doublePrecision('original_value'),
@@ -288,7 +287,6 @@ export const preferences = pgTable('preferences', {
     units: text('units').notNull().default('metric'),
     metricPreferences: jsonb('metric_preferences'),
     metricResolutionVersion: integer('metric_resolution_version').notNull().default(1),
-    goals: jsonb('goals').notNull().default({}),
     mcpEnabled: boolean('mcp_enabled').notNull().default(false),
     mcpAllowedOrigins: jsonb('mcp_allowed_origins').$type<string[]>().notNull().default([]),
     experience: jsonb('experience').notNull().default({}),
@@ -407,8 +405,7 @@ export const syncCursors = pgTable(
 
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),
-    metricId: text('metric').notNull(),
-    legacyTargetValue: doublePrecision('target_value').notNull(),
+    definitionId: text('definition_id').notNull(),
     aggregation: text('aggregation').notNull().default('latest'),
     comparator: text('comparator').notNull().default('gte'),
     target: jsonb('target').$type<{ value: number } | { min: number; max: number }>().notNull(),
@@ -426,8 +423,8 @@ export const goals = pgTable('goals', {
 export const savedTrendViews = pgTable('saved_trend_views', {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
-    metric: text('metric').notNull(),
-    comparisonMetric: text('comparison_metric'),
+    definitionId: text('definition_id').notNull(),
+    comparisonDefinitionId: text('comparison_definition_id'),
     rangeDays: integer('range_days').notNull(),
     granularity: text('granularity').notNull().default('daily'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
