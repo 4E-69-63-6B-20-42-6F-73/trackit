@@ -237,6 +237,7 @@ describe('GoalsPanel', () => {
         await user.click(
             within(screen.getByRole('dialog')).getByRole('button', { name: 'Delete goal' }),
         )
-        await waitFor(() => expect(deleteGoal).toHaveBeenCalledWith(retired))
+        await waitFor(() => expect(deleteGoal).toHaveBeenCalledOnce())
+        expect(vi.mocked(deleteGoal).mock.calls[0][0]).toEqual(retired)
     })
 })
