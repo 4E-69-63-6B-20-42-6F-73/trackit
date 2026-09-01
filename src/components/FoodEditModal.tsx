@@ -66,7 +66,9 @@ export function FoodEditModal({
     const categories = categoriesQuery.data ?? []
     const selectedCategoryIds =
         categoryIds ??
-        categories.filter(category => category.foodIds.includes(food.id)).map(category => category.id)
+        categories
+            .filter(category => category.foodIds.includes(food.id))
+            .map(category => category.id)
 
     const saveMutation = useMutation({
         mutationFn: async () => {
@@ -245,7 +247,11 @@ export function FoodEditModal({
                             Delete food
                         </Button>
                         <Group gap="xs">
-                            <Button variant="default" disabled={saving || deleting} onClick={onClose}>
+                            <Button
+                                variant="default"
+                                disabled={saving || deleting}
+                                onClick={onClose}
+                            >
                                 Cancel
                             </Button>
                             <Button
@@ -287,7 +293,11 @@ export function FoodEditModal({
                         >
                             Keep food
                         </Button>
-                        <Button color="red" loading={deleting} onClick={() => deleteMutation.mutate()}>
+                        <Button
+                            color="red"
+                            loading={deleting}
+                            onClick={() => deleteMutation.mutate()}
+                        >
                             Delete food
                         </Button>
                     </Group>

@@ -18,7 +18,13 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
     const [cameraBusy, setCameraBusy] = useState(false)
 
     const lookupMutation = useMutation({
-        mutationFn: async ({ lookupMode, term }: { lookupMode: 'barcode' | 'search'; term: string }) => {
+        mutationFn: async ({
+            lookupMode,
+            term,
+        }: {
+            lookupMode: 'barcode' | 'search'
+            term: string
+        }) => {
             if (lookupMode === 'barcode') {
                 const food = await lookupCatalogBarcode(term)
                 return food ? [food] : []
@@ -234,7 +240,8 @@ export function FoodCatalogLookup({ onCreated }: { onCreated: (food: Food) => vo
                                                 : `${Math.round(food.per100g.calories)} kcal per 100 g`}
                                         </Text>
                                         <Text size="xs" c="dimmed">
-                                            Default serving: {food.servingGrams} g ({food.servingName})
+                                            Default serving: {food.servingGrams} g (
+                                            {food.servingName})
                                         </Text>
                                     </div>
                                     <Badge
