@@ -18,10 +18,11 @@ import {
     observationIdParamsSchema,
     observationInputSchema,
     observationListResponseSchema,
+    type ObservationMutationResult,
+    observationMutationResponseSchema,
     observationRangeQuerySchema,
     observationUpdateSchema,
     parseObservationDefinitionIds,
-    unknownDataResponseSchema,
 } from '../contracts/observations.js'
 import type { DataRepository } from '../data/types.js'
 import { mergeGeneratedObservationPaths, openApiContract } from '../openapi.js'
@@ -39,6 +40,11 @@ type BadRequest = (
 type ObservationRouteOptions = {
     data: DataRepository
     badRequest: BadRequest
+}
+
+const mutationResult = (value: unknown): ObservationMutationResult => {
+    const record = value as { id: string; version: number; excluded: boolean }
+    return { id: record.id, version: record.version, excluded: record.excluded }
 }
 
 export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = async (
@@ -151,14 +157,15 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             schema: {
                 body: observationInputSchema,
                 response: {
-                    201: unknownDataResponseSchema,
+                    201: observationMutationResponseSchema,
                     400: errorResponseSchema,
                 },
             },
         },
         async (request, reply) => {
             if (request.validationError) return badRequest(request, reply)
-            return reply.code(201).send({ data: await data.createObservation(request.body) })
+            const created = await data.createObservation(request.body)
+            return reply.code(201).send({ data: mutationResult(created) })
         },
     )
 
@@ -170,7 +177,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
                 params: observationIdParamsSchema,
                 body: observationUpdateSchema,
                 response: {
-                    200: unknownDataResponseSchema,
+                    200: observationMutationResponseSchema,
                     400: errorResponseSchema,
                     409: errorResponseSchema,
                 },
@@ -180,7 +187,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             if (request.validationError) return badRequest(request, reply)
             const updated = await data.updateObservation(request.params.id, request.body)
             if (!updated) return reply.code(409).send({ error: 'version_conflict' })
-            return { data: updated }
+            return { data: mutationResult(updated) }
         },
     )
 
