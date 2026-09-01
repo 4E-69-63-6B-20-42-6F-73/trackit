@@ -4,7 +4,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JournalEvent } from '../domain/types'
+import type { JournalEvent } from '@trackit/domain/types'
 import { ServerDataProvider } from '../hooks/useServerData'
 import { createTestQueryClient } from '../test/queryClient'
 import { Today } from './Today'
@@ -24,7 +24,7 @@ vi.mock('../hooks/useTodayHealth', () => ({
             {
                 goal: {
                     id: 'steps-goal',
-                    metricId: 'steps',
+                    definitionId: 'steps',
                     aggregation: 'total',
                     comparator: 'gte',
                     target: { value: 8000 },
