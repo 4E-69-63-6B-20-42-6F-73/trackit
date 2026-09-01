@@ -1,0 +1,170 @@
+name: Journal meal edit refactor
+
+on:
+  push:
+    branches:
+      - feature/journal-meal-edit-logger
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: feature/journal-meal-edit-logger
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Reuse food logger for journal meal editing
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('src/components/logging/FoodLogger.tsx')
+          text = path.read_text()
+
+          def replace(old, new):
+              global text
+              if old not in text:
+                  raise SystemExit(f'missing replacement target:\n{old[:200]}')
+              text = text.replace(old, new, 1)
+
+          replace(
+          """    updateFood,\n    type RecipeRecord,\n} from '../../lib/nutritionApi'""",
+          """    updateFood,\n    updateMeal,\n    type MealRecord,\n    type RecipeRecord,\n} from '../../lib/nutritionApi'""",
+          )
+
+          replace(
+          """type Selection = { kind: 'food'; food: Food } | { kind: 'recipe'; recipe: RecipeRecord }""",
+          """type Selection =\n    | { kind: 'food'; food: Food }\n    | { kind: 'recipe'; recipe: RecipeRecord }\n    | { kind: 'snapshot'; meal: MealRecord }""",
+          )
+
+          replace(
+          """const selectionKey = (selection: Selection) =>\n    selection.kind === 'food' ? `food:${selection.food.id}` : `recipe:${selection.recipe.id}`""",
+          """const selectionKey = (selection: Selection) =>\n    selection.kind === 'food'\n        ? `food:${selection.food.id}`\n        : selection.kind === 'recipe'\n          ? `recipe:${selection.recipe.id}`\n          : `snapshot:${selection.meal.id}`""",
+          )
+
+          replace(
+          """const selectionName = (selection: Selection) =>\n    selection.kind === 'food' ? selection.food.name : selection.recipe.name""",
+          """const selectionName = (selection: Selection) =>\n    selection.kind === 'food'\n        ? selection.food.name\n        : selection.kind === 'recipe'\n          ? selection.recipe.name\n          : selection.meal.name""",
+          )
+
+          replace(
+          """const selectionFavorite = (selection: Selection) =>\n    selection.kind === 'food' ? selection.food.favorite : selection.recipe.favorite""",
+          """const selectionFavorite = (selection: Selection) =>\n    selection.kind === 'food'\n        ? selection.food.favorite\n        : selection.kind === 'recipe'\n          ? selection.recipe.favorite\n          : false""",
+          )
+
+          replace(
+          """const selectionDefaultAmount = (selection: Selection) =>\n    selection.kind === 'food' ? selection.food.servingGrams : 1""",
+          """const selectionDefaultAmount = (selection: Selection) =>\n    selection.kind === 'food'\n        ? selection.food.servingGrams\n        : selection.kind === 'recipe'\n          ? 1\n          : (selection.meal.serving?.amount ?? 1)""",
+          )
+
+          replace(
+          """const selectionQuality = (selection: Selection) =>\n    selection.kind === 'food' ? selection.food.nutritionQuality : selection.recipe.nutritionQuality""",
+          """const selectionQuality = (selection: Selection) =>\n    selection.kind === 'food'\n        ? selection.food.nutritionQuality\n        : selection.kind === 'recipe'\n          ? selection.recipe.nutritionQuality\n          : selection.meal.nutritionQuality""",
+          )
+
+          replace(
+          """const selectionNutrients = (selection: Selection, amount: number) =>\n    selection.kind === 'food'\n        ? roundedNutrients(nutrientsFor(selection.food, amount))\n        : roundedNutrients(\n              Object.fromEntries(\n                  Object.entries(selection.recipe.nutrientsPerServing).map(([key, value]) => [\n                      key,\n                      value * amount,\n                  ]),\n              ) as Nutrients,\n          )""",
+          """const selectionNutrients = (selection: Selection, amount: number) => {\n    if (selection.kind === 'food') return roundedNutrients(nutrientsFor(selection.food, amount))\n    if (selection.kind === 'recipe')\n        return roundedNutrients(\n            Object.fromEntries(\n                Object.entries(selection.recipe.nutrientsPerServing).map(([key, value]) => [\n                    key,\n                    value * amount,\n                ]),\n            ) as Nutrients,\n        )\n    const factor = amount / (selection.meal.serving?.amount ?? 1)\n    return roundedNutrients(\n        Object.fromEntries(\n            Object.entries(selection.meal.nutrientSnapshot)\n                .filter(\n                    (entry): entry is [string, number] =>\n                        typeof entry[1] === 'number' && Number.isFinite(entry[1]),\n                )\n                .map(([key, value]) => [key, value * factor]),\n        ) as Partial<Nutrients>,\n    )\n}""",
+          )
+
+          replace(
+          """const selectionMeta = (selection: Selection) =>\n    selection.kind === 'food'\n        ? selection.food.brand || `${selection.food.servingGrams} g serving`\n        : 'Recipe · per serving'""",
+          """const selectionMeta = (selection: Selection) =>\n    selection.kind === 'food'\n        ? selection.food.brand || `${selection.food.servingGrams} g serving`\n        : selection.kind === 'recipe'\n          ? 'Recipe · per serving'\n          : selection.meal.serving\n            ? `Current entry · ${selection.meal.serving.amount} ${selection.meal.serving.unit === 'g' ? 'g' : selection.meal.serving.amount === 1 ? 'serving' : 'servings'}`\n            : 'Current journal entry'""",
+          )
+
+          replace(
+          """export function FoodLogger({\n    opened,\n    close,\n    selectedDate,\n    onFeedback,\n}: {\n    opened: boolean\n    close: () => void\n    selectedDate?: string | null\n    onFeedback?: (message: string) => void\n}) {""",
+          """export function FoodLogger({\n    opened,\n    close,\n    selectedDate,\n    onFeedback,\n    editMeal,\n    onSaved,\n}: {\n    opened: boolean\n    close: () => void\n    selectedDate?: string | null\n    onFeedback?: (message: string) => void\n    editMeal?: MealRecord\n    onSaved?: () => void\n}) {""",
+          )
+
+          replace(
+          """    const targetDate = selectedDate ?? calendarTodayKey(timezone)\n    const [recordedAt, setRecordedAt] = useState(\n        `${targetDate}T${selectedDate && selectedDate !== nowDay ? '12:00' : nowTime}`,\n    )\n    const hour = Number(nowTime.slice(0, 2))\n    const [mealType, setMealType] = useState(\n        hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack',\n    )""",
+          """    const targetDate = editMeal\n        ? calendarLocalDateTimeValue(new Date(editMeal.eatenAt), timezone).split('T')[0]\n        : (selectedDate ?? calendarTodayKey(timezone))\n    const [recordedAt, setRecordedAt] = useState(\n        editMeal\n            ? calendarLocalDateTimeValue(new Date(editMeal.eatenAt), timezone)\n            : `${targetDate}T${selectedDate && selectedDate !== nowDay ? '12:00' : nowTime}`,\n    )\n    const hour = Number(nowTime.slice(0, 2))\n    const [mealType, setMealType] = useState(\n        editMeal?.mealType ??\n            (hour < 11 ? 'Breakfast' : hour < 15 ? 'Lunch' : hour < 21 ? 'Dinner' : 'Snack'),\n    )""",
+          )
+
+          replace(
+          """    const [selection, setSelection] = useState<Selection | null>(null)\n    const [amount, setAmount] = useState<number | string>(100)""",
+          """    const [selection, setSelection] = useState<Selection | null>(\n        editMeal ? { kind: 'snapshot', meal: editMeal } : null,\n    )\n    const [amount, setAmount] = useState<number | string>(\n        editMeal?.serving?.amount ?? (editMeal ? 1 : 100),\n    )""",
+          )
+
+          replace(
+          """    const logSelection = async (item: Selection, consumedAmount: number, closeAfter: boolean) => {\n        if (!recordedAt || !Number.isFinite(consumedAmount) || consumedAmount <= 0) return\n        const key = selectionKey(item)\n        setLoggingKey(key)\n        setError('')\n        try {\n            await logMeal(\n                selectionName(item),\n                mealType,\n                selectionNutrients(item, consumedAmount),\n                selectionQuality(item),\n                item.kind === 'food' ? item.food.id : undefined,\n                calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),\n                { amount: consumedAmount, unit: item.kind === 'food' ? 'g' : 'serving' },\n            )\n            window.dispatchEvent(new Event('trackit:nutrition-changed'))\n            onFeedback?.(`${selectionName(item)} logged to ${mealType.toLowerCase()}.`)\n            if (item.kind === 'food') {\n                setLibraryFoods(current => [\n                    item.food,\n                    ...current.filter(food => food.id !== item.food.id),\n                ])\n            }\n            if (closeAfter) close()\n        } catch {\n            setError('This meal could not be saved. Try again.')\n        } finally {\n            setLoggingKey(null)\n        }\n    }""",
+          """    const logSelection = async (item: Selection, consumedAmount: number, closeAfter: boolean) => {\n        if (!recordedAt || !Number.isFinite(consumedAmount) || consumedAmount <= 0) return\n        const key = selectionKey(item)\n        setLoggingKey(key)\n        setError('')\n        try {\n            const eatenAt = calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString()\n            const nutrients = selectionNutrients(item, consumedAmount)\n            if (editMeal) {\n                await updateMeal(editMeal.id, editMeal.version, {\n                    name: selectionName(item),\n                    mealType: mealType as MealRecord['mealType'],\n                    eatenAt,\n                    nutrients: nutrients as Record<string, number>,\n                    nutritionQuality: selectionQuality(item) ?? 'complete',\n                    serving:\n                        item.kind === 'snapshot'\n                            ? item.meal.serving\n                                ? { amount: consumedAmount, unit: item.meal.serving.unit }\n                                : { amount: consumedAmount, unit: 'serving' }\n                            : {\n                                  amount: consumedAmount,\n                                  unit: item.kind === 'food' ? 'g' : 'serving',\n                              },\n                })\n                window.dispatchEvent(new Event('trackit:nutrition-changed'))\n                window.dispatchEvent(new Event('trackit:observations-changed'))\n                onFeedback?.(`${selectionName(item)} updated.`)\n                onSaved?.()\n            } else {\n                await logMeal(\n                    selectionName(item),\n                    mealType,\n                    nutrients,\n                    selectionQuality(item),\n                    item.kind === 'food' ? item.food.id : undefined,\n                    eatenAt,\n                    { amount: consumedAmount, unit: item.kind === 'food' ? 'g' : 'serving' },\n                )\n                window.dispatchEvent(new Event('trackit:nutrition-changed'))\n                onFeedback?.(`${selectionName(item)} logged to ${mealType.toLowerCase()}.`)\n                if (item.kind === 'food') {\n                    setLibraryFoods(current => [\n                        item.food,\n                        ...current.filter(food => food.id !== item.food.id),\n                    ])\n                }\n            }\n            if (closeAfter) close()\n        } catch {\n            setError(editMeal ? 'This meal could not be updated. Try again.' : 'This meal could not be saved. Try again.')\n        } finally {\n            setLoggingKey(null)\n        }\n    }""",
+          )
+
+          replace(
+          """    const quickLog = (item: Selection) => logSelection(item, selectionDefaultAmount(item), false)""",
+          """    const quickLog = (item: Selection) => {\n        if (editMeal) {\n            chooseSelection(item)\n            return\n        }\n        return logSelection(item, selectionDefaultAmount(item), false)\n    }""",
+          )
+
+          replace(
+          """    const favoriteButton = (item: Selection) => {\n        const favorite = selectionFavorite(item)""",
+          """    const favoriteButton = (item: Selection) => {\n        if (item.kind === 'snapshot') return null\n        const favorite = selectionFavorite(item)""",
+          )
+
+          replace(
+          """                    aria-label={`Quick log ${name}`}\n                    title={`Log ${item.kind === 'food' ? `${item.food.servingGrams} g` : '1 serving'}`}\n                    disabled={loggingKey !== null}\n                    onClick={() => void quickLog(item)}\n                >\n                    {loggingKey === key ? <Loader size={14} /> : <IconPlus size={17} />}""",
+          """                    aria-label={editMeal ? `Choose ${name}` : `Quick log ${name}`}\n                    title={\n                        editMeal\n                            ? `Choose ${name}`\n                            : `Log ${item.kind === 'food' ? `${item.food.servingGrams} g` : '1 serving'}`\n                    }\n                    disabled={loggingKey !== null}\n                    onClick={() => void quickLog(item)}\n                >\n                    {loggingKey === key ? (\n                        <Loader size={14} />\n                    ) : editMeal ? (\n                        <IconCheck size={17} />\n                    ) : (\n                        <IconPlus size={17} />\n                    )}""",
+          )
+
+          replace(
+          """    const footerLabel = selection\n        ? `Adds to ${mealType.toLowerCase()} · ${dateLabel} at ${recordedTime}`\n        : 'Choose a food to continue.'""",
+          """    const footerLabel = selection\n        ? `${editMeal ? 'Updates' : 'Adds to'} ${mealType.toLowerCase()} · ${dateLabel} at ${recordedTime}`\n        : 'Choose a food to continue.'""",
+          )
+
+          replace(
+          """                title={<Text fw={750}>Log food</Text>}""",
+          """                title={<Text fw={750}>{editMeal ? 'Edit meal' : 'Log food'}</Text>}""",
+          )
+
+          replace(
+          """                        placeholder=\"Search foods and recipes…\"""",
+          """                        placeholder={\n                            editMeal\n                                ? 'Search foods and recipes to replace…'\n                                : 'Search foods and recipes…'\n                        }""",
+          )
+
+          replace(
+          """                                    label={selection.kind === 'food' ? 'Amount' : 'Servings'}""",
+          """                                    label={\n                                        selection.kind === 'food' ||\n                                        (selection.kind === 'snapshot' &&\n                                            selection.meal.serving?.unit === 'g')\n                                            ? 'Amount'\n                                            : 'Servings'\n                                    }""",
+          )
+
+          replace(
+          """                                    suffix={selection.kind === 'food' ? ' g' : undefined}""",
+          """                                    suffix={\n                                        selection.kind === 'food' ||\n                                        (selection.kind === 'snapshot' &&\n                                            selection.meal.serving?.unit === 'g')\n                                            ? ' g'\n                                            : undefined\n                                    }""",
+          )
+
+          replace(
+          """                                            : [\n                                                  { label: '½ serving', value: 0.5 },\n                                                  { label: '1 serving', value: 1 },\n                                                  { label: '2 servings', value: 2 },\n                                              ]""",
+          """                                            : selection.kind === 'recipe' ||\n                                                selection.meal.serving?.unit !== 'g'\n                                              ? [\n                                                    { label: '½ serving', value: 0.5 },\n                                                    { label: '1 serving', value: 1 },\n                                                    { label: '2 servings', value: 2 },\n                                                ]\n                                              : [\n                                                    {\n                                                        label: 'Original',\n                                                        value: selectionDefaultAmount(selection),\n                                                    },\n                                                ]""",
+          )
+
+          replace(
+          """                        Log food\n                    </Button>""",
+          """                        {editMeal ? 'Save changes' : 'Log food'}\n                    </Button>""",
+          )
+
+          path.write_text(text)
+
+          Path('src/components/JournalMealEditModal.tsx').write_text("""import type { JournalEvent } from '../domain/types'\nimport type { MealRecord } from '../lib/nutritionApi'\nimport { FoodLogger } from './logging/FoodLogger'\nimport { toast } from './toast'\n\ntype MealEvent = JournalEvent & {\n    detailView: Extract<NonNullable<JournalEvent['detailView']>, { kind: 'meal' }>\n}\n\nexport function JournalMealEditModal({\n    event,\n    onClose,\n    onSaved,\n}: {\n    event: JournalEvent | null\n    onClose: () => void\n    onSaved: () => void\n}) {\n    const mealEvent = event?.detailView?.kind === 'meal' ? (event as MealEvent) : null\n    if (!mealEvent) return null\n\n    const meal: MealRecord = {\n        id: mealEvent.id,\n        name: mealEvent.title,\n        mealType: mealEvent.detailView.mealType,\n        eatenAt: mealEvent.observedAt,\n        nutrientSnapshot: mealEvent.detailView.nutrients,\n        favorite: false,\n        version: mealEvent.version ?? 1,\n        nutritionQuality: mealEvent.detailView.nutritionQuality,\n        serving: mealEvent.detailView.serving,\n    }\n\n    return (\n        <FoodLogger\n            key={`${meal.id}:${meal.version}`}\n            opened\n            close={onClose}\n            editMeal={meal}\n            onSaved={onSaved}\n            onFeedback={toast.success}\n        />\n    )\n}\n""")
+
+          Path('src/components/JournalMealEditModal.test.tsx').write_text("""import { MantineProvider } from '@mantine/core'\nimport { render, screen, waitFor, within } from '@testing-library/react'\nimport userEvent from '@testing-library/user-event'\nimport { beforeEach, describe, expect, it, vi } from 'vitest'\nimport type { JournalEvent } from '../domain/types'\nimport { ServerDataProvider } from '../hooks/useServerData'\nimport { updateMeal } from '../lib/nutritionApi'\nimport { JournalMealEditModal } from './JournalMealEditModal'\n\nvi.mock('../lib/nutritionApi', () => ({\n    createFood: vi.fn(),\n    listRecipes: vi.fn().mockResolvedValue([]),\n    logMeal: vi.fn(),\n    lookupCatalogBarcode: vi.fn(),\n    searchFoodCatalog: vi.fn(),\n    searchFoods: vi.fn().mockResolvedValue([]),\n    updateFood: vi.fn(),\n    updateMeal: vi.fn().mockResolvedValue(undefined),\n}))\n\nconst event: JournalEvent = {\n    id: 'meal-1',\n    definitionId: 'meal',\n    time: '12:30',\n    category: 'Meals',\n    title: 'Chicken bowl',\n    detail: '75 g · 300 kcal',\n    source: 'You',\n    observedAt: '2026-08-23T12:30:00.000Z',\n    version: 4,\n    detailView: {\n        kind: 'meal',\n        mealType: 'Lunch',\n        serving: { amount: 75, unit: 'g' },\n        nutrients: {\n            calories: 300,\n            protein: 24,\n            carbs: 30,\n            fat: 9,\n            fiber: 4,\n        },\n        nutritionQuality: 'complete',\n    },\n}\n\nconst preferences = {\n    displayName: 'Owner',\n    timezone: 'UTC',\n    locale: 'en',\n    units: 'metric' as const,\n}\n\ndescribe('JournalMealEditModal', () => {\n    beforeEach(() => {\n        vi.mocked(updateMeal).mockClear()\n    })\n\n    it('reuses the food logger and scales the existing nutrition snapshot when the amount changes', async () => {\n        const onClose = vi.fn()\n        const onSaved = vi.fn()\n        render(\n            <MantineProvider>\n                <ServerDataProvider initialData={{ preferences }}>\n                    <JournalMealEditModal event={event} onClose={onClose} onSaved={onSaved} />\n                </ServerDataProvider>\n            </MantineProvider>,\n        )\n\n        const dialog = await screen.findByRole('dialog')\n        expect(within(dialog).getByText('Edit meal')).toBeInTheDocument()\n        expect(within(dialog).getByText('Chicken bowl')).toBeInTheDocument()\n        expect(within(dialog).getByText(/Current entry/)).toBeInTheDocument()\n\n        const user = userEvent.setup()\n        const amount = within(dialog).getByLabelText('Amount')\n        await user.clear(amount)\n        await user.type(amount, '150')\n        await user.click(within(dialog).getByRole('button', { name: 'Save changes' }))\n\n        await waitFor(() =>\n            expect(updateMeal).toHaveBeenCalledWith(\n                'meal-1',\n                4,\n                expect.objectContaining({\n                    name: 'Chicken bowl',\n                    mealType: 'Lunch',\n                    serving: { amount: 150, unit: 'g' },\n                    nutrients: expect.objectContaining({\n                        calories: 600,\n                        protein: 48,\n                        carbs: 60,\n                        fat: 18,\n                        fiber: 8,\n                    }),\n                }),\n            ),\n        )\n        expect(onSaved).toHaveBeenCalledTimes(1)\n        expect(onClose).toHaveBeenCalledTimes(1)\n    })\n})\n""")
+          PY
+      - run: npx prettier --write src/components/logging/FoodLogger.tsx src/components/JournalMealEditModal.tsx src/components/JournalMealEditModal.test.tsx
+      - run: npm run lint
+      - run: npx vitest run src/components/JournalMealEditModal.test.tsx
+      - run: npm run build
+      - name: Commit refactor
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/components/logging/FoodLogger.tsx src/components/JournalMealEditModal.tsx src/components/JournalMealEditModal.test.tsx
+          git commit -m "Reuse food logger for journal meal edits"
+          git push origin HEAD:feature/journal-meal-edit-logger
