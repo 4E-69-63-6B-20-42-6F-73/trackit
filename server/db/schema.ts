@@ -166,9 +166,7 @@ export const derivedObservations = pgTable(
 export const derivedObservationInputs = pgTable(
     'derived_observation_inputs',
     {
-        derivedObservationId: text('derived_observation_id')
-            .notNull()
-            .references(() => derivedObservations.id, { onDelete: 'cascade' }),
+        derivedObservationId: text('id').notNull(),
         inputObservationId: text('input_observation_id').notNull(),
         inputVersion: bigint('input_version', { mode: 'number' }).notNull(),
         role: text('role').notNull().default('input'),
@@ -247,6 +245,10 @@ export const foods = pgTable('foods', {
     potassiumPer100g: doublePrecision('potassium_per_100g'),
     servingName: text('serving_name').notNull().default('serving'),
     servingGrams: doublePrecision('serving_grams').notNull().default(100),
+    servingOptions: jsonb('serving_options')
+        .$type<Array<{ label: string; grams: number }>>()
+        .notNull()
+        .default([]),
     favorite: boolean('favorite').notNull().default(false),
     nutritionQuality: text('nutrition_quality').notNull().default('complete'),
     lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
@@ -300,7 +302,7 @@ export const mcpClients = pgTable('mcp_clients', {
     dateTo: timestamp('date_to', { withTimezone: true }),
     expiresAt: timestamp('expires_at', { withTimezone: true }),
     revokedAt: timestamp('revoked_at', { withTimezone: true }),
-    lastUsedAt: timestamp('last_used_at', { withTimezone: true }),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 })
 
