@@ -1,10 +1,12 @@
 import { MantineProvider } from '@mantine/core'
+import { QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Food } from '../domain/nutrition'
 import { listRecipes, searchFoods, type RecipeRecord } from '../lib/nutritionApi'
+import { createTestQueryClient } from '../test/queryClient'
 import { Library } from './Library'
 import { LibraryFoods } from './LibraryFoods'
 import { LibraryRecipes } from './LibraryRecipes'
@@ -57,9 +59,11 @@ const recipe: RecipeRecord = {
 
 const renderPage = (page: ReactNode) =>
     render(
-        <MantineProvider>
-            <MemoryRouter>{page}</MemoryRouter>
-        </MantineProvider>,
+        <QueryClientProvider client={createTestQueryClient()}>
+            <MantineProvider>
+                <MemoryRouter>{page}</MemoryRouter>
+            </MantineProvider>
+        </QueryClientProvider>,
     )
 
 describe('Library', () => {
