@@ -12,10 +12,12 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
+import { useMutation } from '@tanstack/react-query'
 import { calendarLocalDateTimeToInstant, calendarLocalDateTimeValue } from '../domain/calendar'
 import type { JournalEvent } from '../domain/types'
 import { useServerData } from '../hooks/useServerData'
 import { updateMeal } from '../lib/nutritionApi'
+import { invalidateNutritionQueries } from '../lib/serverQueries'
 
 const nutrientFields = [
     ['calories', 'Energy', 'kcal'],
@@ -64,10 +66,26 @@ function MealEditForm({
                 nutrientFields.map(([key]) => [key, event.detailView.nutrients[key] ?? '']),
             ) as Record<NutrientKey, NumericValue>,
     )
-    const [busy, setBusy] = useState(false)
-    const [error, setError] = useState('')
+    const [validationError, setValidationError] = useState('')
 
-    const save = async () => {
+    const saveMutation = useMutation({
+        mutationFn: (input: {
+            name: string
+            mealType: MealEvent['detailView']['mealType']
+            eatenAt: string
+            serving: { amount: number; unit: 'g' | 'serving' } | null
+            nutrients: Record<string, number>
+            nutritionQuality: MealEvent['detailView']['nutritionQuality']
+        }) => updateMeal(event.id, event.version ?? 1, input),
+        onSuccess: async () => {
+            await invalidateNutritionQueries()
+            window.dispatchEvent(new Event('trackit:nutrition-changed'))
+            window.dispatchEvent(new Event('trackit:observations-changed'))
+            onSaved()
+        },
+    })
+
+    const save = () => {
         if (!name.trim() || !recordedAt) return
         const nextNutrients = { ...event.detailView.nutrients }
         for (const [key] of nutrientFields) {
@@ -78,36 +96,32 @@ function MealEditForm({
             }
             const value = Number(raw)
             if (!Number.isFinite(value) || value < 0) {
-                setError('Nutrition values must be zero or greater.')
+                setValidationError('Nutrition values must be zero or greater.')
                 return
             }
             nextNutrients[key] = value
         }
         const amount = servingAmount === '' ? null : Number(servingAmount)
         if (amount !== null && (!Number.isFinite(amount) || amount <= 0)) {
-            setError('Amount must be greater than zero.')
+            setValidationError('Amount must be greater than zero.')
             return
         }
-        setBusy(true)
-        setError('')
-        try {
-            await updateMeal(event.id, event.version ?? 1, {
-                name: name.trim(),
-                mealType,
-                eatenAt: calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),
-                serving: amount === null ? null : { amount, unit: servingUnit },
-                nutrients: nextNutrients,
-                nutritionQuality,
-            })
-            window.dispatchEvent(new Event('trackit:nutrition-changed'))
-            window.dispatchEvent(new Event('trackit:observations-changed'))
-            onSaved()
-        } catch {
-            setError('This meal could not be updated. Reload and try again.')
-        } finally {
-            setBusy(false)
-        }
+        setValidationError('')
+        saveMutation.mutate({
+            name: name.trim(),
+            mealType,
+            eatenAt: calendarLocalDateTimeToInstant(recordedAt, timezone).toISOString(),
+            serving: amount === null ? null : { amount, unit: servingUnit },
+            nutrients: nextNutrients as Record<string, number>,
+            nutritionQuality,
+        })
     }
+
+    const error = validationError
+        ? validationError
+        : saveMutation.isError
+          ? 'This meal could not be updated. Reload and try again.'
+          : ''
 
     return (
         <Stack gap="md">
@@ -162,9 +176,7 @@ function MealEditForm({
                 ]}
             />
             <div>
-                <Text fw={650} mb="sm">
-                    Nutrition for this entry
-                </Text>
+                <Text fw={650} mb="sm">Nutrition for this entry</Text>
                 <SimpleGrid cols={{ base: 2, sm: 3 }}>
                     {nutrientFields.map(([key, label, unit]) => (
                         <NumberInput
@@ -183,10 +195,14 @@ function MealEditForm({
                 </SimpleGrid>
             </div>
             <Group justify="flex-end">
-                <Button variant="default" onClick={onClose} disabled={busy}>
+                <Button variant="default" onClick={onClose} disabled={saveMutation.isPending}>
                     Cancel
                 </Button>
-                <Button loading={busy} disabled={!name.trim() || !recordedAt} onClick={save}>
+                <Button
+                    loading={saveMutation.isPending}
+                    disabled={!name.trim() || !recordedAt}
+                    onClick={save}
+                >
                     Save changes
                 </Button>
             </Group>
