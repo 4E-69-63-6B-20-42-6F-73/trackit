@@ -1,215 +1,110 @@
-import { Alert, Button, Card, Group, Stack, Text, Title } from '@mantine/core'
+import { Alert, Button, Card, Group, Loader, Stack, Text, Title } from '@mantine/core'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { IconArrowLeft } from '@tabler/icons-react'
 import { QRCodeSVG } from 'qrcode.react'
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
     confirmDevice,
     createPairingCode,
     listDevices,
     rejectDevice,
-    type DeviceRecord,
 } from '../../../lib/deviceApi'
-import { IconArrowLeft } from '@tabler/icons-react'
+import { serverQueryKeys } from '../../../lib/serverQueries'
 
 export type PairingUiState = 'showing_qr' | 'pending_approval' | 'approved' | 'expired' | 'error'
 
 export function DeviceNew() {
     const navigate = useNavigate()
-    const [pairingState, setPairingState] = useState<PairingUiState>('showing_qr')
-    const [pairing, setPairing] = useState<{
-        code: string
-        expiresAt: string
-        serverIdentity: string
-    } | null>(null)
-    const [pendingDevice, setPendingDevice] = useState<DeviceRecord | null>(null)
-    const [error, setError] = useState('')
-    const [timeRemaining, setTimeRemaining] = useState<string>('05:00')
-    const pollingRef = useRef<number | null>(null)
-    const countdownRef = useRef<number | null>(null)
-    const pollingActiveRef = useRef(false)
-    const lastProcessedPendingIdRef = useRef<string | null>(null)
+    const queryClient = useQueryClient()
+    const [now, setNow] = useState(() => Date.now())
     const initialCreateStartedRef = useRef(false)
 
-    const calculateTimeRemaining = useCallback((expiresAt: string): string => {
-        const now = new Date()
-        const expires = new Date(expiresAt)
-        const diffMs = expires.getTime() - now.getTime()
-        const remainingMins = Math.floor(diffMs / 60000)
-        const remainingSeconds = Math.floor((diffMs % 60000) / 1000)
-        const mins = Math.max(0, Math.min(remainingMins, 59))
-        const secs = Math.max(0, Math.min(remainingSeconds, 59))
-        return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
-    }, [])
+    const createMutation = useMutation({
+        mutationFn: createPairingCode,
+    })
+    const pairing = createMutation.data ?? null
+    const expired = Boolean(pairing && now >= new Date(pairing.expiresAt).getTime())
 
-    const isPairingExpired = useCallback((expiresAt: string): boolean => {
-        return new Date().getTime() >= new Date(expiresAt).getTime()
-    }, [])
-
-    const handlePairingError = useCallback((message: string) => {
-        setError(message)
-        setPairingState('error')
-    }, [])
-
-    const create = useCallback(async () => {
-        try {
-            const newPairing = await createPairingCode()
-            setPairing(newPairing)
-            setPendingDevice(null)
-            setError('')
-            setPairingState('showing_qr')
-            setTimeRemaining(calculateTimeRemaining(newPairing.expiresAt))
-        } catch {
-            handlePairingError('A pairing code could not be generated.')
-        }
-    }, [calculateTimeRemaining, handlePairingError])
-
-    const startPolling = useCallback(
-        async (currentPairing: { code: string; expiresAt: string; serverIdentity: string }) => {
-            if (pollingActiveRef.current) return
-
-            pollingActiveRef.current = true
-            lastProcessedPendingIdRef.current = null
-
-            const fetchDevices = async () => {
-                try {
-                    const pendingDevices = await listDevices()
-                    const currentPendingDevice =
-                        pendingDevices.find(d => d.status === 'pending') || null
-
-                    if (currentPendingDevice) {
-                        if (
-                            lastProcessedPendingIdRef.current !== currentPendingDevice.id &&
-                            !isPairingExpired(currentPairing.expiresAt)
-                        ) {
-                            lastProcessedPendingIdRef.current = currentPendingDevice.id
-                            setPendingDevice(currentPendingDevice)
-                            setPairingState('pending_approval')
-                        }
-                    } else {
-                        setPendingDevice(null)
-                    }
-                } catch {
-                    // Silently handle errors during polling
-                }
-            }
-
-            await fetchDevices()
-
-            // fetchDevices can change pairingState, which causes the polling
-            // effect cleanup to run while this async function is awaiting.
-            if (!pollingActiveRef.current) return
-
-            pollingRef.current = window.setInterval(fetchDevices, 1500)
+    const devicesQuery = useQuery({
+        queryKey: [...serverQueryKeys.devices, 'pairing'],
+        queryFn: ({ signal }) => listDevices(signal),
+        enabled: Boolean(pairing) && !expired,
+        refetchInterval: query => {
+            const pending = query.state.data?.some(device => device.status === 'pending')
+            return pending ? false : 1500
         },
-        [isPairingExpired],
-    )
+    })
+    const pendingDevice = devicesQuery.data?.find(device => device.status === 'pending') ?? null
 
-    const stopPolling = useCallback(() => {
-        if (pollingRef.current) {
-            window.clearInterval(pollingRef.current)
-            pollingRef.current = null
-        }
-        pollingActiveRef.current = false
-    }, [])
+    const actionMutation = useMutation({
+        mutationFn: async ({ action, id }: { action: 'approve' | 'reject'; id: string }) => {
+            if (action === 'approve') await confirmDevice(id)
+            else await rejectDevice(id)
+            return action
+        },
+        onSuccess: async action => {
+            await queryClient.invalidateQueries({ queryKey: serverQueryKeys.devices })
+            if (action === 'reject') await devicesQuery.refetch()
+        },
+    })
 
-    // Create the first pairing code when the page opens. The ref prevents
-    // React StrictMode's development effect replay from creating two codes.
     useEffect(() => {
         if (initialCreateStartedRef.current) return
-
         initialCreateStartedRef.current = true
-        void create()
-    }, [create])
+        createMutation.mutate()
+    }, [])
 
-    // Start polling while the QR code is waiting for a device. Including
-    // pairingState ensures polling restarts after a rejected device.
     useEffect(() => {
-        if (pairing && pairingState === 'showing_qr') {
-            void startPolling(pairing)
-        }
+        if (!pairing || expired || actionMutation.isSuccess && actionMutation.data === 'approve') return
+        const timer = window.setInterval(() => setNow(Date.now()), 1000)
+        return () => window.clearInterval(timer)
+    }, [pairing, expired, actionMutation.isSuccess, actionMutation.data])
 
-        return () => {
-            stopPolling()
-        }
-    }, [pairing, pairingState, startPolling, stopPolling])
-
-    // Keep the countdown active only while pairing is still in progress.
-    useEffect(() => {
-        if (!pairing || (pairingState !== 'showing_qr' && pairingState !== 'pending_approval')) {
-            return
-        }
-
-        const updateCountdown = () => {
-            const timeStr = calculateTimeRemaining(pairing.expiresAt)
-            setTimeRemaining(timeStr)
-
-            if (isPairingExpired(pairing.expiresAt)) {
-                stopPolling()
-                setPairingState('expired')
-            }
-        }
-
-        updateCountdown()
-        countdownRef.current = window.setInterval(updateCountdown, 1000)
-
-        return () => {
-            if (countdownRef.current) {
-                window.clearInterval(countdownRef.current)
-                countdownRef.current = null
-            }
-        }
-    }, [pairing, pairingState, calculateTimeRemaining, isPairingExpired, stopPolling])
-
-    const handleApprove = async () => {
-        if (!pendingDevice) return
-
-        try {
-            await confirmDevice(pendingDevice.id)
-            stopPolling()
-            setPendingDevice(null)
-            setPairingState('approved')
-            setError('')
-        } catch {
-            handlePairingError(
-                'The device could not be approved. It may have already been confirmed.',
-            )
-        }
+    const calculateTimeRemaining = (expiresAt: string) => {
+        const diffMs = Math.max(0, new Date(expiresAt).getTime() - now)
+        const minutes = Math.floor(diffMs / 60_000)
+        const seconds = Math.floor((diffMs % 60_000) / 1000)
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
     }
 
-    const handleReject = async () => {
-        if (!pendingDevice) return
+    const pairingState: PairingUiState = createMutation.isError || actionMutation.isError
+        ? 'error'
+        : actionMutation.isSuccess && actionMutation.data === 'approve'
+          ? 'approved'
+          : expired
+            ? 'expired'
+            : pendingDevice
+              ? 'pending_approval'
+              : 'showing_qr'
 
-        try {
-            await rejectDevice(pendingDevice.id)
-            stopPolling()
-            setPendingDevice(null)
-            setPairingState('showing_qr')
-            setError('')
-        } catch {
-            handlePairingError('The device could not be rejected. Try again.')
-        }
+    const error = createMutation.isError
+        ? 'A pairing code could not be generated.'
+        : actionMutation.isError
+          ? actionMutation.variables?.action === 'approve'
+              ? 'The device could not be approved. It may have already been confirmed.'
+              : 'The device could not be rejected. Try again.'
+          : ''
+
+    const handleApprove = () => {
+        if (!pendingDevice) return
+        actionMutation.mutate({ action: 'approve', id: pendingDevice.id })
     }
 
-    const handleShowNewCode = useCallback(() => {
-        stopPolling()
-        setPairing(null)
-        setPendingDevice(null)
-        setPairingState('showing_qr')
-        void create()
-    }, [stopPolling, create])
+    const handleReject = () => {
+        if (!pendingDevice) return
+        actionMutation.mutate({ action: 'reject', id: pendingDevice.id })
+    }
 
-    const handleBackToDevices = useCallback(() => {
-        stopPolling()
-        navigate('/connections/devices')
-    }, [navigate, stopPolling])
+    const handleShowNewCode = () => {
+        actionMutation.reset()
+        createMutation.reset()
+        setNow(Date.now())
+        createMutation.mutate()
+    }
 
-    const stopPairing = useCallback(() => {
-        stopPolling()
-        setPairing(null)
-        setPendingDevice(null)
-        setError('')
-        navigate('/connections/devices')
-    }, [navigate, stopPolling])
+    const handleBackToDevices = () => navigate('/connections/devices')
+    const stopPairing = () => navigate('/connections/devices')
 
     const qrValue = pairing
         ? JSON.stringify({
@@ -244,10 +139,18 @@ export function DeviceNew() {
                 </Alert>
             )}
 
-            {/* Active Pairing Flow */}
-            {pairingState !== 'error' && (
+            {createMutation.isPending && (
+                <Card withBorder padding="lg" radius="md" mb="xl">
+                    <Group justify="center" role="status" aria-label="Generating pairing code">
+                        <Loader size="sm" />
+                        <Text size="sm" c="dimmed">Generating pairing code…</Text>
+                    </Group>
+                </Card>
+            )}
+
+            {pairingState !== 'error' && pairing && (
                 <Stack gap="md" mb="xl">
-                    {pairingState === 'showing_qr' && pairing && (
+                    {pairingState === 'showing_qr' && (
                         <Card withBorder padding="lg" radius="md">
                             <Stack gap="md">
                                 <Group justify="space-between">
@@ -263,7 +166,12 @@ export function DeviceNew() {
                                             3. Scan the code shown below
                                         </Text>
                                     </Stack>
-                                    <Button variant="default" size="sm" onClick={handleShowNewCode}>
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        loading={createMutation.isPending}
+                                        onClick={handleShowNewCode}
+                                    >
                                         New code
                                     </Button>
                                 </Group>
@@ -275,14 +183,10 @@ export function DeviceNew() {
                                         aria-label="Android pairing QR code"
                                     />
                                     <Stack gap={4} align="center">
+                                        <Text size="xs" c="dimmed">Pairing code</Text>
+                                        <Text fz="xl" fw={600}>{pairing.code}</Text>
                                         <Text size="xs" c="dimmed">
-                                            Pairing code
-                                        </Text>
-                                        <Text fz="xl" fw={600}>
-                                            {pairing.code}
-                                        </Text>
-                                        <Text size="xs" c="dimmed">
-                                            Expires in {timeRemaining}
+                                            Expires in {calculateTimeRemaining(pairing.expiresAt)}
                                         </Text>
                                     </Stack>
                                 </Group>
@@ -299,12 +203,10 @@ export function DeviceNew() {
                         </Card>
                     )}
 
-                    {pairingState === 'expired' && pairing && (
+                    {pairingState === 'expired' && (
                         <Card withBorder padding="lg" radius="md">
                             <Stack gap="md" align="center">
-                                <Text size="lg" fw={500}>
-                                    This code expired
-                                </Text>
+                                <Text size="lg" fw={500}>This code expired</Text>
                                 <Text size="sm" c="dimmed" ta="center">
                                     The pairing code has expired. Generate a new code to continue.
                                 </Text>
@@ -319,18 +221,23 @@ export function DeviceNew() {
                         <Card withBorder padding="lg" radius="md" color="blue">
                             <Stack gap="md">
                                 <Group justify="space-between">
-                                    <Text size="sm" fw={500}>
-                                        Confirm this phone
-                                    </Text>
-                                    <Button variant="default" size="sm" onClick={handleReject}>
+                                    <Text size="sm" fw={500}>Confirm this phone</Text>
+                                    <Button
+                                        variant="default"
+                                        size="sm"
+                                        loading={
+                                            actionMutation.isPending &&
+                                            actionMutation.variables?.action === 'reject'
+                                        }
+                                        disabled={actionMutation.isPending}
+                                        onClick={handleReject}
+                                    >
                                         Reject
                                     </Button>
                                 </Group>
 
                                 <Stack gap="sm">
-                                    <Text size="md" fw={500}>
-                                        {pendingDevice.name}
-                                    </Text>
+                                    <Text size="md" fw={500}>{pendingDevice.name}</Text>
                                     <Text size="sm" c="dimmed">
                                         This device wants to connect to your TrackIt server.
                                     </Text>
@@ -339,12 +246,22 @@ export function DeviceNew() {
                                     </Text>
                                 </Stack>
 
-                                <Button onClick={handleApprove} color="trackit" size="lg" fullWidth>
+                                <Button
+                                    onClick={handleApprove}
+                                    color="trackit"
+                                    size="lg"
+                                    fullWidth
+                                    loading={
+                                        actionMutation.isPending &&
+                                        actionMutation.variables?.action === 'approve'
+                                    }
+                                    disabled={actionMutation.isPending}
+                                >
                                     Approve {pendingDevice.name}
                                 </Button>
 
                                 <Text size="xs" c="dimmed" ta="center">
-                                    Server: {pairing?.serverIdentity}
+                                    Server: {pairing.serverIdentity}
                                 </Text>
                             </Stack>
                         </Card>
@@ -353,9 +270,7 @@ export function DeviceNew() {
                     {pairingState === 'approved' && (
                         <Card withBorder padding="lg" radius="md" color="green">
                             <Stack gap="md" align="center">
-                                <Text size="lg" fw={500}>
-                                    Phone connected
-                                </Text>
+                                <Text size="lg" fw={500}>Phone connected</Text>
                                 <Text size="sm" c="dimmed" ta="center">
                                     Finish Health Connect setup on your Android phone.
                                 </Text>
