@@ -24,7 +24,13 @@ describe('Journal observation projection preferences', () => {
         })
 
         expect(await journal.list()).toEqual([
-            expect.objectContaining({ id: created.id, title: 'Initial title' }),
+            expect.objectContaining({
+                id: created.id,
+                title: 'Initial title',
+                entityType: 'observation',
+                entityId: created.id,
+                editable: true,
+            }),
         ])
 
         await observations.updateObservation(created.id, {
@@ -91,6 +97,7 @@ describe('Journal observation projection preferences', () => {
         const database = drizzle(client, { schema })
         const data = new PostgresDataRepository(database as never)
         const journal = new PostgresJournalRepository(database as never)
+        const foodId = '11111111-1111-4111-8111-111111111111'
 
         await data.createMeal({
             name: 'Plain Skyr',
@@ -105,6 +112,7 @@ describe('Journal observation projection preferences', () => {
             },
             favorite: false,
             nutritionQuality: 'estimated',
+            foodId,
             serving: { amount: 150, unit: 'g' },
         })
 
@@ -114,6 +122,10 @@ describe('Journal observation projection preferences', () => {
         expect(summary).toEqual(
             expect.objectContaining({
                 title: 'Plain Skyr',
+                definitionId: 'calories',
+                entityType: 'meal',
+                entityId: summary.id,
+                editable: true,
                 detail: '150 g · 94.5 kcal',
                 category: 'Meals',
             }),
@@ -121,6 +133,9 @@ describe('Journal observation projection preferences', () => {
         expect(summary).not.toHaveProperty('detailView')
         expect(await journal.get(summary.id)).toEqual(
             expect.objectContaining({
+                entityType: 'meal',
+                entityId: summary.id,
+                editable: true,
                 detailView: {
                     kind: 'meal',
                     mealType: 'Dinner',
@@ -133,6 +148,7 @@ describe('Journal observation projection preferences', () => {
                         sodium: 120,
                     },
                     nutritionQuality: 'estimated',
+                    sourceItem: { kind: 'food', id: foodId },
                 },
             }),
         )
@@ -159,7 +175,11 @@ describe('Journal observation projection preferences', () => {
         )
 
         expect(await journal.list({ source: 'Target source', limit: 1 })).toEqual([
-            expect.objectContaining({ title: 'Weight 0', source: 'Target source' }),
+            expect.objectContaining({
+                title: 'Weight 0',
+                source: 'Target source',
+                editable: false,
+            }),
         ])
         await client.close()
     })
