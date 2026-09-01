@@ -2,7 +2,7 @@ import { and, desc, eq, gte, isNull, lt, notExists, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { observationRelations, observations, preferences } from '../db/schema.js'
-import { metricDefinition } from '../../src/domain/metricCatalog.js'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
 import type {
     JournalDetailView,
     JournalEntry,
