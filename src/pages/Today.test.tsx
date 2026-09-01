@@ -58,6 +58,10 @@ vi.mock('../hooks/useDailyNutrition', () => ({
     }),
 }))
 
+vi.mock('../lib/planApi', () => ({
+    listPlanItems: vi.fn().mockResolvedValue([]),
+}))
+
 vi.mock('../lib/journalApi', () => ({
     getJournalEntry: vi.fn().mockRejectedValue(new Error('not available')),
     listJournal: vi.fn().mockResolvedValue([
@@ -119,7 +123,7 @@ describe('Today', () => {
         expect(screen.getByText('No key observations recorded')).toBeInTheDocument()
         expect(screen.queryByText('Not much was recorded for this day.')).not.toBeInTheDocument()
         expect(screen.getAllByText('Nutrition')).toHaveLength(1)
-        expect(screen.getByText('640 kcal')).toBeInTheDocument()
+        expect(await screen.findByText('640 kcal')).toBeInTheDocument()
         expect(screen.getByText('42 / 120 g')).toBeInTheDocument()
         expect(screen.queryByRole('button', { name: 'Check in now' })).not.toBeInTheDocument()
         expect(screen.queryByText('No sleep trend yet')).not.toBeInTheDocument()
