@@ -12,7 +12,7 @@ import {
     Switch,
     Text,
 } from '@mantine/core'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { IconArrowDown, IconArrowLeft, IconArrowUp } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
@@ -42,12 +42,18 @@ export function Metrics() {
     const [draftPolicy, setDraftPolicy] = useState<DeduplicationPolicy>('keep_all')
     const [draftSourcePriority, setDraftSourcePriority] = useState<string[]>([])
     const [draftDisabledSources, setDraftDisabledSources] = useState<string[]>([])
-    const [saving, setSaving] = useState(false)
-    const [message, setMessage] = useState('')
     const sourceQuery = useQuery({
         queryKey: healthQueryKeys.metricSources,
         queryFn: ({ signal }) => listMetricSources(signal),
     })
+    const saveMutation = useMutation({
+        mutationFn: ({ metricPreferences }: { metricPreferences: ReturnType<typeof normalizedMetricPreferences>; close: boolean }) =>
+            updatePreferences({ metricPreferences }),
+        onSuccess: (_saved, variables) => {
+            if (variables.close) setEditing(null)
+        },
+    })
+    const saving = saveMutation.isPending
     const loading = sharedLoading || sourceQuery.isPending
     const sourceSummaries = sourceQuery.data ?? []
     const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
@@ -66,23 +72,14 @@ export function Metrics() {
             }, {}),
         [sourceSummaries],
     )
-    const save = async (metricPreferences: typeof selected, close = true) => {
+    const save = (metricPreferences: typeof selected, close = true) => {
         if (!preferences) return
-        setSaving(true)
-        setMessage('')
-        try {
-            await updatePreferences({ metricPreferences })
-            if (close) setEditing(null)
-        } catch {
-            setMessage('Your Metric Center preference could not be saved. Try again.')
-        } finally {
-            setSaving(false)
-        }
+        saveMutation.mutate({ metricPreferences, close })
     }
     const applyPreset = (next: string) => {
         if (next === 'custom' || !preferences) return
         const presetPreferences = preferencesForPreset(next as Exclude<UnitPreset, 'custom'>)
-        void save(
+        save(
             Object.fromEntries(
                 Object.entries(presetPreferences).map(([id, preference]) => [
                     id,
@@ -93,6 +90,7 @@ export function Metrics() {
         )
     }
     const openMetric = (metric: MetricDefinition) => {
+        saveMutation.reset()
         setEditing(metric)
         setDraftUnit(selected[metric.id].displayUnit)
         setDraftPrecision(selected[metric.id].precision ?? metric.precision)
@@ -148,9 +146,9 @@ export function Metrics() {
                     ]}
                 />
             </section>
-            {message && (
+            {saveMutation.isError && (
                 <Alert mt="md" color="orange">
-                    {message}
+                    Your Metric Center preference could not be saved. Try again.
                 </Alert>
             )}
             {sourceQuery.isError && (
@@ -395,13 +393,13 @@ export function Metrics() {
                     editing.precision > 0 ||
                     (metricSources[editing.id]?.length ?? 0) > 1 ? (
                         <Group justify="flex-end" mt="xl">
-                            <Button variant="default" onClick={() => setEditing(null)}>
+                            <Button variant="default" disabled={saving} onClick={() => setEditing(null)}>
                                 Cancel
                             </Button>
                             <Button
                                 loading={saving}
                                 onClick={() =>
-                                    void save({
+                                    save({
                                         ...selected,
                                         [editing.id]: {
                                             ...selected[editing.id],
