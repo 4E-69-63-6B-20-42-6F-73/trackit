@@ -24,8 +24,8 @@ export const parseObservationDefinitionIds = (value?: string) =>
     value ? definitionIds(value) : undefined
 
 export const dailyMetricRangeQuerySchema = z.object({
-    from: z.string().date().optional(),
-    to: z.string().date().optional(),
+    from: z.string().date(),
+    to: z.string().date(),
 })
 
 export const observationIdParamsSchema = z.object({
