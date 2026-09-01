@@ -6,6 +6,7 @@ import { QueryClientProvider } from '@tanstack/react-query'
 import { BrowserRouter } from 'react-router-dom'
 import { theme } from './app/theme'
 import { AuthGate } from './components/AuthGate'
+import { ToastProvider } from './components/ToastProvider'
 import './styles.css'
 import './today.css'
 import './ux-journey.css'
@@ -36,9 +37,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
                 <QueryClientProvider client={queryClient}>
                     <AuthGate>
                         <ServerDataProvider>
-                            <LoggingProvider>
-                                <App />
-                            </LoggingProvider>
+                            <ToastProvider>
+                                <LoggingProvider>
+                                    <App />
+                                </LoggingProvider>
+                            </ToastProvider>
                         </ServerDataProvider>
                     </AuthGate>
                 </QueryClientProvider>
