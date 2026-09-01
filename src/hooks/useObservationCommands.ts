@@ -29,23 +29,21 @@ export function useObservationCommands() {
         }
     }
 
-    const add = (input: CreateObservationInput) => {
-        void run({
+    const add = (input: CreateObservationInput) =>
+        run({
             run: () => createObservation(input),
             message: 'The observation was not saved. Reconnect and retry.',
         })
-    }
     const update = (id: string, input: UpdateObservationInput) =>
         run({
             run: () => updateObservation(id, input),
             message: 'The observation edit was not saved. Reconnect and retry.',
         })
-    const remove = (id: string) => {
-        void run({
+    const remove = (id: string) =>
+        run({
             run: () => deleteObservation(id),
             message: 'The observation was not deleted. Reconnect and retry.',
         })
-    }
     const retryCommand = () => {
         if (commandMutation.variables) void run(commandMutation.variables)
     }
