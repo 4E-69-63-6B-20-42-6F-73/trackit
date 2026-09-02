@@ -5,10 +5,9 @@ const knownDates = vi.fn()
 const invalidateDates = vi.fn()
 
 vi.mock('./projection-coordinator.js', () => ({
-    DailyProjectionCoordinator: vi.fn().mockImplementation(() => ({
-        knownDates,
-        invalidateDates,
-    })),
+    DailyProjectionCoordinator: vi.fn(function DailyProjectionCoordinator() {
+        return { knownDates, invalidateDates }
+    }),
 }))
 
 const selected = (result: unknown) => ({
