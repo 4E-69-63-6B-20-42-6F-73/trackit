@@ -182,7 +182,11 @@ export interface paths {
                         'application/json': {
                             data: {
                                 displayName: string
-                                experience: { [key: string]: unknown }
+                                experience: {
+                                    dismissedWeeklyReflection?: string
+                                    onboardingComplete?: boolean
+                                    onboardingStep?: number
+                                }
                                 id: string
                                 locale: string
                                 mcpAllowedOrigins: Array<string>
@@ -244,7 +248,11 @@ export interface paths {
                         'application/json': {
                             data: {
                                 displayName: string
-                                experience: { [key: string]: unknown }
+                                experience: {
+                                    dismissedWeeklyReflection?: string
+                                    onboardingComplete?: boolean
+                                    onboardingStep?: number
+                                }
                                 id: string
                                 locale: string
                                 mcpAllowedOrigins: Array<string>
