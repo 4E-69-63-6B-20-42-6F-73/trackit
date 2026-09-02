@@ -38,6 +38,27 @@ describe('health calculations', () => {
         ])
     })
 
+    it('attributes sleep to the wake day instead of the session start day', () => {
+        const first = {
+            ...observation('first', '2026-08-15T00:30:00Z', 8.5),
+            definitionId: 'sleep',
+            canonicalUnit: 'hours',
+            originalUnit: 'hours',
+            endedAt: '2026-08-15T09:00:00Z',
+        }
+        const second = {
+            ...observation('second', '2026-08-15T23:30:00Z', 8),
+            definitionId: 'sleep',
+            canonicalUnit: 'hours',
+            originalUnit: 'hours',
+            endedAt: '2026-08-16T07:30:00Z',
+        }
+        expect(dailySeries([first, second], new Date('2026-08-15T12:00:00Z'), 2)).toEqual([
+            { date: '2026-08-15', value: 8.5, recordIds: ['first'] },
+            { date: '2026-08-16', value: 8, recordIds: ['second'] },
+        ])
+    })
+
     it('sums additive records and uses the latest scalar record reproducibly', () => {
         const records = [
             { ...observation('one', '2026-08-20T08:00:00Z', 1000), definitionId: 'steps' },
