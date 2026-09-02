@@ -75,7 +75,7 @@ export function dailySeries(
     })
     const buckets = new Map<string, NumericObservation[]>()
     for (const observation of observations.filter(record => !record.excluded)) {
-        const key = formatter.format(new Date(observation.observedAt))
+        const key = formatter.format(dailyMetricAttributionInstant(observation))
         buckets.set(key, [...(buckets.get(key) ?? []), observation])
     }
     return Array.from({ length: days }, (_, offset) => {
