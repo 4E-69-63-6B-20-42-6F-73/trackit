@@ -1,15 +1,11 @@
 import {
-    ActionIcon,
     Alert,
-    Badge,
     Button,
     Chip,
     Collapse,
     Group,
-    Menu,
     Modal,
     NumberInput,
-    Progress,
     Select,
     SimpleGrid,
     Skeleton,
@@ -18,13 +14,7 @@ import {
     TextInput,
 } from '@mantine/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import {
-    IconChevronDown,
-    IconChevronUp,
-    IconDots,
-    IconTargetArrow,
-    IconTrash,
-} from '@tabler/icons-react'
+import { IconChevronDown, IconChevronUp, IconTargetArrow } from '@tabler/icons-react'
 import { useMemo, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
@@ -32,12 +22,7 @@ import {
     calendarTodayKey,
     formatCalendarDate,
 } from '@trackit/domain/calendar'
-import {
-    validateGoal,
-    type Goal,
-    type GoalEvaluation,
-    type GoalPeriod,
-} from '@trackit/domain/goals'
+import { validateGoal, type Goal, type GoalPeriod } from '@trackit/domain/goals'
 import {
     metricCatalog,
     metricDefinition,
@@ -47,7 +32,6 @@ import {
 import {
     convertMetricValue,
     displayUnitFor,
-    formatMetric,
     toCanonicalMetricValue,
     unitPresentation,
 } from '@trackit/domain/metrics'
@@ -61,6 +45,8 @@ import {
     type GoalRecord,
 } from '../lib/goalApi'
 import { healthQueryKeys } from '../lib/healthQueries'
+import { GoalCardView } from './GoalCardView'
+import { goalCardPresentation } from './goalCardModel'
 
 const weekdays = [
     { value: '1', label: 'Monday' },
@@ -132,6 +118,7 @@ function measurements(metricId: string): Measurement[] {
         }
     return result
 }
+
 const preferredMeasurement = (metricId: string, options = measurements(metricId)) => {
     const defaults = metricDefinition(metricId)?.goalDefaults
     const preferredValue = defaults
@@ -139,12 +126,6 @@ const preferredMeasurement = (metricId: string, options = measurements(metricId)
         : null
     return options.find(item => item.value === preferredValue) ?? options[0]
 }
-const periodText = (goal: Goal) =>
-    goal.period.type === 'rolling'
-        ? `${goal.period.days}-day ${goal.aggregation}`
-        : goal.aggregation === 'latest'
-          ? `${goal.period.type === 'day' ? 'Daily' : 'Weekly'} latest value`
-          : `${goal.period.type === 'day' ? 'Daily' : 'Weekly'} ${goal.aggregation}`
 
 function TargetValueInput({
     label,
@@ -172,203 +153,6 @@ function TargetValueInput({
                 {unitPresentation(unit).label}
             </Text>
         </div>
-    )
-}
-
-function GoalCard({
-    goal,
-    evaluation,
-    evaluationUnavailable,
-    retiring,
-    timezone,
-    locale,
-    metricPreferences,
-    onEdit,
-    onRetire,
-    onDelete,
-    onViewTrend,
-}: {
-    goal: GoalRecord
-    evaluation?: GoalEvaluation
-    evaluationUnavailable?: boolean
-    retiring?: boolean
-    timezone: string
-    locale?: string
-    metricPreferences?: Parameters<typeof formatMetric>[2]
-    onEdit: () => void
-    onRetire: () => Promise<void>
-    onDelete: () => void
-    onViewTrend: () => void
-}) {
-    const definition = metricDefinition(goal.definitionId)
-    const now = new Date()
-    const result = evaluation ?? {
-        value: null,
-        met: null,
-        progress: null,
-        observationCount: 0,
-        difference: null,
-    }
-    const upcoming = new Date(goal.effectiveFrom) > now
-    const retired = Boolean(goal.effectiveTo && new Date(goal.effectiveTo) < now)
-    const targetLabel =
-        goal.comparator === 'between' && 'min' in goal.target
-            ? `${formatMetric(goal.definitionId, goal.target.min, metricPreferences, locale)}–${formatMetric(goal.definitionId, goal.target.max, metricPreferences, locale)}`
-            : 'value' in goal.target
-              ? `${goal.comparator === 'gte' ? 'at least' : 'at or below'} ${formatMetric(goal.definitionId, goal.target.value, metricPreferences, locale)}`
-              : ''
-    const differenceLabel =
-        result.value !== null &&
-        result.met === false &&
-        result.difference !== null &&
-        goal.comparator !== 'between'
-            ? `${formatMetric(goal.definitionId, result.difference, metricPreferences, locale)} ${goal.comparator === 'lte' ? 'above' : 'below'} target`
-            : null
-    const scheduledDays = (
-        goal.schedule.weekdays?.length ? goal.schedule.weekdays.map(String) : everyDay
-    ).sort()
-    const mode = scheduleModeFor(goal.schedule.weekdays)
-    const scheduleLabel =
-        mode === 'custom'
-            ? scheduledDays
-                  .map(day => weekdays.find(option => option.value === day)?.label.slice(0, 3))
-                  .filter(Boolean)
-                  .join(', ')
-            : mode === 'every-day'
-              ? null
-              : scheduleLabels[mode]
-    const timingLabel = [
-        scheduleLabel,
-        goal.effectiveTo
-            ? `Until ${new Date(goal.effectiveTo).toLocaleDateString(locale, {
-                  day: 'numeric',
-                  month: 'short',
-                  year: 'numeric',
-                  timeZone: timezone,
-              })}`
-            : null,
-    ]
-        .filter(Boolean)
-        .join(' · ')
-
-    return (
-        <article className="goal-card">
-            <Group justify="space-between" align="start" wrap="nowrap">
-                <div>
-                    <Text fw={700}>{definition?.name ?? goal.definitionId}</Text>
-                    <Text size="sm" c="dimmed">
-                        {periodText(goal)}
-                    </Text>
-                </div>
-                <Group gap="xs">
-                    <Badge
-                        color={
-                            retired || upcoming || evaluationUnavailable
-                                ? 'gray'
-                                : result.met === null
-                                  ? 'gray'
-                                  : result.met
-                                    ? 'teal'
-                                    : 'orange'
-                        }
-                        variant="light"
-                    >
-                        {retired
-                            ? 'Past'
-                            : upcoming
-                              ? 'Upcoming'
-                              : evaluationUnavailable
-                                ? 'Unavailable'
-                                : result.met === null
-                                  ? 'No data'
-                                  : result.met
-                                    ? 'On target'
-                                    : 'Not on target'}
-                    </Badge>
-                    <Menu>
-                        <Menu.Target>
-                            <ActionIcon
-                                variant="subtle"
-                                color="gray"
-                                aria-label={`Actions for ${definition?.name ?? goal.definitionId}`}
-                            >
-                                <IconDots size={17} />
-                            </ActionIcon>
-                        </Menu.Target>
-                        <Menu.Dropdown>
-                            <Menu.Item onClick={onViewTrend}>View trend</Menu.Item>
-                            {!retired ? (
-                                <>
-                                    <Menu.Item onClick={onEdit}>Edit goal</Menu.Item>
-                                    <Menu.Item
-                                        color="orange"
-                                        disabled={retiring}
-                                        onClick={() => void onRetire()}
-                                    >
-                                        {retiring ? 'Retiring goal…' : 'Retire goal today'}
-                                    </Menu.Item>
-                                </>
-                            ) : (
-                                <Menu.Item
-                                    color="red"
-                                    leftSection={<IconTrash size={15} />}
-                                    onClick={onDelete}
-                                >
-                                    Delete goal
-                                </Menu.Item>
-                            )}
-                        </Menu.Dropdown>
-                    </Menu>
-                </Group>
-            </Group>
-            <Text className="goal-target">
-                {evaluationUnavailable
-                    ? 'Progress unavailable'
-                    : result.value === null
-                      ? upcoming
-                          ? 'Starts soon'
-                          : 'Nothing recorded yet'
-                      : formatMetric(goal.definitionId, result.value, metricPreferences, locale)}
-            </Text>
-            <Text size="sm">Target: {targetLabel}</Text>
-            {timingLabel && (
-                <Text size="xs" c="dimmed">
-                    {timingLabel}
-                </Text>
-            )}
-            {evaluationUnavailable ? (
-                <Text size="sm" c="dimmed">
-                    Goal progress could not be loaded.
-                </Text>
-            ) : upcoming ? (
-                <Text size="sm" c="dimmed">
-                    Starts{' '}
-                    {new Date(goal.effectiveFrom).toLocaleDateString(locale, {
-                        day: 'numeric',
-                        month: 'short',
-                        year: 'numeric',
-                        timeZone: timezone,
-                    })}
-                    .
-                </Text>
-            ) : result.value === null ? (
-                <Text size="sm" c="dimmed">
-                    Record {definition?.name.toLowerCase() ?? 'this metric'} to see progress.
-                </Text>
-            ) : (
-                <Text size="sm" c="dimmed">
-                    {result.observationCount} measurement{result.observationCount === 1 ? '' : 's'}
-                    {differenceLabel ? ` · ${differenceLabel}` : ''}
-                </Text>
-            )}
-            {!evaluationUnavailable && result.progress !== null && (
-                <Progress
-                    value={result.progress * 100}
-                    color="trackit"
-                    aria-label="Goal progress"
-                />
-            )}
-        </article>
     )
 }
 
@@ -426,6 +210,7 @@ export function GoalsPanel() {
         setRangeMax(nextTarget + Math.max(1, Math.abs(nextTarget) * 0.05))
         setValidationError('')
     }
+
     const resetForm = () => {
         setEditing(null)
         setMetricId('weight')
@@ -440,6 +225,7 @@ export function GoalsPanel() {
         setAdvanced(false)
         setValidationError('')
     }
+
     const edit = (goal: GoalRecord) => {
         setEditing(goal)
         setMetricId(goal.definitionId)
@@ -469,6 +255,7 @@ export function GoalsPanel() {
             )
         }
     }
+
     const draft = (): Omit<Goal, 'id'> => {
         const startRange = calendarDayRangeForKey(effectiveFrom || today, timezone)
         const endRange = effectiveTo ? calendarDayRangeForKey(effectiveTo, timezone) : null
@@ -490,6 +277,7 @@ export function GoalsPanel() {
             schedule: { weekdays: selectedWeekdays.map(Number) },
         }
     }
+
     const validation = () => {
         if (scheduleMode === 'custom' && selectedWeekdays.length === 0)
             return ['Choose at least one day for a custom schedule.']
@@ -499,6 +287,7 @@ export function GoalsPanel() {
             return ['Target could not be converted.']
         }
     }
+
     const changeSchedule = (value: string | null) => {
         if (!value) return
         const mode = value as ScheduleMode
@@ -508,6 +297,7 @@ export function GoalsPanel() {
         if (mode === 'weekends') setSelectedWeekdays(weekendSchedule)
         if (mode === 'custom' && selectedWeekdays.length === 0) setSelectedWeekdays(weekdaySchedule)
     }
+
     const saveMutation = useMutation({
         mutationFn: async ({
             goal,
@@ -521,9 +311,7 @@ export function GoalsPanel() {
         },
         onSuccess: () => resetForm(),
     })
-    const retireMutation = useMutation({
-        mutationFn: retireGoal,
-    })
+    const retireMutation = useMutation({ mutationFn: retireGoal })
     const deleteMutation = useMutation({
         mutationFn: deleteGoal,
         onSuccess: () => setDeleting(null),
@@ -549,6 +337,7 @@ export function GoalsPanel() {
     )
     const mutationError = latestMutation.result.isError ? latestMutation.error : ''
     const mutationMessage = latestMutation.result.isSuccess ? latestMutation.success : ''
+
     const save = (event: FormEvent) => {
         event.preventDefault()
         const errors = validation()
@@ -559,6 +348,7 @@ export function GoalsPanel() {
         setValidationError('')
         saveMutation.mutate({ goal: editing, input: draft() })
     }
+
     const activeGoals = useMemo(
         () => goals.filter(goal => !goal.effectiveTo || new Date(goal.effectiveTo) > new Date()),
         [goals],
@@ -574,6 +364,27 @@ export function GoalsPanel() {
         comparator === 'between'
             ? `between ${target} and ${rangeMax} ${unitPresentation(displayUnit).label}`
             : `${comparator === 'gte' ? 'at least' : 'at or below'} ${target} ${unitPresentation(displayUnit).label}`
+
+    const renderGoal = (goal: GoalRecord) => (
+        <GoalCardView
+            key={goal.id}
+            {...goalCardPresentation({
+                goal,
+                evaluation: evaluations[goal.id],
+                evaluationUnavailable: evaluationsQuery.isError,
+                timezone,
+                locale: preferences?.locale,
+                metricPreferences: preferences?.metricPreferences,
+            })}
+            retiring={retireMutation.isPending && retireMutation.variables?.id === goal.id}
+            onEdit={() => edit(goal)}
+            onRetire={() => void retire(goal)}
+            onDelete={() => setDeleting(goal)}
+            onViewTrend={() =>
+                navigate(`/trends?metric=${encodeURIComponent(goal.definitionId)}`)
+            }
+        />
+    )
 
     return (
         <div className={`goals-layout${goals.length ? ' has-goals' : ''}`}>
@@ -774,59 +585,14 @@ export function GoalsPanel() {
                         <IconTargetArrow size={28} />
                         <Text fw={700}>No goals yet</Text>
                         <Text size="sm" c="dimmed">
-                            Create a goal when you want a target to add context to your
-                            observations.
+                            Create a goal when you want a target to add context to your observations.
                         </Text>
                     </div>
                 ) : (
                     <Stack gap="sm">
-                        {activeGoals.map(goal => (
-                            <GoalCard
-                                key={goal.id}
-                                goal={goal}
-                                evaluation={evaluations[goal.id]}
-                                evaluationUnavailable={evaluationsQuery.isError}
-                                retiring={
-                                    retireMutation.isPending &&
-                                    retireMutation.variables?.id === goal.id
-                                }
-                                timezone={timezone}
-                                locale={preferences?.locale}
-                                metricPreferences={preferences?.metricPreferences}
-                                onEdit={() => edit(goal)}
-                                onRetire={() => retire(goal)}
-                                onDelete={() => setDeleting(goal)}
-                                onViewTrend={() =>
-                                    navigate(
-                                        `/trends?metric=${encodeURIComponent(goal.definitionId)}`,
-                                    )
-                                }
-                            />
-                        ))}
+                        {activeGoals.map(renderGoal)}
                         {pastGoals.length > 0 && <Text fw={700}>Goal history</Text>}
-                        {pastGoals.map(goal => (
-                            <GoalCard
-                                key={goal.id}
-                                goal={goal}
-                                evaluation={evaluations[goal.id]}
-                                evaluationUnavailable={evaluationsQuery.isError}
-                                retiring={
-                                    retireMutation.isPending &&
-                                    retireMutation.variables?.id === goal.id
-                                }
-                                timezone={timezone}
-                                locale={preferences?.locale}
-                                metricPreferences={preferences?.metricPreferences}
-                                onEdit={() => edit(goal)}
-                                onRetire={() => retire(goal)}
-                                onDelete={() => setDeleting(goal)}
-                                onViewTrend={() =>
-                                    navigate(
-                                        `/trends?metric=${encodeURIComponent(goal.definitionId)}`,
-                                    )
-                                }
-                            />
-                        ))}
+                        {pastGoals.map(renderGoal)}
                     </Stack>
                 )}
             </section>
