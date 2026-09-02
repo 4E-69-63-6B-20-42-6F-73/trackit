@@ -1,7 +1,13 @@
 import { and, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import { dailyMetrics, dailyProjectionRuns, observations, preferences } from '../db/schema.js'
+import {
+    dailyMetrics,
+    dailyProjectionRuns,
+    observations,
+    preferences,
+    projectionDirtyDates,
+} from '../db/schema.js'
 import {
     EFFECTIVE_DAILY_DERIVATION_VERSION,
     rebuildEffectiveDailyMetric,
@@ -95,6 +101,31 @@ export class DailyProjectionCoordinator {
         )
     }
 
+    async dirtyDates() {
+        return new Set(
+            (
+                await this.database
+                    .select({ date: projectionDirtyDates.date })
+                    .from(projectionDirtyDates)
+                    .where(eq(projectionDirtyDates.userId, 'owner'))
+            ).map(item => item.date),
+        )
+    }
+
+    private async laterWeightDates(fromDate: string, timezone: string) {
+        const weights = await this.database
+            .select({ observedAt: observations.observedAt })
+            .from(observations)
+            .where(
+                and(
+                    isNull(observations.deletedAt),
+                    eq(observations.definitionId, 'weight'),
+                    gte(observations.observedAt, localDayRange(fromDate, timezone).from),
+                ),
+            )
+        return new Set(weights.map(weight => dateKeyInTimezone(weight.observedAt, timezone)))
+    }
+
     async observationImpactDates(records: ProjectionObservation[]) {
         if (!records.length) return new Set<string>()
         const { timezone } = await this.context()
@@ -110,20 +141,7 @@ export class DailyProjectionCoordinator {
             const earliestHeightDate = changedHeights
                 .map(record => dateKeyInTimezone(record.observedAt, timezone))
                 .sort()[0]
-            const weights = await this.database
-                .select({ observedAt: observations.observedAt })
-                .from(observations)
-                .where(
-                    and(
-                        isNull(observations.deletedAt),
-                        eq(observations.definitionId, 'weight'),
-                        gte(
-                            observations.observedAt,
-                            localDayRange(earliestHeightDate, timezone).from,
-                        ),
-                    ),
-                )
-            for (const weight of weights) dates.add(dateKeyInTimezone(weight.observedAt, timezone))
+            for (const date of await this.laterWeightDates(earliestHeightDate, timezone)) dates.add(date)
         }
         return dates
     }
@@ -136,8 +154,7 @@ export class DailyProjectionCoordinator {
 
     async refreshDates(dates: Iterable<string>) {
         const queued = await this.invalidateDates(dates)
-        for (const date of [...queued].sort())
-            await rebuildEffectiveDailyMetric(this.database, date)
+        for (const date of [...queued].sort()) await rebuildEffectiveDailyMetric(this.database, date)
         return queued
     }
 
@@ -147,6 +164,18 @@ export class DailyProjectionCoordinator {
 
     async refreshObservations(records: ProjectionObservation[]) {
         return this.refreshDates(await this.observationImpactDates(records))
+    }
+
+    /**
+     * Bulk ingestion does not retain enough information after replacement/deletion to know whether
+     * a dirty date contained a carry-forward height. Conservatively requeue later weight dates from
+     * the earliest dirty date so cached BMI can never survive a historical bulk correction.
+     */
+    async invalidateCarryForwardDependents(dates: Iterable<string> = await this.dirtyDates()) {
+        const dirty = [...new Set(dates)].sort()
+        if (!dirty.length) return new Set<string>()
+        const { timezone } = await this.context()
+        return this.invalidateDates(await this.laterWeightDates(dirty[0], timezone))
     }
 
     async invalidateAll() {
