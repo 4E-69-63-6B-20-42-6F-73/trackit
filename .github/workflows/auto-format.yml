@@ -36,6 +36,8 @@ jobs:
                   node-version: 22
                   cache: npm
             - run: npm ci
+            - name: Stabilize health projection
+              run: node scripts/stabilize-health-projection.mjs
             - run: npm run build:domain
             - name: Regenerate OpenAPI types
               run: npm run api:types
