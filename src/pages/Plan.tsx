@@ -1,35 +1,21 @@
-import { Fragment, useState } from 'react'
+import { useState } from 'react'
 import {
-    ActionIcon,
     Alert,
     Button,
     Chip,
     Divider,
     Group,
-    Menu,
     Modal,
     NumberInput,
     Paper,
     Select,
     SimpleGrid,
-    Skeleton,
     Stack,
     Text,
     TextInput,
 } from '@mantine/core'
 import { useMediaQuery } from '@mantine/hooks'
 import { useMutation, useQuery } from '@tanstack/react-query'
-import {
-    IconCheck,
-    IconChevronLeft,
-    IconChevronRight,
-    IconDots,
-    IconEdit,
-    IconPlus,
-    IconRestore,
-    IconTrash,
-    IconX,
-} from '@tabler/icons-react'
 import { useSearchParams } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import {
@@ -41,9 +27,7 @@ import {
 import { nutrientsFor, roundedNutrients, type Nutrients } from '@trackit/domain/nutrition'
 import {
     addPlanDays,
-    formatPlanAmount,
     formatPlanProgress,
-    planStatus,
     type MealPlanItem,
     type MealType,
     type PlanReferenceType,
@@ -66,16 +50,10 @@ import {
     type PlanSchedule,
 } from '../lib/planApi'
 import { serverQueryKeys } from '../lib/serverQueries'
+import { PlanBoardView } from './PlanBoardView'
 import '../plan.css'
 
 const mealTypes: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snack']
-
-const mealDescriptions: Record<MealType, string> = {
-    Breakfast: 'Start the day',
-    Lunch: 'Midday meal',
-    Dinner: 'Evening meal',
-    Snack: 'Between meals',
-}
 
 const weekdayOptions = [
     { value: '1', label: 'Mon' },
@@ -133,7 +111,7 @@ const formatScheduleAmount = (schedule: PlanSchedule) =>
 
 export function Plan() {
     const [params, setParams] = useSearchParams()
-    const compact = useMediaQuery('(max-width: 62em)')
+    const compact = useMediaQuery('(max-width: 62em)') ?? false
     const { preferences } = useServerData()
     const timezone = preferences?.timezone ?? 'UTC'
     const locale = preferences?.locale
@@ -294,7 +272,6 @@ export function Plan() {
         },
         onSuccess: destinationDate => {
             setEditor(null)
-            window.dispatchEvent(new Event('trackit:plan-changed'))
             if (destinationDate && weekStartKey(destinationDate) !== weekStart)
                 navigateDate(destinationDate)
         },
@@ -302,7 +279,6 @@ export function Plan() {
 
     const actionMutation = useMutation({
         mutationFn: (action: () => Promise<unknown>) => action(),
-        onSuccess: () => window.dispatchEvent(new Event('trackit:plan-changed')),
     })
 
     const categoryFoods = (item: MealPlanItem) => {
@@ -338,11 +314,7 @@ export function Plan() {
                 foodId: current.foodId ?? undefined,
             })
         },
-        onSuccess: () => {
-            setLogState(null)
-            window.dispatchEvent(new Event('trackit:plan-changed'))
-            window.dispatchEvent(new Event('trackit:nutrition-changed'))
-        },
+        onSuccess: () => setLogState(null),
     })
     const busy = editorMutation.isPending || actionMutation.isPending || logMutation.isPending
     const latestMutation = [
@@ -357,284 +329,7 @@ export function Plan() {
             ? latestMutation.result.error.message
             : latestMutation.fallback
         : ''
-
     const weekLabel = `${formatCalendarDate(dates[0], locale, { month: 'short', day: 'numeric' })} – ${formatCalendarDate(dates[6], locale, { month: 'short', day: 'numeric', year: 'numeric' })}`
-
-    const mealCard = (item: MealPlanItem) => {
-        const status = planStatus(item)
-        const typeLabel =
-            item.meal.reference.type === 'recipe'
-                ? 'Recipe'
-                : item.meal.reference.type === 'category'
-                  ? 'Food group'
-                  : 'Food'
-        return (
-            <div key={item.id} className={`plan-meal-card plan-meal-card-${status}`}>
-                <div className="plan-meal-title">{item.meal.reference.name}</div>
-                <div className="plan-meal-meta">
-                    <span>
-                        {item.scheduledTime && (
-                            <span className="plan-meal-time">{item.scheduledTime} · </span>
-                        )}
-                        {item.meal.reference.type === 'category' && item.meal.fulfilledAmount > 0
-                            ? formatPlanProgress(item)
-                            : formatPlanAmount(item)}{' '}
-                        · {typeLabel}
-                    </span>
-                    {status === 'logged' && (
-                        <span className="plan-meal-status">
-                            <IconCheck size={11} />
-                            {item.meal.reference.type === 'category' ? 'Complete' : 'Logged'}
-                        </span>
-                    )}
-                    {status === 'partial' && (
-                        <span className="plan-meal-status plan-meal-status-partial">
-                            In progress
-                        </span>
-                    )}
-                    {status === 'skipped' && (
-                        <span className="plan-meal-status plan-meal-status-skipped">Skipped</span>
-                    )}
-                </div>
-                <Menu position="bottom-end" shadow="md">
-                    <Menu.Target>
-                        <ActionIcon
-                            className="plan-meal-menu"
-                            variant="subtle"
-                            color="gray"
-                            size="sm"
-                            aria-label={`Actions for ${item.meal.reference.name}`}
-                        >
-                            <IconDots size={16} />
-                        </ActionIcon>
-                    </Menu.Target>
-                    <Menu.Dropdown>
-                        {(status === 'planned' || status === 'partial') && (
-                            <Menu.Item
-                                leftSection={<IconCheck size={15} />}
-                                onClick={() => openLog(item)}
-                            >
-                                {item.meal.reference.type === 'category'
-                                    ? 'Log progress'
-                                    : 'Log as eaten'}
-                            </Menu.Item>
-                        )}
-                        {(status === 'planned' || status === 'skipped') && (
-                            <Menu.Item
-                                leftSection={<IconEdit size={15} />}
-                                onClick={() => openEdit(item)}
-                            >
-                                Edit or move
-                            </Menu.Item>
-                        )}
-                        {status === 'planned' && (
-                            <Menu.Item
-                                leftSection={<IconX size={15} />}
-                                onClick={() =>
-                                    actionMutation.mutate(() => setPlanMealSkipped(item, true))
-                                }
-                            >
-                                Skip
-                            </Menu.Item>
-                        )}
-                        {status === 'skipped' && (
-                            <Menu.Item
-                                leftSection={<IconRestore size={15} />}
-                                onClick={() =>
-                                    actionMutation.mutate(() => setPlanMealSkipped(item, false))
-                                }
-                            >
-                                Restore
-                            </Menu.Item>
-                        )}
-                        <Menu.Divider />
-                        <Menu.Item
-                            color="red"
-                            leftSection={<IconTrash size={15} />}
-                            onClick={() => actionMutation.mutate(() => deletePlanMeal(item))}
-                        >
-                            Remove from plan
-                        </Menu.Item>
-                    </Menu.Dropdown>
-                </Menu>
-            </div>
-        )
-    }
-
-    const slotItems = (date: string, mealType: MealType) =>
-        items
-            .filter(item => item.scheduledDate === date && item.meal.mealType === mealType)
-            .sort(
-                (left, right) =>
-                    (left.scheduledTime ?? '99:99').localeCompare(right.scheduledTime ?? '99:99') ||
-                    left.position - right.position,
-            )
-
-    const desktopPlan = (
-        <>
-            <div className="plan-board">
-                <div className="plan-grid">
-                    <div className="plan-grid-corner">
-                        <span className="plan-grid-corner-label">Weekly plan</span>
-                    </div>
-                    {dates.map(date => {
-                        const isToday = date === todayKey
-                        return (
-                            <div
-                                key={`header-${date}`}
-                                className={`plan-day-header${isToday ? ' plan-day-header-today' : ''}`}
-                            >
-                                <div className="plan-day-name">
-                                    {isToday
-                                        ? 'Today'
-                                        : formatCalendarDate(date, locale, { weekday: 'short' })}
-                                </div>
-                                <div className="plan-day-number">
-                                    {formatCalendarDate(date, locale, { day: 'numeric' })}
-                                </div>
-                                {isToday && (
-                                    <span className="plan-today-chip">
-                                        {formatCalendarDate(date, locale, {
-                                            weekday: 'short',
-                                        }).toUpperCase()}
-                                    </span>
-                                )}
-                            </div>
-                        )
-                    })}
-                    {mealTypes.map(mealType => (
-                        <Fragment key={mealType}>
-                            <div className="plan-meal-label">
-                                <strong className="plan-meal-label-name">{mealType}</strong>
-                                <span className="plan-meal-label-description">
-                                    {mealDescriptions[mealType]}
-                                </span>
-                            </div>
-                            {dates.map(date => {
-                                const planned = slotItems(date, mealType)
-                                const isToday = date === todayKey
-                                return (
-                                    <div
-                                        key={`${date}-${mealType}`}
-                                        className={`plan-slot${isToday ? ' plan-slot-today' : ''}${
-                                            planned.length === 0 ? ' plan-slot-empty' : ''
-                                        }`}
-                                    >
-                                        {planned.map(mealCard)}
-                                        {planned.length === 0 ? (
-                                            <button
-                                                type="button"
-                                                className="plan-add-cell"
-                                                onClick={() => openNew(date, mealType)}
-                                                aria-label={`Add ${mealType.toLowerCase()} on ${formatCalendarDate(
-                                                    date,
-                                                    locale,
-                                                    { month: 'short', day: 'numeric' },
-                                                )}`}
-                                            >
-                                                <IconPlus size={14} />
-                                                Add
-                                            </button>
-                                        ) : (
-                                            <button
-                                                type="button"
-                                                className="plan-add-another"
-                                                onClick={() => openNew(date, mealType)}
-                                            >
-                                                + Add another
-                                            </button>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </Fragment>
-                    ))}
-                </div>
-            </div>
-            <div className="plan-legend" aria-label="Meal plan legend">
-                <span className="plan-legend-item">
-                    <span className="plan-legend-dot" />
-                    Planned meals are intentions
-                </span>
-                <span className="plan-legend-item">
-                    <IconCheck size={13} />
-                    Flexible food groups can be completed across multiple foods
-                </span>
-            </div>
-        </>
-    )
-
-    const mobilePlan = (
-        <>
-            <div className="plan-mobile-strip">
-                <div className="plan-mobile-days">
-                    {dates.map(date => {
-                        const isToday = date === todayKey
-                        const isSelected = date === selectedDate
-                        return (
-                            <button
-                                key={date}
-                                type="button"
-                                className={`plan-mobile-day${
-                                    isSelected ? ' plan-mobile-day-selected' : ''
-                                }${isToday ? ' plan-mobile-day-today' : ''}`}
-                                onClick={() => navigateDate(date)}
-                                aria-current={isSelected ? 'date' : undefined}
-                            >
-                                <span className="plan-mobile-day-name">
-                                    {isToday
-                                        ? 'Today'
-                                        : formatCalendarDate(date, locale, { weekday: 'short' })}
-                                </span>
-                                <span className="plan-mobile-day-number">
-                                    {formatCalendarDate(date, locale, { day: 'numeric' })}
-                                </span>
-                            </button>
-                        )
-                    })}
-                </div>
-            </div>
-            <div className="plan-mobile-heading">
-                <div className="plan-mobile-eyebrow">
-                    {selectedDate === todayKey
-                        ? 'Today'
-                        : formatCalendarDate(selectedDate, locale, { weekday: 'long' })}
-                </div>
-                <h2>
-                    {formatCalendarDate(selectedDate, locale, { month: 'long', day: 'numeric' })}
-                </h2>
-            </div>
-            {mealTypes.map(mealType => {
-                const planned = slotItems(selectedDate, mealType)
-                return (
-                    <section className="plan-mobile-section" key={mealType}>
-                        <div className="plan-mobile-section-header">
-                            <strong>{mealType}</strong>
-                            <button
-                                type="button"
-                                className="plan-mobile-add"
-                                onClick={() => openNew(selectedDate, mealType)}
-                            >
-                                + Add
-                            </button>
-                        </div>
-                        {planned.length ? (
-                            <div className="plan-mobile-list">
-                                {planned.map(item => (
-                                    <div className="plan-mobile-card" key={item.id}>
-                                        {mealCard(item)}
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <div className="plan-mobile-empty">Nothing planned yet.</div>
-                        )}
-                    </section>
-                )
-            })}
-        </>
-    )
-
     const logFoods = logState ? categoryFoods(logState.item) : []
 
     return (
@@ -644,55 +339,32 @@ export function Plan() {
                 description="Plan meals ahead. They become part of your health record only when logged."
             />
 
-            <div className="plan-toolbar">
-                <div className="plan-week-nav">
-                    <ActionIcon
-                        variant="default"
-                        aria-label="Previous week"
-                        onClick={() => navigateDate(addPlanDays(weekStart, -7))}
-                    >
-                        <IconChevronLeft size={17} />
-                    </ActionIcon>
-                    <Text className="plan-week-label" fw={700}>
-                        {weekLabel}
-                    </Text>
-                    <ActionIcon
-                        variant="default"
-                        aria-label="Next week"
-                        onClick={() => navigateDate(addPlanDays(weekStart, 7))}
-                    >
-                        <IconChevronRight size={17} />
-                    </ActionIcon>
-                </div>
-                <Group gap="xs">
-                    <Button variant="default" size="sm" onClick={() => setSchedulesOpen(true)}>
-                        Schedules{schedules.length ? ` (${schedules.length})` : ''}
-                    </Button>
-                    {weekStart !== weekStartKey(todayKey) && (
-                        <Button variant="default" size="sm" onClick={() => navigateDate(todayKey)}>
-                            This week
-                        </Button>
-                    )}
-                </Group>
-            </div>
-
             {(mutationError || loadError) && (
                 <Alert color="orange" mb="md">
                     {mutationError || loadError}
                 </Alert>
             )}
 
-            {loading ? (
-                compact ? (
-                    <Skeleton height={420} radius="lg" />
-                ) : (
-                    <Skeleton height={540} radius="lg" />
-                )
-            ) : compact ? (
-                mobilePlan
-            ) : (
-                desktopPlan
-            )}
+            <PlanBoardView
+                compact={compact}
+                loading={loading}
+                dates={dates}
+                todayKey={todayKey}
+                selectedDate={selectedDate}
+                weekStart={weekStart}
+                weekLabel={weekLabel}
+                locale={locale}
+                items={items}
+                schedulesCount={schedules.length}
+                onNavigateDate={navigateDate}
+                onOpenSchedules={() => setSchedulesOpen(true)}
+                onAdd={openNew}
+                onEdit={openEdit}
+                onLog={openLog}
+                onSkip={item => actionMutation.mutate(() => setPlanMealSkipped(item, true))}
+                onRestore={item => actionMutation.mutate(() => setPlanMealSkipped(item, false))}
+                onDelete={item => actionMutation.mutate(() => deletePlanMeal(item))}
+            />
 
             <Modal
                 opened={Boolean(editor)}
@@ -772,17 +444,7 @@ export function Plan() {
                                         </Chip.Group>
                                         <Text size="xs" c="dimmed" mt={7}>
                                             {editor.weekdays.length
-                                                ? `Repeats every ${scheduleDaysLabel(
-                                                      editor.weekdays.map(Number),
-                                                  )}, starting ${formatCalendarDate(
-                                                      editor.date,
-                                                      locale,
-                                                      {
-                                                          month: 'short',
-                                                          day: 'numeric',
-                                                          year: 'numeric',
-                                                      },
-                                                  )}.`
+                                                ? `Repeats every ${scheduleDaysLabel(editor.weekdays.map(Number))}, starting ${formatCalendarDate(editor.date, locale, { month: 'short', day: 'numeric', year: 'numeric' })}.`
                                                 : 'Choose at least one day.'}
                                         </Text>
                                     </div>

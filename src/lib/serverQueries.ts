@@ -26,10 +26,14 @@ export async function invalidateJournalQueries() {
     await queryClient.invalidateQueries({ queryKey: serverQueryKeys.journal })
 }
 
+export async function invalidateObservationQueries() {
+    await Promise.all([invalidateJournalQueries(), invalidateHealthQueries()])
+}
+
 export async function invalidateNutritionQueries() {
     await Promise.all([
         queryClient.invalidateQueries({ queryKey: serverQueryKeys.meals }),
-        queryClient.invalidateQueries({ queryKey: serverQueryKeys.journal }),
+        invalidateJournalQueries(),
         invalidateHealthQueries(),
     ])
 }
@@ -49,55 +53,33 @@ export async function invalidatePlanQueries() {
     ])
 }
 
-let installed = false
+export async function invalidatePlanAndNutritionQueries() {
+    await Promise.all([invalidatePlanQueries(), invalidateNutritionQueries()])
+}
 
-export function installServerQueryInvalidation() {
-    if (installed) return
-    installed = true
+export async function cachePreferences(preferences: Preferences) {
+    queryClient.setQueryData(serverQueryKeys.preferences, preferences)
+    await invalidateHealthQueries()
+}
 
-    const observationsChanged = () => {
-        void invalidateNutritionQueries()
-    }
-    const preferencesChanged = () => {
-        void queryClient.invalidateQueries({ queryKey: serverQueryKeys.preferences })
-    }
-    const preferencesSaved = (event: Event) => {
-        queryClient.setQueryData(
-            serverQueryKeys.preferences,
-            (event as CustomEvent<Preferences>).detail,
-        )
-        void invalidateHealthQueries()
-    }
-    const goalsChanged = () => {
-        void Promise.all([
-            queryClient.invalidateQueries({ queryKey: serverQueryKeys.goals }),
-            invalidateHealthQueries(),
-        ])
-    }
-    const goalSaved = (event: Event) => {
-        const goal = (event as CustomEvent<GoalRecord>).detail
-        queryClient.setQueryData<GoalRecord[]>(serverQueryKeys.goals, current => [
-            goal,
-            ...(current ?? []).filter(item => item.id !== goal.id),
-        ])
-        void invalidateHealthQueries()
-    }
-    const goalDeleted = (event: Event) => {
-        const id = (event as CustomEvent<string>).detail
-        queryClient.setQueryData<GoalRecord[]>(serverQueryKeys.goals, current =>
-            (current ?? []).filter(item => item.id !== id),
-        )
-        void invalidateHealthQueries()
-    }
-    const planChanged = () => {
-        void Promise.all([invalidatePlanQueries(), invalidateNutritionQueries()])
-    }
+export async function cacheGoal(goal: GoalRecord) {
+    queryClient.setQueryData<GoalRecord[]>(serverQueryKeys.goals, current => [
+        goal,
+        ...(current ?? []).filter(item => item.id !== goal.id),
+    ])
+    await invalidateHealthQueries()
+}
 
-    window.addEventListener('trackit:observations-changed', observationsChanged)
-    window.addEventListener('trackit:preferences-changed', preferencesChanged)
-    window.addEventListener('trackit:preferences-saved', preferencesSaved)
-    window.addEventListener('trackit:goals-changed', goalsChanged)
-    window.addEventListener('trackit:goal-saved', goalSaved)
-    window.addEventListener('trackit:goal-deleted', goalDeleted as EventListener)
-    window.addEventListener('trackit:plan-changed', planChanged)
+export async function removeGoalFromCache(id: string) {
+    queryClient.setQueryData<GoalRecord[]>(serverQueryKeys.goals, current =>
+        (current ?? []).filter(item => item.id !== id),
+    )
+    await invalidateHealthQueries()
+}
+
+export async function invalidateAllServerDataQueries() {
+    await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['server'] }),
+        invalidateHealthQueries(),
+    ])
 }

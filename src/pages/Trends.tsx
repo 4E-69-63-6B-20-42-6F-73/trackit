@@ -1,50 +1,28 @@
-import { Alert, Badge, Button, Menu, SegmentedControl, Select, Text } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import {
-    IconAdjustments,
-    IconBookmark,
-    IconChartLine,
-    IconChevronDown,
-    IconPlugConnected,
-} from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import {
-    addCalendarDays,
-    calendarDateFromKey,
-    calendarDayRangeForKey,
-    calendarTodayKey,
-} from '@trackit/domain/calendar'
-import {
-    dailySeries,
-    weeklySeries,
-    type NumericObservation,
-    type TrendGranularity,
-} from '@trackit/domain/health'
-import { metricDefinition } from '@trackit/domain/metricCatalog'
-import {
-    convertMetricValue,
-    displayUnitFor,
-    formatMetricDisplayValue,
-    unitPresentation,
-} from '@trackit/domain/metrics'
-import { CorrelationNote } from '../components/CorrelationNote'
-import { ObservationRecords } from '../components/ObservationRecords'
-import { PageHeader } from '../components/PageHeader'
-import { TrendChart } from '../components/TrendChart'
+import { addCalendarDays, calendarTodayKey } from '@trackit/domain/calendar'
+import type { NumericObservation, TrendGranularity } from '@trackit/domain/health'
+import { unitPresentation } from '@trackit/domain/metrics'
 import { useServerData } from '../hooks/useServerData'
 import { listDailyMetrics } from '../lib/dailyMetricApi'
 import { healthQueryKeys } from '../lib/healthQueries'
 import { listObservations, setObservationExcluded } from '../lib/observationApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 import { listTrendViews, saveTrendView, type TrendViewRecord } from '../lib/trendApi'
+import { TrendsView } from './TrendsView'
+import {
+    buildTrendPresentation,
+    formatTrendValue,
+    metricLabel,
+    metricOptionsFor,
+    recordedMetricIds,
+    resolveActiveMetric,
+    trendObservationRange,
+    trendRanges,
+    type TrendRangeLabel,
+} from './trendsModel'
 import '../trends.css'
-
-const ranges = { '7 days': 7, '30 days': 30, '90 days': 90 } as const
-
-const metricLabel = (definitionId: string) =>
-    metricDefinition(definitionId)?.name ??
-    definitionId.replaceAll('_', ' ').replace(/^./, value => value.toUpperCase())
 
 export function Trends() {
     const navigate = useNavigate()
@@ -54,7 +32,7 @@ export function Trends() {
     const timezone = preferences?.timezone ?? 'UTC'
     const todayKey = calendarTodayKey(timezone)
     const requestedMetric = params.get('metric')
-    const [range, setRange] = useState<keyof typeof ranges>('30 days')
+    const [range, setRange] = useState<TrendRangeLabel>('30 days')
     const [definitionId, setDefinitionIdState] = useState<string | null>(requestedMetric)
     const [comparisonDefinitionId, setComparisonDefinitionId] = useState<string | null>(null)
     const [showCompare, setShowCompare] = useState(false)
@@ -76,32 +54,24 @@ export function Trends() {
     )
     const savedViews = savedViewsQuery.data ?? []
     const recordedDefinitionIds = useMemo(
-        () => [...new Set(availableMetrics.map(record => record.definitionId))],
+        () => recordedMetricIds(availableMetrics),
         [availableMetrics],
     )
-    const preferredDefinitionId = ['sleep', 'steps', 'weight', 'resting_heart_rate', 'energy'].find(
-        candidate => recordedDefinitionIds.includes(candidate),
+    const activeDefinitionId = resolveActiveMetric(
+        definitionId,
+        requestedMetric,
+        recordedDefinitionIds,
     )
-    const activeDefinitionId =
-        definitionId && recordedDefinitionIds.includes(definitionId)
-            ? definitionId
-            : requestedMetric && recordedDefinitionIds.includes(requestedMetric)
-              ? requestedMetric
-              : (preferredDefinitionId ?? recordedDefinitionIds[0] ?? null)
-    const days = ranges[range]
-    const observationFromKey = addCalendarDays(todayKey, -(days * 2 - 1))
+    const days = trendRanges[range]
     const observationDefinitionIds = activeDefinitionId
         ? [activeDefinitionId, ...(comparisonDefinitionId ? [comparisonDefinitionId] : [])]
         : []
-    const observationStart = calendarDayRangeForKey(observationFromKey, timezone).from
-    const sleepLookbehindMs = observationDefinitionIds.some(id => id.startsWith('sleep'))
-        ? 36 * 60 * 60 * 1000
-        : 0
-    const observationRange = {
-        from: new Date(observationStart.getTime() - sleepLookbehindMs).toISOString(),
-        to: calendarDayRangeForKey(todayKey, timezone).to.toISOString(),
-        definitionIds: observationDefinitionIds,
-    }
+    const observationRange = trendObservationRange(
+        todayKey,
+        days,
+        timezone,
+        observationDefinitionIds,
+    )
     const observationsQuery = useQuery({
         queryKey: [...healthQueryKeys.observations, observationRange],
         enabled: Boolean(activeDefinitionId) && !availableMetricsQuery.isPending,
@@ -112,6 +82,20 @@ export function Trends() {
         availableMetricsQuery.isPending ||
         (Boolean(activeDefinitionId) && observationsQuery.isPending)
     const error = availableMetricsQuery.isError || observationsQuery.isError
+    const metricOptions = useMemo(
+        () => metricOptionsFor(recordedDefinitionIds),
+        [recordedDefinitionIds],
+    )
+    const presentation = buildTrendPresentation({
+        observations,
+        activeDefinitionId,
+        comparisonDefinitionId,
+        granularity,
+        days,
+        todayKey,
+        timezone,
+        metricPreferences: preferences?.metricPreferences,
+    })
 
     const setDefinitionId = (value: string | null) => {
         setDefinitionIdState(value)
@@ -121,96 +105,18 @@ export function Trends() {
         setParams(next, { replace: true })
     }
 
-    const metricOptions = useMemo(() => {
-        const grouped = new Map<string, Array<{ value: string; label: string }>>()
-        for (const id of recordedDefinitionIds) {
-            const group = metricDefinition(id)?.category ?? 'Other recorded metrics'
-            const items = grouped.get(group) ?? []
-            items.push({ value: id, label: metricLabel(id) })
-            grouped.set(group, items)
-        }
-        return [...grouped.entries()].map(([group, items]) => ({
-            group,
-            items: items.sort((left, right) => left.label.localeCompare(right.label)),
-        }))
-    }, [recordedDefinitionIds])
-
-    const currentStartKey = addCalendarDays(todayKey, -(days - 1))
-    const previousStartKey = addCalendarDays(todayKey, -(days * 2 - 1))
-    const currentStart = calendarDateFromKey(currentStartKey, timezone)
-    const previousStart = calendarDateFromKey(previousStartKey, timezone)
-    const primaryRecords = observations.filter(
-        record => record.definitionId === activeDefinitionId && !record.excluded,
-    )
-    const comparisonRecords = observations.filter(
-        record => record.definitionId === comparisonDefinitionId && !record.excluded,
-    )
-    const displayUnit = activeDefinitionId
-        ? displayUnitFor(activeDefinitionId, preferences?.metricPreferences)
-        : undefined
-    const convert = (value: number) =>
-        activeDefinitionId &&
-        metricDefinition(activeDefinitionId) &&
-        primaryRecords[0]?.canonicalUnit &&
-        displayUnit
-            ? convertMetricValue(
-                  activeDefinitionId,
-                  value,
-                  primaryRecords[0].canonicalUnit,
-                  displayUnit,
-              )
-            : value
     const formatDisplayValue = (
         value: number,
         options?: { signed?: boolean; withUnit?: boolean },
     ) =>
-        activeDefinitionId && displayUnit
-            ? formatMetricDisplayValue(
-                  activeDefinitionId,
-                  value,
-                  displayUnit,
-                  preferences?.metricPreferences,
-                  preferences?.locale,
-                  options,
-              )
-            : value.toLocaleString(preferences?.locale)
-
-    const seriesFor = (records: NumericObservation[], start: Date) =>
-        (granularity === 'weekly' ? weeklySeries : dailySeries)(records, start, days, timezone)
-    const points = seriesFor(primaryRecords, currentStart).map(point => ({
-        ...point,
-        value: point.value === null ? null : convert(point.value),
-    }))
-    const previousPoints = seriesFor(primaryRecords, previousStart).map(point => ({
-        ...point,
-        value: point.value === null ? null : convert(point.value),
-    }))
-    const comparisonPoints = seriesFor(comparisonRecords, currentStart)
-    const coveredValues = points.flatMap(point => (point.value === null ? [] : [point.value]))
-    const previousValues = previousPoints.flatMap(point =>
-        point.value === null ? [] : [point.value],
-    )
-    const average = coveredValues.length
-        ? coveredValues.reduce((total, value) => total + value, 0) / coveredValues.length
-        : null
-    const previousAverage = previousValues.length
-        ? previousValues.reduce((total, value) => total + value, 0) / previousValues.length
-        : null
-    const periodChange =
-        average !== null && previousAverage !== null ? average - previousAverage : null
-    const coverageRatio = points.length ? coveredValues.length / points.length : 0
-    const confidence =
-        coverageRatio >= 0.75
-            ? 'High coverage'
-            : coverageRatio >= 0.4
-              ? 'Partial coverage'
-              : 'Low coverage'
-    const isNutritionMetric = activeDefinitionId
-        ? metricDefinition(activeDefinitionId)?.source === 'meal'
-        : false
-    const isManualMetric = activeDefinitionId
-        ? metricDefinition(activeDefinitionId)?.source === 'manual'
-        : false
+        formatTrendValue(
+            activeDefinitionId,
+            presentation.displayUnit,
+            value,
+            preferences?.metricPreferences,
+            preferences?.locale,
+            options,
+        )
 
     const excludeMutation = useMutation({
         mutationFn: ({
@@ -257,342 +163,105 @@ export function Trends() {
         setShowAnalysis(false)
         setGranularity(view.granularity)
         setInspectedIds(null)
-        const nextRange = Object.entries(ranges).find(([, value]) => value === view.rangeDays)?.[0]
-        if (nextRange) setRange(nextRange as keyof typeof ranges)
+        const nextRange = Object.entries(trendRanges).find(
+            ([, value]) => value === view.rangeDays,
+        )?.[0]
+        if (nextRange) setRange(nextRange as TrendRangeLabel)
     }
 
     const pageEmpty =
         !loading && (availableMetricsQuery.isError || recordedDefinitionIds.length === 0)
     const rangeUnavailable = Boolean(activeDefinitionId) && observationsQuery.isError
-    const rangeEmpty = !loading && !rangeUnavailable && coveredValues.length === 0
+    const rangeEmpty = !loading && !rangeUnavailable && presentation.coveredCount === 0
+    const inspectedObservations =
+        inspectedIds && activeDefinitionId
+            ? observations.filter(
+                  record =>
+                      record.definitionId === activeDefinitionId &&
+                      inspectedIds.includes(record.id),
+              )
+            : []
+    const valueLabel =
+        activeDefinitionId && presentation.displayUnit
+            ? `${metricLabel(activeDefinitionId)} (${unitPresentation(presentation.displayUnit).label})`
+            : undefined
 
     return (
-        <div className="page-content trends-page trends-revamp">
-            <PageHeader title="Trends" description="See how your observations change over time." />
-
-            {pageEmpty ? (
-                <section className="panel page-empty">
-                    <IconChartLine size={28} />
-                    <h2>
-                        {availableMetricsQuery.isError
-                            ? 'Trends are unavailable'
-                            : 'No trends to show yet'}
-                    </h2>
-                    <Text c="dimmed" size="sm">
-                        {availableMetricsQuery.isError
-                            ? 'TrackIt could not load your observations. Review the server and connection status.'
-                            : 'Trends appear after observations have been recorded or imported.'}
-                    </Text>
-                    <Button
-                        leftSection={<IconPlugConnected size={17} />}
-                        onClick={() => navigate('/settings/connections')}
-                    >
-                        Review Connections
-                    </Button>
-                </section>
-            ) : (
-                <section className="panel chart-large trends-surface">
-                    <div className="trends-toolbar">
-                        <div className="trends-primary-controls">
-                            <Select
-                                label="Metric"
-                                aria-label="Trend metric"
-                                value={activeDefinitionId}
-                                onChange={value => {
-                                    setDefinitionId(value)
-                                    if (value === comparisonDefinitionId)
-                                        setComparisonDefinitionId(null)
-                                    setInspectedIds(null)
-                                    setShowAnalysis(false)
-                                }}
-                                data={metricOptions}
-                                allowDeselect={false}
-                            />
-                            <Select
-                                label="Range"
-                                value={range}
-                                onChange={value => {
-                                    if (value) setRange(value as keyof typeof ranges)
-                                    setInspectedIds(null)
-                                }}
-                                data={Object.keys(ranges)}
-                                allowDeselect={false}
-                            />
-                        </div>
-                        <div className="trends-secondary-controls">
-                            {savedViews.length > 0 && (
-                                <Menu position="bottom-end">
-                                    <Menu.Target>
-                                        <Button
-                                            variant="subtle"
-                                            color="gray"
-                                            leftSection={<IconBookmark size={16} />}
-                                            rightSection={<IconChevronDown size={14} />}
-                                        >
-                                            Saved views
-                                        </Button>
-                                    </Menu.Target>
-                                    <Menu.Dropdown>
-                                        {savedViews.map(view => (
-                                            <Menu.Item
-                                                key={view.id}
-                                                onClick={() => loadView(view.id)}
-                                            >
-                                                {view.name}
-                                            </Menu.Item>
-                                        ))}
-                                    </Menu.Dropdown>
-                                </Menu>
-                            )}
-                            <Menu position="bottom-end">
-                                <Menu.Target>
-                                    <Button
-                                        variant="subtle"
-                                        color="gray"
-                                        leftSection={<IconAdjustments size={16} />}
-                                        rightSection={<IconChevronDown size={14} />}
-                                    >
-                                        More
-                                    </Button>
-                                </Menu.Target>
-                                <Menu.Dropdown>
-                                    <Menu.Label>Aggregation</Menu.Label>
-                                    <Menu.Item closeMenuOnClick={false}>
-                                        <SegmentedControl
-                                            aria-label="Trend aggregation"
-                                            size="xs"
-                                            data={[
-                                                { label: 'Daily', value: 'daily' },
-                                                { label: 'Weekly', value: 'weekly' },
-                                            ]}
-                                            value={granularity}
-                                            onChange={value => {
-                                                setGranularity(value as TrendGranularity)
-                                                setInspectedIds(null)
-                                            }}
-                                        />
-                                    </Menu.Item>
-                                    <Menu.Divider />
-                                    <Menu.Item
-                                        disabled={saveViewMutation.isPending}
-                                        onClick={() => saveViewMutation.mutate()}
-                                    >
-                                        Save current view
-                                    </Menu.Item>
-                                </Menu.Dropdown>
-                            </Menu>
-                        </div>
-                    </div>
-
-                    {savedViewsQuery.isError && (
-                        <Alert color="orange">Saved trend views could not be loaded.</Alert>
-                    )}
-
-                    {average !== null && (
-                        <div className="trends-summary" aria-label="Trend summary">
-                            <div>
-                                <Text size="xs" c="dimmed">
-                                    Average
-                                </Text>
-                                <Text fw={750} size="xl">
-                                    {formatDisplayValue(average)}
-                                </Text>
-                            </div>
-                            <div>
-                                <Text size="xs" c="dimmed">
-                                    vs previous {range.toLowerCase()}
-                                </Text>
-                                <Text fw={700}>
-                                    {periodChange === null
-                                        ? 'Not enough prior data'
-                                        : formatDisplayValue(periodChange, { signed: true })}
-                                </Text>
-                            </div>
-                            <div>
-                                <Text size="xs" c="dimmed">
-                                    Coverage
-                                </Text>
-                                <div className="trends-coverage-value">
-                                    <Text fw={700}>
-                                        {coveredValues.length} / {points.length}{' '}
-                                        {granularity === 'weekly' ? 'weeks' : 'days'}
-                                    </Text>
-                                    <Badge
-                                        size="xs"
-                                        color={
-                                            coverageRatio >= 0.75
-                                                ? 'teal'
-                                                : coverageRatio >= 0.4
-                                                  ? 'yellow'
-                                                  : 'gray'
-                                        }
-                                    >
-                                        {confidence}
-                                    </Badge>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-
-                    {rangeUnavailable ? (
-                        <Alert color="orange">
-                            Trend observations for this range could not be loaded.
-                        </Alert>
-                    ) : rangeEmpty ? (
-                        <div className="trend-metric-empty">
-                            <Text fw={650}>
-                                No{' '}
-                                {activeDefinitionId
-                                    ? metricLabel(activeDefinitionId).toLowerCase()
-                                    : 'metric'}{' '}
-                                data in this range
-                            </Text>
-                            <Text size="sm" c="dimmed">
-                                {isNutritionMetric
-                                    ? 'This trend will appear after meals containing this nutrient are recorded.'
-                                    : isManualMetric
-                                      ? 'Use Log to add an observation for this metric.'
-                                      : 'This trend will appear after observations are imported from a Connection.'}
-                            </Text>
-                            {!isManualMetric && (
-                                <Button
-                                    size="xs"
-                                    variant="default"
-                                    onClick={() =>
-                                        navigate(
-                                            isNutritionMetric
-                                                ? '/journal?category=Meals'
-                                                : '/settings/connections',
-                                        )
-                                    }
-                                >
-                                    {isNutritionMetric
-                                        ? 'View meals in Journal'
-                                        : 'Review Connections'}
-                                </Button>
-                            )}
-                        </div>
-                    ) : (
-                        <TrendChart
-                            points={points}
-                            loading={loading}
-                            error={error}
-                            metric={activeDefinitionId ? metricLabel(activeDefinitionId) : ''}
-                            onInspect={isNutritionMetric ? undefined : setInspectedIds}
-                            comparisonPoints={comparisonDefinitionId ? comparisonPoints : undefined}
-                            comparisonLabel={
-                                comparisonDefinitionId
-                                    ? metricLabel(comparisonDefinitionId)
-                                    : undefined
-                            }
-                            periodLabel={granularity === 'weekly' ? 'week' : 'day'}
-                            valueLabel={
-                                activeDefinitionId && displayUnit
-                                    ? `${metricLabel(activeDefinitionId)} (${unitPresentation(displayUnit).label})`
-                                    : undefined
-                            }
-                            formatValue={value => formatDisplayValue(value, { withUnit: false })}
-                        />
-                    )}
-
-                    <div className="trends-below-chart">
-                        {!showCompare ? (
-                            <Button
-                                variant="default"
-                                onClick={() => {
-                                    setShowCompare(true)
-                                    setShowAnalysis(false)
-                                }}
-                            >
-                                Compare another metric
-                            </Button>
-                        ) : (
-                            <Select
-                                className="trend-compare"
-                                clearable
-                                label="Compare with"
-                                value={comparisonDefinitionId}
-                                onChange={value => {
-                                    setComparisonDefinitionId(value)
-                                    setShowAnalysis(false)
-                                }}
-                                data={recordedDefinitionIds
-                                    .filter(id => id !== activeDefinitionId)
-                                    .map(id => ({ value: id, label: metricLabel(id) }))}
-                                placeholder="Choose a recorded metric"
-                            />
-                        )}
-                        {showCompare && comparisonDefinitionId && (
-                            <Button
-                                variant="subtle"
-                                color="gray"
-                                onClick={() => setShowAnalysis(value => !value)}
-                            >
-                                {showAnalysis ? 'Hide analysis' : 'Analyze relationship'}
-                            </Button>
-                        )}
-                    </div>
-
-                    {showAnalysis && activeDefinitionId && comparisonDefinitionId && (
-                        <div className="trends-analysis">
-                            <CorrelationNote
-                                observations={observations}
-                                metric={activeDefinitionId}
-                                comparisonMetric={comparisonDefinitionId}
-                                start={currentStart}
-                                days={days}
-                                timezone={timezone}
-                            />
-                        </div>
-                    )}
-
-                    {actionError && (
-                        <Alert role="alert" color="orange">
-                            {actionError}
-                        </Alert>
-                    )}
-
-                    {inspectedIds && activeDefinitionId && (
-                        <div className="trends-inspector">
-                            <div className="trends-inspector-heading">
-                                <div>
-                                    <Text fw={700}>Contributing observations</Text>
-                                    <Text size="sm" c="dimmed">
-                                        These are the records behind the selected chart point.
-                                    </Text>
-                                </div>
-                                <Button
-                                    size="xs"
-                                    variant="subtle"
-                                    color="gray"
-                                    onClick={() => setInspectedIds(null)}
-                                >
-                                    Close
-                                </Button>
-                            </div>
-                            <ObservationRecords
-                                observations={observations.filter(
-                                    record =>
-                                        record.definitionId === activeDefinitionId &&
-                                        inspectedIds.includes(record.id),
-                                )}
-                                onToggleExcluded={observation =>
-                                    excludeMutation.mutate({
-                                        observation,
-                                        excluded: !observation.excluded,
-                                    })
-                                }
-                                showAll
-                            />
-                        </div>
-                    )}
-
-                    <Text size="xs" c="dimmed" className="trends-footnote">
-                        Missing periods are shown rather than estimated. Summary values use only
-                        periods that contain observations.
-                    </Text>
-                </section>
-            )}
-        </div>
+        <TrendsView
+            pageEmpty={pageEmpty}
+            availableMetricsError={availableMetricsQuery.isError}
+            recordedDefinitionIds={recordedDefinitionIds}
+            savedViews={savedViews}
+            savedViewsError={savedViewsQuery.isError}
+            metricOptions={metricOptions}
+            activeDefinitionId={activeDefinitionId}
+            range={range}
+            granularity={granularity}
+            average={presentation.average}
+            periodChange={presentation.periodChange}
+            coveredCount={presentation.coveredCount}
+            pointCount={presentation.pointCount}
+            coverageRatio={presentation.coverageRatio}
+            confidence={presentation.confidence}
+            rangeUnavailable={rangeUnavailable}
+            rangeEmpty={rangeEmpty}
+            isNutritionMetric={presentation.isNutritionMetric}
+            isManualMetric={presentation.isManualMetric}
+            points={presentation.points}
+            comparisonPoints={presentation.comparisonPoints}
+            loading={loading}
+            error={error}
+            comparisonDefinitionId={comparisonDefinitionId}
+            showCompare={showCompare}
+            showAnalysis={showAnalysis}
+            observations={observations}
+            currentStart={presentation.currentStart}
+            days={days}
+            timezone={timezone}
+            actionError={actionError}
+            inspectedIds={inspectedIds}
+            inspectedObservations={inspectedObservations}
+            saveViewPending={saveViewMutation.isPending}
+            valueLabel={valueLabel}
+            formatDisplayValue={formatDisplayValue}
+            onReviewConnections={() => navigate('/settings/connections')}
+            onMetricChange={value => {
+                setDefinitionId(value)
+                if (value === comparisonDefinitionId) setComparisonDefinitionId(null)
+                setInspectedIds(null)
+                setShowAnalysis(false)
+            }}
+            onRangeChange={value => {
+                setRange(value)
+                setInspectedIds(null)
+            }}
+            onLoadView={loadView}
+            onGranularityChange={value => {
+                setGranularity(value)
+                setInspectedIds(null)
+            }}
+            onSaveView={() => saveViewMutation.mutate()}
+            onReviewEmptyRange={() =>
+                navigate(
+                    presentation.isNutritionMetric
+                        ? '/journal?category=Meals'
+                        : '/settings/connections',
+                )
+            }
+            onInspect={setInspectedIds}
+            onShowCompare={() => {
+                setShowCompare(true)
+                setShowAnalysis(false)
+            }}
+            onComparisonChange={value => {
+                setComparisonDefinitionId(value)
+                setShowAnalysis(false)
+            }}
+            onToggleAnalysis={() => setShowAnalysis(value => !value)}
+            onCloseInspector={() => setInspectedIds(null)}
+            onToggleExcluded={observation =>
+                excludeMutation.mutate({ observation, excluded: !observation.excluded })
+            }
+        />
     )
 }
