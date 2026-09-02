@@ -104,7 +104,9 @@ export class PostgresDataRepository extends PersistenceDataRepository implements
         const saved = await super.updatePreferences(input)
         if (saved.metricResolutionVersion !== before.metricResolutionVersion) {
             await this.projections.invalidateAll()
-            await this.projections.refreshDates([calendarDateKey(new Date(), saved.timezone ?? 'UTC')])
+            await this.projections.refreshDates([
+                calendarDateKey(new Date(), saved.timezone ?? 'UTC'),
+            ])
         }
         return saved
     }
