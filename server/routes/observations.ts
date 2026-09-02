@@ -13,7 +13,6 @@ import {
     dailyMetricRangeQuerySchema,
     errorResponseSchema,
     metricSourceListResponseSchema,
-    type MetricSourceSummary,
     type NumericObservationResponse,
     observationIdParamsSchema,
     observationInputSchema,
@@ -24,7 +23,7 @@ import {
     observationUpdateSchema,
     parseObservationDefinitionIds,
 } from '../contracts/observations.js'
-import type { DataRepository } from '../data/types.js'
+import type { HealthProjectionRepository, ObservationRepository } from '../data/types.js'
 import { mergeGeneratedObservationPaths, openApiContract } from '../openapi.js'
 
 type BadRequest = (
@@ -38,7 +37,7 @@ type BadRequest = (
 ) => FastifyReply
 
 type ObservationRouteOptions = {
-    data: DataRepository
+    data: ObservationRepository & HealthProjectionRepository
     badRequest: BadRequest
 }
 
@@ -121,7 +120,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             },
         },
         async () => ({
-            data: ((await data.listMetricSources?.()) ?? []) as MetricSourceSummary[],
+            data: await data.listMetricSources(),
         }),
     )
 
@@ -147,18 +146,20 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
                 86_400_000
             if (days < 0 || days > 365)
                 return badRequest(request, reply, { error: 'range_too_large' })
-            const rows = ((await data.listDailyMetrics?.({
+            const rows = await data.listDailyMetrics({
                 from: request.query.from,
                 to: request.query.to,
-            })) ?? []) as DailyMetricResponse[]
+            })
             return {
-                data: rows.map(row => ({
-                    date: row.date,
-                    definitionId: row.definitionId,
-                    value: row.value,
-                    unit: row.unit,
-                    derivationVersion: row.derivationVersion,
-                })),
+                data: rows.map(
+                    (row): DailyMetricResponse => ({
+                        date: row.date,
+                        definitionId: row.definitionId,
+                        value: row.value,
+                        unit: row.unit,
+                        derivationVersion: row.derivationVersion,
+                    }),
+                ),
             }
         },
     )
@@ -178,6 +179,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
         async (request, reply) => {
             if (request.validationError) return badRequest(request, reply)
             const created = await data.createObservation(request.body)
+            if (!created) return reply.code(409).send({ error: 'observation_conflict' })
             return reply
                 .code(201)
                 .send({ data: mutationResult(created, { version: 1, excluded: false }) })
