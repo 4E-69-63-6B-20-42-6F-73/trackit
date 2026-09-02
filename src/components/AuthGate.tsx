@@ -17,26 +17,20 @@ import {
 } from '@mantine/core'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
-import { environment } from '../app/env'
-import { csrfToken } from '../lib/authApi'
+import {
+    authenticationOptions,
+    loadAuthStatus,
+    loginOwner,
+    recoverOwner,
+    registrationOptions,
+    setupOwner,
+    verifyAuthentication,
+    verifyRegistration,
+} from '../lib/authApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 
 type AuthState = 'loading' | 'offline' | 'setup' | 'login' | 'recovery' | 'authenticated'
 type AuthOverride = Extract<AuthState, 'login' | 'recovery' | 'authenticated'> | null
-
-type AuthStatus = {
-    configured: boolean
-    authenticated: boolean
-}
-
-const loadAuthStatus = async (signal: AbortSignal): Promise<AuthStatus> => {
-    const response = await fetch(`${environment.VITE_API_URL}/api/auth/status`, {
-        credentials: 'same-origin',
-        signal,
-    })
-    if (!response.ok) throw new Error('unavailable')
-    return (await response.json()) as AuthStatus
-}
 
 export function AuthGate({ children }: { children: ReactNode }) {
     const statusQuery = useQuery({
@@ -61,28 +55,10 @@ export function AuthGate({ children }: { children: ReactNode }) {
                 : 'setup'
 
     const submitMutation = useMutation({
-        mutationFn: async () => {
-            const endpoint = state === 'setup' ? 'setup' : 'login'
-            const response = await fetch(`${environment.VITE_API_URL}/api/auth/${endpoint}`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'content-type': 'application/json',
-                    ...(state === 'setup' ? { 'x-trackit-bootstrap-secret': bootstrapSecret } : {}),
-                },
-                body: JSON.stringify({ password }),
-            })
-            if (!response.ok) {
-                throw new Error(
-                    state === 'setup'
-                        ? 'Check the setup secret and use a password of at least 12 characters.'
-                        : 'That password is incorrect.',
-                )
-            }
-            return state === 'setup'
-                ? ((await response.json()) as { recoveryCodes: string[] })
-                : null
-        },
+        mutationFn: async () =>
+            state === 'setup'
+                ? setupOwner(password, bootstrapSecret)
+                : loginOwner(password).then(() => null),
         onSuccess: result => {
             if (!result) setOverrideState('authenticated')
             setPassword('')
@@ -91,74 +67,28 @@ export function AuthGate({ children }: { children: ReactNode }) {
 
     const registerPasskeyMutation = useMutation({
         mutationFn: async () => {
-            const optionsResponse = await fetch(
-                `${environment.VITE_API_URL}/api/auth/passkey/register/options`,
-                {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'x-csrf-token': csrfToken() ?? '' },
-                },
-            )
-            if (!optionsResponse.ok) throw new Error('options_failed')
-            const attempt = (await optionsResponse.json()) as {
-                attemptId: string
-                options: PublicKeyCredentialCreationOptionsJSON
-            }
-            const response = await startRegistration({ optionsJSON: attempt.options })
-            const verification = await fetch(
-                `${environment.VITE_API_URL}/api/auth/passkey/register/verify`,
-                {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: {
-                        'content-type': 'application/json',
-                        'x-csrf-token': csrfToken() ?? '',
-                    },
-                    body: JSON.stringify({ attemptId: attempt.attemptId, response }),
-                },
-            )
-            if (!verification.ok) throw new Error('verification_failed')
+            const attempt = await registrationOptions()
+            const response = await startRegistration({
+                optionsJSON: attempt.options as PublicKeyCredentialCreationOptionsJSON,
+            })
+            await verifyRegistration(attempt.attemptId, response)
         },
         onSuccess: () => setOverrideState('authenticated'),
     })
 
     const loginWithPasskeyMutation = useMutation({
         mutationFn: async () => {
-            const optionsResponse = await fetch(
-                `${environment.VITE_API_URL}/api/auth/passkey/authenticate/options`,
-                { method: 'POST', credentials: 'same-origin' },
-            )
-            if (!optionsResponse.ok) throw new Error('options_failed')
-            const attempt = (await optionsResponse.json()) as {
-                attemptId: string
-                options: PublicKeyCredentialRequestOptionsJSON
-            }
-            const response = await startAuthentication({ optionsJSON: attempt.options })
-            const verification = await fetch(
-                `${environment.VITE_API_URL}/api/auth/passkey/authenticate/verify`,
-                {
-                    method: 'POST',
-                    credentials: 'same-origin',
-                    headers: { 'content-type': 'application/json' },
-                    body: JSON.stringify({ attemptId: attempt.attemptId, response }),
-                },
-            )
-            if (!verification.ok) throw new Error('verification_failed')
+            const attempt = await authenticationOptions()
+            const response = await startAuthentication({
+                optionsJSON: attempt.options as PublicKeyCredentialRequestOptionsJSON,
+            })
+            await verifyAuthentication(attempt.attemptId, response)
         },
         onSuccess: () => setOverrideState('authenticated'),
     })
 
     const recoveryMutation = useMutation({
-        mutationFn: async () => {
-            const response = await fetch(`${environment.VITE_API_URL}/api/auth/recover`, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'content-type': 'application/json' },
-                body: JSON.stringify({ code: recoveryCode.trim() }),
-            })
-            if (!response.ok)
-                throw new Error('That recovery code is invalid or has already been used.')
-        },
+        mutationFn: () => recoverOwner(recoveryCode.trim()),
         onSuccess: () => {
             setRecoveryCode('')
             setOverrideState('authenticated')

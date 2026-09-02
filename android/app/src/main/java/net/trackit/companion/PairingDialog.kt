@@ -161,7 +161,7 @@ fun PairingDialog(
                     }
                     state = PairingDialogState.Waiting(result.deviceId)
                     val polled = pairingPoller.pollForConfirmation(
-                        deviceId = result.deviceId,
+                        pending = result,
                         serverUrl = normalized.serverUrl,
                     )
                     when (polled) {

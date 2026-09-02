@@ -4,6 +4,7 @@ export type DeduplicationPolicy = 'keep_all' | 'prefer_priority' | 'metric_merge
 export type MetricPreference = {
     displayUnit: string
     precision?: number
+    showInJournal?: boolean
     deduplication?: {
         policy: DeduplicationPolicy
         sourcePriority: string[]

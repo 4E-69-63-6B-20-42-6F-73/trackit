@@ -1,25 +1,10 @@
-import { environment } from '../app/env'
-import type { JournalDetailView, JournalEvent } from '@trackit/domain/types'
 import { friendlySourceName } from '@trackit/domain/formatting'
-import { sharedJsonRequest } from './sharedRequest'
+import type { JournalEvent } from '@trackit/domain/types'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
-type ApiJournalEntry = {
-    id: string
-    definitionId: string
-    entityType?: JournalEvent['entityType']
-    entityId?: string
-    editable?: boolean
-    category: JournalEvent['category']
-    title: string
-    detail: string
-    source: string
-    deviceName?: string
-    observedAt: string
-    startedAt?: string
-    endedAt?: string
-    version: number
-    detailView?: JournalDetailView
-}
+type ApiJournalEntry =
+    paths['/api/journal']['get']['responses'][200]['content']['application/json']['data'][number]
 
 export type JournalQuery = {
     from?: string
@@ -30,7 +15,6 @@ export type JournalQuery = {
     limit?: number
 }
 
-const apiUrl = (path: string) => `${environment.VITE_API_URL}${path}`
 const toEvent = (entry: ApiJournalEntry): JournalEvent => ({
     id: entry.id,
     definitionId: entry.definitionId,
@@ -58,22 +42,19 @@ export async function listJournal(
     query: JournalQuery = {},
     signal?: AbortSignal,
 ): Promise<JournalEvent[]> {
-    const search = new URLSearchParams(
-        Object.entries(query)
-            .filter((entry): entry is [string, string | number] => entry[1] !== undefined)
-            .map(([key, value]) => [key, String(value)]),
-    )
-    const body = await sharedJsonRequest<{ data: ApiJournalEntry[] }>(
-        apiUrl(`/api/journal?${search}`),
+    const { data, response } = await apiClient.GET('/api/journal', {
+        params: { query },
         signal,
-    )
-    return body.data.map(toEvent)
+    })
+    if (!response.ok || !data) throw new Error('Journal unavailable')
+    return data.data.map(toEvent)
 }
 
 export async function getJournalEntry(id: string, signal?: AbortSignal): Promise<JournalEvent> {
-    const body = await sharedJsonRequest<{ data: ApiJournalEntry }>(
-        apiUrl(`/api/journal/${encodeURIComponent(id)}`),
+    const { data, response } = await apiClient.GET('/api/journal/{id}', {
+        params: { path: { id } },
         signal,
-    )
-    return toEvent(body.data)
+    })
+    if (!response.ok || !data) throw new Error('Journal entry unavailable')
+    return toEvent(data.data)
 }

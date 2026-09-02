@@ -13,7 +13,6 @@ import {
     dailyMetricRangeQuerySchema,
     errorResponseSchema,
     metricSourceListResponseSchema,
-    type MetricSourceSummary,
     type NumericObservationResponse,
     observationIdParamsSchema,
     observationInputSchema,
@@ -24,7 +23,11 @@ import {
     observationUpdateSchema,
     parseObservationDefinitionIds,
 } from '../contracts/observations.js'
-import type { DataRepository } from '../data/types.js'
+import type {
+    HealthProjectionRepository,
+    ObservationRepository,
+    RawObservationRecord,
+} from '../data/types.js'
 import { mergeGeneratedObservationPaths, openApiContract } from '../openapi.js'
 
 type BadRequest = (
@@ -38,19 +41,21 @@ type BadRequest = (
 ) => FastifyReply
 
 type ObservationRouteOptions = {
-    data: DataRepository
+    data: ObservationRepository & HealthProjectionRepository
     badRequest: BadRequest
 }
 
+type ObservationMutationRecord = Pick<RawObservationRecord, 'id' | 'version' | 'excluded'>
+
 const mutationResult = (
-    value: unknown,
+    value: ObservationMutationRecord | undefined,
     defaults?: Pick<ObservationMutationResult, 'version' | 'excluded'>,
 ): ObservationMutationResult => {
-    const record = value as { id: string; version?: number; excluded?: boolean }
+    if (!value) throw new Error('observation_persistence_invariant')
     return {
-        id: record.id,
-        version: record.version ?? defaults?.version ?? 1,
-        excluded: record.excluded ?? defaults?.excluded ?? false,
+        id: value.id,
+        version: value.version ?? defaults?.version ?? 1,
+        excluded: value.excluded ?? defaults?.excluded ?? false,
     }
 }
 
@@ -88,6 +93,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             const bounded: {
                 from?: string
                 to?: string
+
                 definitionIds?: string[]
             } = {
                 from: request.query.from,
@@ -121,7 +127,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             },
         },
         async () => ({
-            data: ((await data.listMetricSources?.()) ?? []) as MetricSourceSummary[],
+            data: await data.listMetricSources(),
         }),
     )
 
@@ -147,12 +153,12 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
                 86_400_000
             if (days < 0 || days > 365)
                 return badRequest(request, reply, { error: 'range_too_large' })
-            const rows = ((await data.listDailyMetrics?.({
+            const rows = await data.listDailyMetrics({
                 from: request.query.from,
                 to: request.query.to,
-            })) ?? []) as DailyMetricResponse[]
+            })
             return {
-                data: rows.map(row => ({
+                data: rows.map((row): DailyMetricResponse => ({
                     date: row.date,
                     definitionId: row.definitionId,
                     value: row.value,

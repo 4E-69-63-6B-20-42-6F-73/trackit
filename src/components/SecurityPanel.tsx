@@ -1,26 +1,8 @@
 import { Alert, Badge, Button, Divider, Group, Select, Skeleton, Stack, Text } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import { authRequest } from '../lib/authApi'
+import { listAuthAudit, listAuthSessions, logoutAll, revokeAuthSession } from '../lib/authApi'
 import { serverQueryKeys } from '../lib/serverQueries'
-
-type Session = {
-    id: string
-    userAgent: string | null
-    ipAddress: string | null
-    createdAt: string
-    expiresAt: string
-    current: boolean
-}
-
-type AuditEvent = {
-    id: string
-    action: string
-    actor: string
-    targetType: string | null
-    targetId: string | null
-    createdAt: string
-}
 
 const deviceName = (agent: string | null) => {
     if (!agent) return 'Unknown browser and device'
@@ -53,35 +35,20 @@ const actionLabel = (action: string) =>
         'data.exported': 'Data export downloaded',
     })[action] ?? action.replaceAll('.', ' ').replace(/^./, letter => letter.toUpperCase())
 
-const loadSessions = async (signal: AbortSignal) => {
-    const response = await authRequest('/api/auth/sessions', { signal })
-    if (!response.ok) throw new Error('Sessions unavailable')
-    return ((await response.json()) as { data: Session[] }).data
-}
-
-const loadAudit = async (signal: AbortSignal) => {
-    const response = await authRequest('/api/auth/audit', { signal })
-    if (!response.ok) throw new Error('Security activity unavailable')
-    return ((await response.json()) as { data: AuditEvent[] }).data
-}
-
 export function SecurityPanel() {
     const queryClient = useQueryClient()
     const [auditFilter, setAuditFilter] = useState('all')
     const [visibleEvents, setVisibleEvents] = useState(10)
     const sessionsQuery = useQuery({
         queryKey: serverQueryKeys.securitySessions,
-        queryFn: ({ signal }) => loadSessions(signal),
+        queryFn: ({ signal }) => listAuthSessions(signal),
     })
     const auditQuery = useQuery({
         queryKey: serverQueryKeys.securityAudit,
-        queryFn: ({ signal }) => loadAudit(signal),
+        queryFn: ({ signal }) => listAuthAudit(signal),
     })
     const revokeMutation = useMutation({
-        mutationFn: async (id: string) => {
-            const response = await authRequest(`/api/auth/sessions/${id}`, { method: 'DELETE' })
-            if (!response.ok) throw new Error('rejected')
-        },
+        mutationFn: revokeAuthSession,
         onSuccess: async () => {
             await Promise.all([
                 queryClient.invalidateQueries({ queryKey: serverQueryKeys.securitySessions }),
@@ -90,10 +57,7 @@ export function SecurityPanel() {
         },
     })
     const revokeAllMutation = useMutation({
-        mutationFn: async () => {
-            const response = await authRequest('/api/auth/logout-all', { method: 'POST' })
-            if (!response.ok) throw new Error('rejected')
-        },
+        mutationFn: logoutAll,
         onSuccess: () => window.location.reload(),
     })
     const sessions = sessionsQuery.data ?? []

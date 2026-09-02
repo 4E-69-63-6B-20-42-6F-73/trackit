@@ -2,10 +2,17 @@ import { performance } from 'node:perf_hooks'
 import { PGlite } from '@electric-sql/pglite'
 import { drizzle } from 'drizzle-orm/pglite'
 import { describe, expect, it, vi } from 'vitest'
+import type { NumericObservation } from '@trackit/domain/health'
 import { createApp } from './app.js'
 import type { JournalEntry, JournalRepository } from './journal/types.js'
 import { PostgresJournalRepository } from './journal/postgres-repository.js'
-import type { DataRepository, RecordRange } from './data/types.js'
+import type {
+    DataRepository,
+    MealRecord,
+    MealRepository,
+    ObservationRepository,
+    RecordRange,
+} from './data/types.js'
 import * as schema from './db/schema.js'
 import { applyTestMigrations } from './db/test-migrations.js'
 
@@ -19,12 +26,16 @@ class EmptyJournal implements JournalRepository {
     }
 }
 
-class FiveYearData implements DataRepository {
-    async listSources(): Promise<unknown[]> {
-        return []
-    }
+type PerformanceRepository = Pick<ObservationRepository, 'listObservations'> &
+    Pick<MealRepository, 'listMeals'>
 
-    private readonly records = Array.from({ length: 5 * 365 }, (_, index) => {
+type PerformanceRecord = NumericObservation & {
+    eatenAt: string
+    nutrientSnapshot: Record<string, number>
+}
+
+class FiveYearData implements PerformanceRepository {
+    private readonly records: PerformanceRecord[] = Array.from({ length: 5 * 365 }, (_, index) => {
         const observedAt = new Date(
             Date.UTC(2021, 0, 1) + index * 24 * 60 * 60 * 1000,
         ).toISOString()
@@ -47,108 +58,40 @@ class FiveYearData implements DataRepository {
         return (!range.from || value >= range.from) && (!range.to || value <= range.to)
     }
 
-    async listObservations(range?: RecordRange): Promise<unknown[]> {
+    async listObservations(range?: RecordRange): Promise<NumericObservation[]> {
         return this.records.filter(record => this.inRange(record.observedAt, range))
     }
 
-    async listRawObservations(range?: RecordRange): Promise<unknown[]> {
-        return this.records.filter(record => this.inRange(record.observedAt, range))
-    }
-
-    async listMeals(range?: RecordRange): Promise<unknown[]> {
-        return this.records.filter(record => this.inRange(record.eatenAt, range))
-    }
-
-    async createObservation(input: unknown): Promise<unknown> {
-        return input
-    }
-
-    async updateObservation(): Promise<unknown | null> {
-        return null
-    }
-
-    async removeObservation(): Promise<boolean> {
-        return false
-    }
-
-    async createMeal(input: unknown): Promise<unknown> {
-        return input
-    }
-
-    async updateMeal(): Promise<unknown | null> {
-        return null
-    }
-
-    async removeMeal(): Promise<boolean> {
-        return false
-    }
-
-    async getPreferences(): Promise<unknown> {
-        return {}
-    }
-
-    async updatePreferences(input: unknown): Promise<unknown> {
-        return input
-    }
-
-    async listFoods(): Promise<unknown[]> {
+    async listRawObservations(): Promise<never[]> {
         return []
     }
 
-    async createFood(input: unknown): Promise<unknown> {
-        return input
-    }
-
-    async updateFood(): Promise<unknown | null> {
-        return null
-    }
-
-    async importFoods(input: unknown): Promise<unknown> {
-        return input
-    }
-
-    async listRecipes(): Promise<unknown[]> {
-        return []
-    }
-
-    async createRecipe(input: unknown): Promise<unknown> {
-        return input
-    }
-
-    async updateRecipe(): Promise<unknown | null> {
-        return null
-    }
-
-    async listGoals(): Promise<unknown[]> {
-        return []
-    }
-
-    async createGoal(input: unknown): Promise<unknown> {
-        return input
-    }
-    async retireGoal(): Promise<unknown | null> {
-        return null
-    }
-    async updateGoal(): Promise<unknown | null> {
-        return null
-    }
-    async removeGoal(): Promise<boolean> {
-        return false
-    }
-
-    async listSavedTrendViews(): Promise<unknown[]> {
-        return []
-    }
-
-    async createSavedTrendView(input: unknown): Promise<unknown> {
-        return input
+    async listMeals(range?: RecordRange): Promise<MealRecord[]> {
+        return this.records
+            .filter(record => this.inRange(record.eatenAt, range))
+            .map(record => ({
+                id: record.id,
+                name: `Meal ${record.id}`,
+                mealType: 'Lunch',
+                eatenAt: new Date(record.eatenAt),
+                nutrientSnapshot: record.nutrientSnapshot,
+                nutritionQuality: 'complete',
+                favorite: false,
+                sourceId: null,
+                version: record.version,
+                createdAt: new Date(record.eatenAt),
+                updatedAt: new Date(record.eatenAt),
+                deletedAt: null,
+            }))
     }
 }
+
+const asApplicationRepository = (data: FiveYearData) => data as unknown as DataRepository
 
 describe('large-history performance', () => {
     it('does not allow the observations API to bypass the effective series', async () => {
         const data = new FiveYearData()
-        const effective = [
+        const effective: NumericObservation[] = [
             {
                 id: 'effective',
                 definitionId: 'steps',
@@ -162,17 +105,16 @@ describe('large-history performance', () => {
             },
         ]
         data.listObservations = vi.fn().mockResolvedValue(effective)
-        data.listRawObservations = vi.fn().mockResolvedValue([
-            { id: 'raw-garmin', metric: 'steps', canonicalValue: 7000 },
-            { id: 'raw-samsung', metric: 'steps', canonicalValue: 7000 },
-        ])
-        const app = await createApp(new EmptyJournal(), { dataRepository: data })
+        const listRawObservations = vi.spyOn(data, 'listRawObservations')
+        const app = await createApp(new EmptyJournal(), {
+            dataRepository: asApplicationRepository(data),
+        })
 
         const response = await app.inject({ method: 'GET', url: '/api/observations?series=raw' })
 
         expect(response.statusCode).toBe(200)
         expect(response.json()).toEqual({ data: effective })
-        expect(data.listRawObservations).not.toHaveBeenCalled()
+        expect(listRawObservations).not.toHaveBeenCalled()
         await app.close()
     })
 
@@ -239,7 +181,7 @@ describe('large-history performance', () => {
 
     it('keeps dashboard range responses P95 below 500 ms with five years of history', async () => {
         const app = await createApp(new EmptyJournal(), {
-            dataRepository: new FiveYearData(),
+            dataRepository: asApplicationRepository(new FiveYearData()),
         })
         const from = new Date(Date.UTC(2025, 11, 1)).toISOString()
         const urls = [

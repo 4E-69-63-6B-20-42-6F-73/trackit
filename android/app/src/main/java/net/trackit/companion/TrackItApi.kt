@@ -9,8 +9,8 @@ import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.security.Signature
-import java.time.ZonedDateTime
 import java.time.Instant
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Base64
 import java.util.UUID
@@ -81,12 +81,11 @@ class TrackItApi(context: Context) {
         cursor: String?,
         status: String,
     ) = request(
-        path = "/api/device/cursor",
+        endpoint = OpenApiEndpoints.DEVICE_CURSOR_PUT,
         body = JSONObject()
             .put("recordType", recordType)
             .put("cursor", cursor)
             .put("status", status),
-        method = "PUT",
     )
 
     suspend fun reconcile(
@@ -94,7 +93,7 @@ class TrackItApi(context: Context) {
         since: Instant,
         presentExternalIds: Set<String>,
     ) = request(
-        path = "/api/device/health-records/reconcile",
+        endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_RECONCILE_POST,
         body = JSONObject()
             .put("recordType", recordType)
             .put("since", HealthTime.serialize(since))
@@ -110,7 +109,7 @@ class TrackItApi(context: Context) {
 
         try {
             request(
-                path = "/api/device/health-records",
+                endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_POST,
                 body = JSONObject()
                     .put("idempotencyKey", idempotencyKey)
                     .put("records", JSONArray(records.map(::toJson))),
@@ -148,9 +147,8 @@ class TrackItApi(context: Context) {
     }
 
     private suspend fun request(
-        path: String,
+        endpoint: OpenApiEndpoint,
         body: JSONObject,
-        method: String = "POST",
         onRetry: suspend (ApiRetryEvent) -> Unit = {},
     ) = withContext(Dispatchers.IO) {
         var lastError: IOException? = null
@@ -159,7 +157,7 @@ class TrackItApi(context: Context) {
             val attempt = zeroBasedAttempt + 1
 
             try {
-                performRequest(path, body, method)
+                performRequest(endpoint, body)
                 return@withContext
             } catch (e: HttpResponseException) {
                 lastError = e
@@ -232,9 +230,8 @@ class TrackItApi(context: Context) {
     }
 
     private fun performRequest(
-        path: String,
+        endpoint: OpenApiEndpoint,
         body: JSONObject,
-        method: String,
     ) {
         val timestamp = System.currentTimeMillis().toString()
 
@@ -267,8 +264,8 @@ class TrackItApi(context: Context) {
                 ?: throw IllegalStateException("Missing serverUrl")
 
         val canonical = listOf(
-            method.uppercase(),
-            path,
+            endpoint.method,
+            endpoint.path,
             timestamp,
             nonce,
             bodyHash,
@@ -299,11 +296,11 @@ class TrackItApi(context: Context) {
             .encodeToString(signer.sign())
 
         val connection = URI(
-            "${serverUrl.trimEnd('/')}$path",
+            "${serverUrl.trimEnd('/')}${endpoint.path}",
         ).toURL().openConnection() as HttpURLConnection
 
         try {
-            connection.requestMethod = method
+            connection.requestMethod = endpoint.method
             connection.connectTimeout = 15_000
             connection.readTimeout = 60_000
             connection.setRequestProperty(

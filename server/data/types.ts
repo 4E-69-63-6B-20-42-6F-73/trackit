@@ -1,6 +1,20 @@
 import { z } from 'zod'
+import type { NumericObservation } from '@trackit/domain/health'
+import type { MealSourceItem } from '@trackit/domain/types'
 import { validateGoal } from '@trackit/domain/goals'
 import { observationDefinition } from '@trackit/domain/observationDefinitions'
+import type {
+    dailyMetrics,
+    foods,
+    goals,
+    healthRecords,
+    observations,
+    preferences,
+    recipeItems,
+    recipes,
+    savedTrendViews,
+    sources,
+} from '../db/schema.js'
 
 export const observationInputSchema = z
     .object({
@@ -288,37 +302,158 @@ export const recipeUpdateSchema = z.object({
     version: z.number().int().positive(),
 })
 
-export interface DataRepository {
-    listSources(): Promise<unknown[]>
-    listMetricSources?(): Promise<unknown[]>
-    listHealthRecords?(): Promise<unknown[]>
-    listDailyMetrics?(range?: { from?: string; to?: string }): Promise<unknown[]>
-    listRawObservations?(range?: RecordRange): Promise<unknown[]>
-    listObservations(range?: RecordRange): Promise<unknown[]>
-    createObservation(input: z.infer<typeof observationInputSchema>): Promise<unknown>
-    updateObservation(
-        id: string,
-        input: z.infer<typeof observationUpdateSchema>,
-    ): Promise<unknown | null>
-    removeObservation(id: string): Promise<boolean>
-    listMeals(range?: RecordRange): Promise<unknown[]>
-    createMeal(input: z.infer<typeof mealInputSchema>): Promise<unknown>
-    updateMeal(id: string, input: z.infer<typeof mealUpdateSchema>): Promise<unknown | null>
-    removeMeal(id: string): Promise<boolean>
-    getPreferences(): Promise<unknown>
-    updatePreferences(input: z.infer<typeof preferencesInputSchema>): Promise<unknown>
-    listFoods(query?: string): Promise<unknown[]>
-    createFood(input: z.infer<typeof foodInputSchema>): Promise<unknown>
-    updateFood(id: string, input: z.infer<typeof foodUpdateSchema>): Promise<unknown | null>
-    importFoods(input: z.infer<typeof foodImportSchema>): Promise<unknown>
-    listRecipes(): Promise<unknown[]>
-    createRecipe(input: z.infer<typeof recipeInputSchema>): Promise<unknown>
-    updateRecipe(id: string, input: z.infer<typeof recipeUpdateSchema>): Promise<unknown | null>
-    listGoals(): Promise<unknown[]>
-    createGoal(input: z.infer<typeof goalInputSchema>): Promise<unknown>
-    retireGoal(id: string, effectiveTo: string): Promise<unknown | null>
-    updateGoal(id: string, input: z.infer<typeof goalUpdateSchema>): Promise<unknown | null>
-    removeGoal(id: string): Promise<boolean>
-    listSavedTrendViews(): Promise<unknown[]>
-    createSavedTrendView(input: z.infer<typeof savedTrendViewInputSchema>): Promise<unknown>
+export type ObservationInput = z.infer<typeof observationInputSchema>
+export type ObservationUpdate = z.infer<typeof observationUpdateSchema>
+export type MealInput = z.infer<typeof mealInputSchema>
+export type MealUpdate = z.infer<typeof mealUpdateSchema>
+export type PreferencesInput = z.infer<typeof preferencesInputSchema>
+export type GoalInput = z.infer<typeof goalInputSchema>
+export type GoalUpdate = z.infer<typeof goalUpdateSchema>
+export type SavedTrendViewInput = z.infer<typeof savedTrendViewInputSchema>
+export type FoodInput = z.infer<typeof foodInputSchema>
+export type FoodUpdate = z.infer<typeof foodUpdateSchema>
+export type FoodImportInput = z.infer<typeof foodImportSchema>
+export type RecipeInput = z.infer<typeof recipeInputSchema>
+export type RecipeUpdate = z.infer<typeof recipeUpdateSchema>
+
+export type SourceRecord = typeof sources.$inferSelect
+export type HealthRecordRecord = typeof healthRecords.$inferSelect
+export type DailyMetricRecord = typeof dailyMetrics.$inferSelect
+export type RawObservationRecord = typeof observations.$inferSelect
+export type PreferencesRecord = typeof preferences.$inferSelect
+export type FoodRecord = typeof foods.$inferSelect
+
+type PersistedGoalRecord = typeof goals.$inferSelect
+export type GoalRecord = Omit<PersistedGoalRecord, 'effectiveFrom' | 'effectiveTo'> & {
+    effectiveFrom: Date | string
+    effectiveTo: Date | string | null
 }
+
+export type SavedTrendViewRecord = typeof savedTrendViews.$inferSelect
+
+export type MetricSourceSummary = {
+    definitionId: string
+    provider: string
+    connector: string | null
+}
+
+export type MealRecord = {
+    id: string
+    name: string
+    mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
+    eatenAt: Date
+    nutrientSnapshot: Record<string, number>
+    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+    favorite: boolean
+    serving?: { amount: number; unit: 'g' | 'serving' }
+    sourceItem?: MealSourceItem
+    sourceId: string | null
+    version: number
+    createdAt: Date
+    updatedAt: Date
+    deletedAt: Date | null
+}
+
+type NutrientKey =
+    | 'calories'
+    | 'protein'
+    | 'carbs'
+    | 'fat'
+    | 'fiber'
+    | 'sugar'
+    | 'saturatedFat'
+    | 'sodium'
+    | 'potassium'
+
+export type RecipeRecord = typeof recipes.$inferSelect & {
+    items: Array<typeof recipeItems.$inferSelect & { foodName: string }>
+    nutrientsPerServing: Record<NutrientKey, number | null>
+    nutritionQuality: string
+}
+
+export type CreatedRecipeRecord = typeof recipes.$inferSelect & {
+    items: Array<typeof recipeItems.$inferSelect>
+}
+
+export type FoodImportResult = {
+    results: Array<{
+        index: number
+        status: 'created' | 'updated' | 'skipped' | 'failed'
+        id?: string
+        reason?: string
+    }>
+    created: number
+    updated: number
+    skipped: number
+    failed: number
+}
+
+export interface SourceRepository {
+    listSources(): Promise<SourceRecord[]>
+}
+
+export interface HealthProjectionRepository {
+    listHealthRecords(): Promise<HealthRecordRecord[]>
+    listDailyMetrics(range?: { from?: string; to?: string }): Promise<DailyMetricRecord[]>
+}
+
+export interface ObservationRepository {
+    listMetricSources(): Promise<MetricSourceSummary[]>
+    listRawObservations(range?: RecordRange): Promise<RawObservationRecord[]>
+    listObservations(range?: RecordRange): Promise<NumericObservation[]>
+    createObservation(input: ObservationInput): Promise<RawObservationRecord | undefined>
+    updateObservation(id: string, input: ObservationUpdate): Promise<RawObservationRecord | null>
+    removeObservation(id: string): Promise<boolean>
+}
+
+export interface MealRepository {
+    listMeals(range?: RecordRange): Promise<MealRecord[]>
+    createMeal(input: MealInput): Promise<MealRecord | undefined>
+    updateMeal(id: string, input: MealUpdate): Promise<MealRecord | null>
+    removeMeal(id: string): Promise<boolean>
+}
+
+export interface PreferencesRepository {
+    getPreferences(): Promise<PreferencesRecord>
+    updatePreferences(input: PreferencesInput): Promise<PreferencesRecord>
+}
+
+export interface FoodRepository {
+    listFoods(query?: string): Promise<FoodRecord[]>
+    createFood(input: FoodInput): Promise<FoodRecord>
+    updateFood(id: string, input: FoodUpdate): Promise<FoodRecord | null>
+    importFoods(input: FoodImportInput): Promise<FoodImportResult>
+}
+
+export interface RecipeRepository {
+    listRecipes(): Promise<RecipeRecord[]>
+    createRecipe(input: RecipeInput): Promise<CreatedRecipeRecord>
+    updateRecipe(id: string, input: RecipeUpdate): Promise<typeof recipes.$inferSelect | null>
+}
+
+export interface GoalRepository {
+    listGoals(): Promise<GoalRecord[]>
+    createGoal(input: GoalInput): Promise<GoalRecord>
+    retireGoal(id: string, effectiveTo: string): Promise<GoalRecord | null>
+    updateGoal(id: string, input: GoalUpdate): Promise<GoalRecord | null>
+    removeGoal(id: string): Promise<boolean>
+}
+
+export interface TrendViewRepository {
+    listSavedTrendViews(): Promise<SavedTrendViewRecord[]>
+    createSavedTrendView(input: SavedTrendViewInput): Promise<SavedTrendViewRecord>
+}
+
+export type NutritionRepository = MealRepository & FoodRepository & RecipeRepository
+
+/**
+ * Application-level composition for wiring the concrete repository. Feature modules should depend on
+ * the narrow capability interfaces above rather than this aggregate type.
+ */
+export type DataRepository = SourceRepository &
+    HealthProjectionRepository &
+    ObservationRepository &
+    NutritionRepository &
+    PreferencesRepository &
+    GoalRepository &
+    TrendViewRepository
