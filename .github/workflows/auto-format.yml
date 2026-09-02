@@ -36,6 +36,8 @@ jobs:
                   node-version: 22
                   cache: npm
             - run: npm ci
+            - name: Remove unit compatibility remnants
+              run: node scripts/remove-unit-remnants.mjs
             - run: npm run build:domain
             - name: Regenerate OpenAPI types
               run: npm run api:types
