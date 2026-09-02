@@ -18,7 +18,7 @@ async function migratedDatabase() {
     return { client, database: drizzle(client, { schema }) }
 }
 
-describe('metric source summaries', () => {
+describe('metric source summaries and daily projections', () => {
     it('validates definitions and canonicalizes numeric commands through Metric Center', async () => {
         const { client, database } = await migratedDatabase()
         const repository = new PostgresDataRepository(database as never)
@@ -35,7 +35,7 @@ describe('metric source summaries', () => {
             originalValue: 176.369809744,
             originalUnit: 'lb',
         })
-        expect(observation.canonicalValue).toBeCloseTo(80)
+        expect(observation?.canonicalValue).toBeCloseTo(80)
         const symptom = await repository.createObservation({
             definitionId: 'symptom',
             value: 7,
@@ -89,8 +89,6 @@ describe('metric source summaries', () => {
                 originalUnit: 'count',
                 observedAt: new Date('2026-08-26T00:00:00.000Z'),
             },
-        ])
-        await database.insert(schema.observations).values([
             {
                 definitionId: 'meal',
                 valueType: 'compound',
@@ -186,17 +184,17 @@ describe('metric source summaries', () => {
                 originalUnit: 'kcal',
                 observedAt: new Date('2026-08-25T18:00:00Z'),
             },
+            {
+                definitionId: 'calories',
+                valueType: 'number',
+                category: 'Meals',
+                canonicalValue: 2200,
+                canonicalUnit: 'kcal',
+                originalValue: 2200,
+                originalUnit: 'kcal',
+                observedAt: new Date('2026-08-25T19:00:00Z'),
+            },
         ])
-        await database.insert(schema.observations).values({
-            definitionId: 'calories',
-            valueType: 'number',
-            category: 'Meals',
-            canonicalValue: 2200,
-            canonicalUnit: 'kcal',
-            originalValue: 2200,
-            originalUnit: 'kcal',
-            observedAt: new Date('2026-08-25T19:00:00Z'),
-        })
         const repository = new PostgresDataRepository(database as never)
         const records = (await repository.listObservations({
             from: '2026-08-25T00:00:00.000Z',
@@ -224,7 +222,7 @@ describe('metric source summaries', () => {
         await client.close()
     })
 
-    it('precomputes daily totals from the resolved effective sources', async () => {
+    it('precomputes daily totals through the projection builder, not the read path', async () => {
         const { client, database } = await migratedDatabase()
         await database.insert(schema.observations).values([
             {
@@ -259,6 +257,7 @@ describe('metric source summaries', () => {
                 },
             },
         })
+        await rebuildEffectiveDailyMetric(database as never, '2026-08-25')
 
         expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
             [
@@ -273,69 +272,67 @@ describe('metric source summaries', () => {
         await client.close()
     })
 
-    it('materializes an empty day only once', async () => {
+    it('keeps daily metric reads free of projection writes', async () => {
         const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values({
+            definitionId: 'steps',
+            canonicalValue: 100,
+            canonicalUnit: 'count',
+            originalValue: 100,
+            originalUnit: 'count',
+            observedAt: new Date('2026-08-25T12:00:00.000Z'),
+        })
         const repository = new PostgresDataRepository(database as never)
+
         expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
             [],
         )
-        const [first] = await database.select().from(schema.dailyProjectionRuns)
-        expect(first).toMatchObject({ date: '2026-08-25', status: 'complete' })
-        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
-            [],
-        )
-        const [second] = await database.select().from(schema.dailyProjectionRuns)
-        expect(second.completedAt.getTime()).toBe(first.completedAt.getTime())
+        expect(await database.select().from(schema.dailyProjectionRuns)).toEqual([])
+        expect(await database.select().from(schema.projectionDirtyDates)).toEqual([])
+
+        await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })
+        expect(await database.select().from(schema.dailyProjectionRuns)).toEqual([])
+        expect(await database.select().from(schema.projectionDirtyDates)).toEqual([])
         await client.close()
     })
 
-    it('queues historical projection backfill while rebuilding the active day', async () => {
+    it('refreshes later BMI projections when a carry-forward height is removed', async () => {
         const { client, database } = await migratedDatabase()
-        await database.insert(schema.observations).values(
-            ['2026-08-22', '2026-08-23', '2026-08-24', '2026-08-25'].map(date => ({
-                definitionId: 'steps',
-                canonicalValue: 100,
-                canonicalUnit: 'count',
-                originalValue: 100,
-                originalUnit: 'count',
-                observedAt: new Date(`${date}T12:00:00.000Z`),
-            })),
-        )
         const repository = new PostgresDataRepository(database as never)
-
-        const rows = await repository.listDailyMetrics({
-            from: '2026-08-22',
-            to: '2026-08-25',
+        const height = await repository.createObservation({
+            definitionId: 'height',
+            value: 180,
+            unit: 'cm',
+            observedAt: '2026-08-01T08:00:00.000Z',
+            source: 'You',
         })
-
-        expect(rows).toEqual([
-            expect.objectContaining({
-                date: '2026-08-25',
-                definitionId: 'steps',
-                value: 100,
-            }),
-        ])
+        await repository.createObservation({
+            definitionId: 'weight',
+            value: 81,
+            unit: 'kg',
+            observedAt: '2026-08-25T08:00:00.000Z',
+            source: 'You',
+        })
         expect(
-            (await database.select().from(schema.projectionDirtyDates))
-                .map(item => item.date)
-                .sort(),
-        ).toEqual(['2026-08-22', '2026-08-23', '2026-08-24'])
+            (await database.select().from(schema.derivedObservations)).some(
+                row => row.definitionId === 'bmi' && row.date === '2026-08-25',
+            ),
+        ).toBe(true)
+
+        await repository.removeObservation(height!.id)
+
+        expect(
+            (await database.select().from(schema.derivedObservations)).some(
+                row => row.definitionId === 'bmi' && row.date === '2026-08-25',
+            ),
+        ).toBe(false)
         await client.close()
     })
 })
 
 describe('nutrition snapshot persistence', () => {
     it('keeps meal history stable and recalculates future recipe servings after edits', async () => {
-        const client = new PGlite()
-        const migrationDirectory = 'server/db/migrations'
-        const migrations = (await readdir(migrationDirectory))
-            .filter(filename => filename.endsWith('.sql'))
-            .sort()
-        for (const filename of migrations) {
-            const migration = await readFile(`${migrationDirectory}/${filename}`, 'utf8')
-            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
-        }
-        const database = drizzle(client, { schema })
+        const { client, database } = await migratedDatabase()
         const repository = new PostgresDataRepository(database as never)
         const food = (await repository.createFood({
             name: 'Snapshot oats',
@@ -441,14 +438,8 @@ describe('nutrition snapshot persistence', () => {
 
 describe('goal lifecycle persistence', () => {
     it('only permanently deletes goals after they have been retired', async () => {
-        const client = new PGlite()
-        for (const filename of (await readdir('server/db/migrations'))
-            .filter(name => name.endsWith('.sql'))
-            .sort()) {
-            const migration = await readFile(`server/db/migrations/${filename}`, 'utf8')
-            await client.exec(migration.replaceAll('--> statement-breakpoint', ''))
-        }
-        const repository = new PostgresDataRepository(drizzle(client, { schema }) as never)
+        const { client, database } = await migratedDatabase()
+        const repository = new PostgresDataRepository(database as never)
         const active = (await repository.createGoal({
             definitionId: 'weight',
             aggregation: 'average',

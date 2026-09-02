@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { markProjectionDatesDirty } from './projection-state.js'
 import { ProjectionMaintenanceService } from './projection-maintenance.js'
 
-vi.mock('./projection-state.js', () => ({
-    markProjectionDatesDirty: vi.fn(),
+const knownDates = vi.fn()
+const invalidateDates = vi.fn()
+
+vi.mock('./projection-coordinator.js', () => ({
+    DailyProjectionCoordinator: vi.fn(function DailyProjectionCoordinator() {
+        return { knownDates, invalidateDates }
+    }),
 }))
 
 const selected = (result: unknown) => ({
@@ -13,27 +17,27 @@ const selected = (result: unknown) => ({
 })
 
 describe('ProjectionMaintenanceService', () => {
-    beforeEach(() => vi.clearAllMocks())
+    beforeEach(() => {
+        vi.clearAllMocks()
+        knownDates.mockResolvedValue(
+            new Set(['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']),
+        )
+    })
 
-    it('queues canonical observation dates and existing projection dates inside the range', async () => {
-        const select = vi.fn().mockReturnValue(selected([{ timezone: 'Europe/Amsterdam' }]))
-        const selectDistinct = vi
-            .fn()
-            .mockReturnValueOnce(selected([{ date: '2026-08-27' }, { date: '2026-08-28' }]))
-            .mockReturnValueOnce(selected([{ date: '2026-08-28' }, { date: '2026-08-29' }]))
-            .mockReturnValueOnce(selected([{ date: '2026-08-26' }, { date: '2026-08-29' }]))
-        const database = { select, selectDistinct }
+    it('queues known projection dates inside the resolved maintenance range', async () => {
+        const database = {
+            select: vi.fn().mockReturnValue(selected([{ timezone: 'Europe/Amsterdam' }])),
+        }
 
         const result = await new ProjectionMaintenanceService(database as never).rebuild({
             from: '2026-08-26',
             to: '2026-08-29',
         })
 
+        expect(knownDates).toHaveBeenCalledWith({ from: '2026-08-26', to: '2026-08-29' })
+        expect(invalidateDates).toHaveBeenCalledWith(
+            new Set(['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']),
+        )
         expect(result).toEqual({ queuedDates: 4 })
-        expect(markProjectionDatesDirty).toHaveBeenCalledTimes(1)
-        expect([
-            ...((markProjectionDatesDirty as ReturnType<typeof vi.fn>).mock
-                .calls[0][1] as Set<string>),
-        ]).toEqual(expect.arrayContaining(['2026-08-26', '2026-08-27', '2026-08-28', '2026-08-29']))
     })
 })
