@@ -13,7 +13,6 @@ import { normalizeHealthRecord } from './normalize.js'
 import { insertHealthObservationGraph } from './projection.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
-type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 
 const previousDate = (date: string) => {
     const value = new Date(`${date}T00:00:00.000Z`)
