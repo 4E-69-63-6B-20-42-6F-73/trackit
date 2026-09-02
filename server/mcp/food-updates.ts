@@ -85,8 +85,7 @@ const changedValues = (food: FoodRecord, changes: FoodChanges) =>
     Object.fromEntries(
         Object.entries(changes).filter(
             ([field, value]) =>
-                value !== undefined &&
-                !sameValue(food[field as keyof FoodRecord], value),
+                value !== undefined && !sameValue(food[field as keyof FoodRecord], value),
         ),
     ) as FoodChanges
 
