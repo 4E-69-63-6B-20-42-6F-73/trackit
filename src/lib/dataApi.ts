@@ -1,5 +1,6 @@
 import type { paths } from './api.generated'
 import { apiClient } from './apiClient'
+import { invalidateAllServerDataQueries } from './serverQueries'
 
 export type MaintenanceDateRange =
     paths['/api/data/rebuild-projections']['post']['requestBody']['content']['application/json']
@@ -26,6 +27,7 @@ export async function rebuildProjections(range: MaintenanceDateRange = {}) {
     })
     if (!response.ok) throw maintenanceError(response, error)
     if (!data) throw new Error('Data maintenance response was invalid.')
+    await invalidateAllServerDataQueries()
     return data.data
 }
 
@@ -35,6 +37,7 @@ export async function rederiveObservations(input: MaintenanceRederiveRequest = {
     })
     if (!response.ok) throw maintenanceError(response, error)
     if (!data) throw new Error('Data maintenance response was invalid.')
+    await invalidateAllServerDataQueries()
     return data.data
 }
 
@@ -43,4 +46,5 @@ export async function deleteOwnerData(confirmation: string) {
         body: { confirmation: confirmation as 'DELETE ALL TRACKIT DATA' },
     })
     if (!response.ok) throw new Error('Enter the confirmation phrase exactly.')
+    await invalidateAllServerDataQueries()
 }
