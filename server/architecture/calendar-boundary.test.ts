@@ -37,6 +37,8 @@ describe('calendar architecture', () => {
         const source = readFileSync(path, 'utf8')
 
         expect(source).toContain("from '@trackit/domain/calendar'")
-        expect(source).not.toMatch(/Intl\.DateTimeFormat|Date\.UTC|setUTCDate|getUTCDate|formatToParts/)
+        expect(source).not.toMatch(
+            /Intl\.DateTimeFormat|Date\.UTC|setUTCDate|getUTCDate|formatToParts/,
+        )
     })
 })
