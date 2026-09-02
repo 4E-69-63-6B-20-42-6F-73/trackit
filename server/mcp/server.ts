@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { localDayRange } from '../data/timezone.js'
+import { calendarDateKey, calendarDayRangeForKey } from '@trackit/domain/calendar'
 import { z } from 'zod'
 import type { DataRepository } from '../data/types.js'
 import { PostgresDataRepository } from '../data/postgres-repository.js'
@@ -207,14 +207,8 @@ export function createTrackItMcpServer(
         },
         async () => {
             const timezone = await ownerTimezone()
-            const dateFormatter = new Intl.DateTimeFormat('en-CA', {
-                timeZone: timezone,
-                year: 'numeric',
-                month: '2-digit',
-                day: '2-digit',
-            })
-            const day = dateFormatter.format(new Date())
-            const dayRange = localDayRange(day, timezone)
+            const day = calendarDateKey(new Date(), timezone)
+            const dayRange = calendarDayRangeForKey(day, timezone)
             const boundedDay = {
                 from: new Date(
                     Math.max(dayRange.from.getTime(), client.dateFrom?.getTime() ?? -Infinity),
