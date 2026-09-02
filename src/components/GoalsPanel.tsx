@@ -380,9 +380,7 @@ export function GoalsPanel() {
             onEdit={() => edit(goal)}
             onRetire={() => void retire(goal)}
             onDelete={() => setDeleting(goal)}
-            onViewTrend={() =>
-                navigate(`/trends?metric=${encodeURIComponent(goal.definitionId)}`)
-            }
+            onViewTrend={() => navigate(`/trends?metric=${encodeURIComponent(goal.definitionId)}`)}
         />
     )
 
@@ -585,7 +583,8 @@ export function GoalsPanel() {
                         <IconTargetArrow size={28} />
                         <Text fw={700}>No goals yet</Text>
                         <Text size="sm" c="dimmed">
-                            Create a goal when you want a target to add context to your observations.
+                            Create a goal when you want a target to add context to your
+                            observations.
                         </Text>
                     </div>
                 ) : (
