@@ -15,6 +15,7 @@ import { markProjectionDatesDirty } from './projection-queue.js'
 import { dateKeyInTimezone, localDayRange } from './timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+type ProjectionDateRange = { from?: string; to?: string }
 
 type ProjectionObservation = Pick<
     typeof observations.$inferSelect,
@@ -33,6 +34,9 @@ const projectionDate = (record: ProjectionObservation, timezone: string) =>
             : record.observedAt,
         timezone,
     )
+
+const inRange = (date: string, range: ProjectionDateRange) =>
+    (!range.from || date >= range.from) && (!range.to || date <= range.to)
 
 /**
  * Owns projection invalidation and reconciliation policy.
@@ -77,7 +81,7 @@ export class DailyProjectionCoordinator {
             )
     }
 
-    async knownDates() {
+    async knownDates(range: ProjectionDateRange = {}) {
         const { timezone } = await this.context()
         const [observationDates, metricDates, runDates] = await Promise.all([
             this.attributedObservationDates(timezone),
@@ -87,11 +91,13 @@ export class DailyProjectionCoordinator {
                 .from(dailyProjectionRuns)
                 .where(eq(dailyProjectionRuns.userId, 'owner')),
         ])
-        return new Set([
-            ...observationDates.map(item => item.date),
-            ...metricDates.map(item => item.date),
-            ...runDates.map(item => item.date),
-        ])
+        return new Set(
+            [
+                ...observationDates.map(item => item.date),
+                ...metricDates.map(item => item.date),
+                ...runDates.map(item => item.date),
+            ].filter(date => inRange(date, range)),
+        )
     }
 
     async observationImpactDates(records: ProjectionObservation[]) {
