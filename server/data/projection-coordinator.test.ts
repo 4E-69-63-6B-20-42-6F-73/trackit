@@ -114,4 +114,35 @@ describe('DailyProjectionCoordinator', () => {
         expect([...dates].sort()).toEqual(['2026-08-01', '2026-08-20', '2026-08-25'])
         await client.close()
     })
+
+    it('conservatively expands bulk dirty ranges to later weight dates', async () => {
+        const { client, database } = await migratedDatabase()
+        await database.insert(schema.observations).values([
+            {
+                definitionId: 'weight',
+                canonicalValue: 80,
+                canonicalUnit: 'kg',
+                originalValue: 80,
+                originalUnit: 'kg',
+                observedAt: new Date('2026-08-20T08:00:00.000Z'),
+            },
+            {
+                definitionId: 'weight',
+                canonicalValue: 81,
+                canonicalUnit: 'kg',
+                originalValue: 81,
+                originalUnit: 'kg',
+                observedAt: new Date('2026-08-25T08:00:00.000Z'),
+            },
+        ])
+        await database.insert(schema.projectionDirtyDates).values({ date: '2026-08-10' })
+        const coordinator = new DailyProjectionCoordinator(database as never)
+
+        await coordinator.invalidateCarryForwardDependents()
+
+        expect(
+            (await database.select().from(schema.projectionDirtyDates)).map(row => row.date).sort(),
+        ).toEqual(['2026-08-10', '2026-08-20', '2026-08-25'])
+        await client.close()
+    })
 })
