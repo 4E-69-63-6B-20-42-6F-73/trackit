@@ -154,7 +154,6 @@ describe('GoalsPanel', () => {
         vi.mocked(createGoal).mockImplementation(async input => ({ id: 'saved', ...input }))
         renderPanel([], {
             ...preferences,
-            units: 'imperial',
             metricPreferences: { weight: { displayUnit: 'lb' } },
         })
 

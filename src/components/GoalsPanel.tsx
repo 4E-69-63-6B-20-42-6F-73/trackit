@@ -405,7 +405,7 @@ export function GoalsPanel() {
     const loading = serverLoading || (goals.length > 0 && evaluationsQuery.isPending)
     const evaluationError = evaluationsQuery.isError ? 'Goal observations could not be loaded.' : ''
     const definition = metricDefinition(metricId)!
-    const displayUnit = displayUnitFor(metricId, preferences?.metricPreferences, preferences?.units)
+    const displayUnit = displayUnitFor(metricId, preferences?.metricPreferences)
     const options = measurements(metricId)
     const selectedMeasurement =
         options.find(item => item.value === measurement) ?? preferredMeasurement(metricId, options)!

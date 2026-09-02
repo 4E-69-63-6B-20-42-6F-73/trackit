@@ -284,8 +284,7 @@ export const preferences = pgTable('preferences', {
     displayName: text('display_name').notNull().default('Owner'),
     timezone: text('timezone').notNull().default('UTC'),
     locale: text('locale').notNull().default('en'),
-    units: text('units').notNull().default('metric'),
-    metricPreferences: jsonb('metric_preferences'),
+    metricPreferences: jsonb('metric_preferences').notNull().default({}),
     metricResolutionVersion: integer('metric_resolution_version').notNull().default(1),
     mcpEnabled: boolean('mcp_enabled').notNull().default(false),
     mcpAllowedOrigins: jsonb('mcp_allowed_origins').$type<string[]>().notNull().default([]),
@@ -405,7 +404,7 @@ export const syncCursors = pgTable(
 
 export const goals = pgTable('goals', {
     id: uuid('id').primaryKey().defaultRandom(),
-    definitionId: text('metric').notNull(),
+    definitionId: text('definition_id').notNull(),
     aggregation: text('aggregation').notNull().default('latest'),
     comparator: text('comparator').notNull().default('gte'),
     target: jsonb('target').$type<{ value: number } | { min: number; max: number }>().notNull(),
@@ -423,8 +422,8 @@ export const goals = pgTable('goals', {
 export const savedTrendViews = pgTable('saved_trend_views', {
     id: uuid('id').primaryKey().defaultRandom(),
     name: text('name').notNull(),
-    definitionId: text('metric').notNull(),
-    comparisonDefinitionId: text('comparison_metric'),
+    definitionId: text('definition_id').notNull(),
+    comparisonDefinitionId: text('comparison_definition_id'),
     rangeDays: integer('range_days').notNull(),
     granularity: text('granularity').notNull().default('daily'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),

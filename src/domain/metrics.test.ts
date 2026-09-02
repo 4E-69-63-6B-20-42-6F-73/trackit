@@ -48,8 +48,8 @@ describe('metric preferences', () => {
             detectUnitPreset({ ...preferencesForPreset('metric'), weight: { displayUnit: 'lb' } }),
         ).toBe('custom')
     })
-    it('migrates legacy imperial preferences when per-metric values are absent', () => {
-        expect(normalizedMetricPreferences(undefined, 'imperial').weight.displayUnit).toBe('lb')
-        expect(normalizedMetricPreferences(undefined, 'imperial').steps.displayUnit).toBe('count')
+    it('uses metric defaults when per-metric values are absent', () => {
+        expect(normalizedMetricPreferences(undefined).weight.displayUnit).toBe('kg')
+        expect(normalizedMetricPreferences(undefined).steps.displayUnit).toBe('count')
     })
 })

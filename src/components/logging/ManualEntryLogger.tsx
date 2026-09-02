@@ -70,8 +70,8 @@ export function ManualEntryLogger({
     const initialNow = calendarLocalDateTimeValue(new Date(), timezone)
     const [initialDay, initialTime] = initialNow.split('T')
     const [kind] = useState<ManualEntryKind>(initialKind)
-    const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
-    const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
+    const weightUnit = displayUnitFor('weight', preferences?.metricPreferences)
+    const waterUnit = displayUnitFor('water', preferences?.metricPreferences)
     const [weightAmount, setWeightAmount] = useState<number | string>(
         weightUnit === 'lb' ? 165 : 75,
     )

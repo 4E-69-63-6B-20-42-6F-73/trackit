@@ -960,8 +960,8 @@
                     "notNull": true,
                     "default": "gen_random_uuid()"
                 },
-                "metric": {
-                    "name": "metric",
+                "definition_id": {
+                    "name": "definition_id",
                     "type": "text",
                     "primaryKey": false,
                     "notNull": true
@@ -2093,18 +2093,12 @@
                     "notNull": true,
                     "default": "'en'"
                 },
-                "units": {
-                    "name": "units",
-                    "type": "text",
-                    "primaryKey": false,
-                    "notNull": true,
-                    "default": "'metric'"
-                },
                 "metric_preferences": {
                     "name": "metric_preferences",
                     "type": "jsonb",
                     "primaryKey": false,
-                    "notNull": false
+                    "notNull": true,
+                    "default": "'{}'::jsonb"
                 },
                 "metric_resolution_version": {
                     "name": "metric_resolution_version",
@@ -2382,14 +2376,14 @@
                     "primaryKey": false,
                     "notNull": true
                 },
-                "metric": {
-                    "name": "metric",
+                "definition_id": {
+                    "name": "definition_id",
                     "type": "text",
                     "primaryKey": false,
                     "notNull": true
                 },
-                "comparison_metric": {
-                    "name": "comparison_metric",
+                "comparison_definition_id": {
+                    "name": "comparison_definition_id",
                     "type": "text",
                     "primaryKey": false,
                     "notNull": false

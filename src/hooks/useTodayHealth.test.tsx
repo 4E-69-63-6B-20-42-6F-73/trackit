@@ -23,7 +23,6 @@ const wrapper = ({ children }: { children: ReactNode }) => (
                     displayName: 'Alex',
                     timezone: 'UTC',
                     locale: 'en-US',
-                    units: 'metric',
                     metricPreferences: {
                         steps: {
                             displayUnit: 'count',

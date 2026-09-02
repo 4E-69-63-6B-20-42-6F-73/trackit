@@ -36,8 +36,6 @@ jobs:
                   node-version: 22
                   cache: npm
             - run: npm ci
-            - name: Remove legacy compatibility
-              run: node scripts/remove-legacy-compat.mjs
             - run: npm run build:domain
             - name: Regenerate OpenAPI types
               run: npm run api:types

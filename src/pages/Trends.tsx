@@ -141,7 +141,7 @@ export function Trends() {
         record => record.definitionId === comparisonDefinitionId && !record.excluded,
     )
     const displayUnit = activeDefinitionId
-        ? displayUnitFor(activeDefinitionId, preferences?.metricPreferences, preferences?.units)
+        ? displayUnitFor(activeDefinitionId, preferences?.metricPreferences)
         : undefined
     const convert = (value: number) =>
         activeDefinitionId &&

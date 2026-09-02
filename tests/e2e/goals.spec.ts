@@ -111,7 +111,6 @@ test('creates and displays a canonical weight goal using pounds', async ({ page 
             displayName: 'Owner',
             timezone: 'UTC',
             locale: 'en-US',
-            units: 'imperial',
             metricPreferences: { weight: { displayUnit: 'lb' } },
             experience: { onboardingComplete: true, onboardingStep: 5 },
         },

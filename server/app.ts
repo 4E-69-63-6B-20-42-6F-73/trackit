@@ -31,7 +31,7 @@ import type { JournalRepository } from './journal/types.js'
 import { openApiContract } from './openapi.js'
 import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
-import type { DeviceService, DeviceUploadRecord } from './devices/service.js'
+import type { DeviceService } from './devices/service.js'
 import type { CanonicalHealthRecordInput } from './health-records/types.js'
 import type { DataDeletionService } from './data-lifecycle/deletion.js'
 import { ExportService } from './data-lifecycle/export.js'
@@ -162,7 +162,6 @@ export async function createApp(
         '/mcp',
         '/api/devices/pair/request',
         '/api/device/status',
-        '/api/device/upload',
         '/api/device/health-records',
         '/api/device/cursor',
     ])
@@ -653,17 +652,6 @@ export async function createApp(
             )
             return device ? { data: device } : reply.code(401).send({ error: 'unauthorized' })
         })
-        const uploadRecordSchema = z.object({
-            externalId: z.string().min(1).max(500),
-            metric: z.string().min(1).max(100),
-            value: z.number().finite(),
-            unit: z.string().min(1).max(40),
-            observedAt: z.string().datetime(),
-            endedAt: z.string().datetime().optional(),
-            version: z.number().int().nonnegative(),
-            dataOrigin: z.string().min(1).max(300),
-            deleted: z.boolean().optional(),
-        })
         const healthRecordSchema = z.object({
             provider: z.string().min(1).max(100),
             recordType: z.string().min(1).max(150),
@@ -703,22 +691,6 @@ export async function createApp(
             )
             return null
         }
-        app.post('/api/device/upload', async (request, reply) => {
-            const device = await authenticateDevice(request, requestBodyHash(request))
-            if (!device) return reply.code(401).send({ error: 'unauthorized' })
-            const input = z
-                .object({
-                    idempotencyKey: z.string().uuid(),
-                    records: z.array(uploadRecordSchema).max(1000),
-                })
-                .safeParse(request.body)
-            if (!input.success) return badRequest(request, reply, { validation: input.error })
-            return devices.upload(
-                device.id,
-                input.data.idempotencyKey,
-                input.data.records as DeviceUploadRecord[],
-            )
-        })
         app.post('/api/device/health-records', async (request, reply) => {
             const device = await authenticateDevice(request, requestBodyHash(request))
             if (!device) return reply.code(401).send({ error: 'unauthorized' })

@@ -9,8 +9,8 @@ Health Connect → Android adapters → health_records → observations → dail
 - `health_records` is canonical. Source identity is `(user_id, provider, external_id)` and updates are accepted only when `external_version` increases. Payload and device JSON retain record-specific data and provenance.
 - `observations` contains deterministic record projections. `source_record_id`, `derivation`, and `derivation_version` make every projection traceable and rebuildable.
 - `daily_metrics` contains owner-timezone aggregates keyed by `definition_id` through the shared Metric Center. It is disposable and rebuilt from observations.
-- Legacy `/api/device/upload` ingestion remains a versioned compatibility path for older companion builds. It writes definition-backed observations with a canonical `source_id`; current Android builds use `/api/device/health-records`, which preserves source records before derivation.
-- `POST /api/health-records/rebuild` replaces all source-linked projections from canonical records. It does not alter legacy or manually entered observations.
+- Android ingestion uses `/api/device/health-records`, which preserves canonical source records before deterministic observation derivation.
+- `POST /api/health-records/rebuild` replaces all source-linked projections from canonical records. It does not alter manually entered observations.
 
 Android owns permission selection, reading, and faithful serialization only. The single `HealthRecordAdapterRegistry` drives supported record types, permissions, historical reads, change-token reads, and serialization. Formulas and aggregation policy remain on the server.
 
