@@ -171,8 +171,8 @@ export class DailyProjectionCoordinator {
      * a dirty date contained a carry-forward height. Conservatively requeue later weight dates from
      * the earliest dirty date so cached BMI can never survive a historical bulk correction.
      */
-    async invalidateCarryForwardDependents(dates: Iterable<string> = await this.dirtyDates()) {
-        const dirty = [...new Set(dates)].sort()
+    async invalidateCarryForwardDependents(dates?: Iterable<string>) {
+        const dirty = [...new Set(dates ?? (await this.dirtyDates()))].sort()
         if (!dirty.length) return new Set<string>()
         const { timezone } = await this.context()
         return this.invalidateDates(await this.laterWeightDates(dirty[0], timezone))
