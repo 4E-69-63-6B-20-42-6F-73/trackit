@@ -1,6 +1,7 @@
 import type { MealPlanItem, MealType, PlanReferenceType } from '@trackit/domain/planning'
 import type { paths } from './api.generated'
 import { apiClient } from './apiClient'
+import { invalidatePlanAndNutritionQueries, invalidatePlanQueries } from './serverQueries'
 
 export type PlanReference = { type: PlanReferenceType; id: string }
 export type PlanSchedule =
@@ -38,6 +39,7 @@ export async function createPlanMeal(input: {
 }) {
     const { data, response } = await apiClient.POST('/api/plan-items', { body: input })
     if (!response.ok || !data) throw new Error('Could not add this meal to your plan.')
+    await invalidatePlanQueries()
     return toPlanItem(data.data)
 }
 
@@ -51,6 +53,7 @@ export async function createPlanSchedule(input: {
 }) {
     const { data, response } = await apiClient.POST('/api/plan-schedules', { body: input })
     if (!response.ok || !data) throw new Error('Could not create this recurring meal schedule.')
+    await invalidatePlanQueries()
     return data.data
 }
 
@@ -63,6 +66,7 @@ export async function stopPlanSchedule(schedule: PlanSchedule, fromDate: string)
         throw new Error('This schedule changed elsewhere. Refresh and try again.')
     if (!response.ok && response.status !== 404)
         throw new Error('Could not stop this recurring meal schedule.')
+    await invalidatePlanQueries()
 }
 
 export async function updatePlanMeal(
@@ -83,6 +87,7 @@ export async function updatePlanMeal(
     if (response.status === 409)
         throw new Error('This plan changed elsewhere. Refresh and try again.')
     if (!response.ok || !data) throw new Error('Could not update this planned meal.')
+    await invalidatePlanQueries()
     return toPlanItem(data.data)
 }
 
@@ -94,6 +99,7 @@ export async function setPlanMealSkipped(item: MealPlanItem, skipped: boolean) {
     if (response.status === 409)
         throw new Error('This plan changed elsewhere. Refresh and try again.')
     if (!response.ok || !data) throw new Error('Could not update this planned meal.')
+    await invalidatePlanQueries()
     return toPlanItem(data.data)
 }
 
@@ -109,6 +115,7 @@ export async function logPlannedMeal(
     if (response.status === 400) throw new Error('Choose a food for this flexible target.')
     if (response.status === 404) throw new Error('That food does not belong to this food group.')
     if (!response.ok || !data) throw new Error('Could not log this planned meal.')
+    await invalidatePlanAndNutritionQueries()
     return data.data
 }
 
@@ -121,4 +128,5 @@ export async function deletePlanMeal(item: MealPlanItem) {
         throw new Error('This plan changed elsewhere. Refresh and try again.')
     if (!response.ok && response.status !== 404)
         throw new Error('Could not remove this planned meal.')
+    await invalidatePlanQueries()
 }
