@@ -1,26 +1,19 @@
-import { environment } from '../app/env'
-import { authRequest } from './authApi'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
-export type FoodCategory = {
-    id: string
-    name: string
-    foodIds: string[]
-}
+export type FoodCategory =
+    paths['/api/food-categories']['get']['responses'][200]['content']['application/json']['data'][number]
 
 export async function listFoodCategories(signal?: AbortSignal) {
-    const response = await fetch(`${environment.VITE_API_URL}/api/food-categories`, {
-        credentials: 'same-origin',
-        signal,
-    })
-    if (!response.ok) throw new Error('Food groups unavailable')
-    return ((await response.json()) as { data: FoodCategory[] }).data
+    const { data, response } = await apiClient.GET('/api/food-categories', { signal })
+    if (!response.ok || !data) throw new Error('Food groups unavailable')
+    return data.data
 }
 
 export async function setFoodCategories(foodId: string, categoryIds: string[]) {
-    const response = await authRequest(`/api/foods/${foodId}/categories`, {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ categoryIds }),
+    const { response } = await apiClient.PUT('/api/foods/{id}/categories', {
+        params: { path: { id: foodId } },
+        body: { categoryIds },
     })
     if (!response.ok) throw new Error('Could not update food groups.')
 }
