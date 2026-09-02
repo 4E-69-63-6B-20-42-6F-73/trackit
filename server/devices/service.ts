@@ -8,109 +8,22 @@ import {
     deviceRequestNonces,
     deviceUploadBatches,
     healthRecords,
-    observationRelations,
     observations,
     pairingCodes,
     preferences,
     sources,
     syncCursors,
 } from '../db/schema.js'
-import { deriveRecord } from '../health-records/derive.js'
-import { projectHealthRecordToJournal } from '../health-records/journal.js'
 import { normalizeHealthRecord, normalizeHealthRecordInput } from '../health-records/normalize.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone, nextDate } from '../data/timezone.js'
-import type { CanonicalHealthRecord, CanonicalHealthRecordInput } from '../health-records/types.js'
+import { insertHealthObservationGraph } from '../health-records/projection.js'
+import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const deletionTombstoneVersion = Number.MAX_SAFE_INTEGER
-
-async function insertHealthObservationGraph(
-    transaction: Transaction,
-    record: CanonicalHealthRecord,
-) {
-    record = normalizeHealthRecord(record)
-    const projections = deriveRecord(record)
-    const components = projections.length
-        ? await transaction
-              .insert(observations)
-              .values(
-                  projections.map(projection => ({
-                      userId: record.userId,
-                      definitionId: projection.definitionId,
-                      valueType: 'number',
-                      origin: 'external',
-                      canonicalValue: projection.value,
-                      canonicalUnit: projection.unit,
-                      originalValue: projection.originalValue ?? projection.value,
-                      originalUnit: projection.originalUnit ?? projection.unit,
-                      observedAt: projection.observedAt!,
-                      endedAt: projection.endedAt,
-                      externalId: `${record.externalId}:${projection.definitionId}:v${projection.derivationVersion}`,
-                      kind: projection.kind,
-                      sourceRecordId: record.id,
-                      derivation: projection.derivation,
-                      derivationVersion: projection.derivationVersion,
-                      version: record.externalVersion,
-                      metadata: {
-                          source: 'Health Connect',
-                          dataOrigin: record.dataOrigin,
-                          connector: 'Health Connect',
-                          provider: record.dataOrigin,
-                      },
-                  })),
-              )
-              .returning({ id: observations.id, definitionId: observations.definitionId })
-        : []
-    const journal = projectHealthRecordToJournal(record, projections)
-    const observedAt =
-        record.recordType === 'SleepSessionRecord' && record.endTime
-            ? record.endTime
-            : record.startTime
-    const [root] = await transaction
-        .insert(observations)
-        .values({
-            id: record.id,
-            userId: record.userId,
-            definitionId: 'health_record',
-            valueType: 'compound',
-            origin: 'external',
-            title: journal?.title,
-            category: journal?.category,
-            observedAt,
-            endedAt: record.endTime,
-            sourceRecordId: record.id,
-            externalId: record.externalId,
-            attributes: {
-                description: journal?.detail ?? '',
-                primaryDefinitionId: projections[0]?.definitionId,
-                sourceLabel: record.dataOrigin
-                    ? `Health Connect · ${record.dataOrigin}`
-                    : 'Health Connect',
-                recordType: record.recordType,
-            },
-            metadata: {
-                connector: 'Health Connect',
-                provider: record.dataOrigin,
-                dataOrigin: record.dataOrigin,
-            },
-            version: record.externalVersion,
-        })
-        .returning({ id: observations.id })
-    if (root && components.length)
-        await transaction.insert(observationRelations).values(
-            components.map((component, ordinal) => ({
-                parentObservationId: root.id,
-                childObservationId: component.id,
-                kind: 'component',
-                role: component.definitionId,
-                ordinal,
-            })),
-        )
-    return projections
-}
 
 export type DeviceUploadRecord = {
     externalId: string
