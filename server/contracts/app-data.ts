@@ -21,6 +21,12 @@ const metricPreferenceSchema = z.object({
         .optional(),
 })
 
+const experiencePreferencesSchema = z.object({
+    onboardingStep: z.number().int().optional(),
+    onboardingComplete: z.boolean().optional(),
+    dismissedWeeklyReflection: z.string().optional(),
+})
+
 export const preferencesRecordSchema = z.object({
     id: z.string(),
     displayName: z.string(),
@@ -30,7 +36,7 @@ export const preferencesRecordSchema = z.object({
     metricResolutionVersion: z.number().int(),
     mcpEnabled: z.boolean(),
     mcpAllowedOrigins: z.array(z.string()),
-    experience: z.record(z.string(), z.unknown()),
+    experience: experiencePreferencesSchema,
     updatedAt: z.string().datetime(),
 })
 
