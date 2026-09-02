@@ -10,19 +10,21 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { useMutation } from '@tanstack/react-query'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
     updatePreferences,
     type ExperiencePreferences,
     type Preferences,
 } from '../lib/preferencesApi'
+import { serverQueryKeys } from '../lib/serverQueries'
 import { useServerData } from '../hooks/useServerData'
 
 type SaveKind = 'experience' | 'profile'
 
 export function Onboarding() {
     const navigate = useNavigate()
+    const queryClient = useQueryClient()
     const { preferences: sharedPreferences, loading, unavailable } = useServerData()
     const [preferences, setPreferences] = useState<Preferences | null>(sharedPreferences)
     const [step, setStep] = useState(0)
@@ -133,7 +135,9 @@ export function Onboarding() {
                     {!preferences && (
                         <Button
                             onClick={() =>
-                                window.dispatchEvent(new Event('trackit:preferences-changed'))
+                                void queryClient.invalidateQueries({
+                                    queryKey: serverQueryKeys.preferences,
+                                })
                             }
                             size="xs"
                             ml="sm"
