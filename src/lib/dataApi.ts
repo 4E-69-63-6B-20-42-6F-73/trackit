@@ -1,55 +1,46 @@
-import { authRequest } from './authApi'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
-export type MaintenanceDateRange = { lastDays: number } | { from?: string; to?: string }
-export type MaintenanceRederiveRequest = MaintenanceDateRange & { recordTypes?: string[] }
+export type MaintenanceDateRange =
+    paths['/api/data/rebuild-projections']['post']['requestBody']['content']['application/json']
+export type MaintenanceRederiveRequest =
+    paths['/api/data/rederive-observations']['post']['requestBody']['content']['application/json']
 
-type MaintenanceErrorBody = {
-    error?: string
-    requestId?: string
-}
-
-const postMaintenance = async <T>(
-    path: string,
-    range: MaintenanceDateRange | MaintenanceRederiveRequest,
+const maintenanceError = (
+    response: Response,
+    error: { error: string; requestId?: string } | undefined,
 ) => {
-    const response = await authRequest(path, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(range),
-    })
-    const body = (await response.json().catch(() => null)) as
-        ({ data?: T } & MaintenanceErrorBody) | null
-    if (!response.ok) {
-        const details = [
-            `HTTP ${response.status}`,
-            body?.error,
-            body?.requestId ? `request ${body.requestId}` : undefined,
-        ]
-            .filter(Boolean)
-            .join(' · ')
-        throw new Error(details || 'Data maintenance request failed.')
-    }
-    if (!body?.data) throw new Error('Data maintenance response was invalid.')
-    return body.data
+    const details = [
+        `HTTP ${response.status}`,
+        error?.error,
+        error?.requestId ? `request ${error.requestId}` : undefined,
+    ]
+        .filter(Boolean)
+        .join(' · ')
+    return new Error(details || 'Data maintenance request failed.')
 }
 
 export async function rebuildProjections(range: MaintenanceDateRange = {}) {
-    return postMaintenance<{ queuedDates: number }>('/api/data/rebuild-projections', range)
+    const { data, error, response } = await apiClient.POST('/api/data/rebuild-projections', {
+        body: range,
+    })
+    if (!response.ok) throw maintenanceError(response, error)
+    if (!data) throw new Error('Data maintenance response was invalid.')
+    return data.data
 }
 
 export async function rederiveObservations(input: MaintenanceRederiveRequest = {}) {
-    return postMaintenance<{
-        sourceRecords: number
-        canonicalObservations: number
-        queuedProjectionDates: number
-    }>('/api/data/rederive-observations', input)
+    const { data, error, response } = await apiClient.POST('/api/data/rederive-observations', {
+        body: input,
+    })
+    if (!response.ok) throw maintenanceError(response, error)
+    if (!data) throw new Error('Data maintenance response was invalid.')
+    return data.data
 }
 
 export async function deleteOwnerData(confirmation: string) {
-    const response = await authRequest('/api/data/delete-owner', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ confirmation }),
+    const { response } = await apiClient.POST('/api/data/delete-owner', {
+        body: { confirmation: confirmation as 'DELETE ALL TRACKIT DATA' },
     })
     if (!response.ok) throw new Error('Enter the confirmation phrase exactly.')
 }
