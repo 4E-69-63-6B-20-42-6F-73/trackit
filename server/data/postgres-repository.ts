@@ -29,7 +29,7 @@ export class PostgresDataRepository extends PersistenceDataRepository implements
         this.projections = new DailyProjectionCoordinator(projectionDatabase)
     }
 
-    override async listDailyMetrics(range: { from?: string; to?: string } = {}) {
+    async listDailyMetrics(range: { from?: string; to?: string } = {}) {
         const conditions: SQL[] = []
         if (range.from) conditions.push(gte(dailyMetrics.date, range.from))
         if (range.to) conditions.push(lte(dailyMetrics.date, range.to))
