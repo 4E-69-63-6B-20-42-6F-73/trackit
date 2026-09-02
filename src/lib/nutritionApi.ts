@@ -1,6 +1,7 @@
 import type { Food, Nutrients } from '@trackit/domain/nutrition'
 import type { paths } from './api.generated'
 import { apiClient } from './apiClient'
+import { invalidateLibraryQueries, invalidateNutritionQueries } from './serverQueries'
 
 type FoodRecord =
     paths['/api/foods']['get']['responses'][200]['content']['application/json']['data'][number]
@@ -123,6 +124,7 @@ export async function searchFoods(query = '') {
 export async function createFood(food: Omit<Food, 'id'>) {
     const { data, response } = await apiClient.POST('/api/foods', { body: foodInput(food) })
     if (!response.ok || !data) throw new Error('Could not create food')
+    await invalidateLibraryQueries()
     return toFood(data.data)
 }
 
@@ -134,6 +136,7 @@ export async function importFoods(
         body: { duplicateStrategy, foods: foods.map(foodInput) },
     })
     if (!response.ok || !data) throw new Error('The server could not import this catalog.')
+    await invalidateLibraryQueries()
     return data.data
 }
 
@@ -166,6 +169,7 @@ export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version
     })
     if (response.status === 409) throw new Error('Food changed elsewhere. Reload and try again.')
     if (!response.ok || !data) throw new Error('Could not update food')
+    await invalidateLibraryQueries()
     return toFood(data.data)
 }
 
@@ -197,6 +201,7 @@ export async function deleteFood(food: Food) {
     }
     if (response.status === 404) throw new Error('This food no longer exists.')
     if (!response.ok) throw new Error('Could not delete food')
+    await invalidateLibraryQueries()
 }
 
 export async function logMeal(
@@ -224,6 +229,7 @@ export async function logMeal(
         },
     })
     if (!response.ok) throw new Error('Could not log meal')
+    await invalidateNutritionQueries()
 }
 
 export async function updateMeal(
@@ -246,6 +252,7 @@ export async function updateMeal(
         body: { version, ...changes },
     })
     if (!response.ok || !data) throw new Error('Could not update meal')
+    await invalidateNutritionQueries()
     return data.data
 }
 
@@ -255,6 +262,7 @@ export async function deleteMeal(id: string): Promise<void> {
     })
     if (!response.ok && response.status !== 404)
         throw new Error(`Meal delete failed (${response.status})`)
+    await invalidateNutritionQueries()
 }
 
 export async function listRecipes(): Promise<RecipeRecord[]> {
@@ -271,6 +279,7 @@ export async function createRecipe(input: {
 }) {
     const { data, response } = await apiClient.POST('/api/recipes', { body: input })
     if (!response.ok || !data) throw new Error('Could not create recipe')
+    await invalidateLibraryQueries()
     return data.data
 }
 
@@ -281,6 +290,7 @@ export async function updateRecipeYield(recipe: RecipeRecord, servings: number) 
     })
     if (response.status === 409) throw new Error('Recipe changed elsewhere. Reload and try again.')
     if (!response.ok) throw new Error('Could not update recipe yield')
+    await invalidateLibraryQueries()
 }
 
 export async function listMeals(range: { from?: string; to?: string } = {}, signal?: AbortSignal) {
