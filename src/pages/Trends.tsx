@@ -90,12 +90,17 @@ export function Trends() {
               : (preferredDefinitionId ?? recordedDefinitionIds[0] ?? null)
     const days = ranges[range]
     const observationFromKey = addCalendarDays(todayKey, -(days * 2 - 1))
+    const observationDefinitionIds = activeDefinitionId
+        ? [activeDefinitionId, ...(comparisonDefinitionId ? [comparisonDefinitionId] : [])]
+        : []
+    const observationStart = calendarDayRangeForKey(observationFromKey, timezone).from
+    const sleepLookbehindMs = observationDefinitionIds.some(id => id.startsWith('sleep'))
+        ? 36 * 60 * 60 * 1000
+        : 0
     const observationRange = {
-        from: calendarDayRangeForKey(observationFromKey, timezone).from.toISOString(),
+        from: new Date(observationStart.getTime() - sleepLookbehindMs).toISOString(),
         to: calendarDayRangeForKey(todayKey, timezone).to.toISOString(),
-        definitionIds: activeDefinitionId
-            ? [activeDefinitionId, ...(comparisonDefinitionId ? [comparisonDefinitionId] : [])]
-            : [],
+        definitionIds: observationDefinitionIds,
     }
     const observationsQuery = useQuery({
         queryKey: [...healthQueryKeys.observations, observationRange],
