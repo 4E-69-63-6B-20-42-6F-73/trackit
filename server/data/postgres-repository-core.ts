@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { calendarDateKey } from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import {
     foods,
@@ -17,7 +18,6 @@ import {
 import type { RecordRange } from './types.js'
 import { convertMetricValue, type MetricPreferences } from '@trackit/domain/metrics'
 import { rebuildEffectiveDailyMetric } from './daily-projection.js'
-import { dateKeyInTimezone } from './timezone.js'
 import { getEffectiveMetricSeries } from './effective-series.js'
 import { observationDefinition } from '@trackit/domain/observationDefinitions'
 
@@ -121,7 +121,7 @@ export class PostgresDataRepository {
             .select({ timezone: preferences.timezone })
             .from(preferences)
             .where(eq(preferences.id, 'owner'))
-        return dateKeyInTimezone(observedAt, saved?.timezone ?? 'UTC')
+        return calendarDateKey(observedAt, saved?.timezone ?? 'UTC')
     }
 
     listHealthRecords() {
@@ -597,8 +597,8 @@ export class PostgresDataRepository {
                         .where(eq(foods.id, input.foodId))
                 }
                 const dates = new Set([
-                    dateKeyInTimezone(record.observedAt, timezone),
-                    dateKeyInTimezone(before.observedAt, timezone),
+                    calendarDateKey(record.observedAt, timezone),
+                    calendarDateKey(before.observedAt, timezone),
                 ])
                 for (const date of dates) await rebuildEffectiveDailyMetric(transaction, date)
             }
@@ -635,7 +635,7 @@ export class PostgresDataRepository {
                         )
                 await rebuildEffectiveDailyMetric(
                     transaction,
-                    dateKeyInTimezone(root.eatenAt, timezone),
+                    calendarDateKey(root.eatenAt, timezone),
                 )
             }
             return Boolean(root)
