@@ -1,6 +1,11 @@
 import { and, eq, gt, inArray, lt, sql } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import {
+    addCalendarDays,
+    calendarDateKey,
+    calendarDayRangeForKey,
+} from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import { healthRecords, observations, preferences } from '../db/schema.js'
 import {
@@ -8,17 +13,10 @@ import {
     type ProviderRecordMaintenanceRange,
 } from '../data/maintenance-range.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
-import { dateKeyInTimezone, localDayRange, nextDate } from '../data/timezone.js'
 import { normalizeHealthRecord } from './normalize.js'
 import { insertHealthObservationGraph } from './projection.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
-
-const previousDate = (date: string) => {
-    const value = new Date(`${date}T00:00:00.000Z`)
-    value.setUTCDate(value.getUTCDate() - 1)
-    return value.toISOString().slice(0, 10)
-}
 
 export class ProviderRecordMaintenanceService {
     constructor(private readonly database: Database) {}
@@ -30,8 +28,8 @@ export class ProviderRecordMaintenanceService {
             .where(eq(preferences.id, 'owner'))
         const timezone = saved?.timezone ?? 'UTC'
         const range = resolveMaintenanceDateRange(input, timezone)
-        const from = range.from ? localDayRange(range.from, timezone).from : undefined
-        const to = range.to ? localDayRange(range.to, timezone).to : undefined
+        const from = range.from ? calendarDayRangeForKey(range.from, timezone).from : undefined
+        const to = range.to ? calendarDayRangeForKey(range.to, timezone).to : undefined
 
         const batchSize = 25
         let cursor: string | undefined
@@ -68,16 +66,16 @@ export class ProviderRecordMaintenanceService {
                         .from(observations)
                         .where(eq(observations.sourceRecordId, stored.id))
                     for (const item of previous) {
-                        dirtyDates.add(dateKeyInTimezone(item.observedAt, timezone))
-                        if (item.endedAt) dirtyDates.add(dateKeyInTimezone(item.endedAt, timezone))
+                        dirtyDates.add(calendarDateKey(item.observedAt, timezone))
+                        if (item.endedAt) dirtyDates.add(calendarDateKey(item.endedAt, timezone))
                     }
 
                     await transaction
                         .delete(observations)
                         .where(eq(observations.sourceRecordId, stored.id))
 
-                    dirtyDates.add(dateKeyInTimezone(stored.startTime, timezone))
-                    if (stored.endTime) dirtyDates.add(dateKeyInTimezone(stored.endTime, timezone))
+                    dirtyDates.add(calendarDateKey(stored.startTime, timezone))
+                    if (stored.endTime) dirtyDates.add(calendarDateKey(stored.endTime, timezone))
 
                     if (!stored.deletedAt) {
                         const record = normalizeHealthRecord({
@@ -105,9 +103,9 @@ export class ProviderRecordMaintenanceService {
                         canonicalObservations += projections.length + 1
                         for (const projection of projections) {
                             if (projection.observedAt)
-                                dirtyDates.add(dateKeyInTimezone(projection.observedAt, timezone))
+                                dirtyDates.add(calendarDateKey(projection.observedAt, timezone))
                             if (projection.endedAt)
-                                dirtyDates.add(dateKeyInTimezone(projection.endedAt, timezone))
+                                dirtyDates.add(calendarDateKey(projection.endedAt, timezone))
                         }
                     }
                 }
@@ -119,9 +117,9 @@ export class ProviderRecordMaintenanceService {
 
         const expandedDates = new Set<string>()
         for (const date of dirtyDates) {
-            expandedDates.add(previousDate(date))
+            expandedDates.add(addCalendarDays(date, -1))
             expandedDates.add(date)
-            expandedDates.add(nextDate(date))
+            expandedDates.add(addCalendarDays(date, 1))
         }
         await markProjectionDatesDirty(this.database, expandedDates)
 
