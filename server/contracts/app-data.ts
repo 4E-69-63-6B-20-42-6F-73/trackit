@@ -42,7 +42,10 @@ const goalTargetSchema = z.union([
 const goalPeriodSchema = z.union([
     z.object({ type: z.literal('day') }),
     z.object({ type: z.literal('week') }),
-    z.object({ type: z.literal('rolling'), days: z.union([z.literal(7), z.literal(14), z.literal(30)]) }),
+    z.object({
+        type: z.literal('rolling'),
+        days: z.union([z.literal(7), z.literal(14), z.literal(30)]),
+    }),
 ])
 
 export const goalRecordSchema = z.object({

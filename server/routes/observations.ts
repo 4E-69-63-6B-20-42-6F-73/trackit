@@ -151,15 +151,13 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
                 to: request.query.to,
             })
             return {
-                data: rows.map(
-                    (row): DailyMetricResponse => ({
-                        date: row.date,
-                        definitionId: row.definitionId,
-                        value: row.value,
-                        unit: row.unit,
-                        derivationVersion: row.derivationVersion,
-                    }),
-                ),
+                data: rows.map((row): DailyMetricResponse => ({
+                    date: row.date,
+                    definitionId: row.definitionId,
+                    value: row.value,
+                    unit: row.unit,
+                    derivationVersion: row.derivationVersion,
+                })),
             }
         },
     )
