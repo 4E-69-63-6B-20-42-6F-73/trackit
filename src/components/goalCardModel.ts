@@ -41,6 +41,8 @@ const defaultEvaluation: GoalEvaluation = {
     met: null,
     progress: null,
     observationCount: 0,
+    periodStart: '',
+    periodEnd: '',
     difference: null,
 }
 
