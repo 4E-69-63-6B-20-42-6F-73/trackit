@@ -1,13 +1,14 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { z } from 'zod'
-import type { DataRepository, RecordRange } from '../data/types.js'
-import type { MetricCoverage } from '../data/metric-coverage.js'
+import { calendarDateKey, calendarDateKeysThrough } from '@trackit/domain/calendar'
 import {
     aggregateDailyObservations,
     dailyMetricAttributionInstant,
     type NumericObservation,
 } from '@trackit/domain/health'
 import { metricCatalog, metricDefinition } from '@trackit/domain/metricCatalog'
+import { z } from 'zod'
+import type { MetricCoverage } from '../data/metric-coverage.js'
+import type { DataRepository, RecordRange } from '../data/types.js'
 import type { McpClient } from './service.js'
 
 type InsightGranularity = 'raw' | 'day' | 'week' | 'month'
@@ -42,25 +43,6 @@ const denied = (reason: string) => ({
     isError: true,
     content: [{ type: 'text' as const, text: reason }],
 })
-
-const dateFormatter = (timezone: string) =>
-    new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    })
-
-const enumerateDates = (from: string, to: string) => {
-    const values: string[] = []
-    const current = new Date(`${from}T00:00:00.000Z`)
-    const end = new Date(`${to}T00:00:00.000Z`)
-    while (current <= end) {
-        values.push(current.toISOString().slice(0, 10))
-        current.setUTCDate(current.getUTCDate() + 1)
-    }
-    return values
-}
 
 const isAdditive = (definitionId: string) =>
     Boolean(metricDefinition(definitionId)?.goalCapabilities?.aggregations.total)
@@ -103,15 +85,14 @@ const resolveRange = (
 }
 
 const groupDaily = (records: NumericObservation[], timezone: string, from: string, to: string) => {
-    const formatter = dateFormatter(timezone)
-    const first = formatter.format(new Date(from))
-    const last = formatter.format(new Date(new Date(to).getTime() - 1))
+    const first = calendarDateKey(new Date(from), timezone)
+    const last = calendarDateKey(new Date(new Date(to).getTime() - 1), timezone)
     const buckets = new Map<string, NumericObservation[]>()
     for (const record of records.filter(record => !record.excluded)) {
-        const day = formatter.format(dailyMetricAttributionInstant(record))
+        const day = calendarDateKey(dailyMetricAttributionInstant(record), timezone)
         buckets.set(day, [...(buckets.get(day) ?? []), record])
     }
-    return enumerateDates(first, last).map(day => {
+    return calendarDateKeysThrough(first, last).map(day => {
         const values = buckets.get(day) ?? []
         return {
             period: day,

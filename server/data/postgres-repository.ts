@@ -1,9 +1,9 @@
 import { and, desc, eq, gte, lte } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { calendarDateKey } from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import { dailyMetrics, observations } from '../db/schema.js'
-import { dateKeyInTimezone } from './timezone.js'
 import { DailyProjectionCoordinator } from './projection-coordinator.js'
 import { PostgresDataRepository as PersistenceDataRepository } from './postgres-repository-core.js'
 import type { DataRepository } from './types.js'
@@ -105,7 +105,7 @@ export class PostgresDataRepository extends PersistenceDataRepository implements
         if (saved.metricResolutionVersion !== before.metricResolutionVersion) {
             await this.projections.invalidateAll()
             await this.projections.refreshDates([
-                dateKeyInTimezone(new Date(), saved.timezone ?? 'UTC'),
+                calendarDateKey(new Date(), saved.timezone ?? 'UTC'),
             ])
         }
         return saved

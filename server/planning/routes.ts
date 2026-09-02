@@ -3,6 +3,7 @@ import { and, eq, gte, inArray, isNull, lte, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { FastifyInstance } from 'fastify'
 import { z } from 'zod'
+import { calendarDateKey } from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import {
     foods,
@@ -13,7 +14,6 @@ import {
     recipes,
 } from '../db/schema.js'
 import { rebuildEffectiveDailyMetric } from '../data/daily-projection.js'
-import { dateKeyInTimezone } from '../data/timezone.js'
 import { foodCategories, foodCategoryMemberships } from '../nutrition/schema.js'
 import {
     planFulfillments,
@@ -614,7 +614,7 @@ export function registerPlanRoutes(app: FastifyInstance, database: Database) {
                         .where(eq(foods.id, reference.id))
                 await rebuildEffectiveDailyMetric(
                     transaction,
-                    dateKeyInTimezone(root.observedAt, timezone),
+                    calendarDateKey(root.observedAt, timezone),
                 )
                 return {
                     observationId: root.id,

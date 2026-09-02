@@ -1,3 +1,4 @@
+import { addCalendarDays, calendarDateFromKey, calendarDateKey } from './calendar.js'
 import { metricDefinition } from './metricCatalog.js'
 import { convertMetricValue } from './metrics.js'
 
@@ -70,21 +71,14 @@ export function dailySeries(
     days: number,
     timezone = 'UTC',
 ): DailyPoint[] {
-    const formatter = new Intl.DateTimeFormat('en-CA', {
-        timeZone: timezone,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-    })
+    const startKey = calendarDateKey(start, timezone)
     const buckets = new Map<string, NumericObservation[]>()
     for (const observation of observations.filter(record => !record.excluded)) {
-        const key = formatter.format(dailyMetricAttributionInstant(observation))
+        const key = calendarDateKey(dailyMetricAttributionInstant(observation), timezone)
         buckets.set(key, [...(buckets.get(key) ?? []), observation])
     }
     return Array.from({ length: days }, (_, offset) => {
-        const date = new Date(start)
-        date.setUTCDate(date.getUTCDate() + offset)
-        const key = formatter.format(date)
+        const key = addCalendarDays(startKey, offset)
         const records = buckets.get(key) ?? []
         const ordered = [...records].sort(
             (left, right) =>
@@ -152,9 +146,8 @@ export function rollingBaselineDelta(
     timezone: string,
     days = 30,
 ) {
-    const start = new Date(now)
-    start.setUTCHours(12, 0, 0, 0)
-    start.setUTCDate(start.getUTCDate() - days + 1)
+    const todayKey = calendarDateKey(now, timezone)
+    const start = calendarDateFromKey(addCalendarDays(todayKey, -(days - 1)), timezone)
     const points = dailySeries(
         observations.filter(record => record.definitionId === definitionId),
         start,

@@ -1,6 +1,7 @@
 import { createHash, createPublicKey, randomBytes, randomInt, verify } from 'node:crypto'
 import { and, desc, eq, gt, gte, isNull, lt, notInArray } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { addCalendarDays, calendarDateKey } from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import {
     auditEvents,
@@ -16,7 +17,6 @@ import {
 } from '../db/schema.js'
 import { normalizeHealthRecord, normalizeHealthRecordInput } from '../health-records/normalize.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
-import { dateKeyInTimezone, nextDate } from '../data/timezone.js'
 import { insertHealthObservationGraph } from '../health-records/projection.js'
 import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
@@ -429,9 +429,9 @@ export class DeviceService {
                     .where(eq(preferences.id, 'owner'))
                 const timezone = saved?.timezone ?? 'UTC'
                 for (const projection of previousProjections) {
-                    affectedDates.add(dateKeyInTimezone(projection.observedAt, timezone))
+                    affectedDates.add(calendarDateKey(projection.observedAt, timezone))
                     if (projection.endedAt)
-                        affectedDates.add(dateKeyInTimezone(projection.endedAt, timezone))
+                        affectedDates.add(calendarDateKey(projection.endedAt, timezone))
                 }
                 await transaction
                     .delete(observations)
@@ -446,9 +446,9 @@ export class DeviceService {
                     })
                     for (const projection of projections) {
                         if (projection.observedAt)
-                            affectedDates.add(dateKeyInTimezone(projection.observedAt, timezone))
+                            affectedDates.add(calendarDateKey(projection.observedAt, timezone))
                         if (projection.endedAt)
-                            affectedDates.add(dateKeyInTimezone(projection.endedAt, timezone))
+                            affectedDates.add(calendarDateKey(projection.endedAt, timezone))
                     }
                 }
             }
@@ -566,8 +566,8 @@ export class DeviceService {
                     .from(observations)
                     .where(eq(observations.sourceRecordId, record.id))
                 for (const item of prior) {
-                    dates.add(dateKeyInTimezone(item.observedAt, timezone))
-                    if (item.endedAt) dates.add(dateKeyInTimezone(item.endedAt, timezone))
+                    dates.add(calendarDateKey(item.observedAt, timezone))
+                    if (item.endedAt) dates.add(calendarDateKey(item.endedAt, timezone))
                 }
                 await transaction
                     .update(healthRecords)
@@ -587,12 +587,10 @@ export class DeviceService {
     }
 
     private async markDailyDateDirty(transaction: Transaction, date: string) {
-        const previous = new Date(`${date}T00:00:00.000Z`)
-        previous.setUTCDate(previous.getUTCDate() - 1)
         await markProjectionDatesDirty(transaction, [
-            previous.toISOString().slice(0, 10),
+            addCalendarDays(date, -1),
             date,
-            nextDate(date),
+            addCalendarDays(date, 1),
         ])
     }
 

@@ -1,3 +1,9 @@
+import {
+    addCalendarDays,
+    calendarDateKey,
+    calendarDayRangeForKey,
+    calendarWeekdayIndex,
+} from './calendar.js'
 import { dailyMetricAttributionInstant, type NumericObservation } from './health.js'
 import {
     metricDefinition,
@@ -30,59 +36,21 @@ export type GoalEvaluation = {
     difference: number | null
 }
 
-const parts = (date: Date, timezone: string) =>
-    Object.fromEntries(
-        new Intl.DateTimeFormat('en-US', {
-            timeZone: timezone,
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hourCycle: 'h23',
-        })
-            .formatToParts(date)
-            .filter(part => part.type !== 'literal')
-            .map(part => [part.type, Number(part.value)]),
-    ) as Record<string, number>
-function zonedDateTime(timezone: string, year: number, month: number, day: number) {
-    const desired = Date.UTC(year, month - 1, day)
-    let instant = desired
-    for (let index = 0; index < 3; index += 1) {
-        const actual = parts(new Date(instant), timezone)
-        instant +=
-            desired -
-            Date.UTC(
-                actual.year,
-                actual.month - 1,
-                actual.day,
-                actual.hour,
-                actual.minute,
-                actual.second,
-            )
-    }
-    return new Date(instant)
-}
-const localDayStart = (date: Date, timezone: string) => {
-    const value = parts(date, timezone)
-    return zonedDateTime(timezone, value.year, value.month, value.day)
-}
 export function goalPeriodBounds(period: GoalPeriod, now: Date, timezone: string) {
     const end = now
     if (period.type === 'rolling')
         return { start: new Date(end.getTime() - period.days * 86_400_000), end }
-    const start = localDayStart(now, timezone)
-    if (period.type === 'week') {
-        const weekday = weekdayIn(now, timezone)
-        start.setUTCDate(start.getUTCDate() - ((weekday + 6) % 7))
-    }
-    return { start, end }
+
+    const today = calendarDateKey(now, timezone)
+    const startKey =
+        period.type === 'week'
+            ? addCalendarDays(today, -((calendarWeekdayIndex(now, timezone) + 6) % 7))
+            : today
+    return { start: calendarDayRangeForKey(startKey, timezone).from, end }
 }
-const weekdayIn = (date: Date, timezone: string) =>
-    ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(
-        new Intl.DateTimeFormat('en-US', { timeZone: timezone, weekday: 'short' }).format(date),
-    )
+
+const weekdayIn = (date: Date, timezone: string) => calendarWeekdayIndex(date, timezone)
+
 export function validateGoal(goal: Omit<Goal, 'id'> | Goal): string[] {
     const errors: string[] = []
     const metric = metricDefinition(goal.definitionId)
@@ -114,6 +82,7 @@ export function validateGoal(goal: Omit<Goal, 'id'> | Goal): string[] {
         errors.push('Weekdays must be between Sunday and Saturday.')
     return errors
 }
+
 export function evaluateGoal(
     goal: Goal,
     observations: NumericObservation[],
