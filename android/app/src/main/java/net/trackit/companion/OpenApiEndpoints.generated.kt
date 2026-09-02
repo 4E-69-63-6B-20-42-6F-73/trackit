@@ -10,8 +10,7 @@ data class OpenApiEndpoint(
 object OpenApiEndpoints {
     val DEVICE_CURSOR_PUT = OpenApiEndpoint("PUT", "/api/device/cursor")
     val DEVICE_HEALTH_RECORDS_POST = OpenApiEndpoint("POST", "/api/device/health-records")
-    val DEVICE_HEALTH_RECORDS_RECONCILE_POST =
-        OpenApiEndpoint("POST", "/api/device/health-records/reconcile")
+    val DEVICE_HEALTH_RECORDS_RECONCILE_POST = OpenApiEndpoint("POST", "/api/device/health-records/reconcile")
     val DEVICE_STATUS_GET = OpenApiEndpoint("GET", "/api/device/status")
     val DEVICES_PAIR_REQUEST_POST = OpenApiEndpoint("POST", "/api/devices/pair/request")
 }
