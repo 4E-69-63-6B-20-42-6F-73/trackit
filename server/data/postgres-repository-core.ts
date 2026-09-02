@@ -1,32 +1,24 @@
 import { randomUUID } from 'node:crypto'
 import { and, desc, eq, gte, inArray, isNull, lt, lte, sql } from 'drizzle-orm'
-import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import {
     foods,
     healthRecords,
-    dailyMetrics,
-    dailyProjectionRuns,
     goals,
     observations,
     observationRelations,
     preferences,
-    projectionDirtyDates,
     sources,
     recipeItems,
     recipes,
     savedTrendViews,
 } from '../db/schema.js'
-import type { DataRepository, RecordRange } from './types.js'
+import type { RecordRange } from './types.js'
 import { convertMetricValue, type MetricPreferences } from '@trackit/domain/metrics'
-import {
-    EFFECTIVE_DAILY_DERIVATION_VERSION,
-    rebuildEffectiveDailyMetric,
-} from './daily-projection.js'
-import { dateKeyInTimezone, datesThrough, localDayRange } from './timezone.js'
+import { rebuildEffectiveDailyMetric } from './daily-projection.js'
+import { dateKeyInTimezone } from './timezone.js'
 import { getEffectiveMetricSeries } from './effective-series.js'
-import { markProjectionDatesDirty } from './projection-state.js'
 import { observationDefinition } from '@trackit/domain/observationDefinitions'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -123,7 +115,7 @@ const foodMatchScore = (query: string, name: string, brand?: string | null) => {
     return ratio <= 0.34 || (query.length >= 5 && distance <= 2) ? 0.5 + ratio : Infinity
 }
 
-export class PostgresDataRepository implements DataRepository {
+export class PostgresDataRepository {
     private async projectionDate(observedAt: Date) {
         const [saved] = await this.database
             .select({ timezone: preferences.timezone })
@@ -134,121 +126,6 @@ export class PostgresDataRepository implements DataRepository {
 
     listHealthRecords() {
         return this.database.select().from(healthRecords).orderBy(desc(healthRecords.startTime))
-    }
-
-    async listDailyMetrics(range: { from?: string; to?: string } = {}) {
-        const conditions: SQL[] = []
-        if (range.from) conditions.push(gte(dailyMetrics.date, range.from))
-        if (range.to) conditions.push(lte(dailyMetrics.date, range.to))
-        const query = () =>
-            this.database
-                .select()
-                .from(dailyMetrics)
-                .where(conditions.length ? and(...conditions) : undefined)
-                .orderBy(desc(dailyMetrics.date))
-        const runConditions: SQL[] = [eq(dailyProjectionRuns.userId, 'owner')]
-        const dirtyConditions: SQL[] = [eq(projectionDirtyDates.userId, 'owner')]
-        if (range.from) {
-            runConditions.push(gte(dailyProjectionRuns.date, range.from))
-            dirtyConditions.push(gte(projectionDirtyDates.date, range.from))
-        }
-        if (range.to) {
-            runConditions.push(lte(dailyProjectionRuns.date, range.to))
-            dirtyConditions.push(lte(projectionDirtyDates.date, range.to))
-        }
-        const [rows, saved, runs, dirty] = await Promise.all([
-            query(),
-            this.database
-                .select({
-                    metricResolutionVersion: preferences.metricResolutionVersion,
-                    timezone: preferences.timezone,
-                })
-                .from(preferences)
-                .where(eq(preferences.id, 'owner')),
-            this.database
-                .select()
-                .from(dailyProjectionRuns)
-                .where(and(...runConditions)),
-            this.database
-                .select({ date: projectionDirtyDates.date })
-                .from(projectionDirtyDates)
-                .where(and(...dirtyConditions)),
-        ])
-        const resolutionVersion = saved[0]?.metricResolutionVersion ?? 1
-        const timezone = saved[0]?.timezone ?? 'UTC'
-        const runByDate = new Map(runs.map(run => [run.date, run]))
-        const requestedDates =
-            range.from && range.to
-                ? datesThrough(range.from, range.to)
-                : [...new Set([...rows.map(row => row.date), ...runs.map(run => run.date)])]
-        const staleDates = new Set([
-            ...dirty.map(item => item.date),
-            ...requestedDates.filter(date => {
-                const run = runByDate.get(date)
-                if (!run) return false
-                return (
-                    run.status !== 'complete' ||
-                    run.derivationVersion !== EFFECTIVE_DAILY_DERIVATION_VERSION ||
-                    run.resolutionVersion !== resolutionVersion ||
-                    run.timezone !== timezone
-                )
-            }),
-            ...rows
-                .filter(
-                    row =>
-                        row.derivationVersion !== EFFECTIVE_DAILY_DERIVATION_VERSION ||
-                        row.resolutionVersion !== resolutionVersion ||
-                        row.timezone !== timezone,
-                )
-                .map(row => row.date),
-        ])
-        const missingDates = requestedDates.filter(date => !runByDate.has(date))
-        if (missingDates.length && range.from && range.to) {
-            const bounds = {
-                from: localDayRange(range.from, timezone).from,
-                to: localDayRange(range.to, timezone).to,
-            }
-            const observationDates = await this.database
-                .selectDistinct({
-                    date: sql<string>`to_char(${observations.observedAt} at time zone ${timezone}, 'YYYY-MM-DD')`,
-                })
-                .from(observations)
-                .where(
-                    and(
-                        isNull(observations.deletedAt),
-                        gte(observations.observedAt, bounds.from),
-                        lt(observations.observedAt, bounds.to),
-                    ),
-                )
-            const inputDates = new Set([
-                ...rows.map(row => row.date),
-                ...observationDates.map(item => item.date),
-            ])
-            const emptyDates = missingDates.filter(date => !inputDates.has(date))
-            for (const date of missingDates.filter(date => inputDates.has(date)))
-                staleDates.add(date)
-            if (emptyDates.length)
-                await this.database
-                    .insert(dailyProjectionRuns)
-                    .values(
-                        emptyDates.map(date => ({
-                            userId: 'owner',
-                            date,
-                            derivationVersion: EFFECTIVE_DAILY_DERIVATION_VERSION,
-                            resolutionVersion,
-                            timezone,
-                            status: 'complete',
-                        })),
-                    )
-                    .onConflictDoNothing()
-        } else for (const date of missingDates) staleDates.add(date)
-        if (!staleDates.size) return rows
-        await markProjectionDatesDirty(this.database, staleDates)
-        // Keep the active day accurate without making a read synchronously backfill
-        // every historical date. The projection worker drains the remaining dates.
-        const activeDate = range.to && staleDates.has(range.to) ? range.to : null
-        if (activeDate) await rebuildEffectiveDailyMetric(this.database, activeDate)
-        return query()
     }
 
     listSources() {
