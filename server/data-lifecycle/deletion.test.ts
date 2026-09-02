@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import * as schema from '../db/schema.js'
 import { applyTestMigrations } from '../db/test-migrations.js'
 import { PostgresDataRepository } from '../data/postgres-repository.js'
+import { ProjectionWorker } from '../data/projection-state.js'
 import { DataDeletionService } from './deletion.js'
 
 describe('explicit data deletion', () => {
@@ -58,7 +59,7 @@ describe('explicit data deletion', () => {
         await client.close()
     })
 
-    it('marks meal projections dirty and removes deleted nutrients on the next read', async () => {
+    it('marks meal projections dirty and removes deleted nutrients after the worker rebuilds', async () => {
         const client = new PGlite()
         await applyTestMigrations(client)
         const database = drizzle(client, { schema })
@@ -80,6 +81,16 @@ describe('explicit data deletion', () => {
         const deletion = new DataDeletionService(database as never)
         await deletion.deleteCategory('meals')
         expect(await database.select().from(schema.projectionDirtyDates)).toHaveLength(1)
+
+        // Reads consume projection state and never drain the dirty queue.
+        expect(
+            (await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).some(
+                row => row.definitionId === 'calories',
+            ),
+        ).toBe(true)
+        expect(await database.select().from(schema.projectionDirtyDates)).toHaveLength(1)
+
+        await new ProjectionWorker(database as never).runOnce()
         expect(
             (await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).some(
                 row => row.definitionId === 'calories',
