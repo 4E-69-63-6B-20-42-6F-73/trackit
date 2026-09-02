@@ -11,8 +11,8 @@ import {
     EFFECTIVE_DAILY_DERIVATION_VERSION,
     rebuildEffectiveDailyMetric,
 } from './daily-projection.js'
+import { markProjectionDatesDirty } from './projection-queue.js'
 import { dateKeyInTimezone, localDayRange } from './timezone.js'
-import { markProjectionDatesDirty } from './projection-state.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
