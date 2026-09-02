@@ -1,4 +1,4 @@
-import { addCalendarDays, calendarDateKey } from './calendar.js'
+import { addCalendarDays, calendarDateFromKey, calendarDateKey } from './calendar.js'
 import { metricDefinition } from './metricCatalog.js'
 import { convertMetricValue } from './metrics.js'
 
@@ -146,9 +146,8 @@ export function rollingBaselineDelta(
     timezone: string,
     days = 30,
 ) {
-    const start = new Date(now)
-    start.setUTCHours(12, 0, 0, 0)
-    start.setUTCDate(start.getUTCDate() - days + 1)
+    const todayKey = calendarDateKey(now, timezone)
+    const start = calendarDateFromKey(addCalendarDays(todayKey, -(days - 1)), timezone)
     const points = dailySeries(
         observations.filter(record => record.definitionId === definitionId),
         start,
