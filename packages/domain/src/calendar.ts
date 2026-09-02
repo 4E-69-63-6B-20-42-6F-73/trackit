@@ -55,6 +55,14 @@ export const addCalendarDays = (dateKey: string, days: number) => {
     return value.toISOString().slice(0, 10)
 }
 
+export const nextCalendarDateKey = (dateKey: string) => addCalendarDays(dateKey, 1)
+
+export function calendarDateKeysThrough(from: string, to: string) {
+    const dates: string[] = []
+    for (let date = from; date <= to; date = nextCalendarDateKey(date)) dates.push(date)
+    return dates
+}
+
 export const calendarDateFromKey = (dateKey: string, timezone: string) => {
     const [year, month, day] = dateKey.split('-').map(Number)
     return zonedDateTime(timezone, year, month, day)
@@ -75,7 +83,7 @@ export function calendarDayRange(date: Date, timezone: string) {
 
 export const calendarDayRangeForKey = (dateKey: string, timezone: string) => {
     const from = calendarDateFromKey(dateKey, timezone)
-    const to = calendarDateFromKey(addCalendarDays(dateKey, 1), timezone)
+    const to = calendarDateFromKey(nextCalendarDateKey(dateKey), timezone)
     return { from, to }
 }
 
