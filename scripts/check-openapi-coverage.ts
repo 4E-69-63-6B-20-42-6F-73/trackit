@@ -4,7 +4,8 @@ import { fileURLToPath } from 'node:url'
 import { openApiContract } from '../server/openapi.js'
 
 const root = fileURLToPath(new URL('../server', import.meta.url))
-const routePattern = /\b(?:app|routes)\.(get|post|put|patch|delete|options|head)(?:<[^>]*>)?\(\s*['"](\/api\/[^'"]+|\/mcp)['"]/g
+const routePattern =
+    /\b(?:app|routes)\.(get|post|put|patch|delete|options|head)(?:<[^>]*>)?\(\s*['"](\/api\/[^'"]+|\/mcp)['"]/g
 
 const sourceFiles = async (directory: string): Promise<string[]> => {
     const entries = await readdir(directory, { withFileTypes: true })

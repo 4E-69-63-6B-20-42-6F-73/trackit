@@ -190,8 +190,9 @@ const renderPaths = (document: JsonObject): string => {
             const operations = Object.entries(pathItem)
                 .filter(([method, value]) => httpMethods.has(method) && asObject(value))
                 .sort(([left], [right]) => left.localeCompare(right))
-                .map(([method, value]) =>
-                    `${method}: ${operationType(pathItem, asObject(value)!, document)}`,
+                .map(
+                    ([method, value]) =>
+                        `${method}: ${operationType(pathItem, asObject(value)!, document)}`,
                 )
             if (!operations.length) throw new Error(`OpenAPI path has no operations: ${path}`)
             return `${propertyKey(path)}: { ${operations.join('; ')} }`
