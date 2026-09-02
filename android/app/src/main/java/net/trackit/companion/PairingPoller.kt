@@ -10,7 +10,7 @@ import org.json.JSONObject
 
 class PairingPoller {
     suspend fun pollForConfirmation(
-        deviceId: String,
+        pending: PairingResult.Pending,
         serverUrl: String,
         maxPolls: Int = 60,
         pollIntervalMs: Long = 5000,
@@ -18,7 +18,7 @@ class PairingPoller {
         for (attempt in 0 until maxPolls) {
             val lastAttempt = attempt == maxPolls - 1
             val result = try {
-                checkPairingStatus(deviceId, serverUrl)
+                checkPairingStatus(pending, serverUrl)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
@@ -49,22 +49,22 @@ class PairingPoller {
             }
         }
 
-        PairingResult.Pending(
-            deviceId = deviceId,
-            serverIdentity = "",
-        )
+        pending
     }
 
     private fun checkPairingStatus(
-        deviceId: String,
+        pending: PairingResult.Pending,
         serverUrl: String,
     ): PairingResult {
-        val connection = URI("${serverUrl.trimEnd('/')}/api/devices/$deviceId/status")
+        val endpoint = OpenApiEndpoints.DEVICE_STATUS_GET
+        val connection = URI("${serverUrl.trimEnd('/')}${endpoint.path}")
             .toURL()
             .openConnection() as HttpURLConnection
 
-        connection.requestMethod = "GET"
+        connection.requestMethod = endpoint.method
         connection.setRequestProperty("Accept", "application/json")
+        connection.setRequestProperty("Authorization", "Bearer ${pending.credential}")
+        connection.setRequestProperty("X-Device-Key-Fingerprint", pending.keyFingerprint)
         connection.connectTimeout = 10_000
         connection.readTimeout = 10_000
 
@@ -79,37 +79,44 @@ class PairingPoller {
                 ?.use { it.readText() }
                 .orEmpty()
             val response = responseText.takeIf { it.isNotBlank() }?.let(::JSONObject)
+            val device = response?.optJSONObject("data")
 
             when {
-                responseCode in 200..299 && response != null -> {
-                    val confirmed = response.optBoolean("confirmed", false)
-                    val credential = response.optString("credential").takeIf { it.isNotBlank() }
-                    val serverIdentity = response.optString("serverIdentity").takeIf { it.isNotBlank() }
-
-                    if (confirmed && credential != null && serverIdentity != null) {
-                        PairingResult.Success(
-                            deviceId = deviceId,
-                            credential = credential,
-                            serverIdentity = serverIdentity,
+                responseCode in 200..299 && device != null -> {
+                    val returnedId = device.optString("id").takeIf { it.isNotBlank() }
+                    val status = device.optString("status").takeIf { it.isNotBlank() }
+                    when {
+                        returnedId != null && returnedId != pending.deviceId -> PairingResult.Failure(
+                            message = "The server returned a different device during pairing.",
+                            serverIdentity = pending.serverIdentity,
                         )
-                    } else {
-                        PairingResult.Pending(
-                            deviceId = deviceId,
-                            serverIdentity = serverIdentity.orEmpty(),
+                        status == "confirmed" || status == "active" -> PairingResult.Success(
+                            deviceId = pending.deviceId,
+                            credential = pending.credential,
+                            serverIdentity = pending.serverIdentity,
+                        )
+                        status == "pending" -> pending
+                        status == "revoked" -> PairingResult.Failure(
+                            message = "The pairing request was rejected.",
+                            serverIdentity = pending.serverIdentity,
+                        )
+                        else -> PairingResult.Failure(
+                            message = "Unexpected pairing status from server.",
+                            serverIdentity = pending.serverIdentity,
                         )
                     }
                 }
-                responseCode == 404 -> PairingResult.Failure(
-                    message = "Pairing request was not found",
-                    serverIdentity = null,
+                responseCode == 401 -> PairingResult.Failure(
+                    message = "Pairing credentials were rejected by the server.",
+                    serverIdentity = pending.serverIdentity,
                 )
                 responseCode in setOf(500, 502, 503, 504) -> PairingResult.Failure(
                     message = RETRYABLE_SERVER_ERROR,
-                    serverIdentity = null,
+                    serverIdentity = pending.serverIdentity,
                 )
                 else -> PairingResult.Failure(
                     message = "Unexpected pairing status response ($responseCode)",
-                    serverIdentity = null,
+                    serverIdentity = pending.serverIdentity,
                 )
             }
         } finally {
