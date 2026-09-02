@@ -161,6 +161,14 @@ describe('goal period and aggregation evaluation', () => {
         expect(bounds.end).toBe(now)
     })
 
+    it('resolves week starts through local calendar dates across timezone transitions', () => {
+        const sunday = new Date('2026-03-29T12:00:00.000Z')
+        const bounds = goalPeriodBounds({ type: 'week' }, sunday, 'Europe/Amsterdam')
+
+        expect(bounds.start.toISOString()).toBe('2026-03-22T23:00:00.000Z')
+        expect(bounds.end).toBe(sunday)
+    })
+
     it('returns an explicit no-data result', () => {
         expect(evaluateGoal(weightGoal(), [], now)).toMatchObject({
             value: null,

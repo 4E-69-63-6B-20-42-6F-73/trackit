@@ -87,6 +87,12 @@ export const calendarDayRangeForKey = (dateKey: string, timezone: string) => {
     return { from, to }
 }
 
+export const calendarWeekdayIndexForKey = (dateKey: string) =>
+    new Date(`${dateKey}T12:00:00.000Z`).getUTCDay()
+
+export const calendarWeekdayIndex = (date: Date, timezone: string) =>
+    calendarWeekdayIndexForKey(calendarDateKey(date, timezone))
+
 export const calendarLocalDateTimeValue = (date: Date, timezone: string) => {
     const value = zonedParts(date, timezone)
     return `${value.year}-${String(value.month).padStart(2, '0')}-${String(value.day).padStart(2, '0')}T${String(value.hour).padStart(2, '0')}:${String(value.minute).padStart(2, '0')}`

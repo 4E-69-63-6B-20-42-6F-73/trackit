@@ -3,6 +3,7 @@ import {
     calendarDateKey,
     calendarDateKeysThrough,
     calendarDayRangeForKey,
+    calendarWeekdayIndex,
     nextCalendarDateKey,
 } from '@trackit/domain/calendar'
 
@@ -43,13 +44,14 @@ describe('calendar day boundaries', () => {
         expect(adelaide.to.toISOString()).toBe('2026-10-04T13:30:00.000Z')
     })
 
-    it('assigns instants to the configured local date', () => {
-        expect(calendarDateKey(new Date('2026-08-24T22:30:00Z'), 'Europe/Amsterdam')).toBe(
-            '2026-08-25',
-        )
-        expect(calendarDateKey(new Date('2026-08-25T03:30:00Z'), 'America/New_York')).toBe(
-            '2026-08-24',
-        )
+    it('assigns instants and weekdays in the configured local timezone', () => {
+        const amsterdam = new Date('2026-08-24T22:30:00Z')
+        const newYork = new Date('2026-08-25T03:30:00Z')
+
+        expect(calendarDateKey(amsterdam, 'Europe/Amsterdam')).toBe('2026-08-25')
+        expect(calendarWeekdayIndex(amsterdam, 'Europe/Amsterdam')).toBe(2)
+        expect(calendarDateKey(newYork, 'America/New_York')).toBe('2026-08-24')
+        expect(calendarWeekdayIndex(newYork, 'America/New_York')).toBe(1)
     })
 
     it('iterates calendar date keys without depending on timezone offsets', () => {
