@@ -12,7 +12,7 @@ import { Metrics } from './Metrics'
 vi.mock('../lib/preferencesApi', () => ({ getPreferences: vi.fn(), updatePreferences: vi.fn() }))
 vi.mock('../lib/observationApi', () => ({ listMetricSources: vi.fn() }))
 
-const base: Preferences = { displayName: 'Alex', timezone: 'UTC', locale: 'en-US', units: 'metric' }
+const base: Preferences = { displayName: 'Alex', timezone: 'UTC', locale: 'en-US' }
 const renderPage = (preferences = base) => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     return render(

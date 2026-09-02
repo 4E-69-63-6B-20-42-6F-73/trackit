@@ -36,6 +36,28 @@ describe('metric source summaries', () => {
             originalUnit: 'lb',
         })
         expect(observation.canonicalValue).toBeCloseTo(80)
+        const symptom = await repository.createObservation({
+            definitionId: 'symptom',
+            value: 7,
+            unit: 'score',
+            title: 'Headache',
+            observedAt: '2026-08-25T08:30:00.000Z',
+            source: 'You',
+        })
+        expect(symptom).toMatchObject({
+            definitionId: 'symptom',
+            canonicalValue: 7,
+            canonicalUnit: 'score',
+        })
+        await expect(
+            repository.createObservation({
+                definitionId: 'symptom',
+                value: 11,
+                unit: 'score',
+                observedAt: '2026-08-25T08:45:00.000Z',
+                source: 'You',
+            }),
+        ).rejects.toThrow(/between 1 and 10/i)
         await expect(
             repository.createObservation({
                 definitionId: 'invented_metric',
@@ -428,7 +450,7 @@ describe('goal lifecycle persistence', () => {
         }
         const repository = new PostgresDataRepository(drizzle(client, { schema }) as never)
         const active = (await repository.createGoal({
-            metricId: 'weight',
+            definitionId: 'weight',
             aggregation: 'average',
             comparator: 'lte',
             target: { value: 80 },

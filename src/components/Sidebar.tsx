@@ -2,7 +2,7 @@ import { ActionIcon } from '@mantine/core'
 import { IconActivity, IconLayoutSidebarLeftCollapse, IconSettings } from '@tabler/icons-react'
 import { NavLink } from 'react-router-dom'
 import { nav } from '../domain/data'
-import type { Page } from '../domain/types'
+import type { Page } from '@trackit/domain/types'
 
 const paths: Partial<Record<Page, string>> = {
     Today: '/today',

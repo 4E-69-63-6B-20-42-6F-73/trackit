@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { inspectFoodCsv, parseFoodCsv } from './foodCsv'
+import { inspectFoodCsv, parseFoodCsv } from '@trackit/domain/foodCsv'
 
 describe('food CSV adapter', () => {
     it('imports quoted names, nutrients, serving data, and favorites', () => {

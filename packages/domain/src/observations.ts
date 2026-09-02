@@ -1,5 +1,4 @@
 export type ObservationOrigin = 'manual' | 'external' | 'derived' | 'migration'
-export type ObservationState = 'active' | 'excluded' | 'corrected' | 'deleted'
 export type ObservationValueType = 'number' | 'text' | 'boolean' | 'category' | 'compound' | 'event'
 
 export type ObservationRelationKind = 'component' | 'derived_from' | 'corrects' | 'supersedes'
@@ -18,7 +17,7 @@ export type DomainObservation = {
     definitionVersion: number
     value: ObservationValue
     origin: ObservationOrigin
-    state: ObservationState
+    excluded: boolean
     title?: string | null
     category?: string | null
     observedAt: string
@@ -30,6 +29,7 @@ export type DomainObservation = {
     attributes: Record<string, unknown>
     metadata: Record<string, unknown>
     version: number
+    deletedAt?: string | null
 }
 
 export type ObservationRelation = {

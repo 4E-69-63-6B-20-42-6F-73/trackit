@@ -10,7 +10,7 @@ import {
     IconTargetArrow,
     IconTrendingUp,
 } from '@tabler/icons-react'
-import type { Category, Page } from './types'
+import type { Category, Page } from '@trackit/domain/types'
 
 export const eventVisual = (category: Category) =>
     category === 'Meals'

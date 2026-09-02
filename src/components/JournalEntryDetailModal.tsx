@@ -1,6 +1,6 @@
 import { Alert, Badge, Button, Divider, Group, Modal, SimpleGrid, Stack, Text } from '@mantine/core'
 import { useQuery } from '@tanstack/react-query'
-import type { JournalEvent, SleepStageDetail } from '../domain/types'
+import type { JournalEvent, SleepStageDetail } from '@trackit/domain/types'
 import { useServerData } from '../hooks/useServerData'
 import { getJournalEntry } from '../lib/journalApi'
 import { serverQueryKeys } from '../lib/serverQueries'

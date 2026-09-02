@@ -35,7 +35,7 @@ test('creates, persists, evaluates, and edits a seven-day average weight goal', 
     await expect(page.getByText('On target')).toBeVisible()
     await expect(page.locator('.goal-card .goal-target')).toHaveText('80.0 kg')
     expect(goals[0]).toMatchObject({
-        metricId: 'weight',
+        definitionId: 'weight',
         aggregation: 'average',
         comparator: 'lte',
         target: { value: 80 },
@@ -58,7 +58,7 @@ test('shows an informative failing status for weight above an LTE target', async
     const goals = [
         {
             id: 'failing-weight',
-            metricId: 'weight',
+            definitionId: 'weight',
             aggregation: 'average',
             comparator: 'lte',
             target: { value: 80 },
@@ -111,7 +111,6 @@ test('creates and displays a canonical weight goal using pounds', async ({ page 
             displayName: 'Owner',
             timezone: 'UTC',
             locale: 'en-US',
-            units: 'imperial',
             metricPreferences: { weight: { displayUnit: 'lb' } },
             experience: { onboardingComplete: true, onboardingStep: 5 },
         },
@@ -131,7 +130,7 @@ test('permanently deletes a retired goal after confirmation', async ({ page }) =
     const goals: Record<string, unknown>[] = [
         {
             id: 'retired-weight',
-            metricId: 'weight',
+            definitionId: 'weight',
             aggregation: 'average',
             comparator: 'lte',
             target: { value: 80 },

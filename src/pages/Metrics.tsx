@@ -18,8 +18,11 @@ import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { PageHeader } from '../components/PageHeader'
 import { MetricRow } from '../components/MetricRow'
-import { metricSourceDisplayName, type MetricSourceDescriptor } from '../domain/effectiveMetrics'
-import { metricCatalog, type MetricDefinition } from '../domain/metricCatalog'
+import {
+    metricSourceDisplayName,
+    type MetricSourceDescriptor,
+} from '@trackit/domain/effectiveMetrics'
+import { metricCatalog, type MetricDefinition } from '@trackit/domain/metricCatalog'
 import {
     detectUnitPreset,
     formatMetricDisplayValue,
@@ -28,7 +31,7 @@ import {
     unitPresentation,
     type DeduplicationPolicy,
     type UnitPreset,
-} from '../domain/metrics'
+} from '@trackit/domain/metrics'
 import { useServerData } from '../hooks/useServerData'
 import { healthQueryKeys } from '../lib/healthQueries'
 import { listMetricSources } from '../lib/observationApi'
@@ -59,8 +62,8 @@ export function Metrics() {
     })
     const saving = saveMutation.isPending
     const loading = sharedLoading || sourceQuery.isPending
-    const sourceSummaries = sourceQuery.data ?? []
-    const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
+    const sourceSummaries = useMemo(() => sourceQuery.data ?? [], [sourceQuery.data])
+    const selected = normalizedMetricPreferences(preferences?.metricPreferences)
     const preset = detectUnitPreset(selected)
     const categories = useMemo(() => [...new Set(metricCatalog.map(metric => metric.category))], [])
     const metricSources = useMemo(

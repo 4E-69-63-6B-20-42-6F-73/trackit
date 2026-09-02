@@ -8,6 +8,8 @@ import { createHash, randomBytes } from 'node:crypto'
 import { z } from 'zod'
 import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
+import { evaluateGoal, type Goal } from '@trackit/domain/goals'
+import type { NumericObservation } from '@trackit/domain/health'
 import type { AuthService } from './auth/service.js'
 import type { DataRepository } from './data/types.js'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
@@ -29,15 +31,13 @@ import type { JournalRepository } from './journal/types.js'
 import { openApiContract } from './openapi.js'
 import type { McpAccessService } from './mcp/service.js'
 import { createTrackItMcpServer } from './mcp/server.js'
-import type { DeviceService, DeviceUploadRecord } from './devices/service.js'
+import type { DeviceService } from './devices/service.js'
 import type { CanonicalHealthRecordInput } from './health-records/types.js'
 import type { DataDeletionService } from './data-lifecycle/deletion.js'
 import { ExportService } from './data-lifecycle/export.js'
 import type { FoodCatalogService } from './nutrition/catalog.js'
 import { observationRoutes } from './routes/observations.js'
 import { config } from './config.js'
-import { evaluateGoal, type Goal } from '../src/domain/goals.js'
-import type { NumericObservation } from '../src/domain/health.js'
 
 export async function createApp(
     repository: JournalRepository,
@@ -162,7 +162,6 @@ export async function createApp(
         '/mcp',
         '/api/devices/pair/request',
         '/api/device/status',
-        '/api/device/upload',
         '/api/device/health-records',
         '/api/device/cursor',
     ])
@@ -347,7 +346,6 @@ export async function createApp(
 
     app.get('/api/health', async () => ({ status: 'ok' }))
     app.get('/api/openapi.json', async () => openApiContract)
-
     if (options?.dataRepository) {
         const exports = new ExportService(options.dataRepository, repository)
         app.get<{ Querystring: { format?: string } }>('/api/export', async (request, reply) => {
@@ -654,17 +652,6 @@ export async function createApp(
             )
             return device ? { data: device } : reply.code(401).send({ error: 'unauthorized' })
         })
-        const uploadRecordSchema = z.object({
-            externalId: z.string().min(1).max(500),
-            metric: z.string().min(1).max(100),
-            value: z.number().finite(),
-            unit: z.string().min(1).max(40),
-            observedAt: z.string().datetime(),
-            endedAt: z.string().datetime().optional(),
-            version: z.number().int().nonnegative(),
-            dataOrigin: z.string().min(1).max(300),
-            deleted: z.boolean().optional(),
-        })
         const healthRecordSchema = z.object({
             provider: z.string().min(1).max(100),
             recordType: z.string().min(1).max(150),
@@ -704,22 +691,6 @@ export async function createApp(
             )
             return null
         }
-        app.post('/api/device/upload', async (request, reply) => {
-            const device = await authenticateDevice(request, requestBodyHash(request))
-            if (!device) return reply.code(401).send({ error: 'unauthorized' })
-            const input = z
-                .object({
-                    idempotencyKey: z.string().uuid(),
-                    records: z.array(uploadRecordSchema).max(1000),
-                })
-                .safeParse(request.body)
-            if (!input.success) return badRequest(request, reply, { validation: input.error })
-            return devices.upload(
-                device.id,
-                input.data.idempotencyKey,
-                input.data.records as DeviceUploadRecord[],
-            )
-        })
         app.post('/api/device/health-records', async (request, reply) => {
             const device = await authenticateDevice(request, requestBodyHash(request))
             if (!device) return reply.code(401).send({ error: 'unauthorized' })
@@ -925,12 +896,12 @@ export async function createApp(
                     data.listGoals() as Promise<Goal[]>,
                     data.getPreferences() as Promise<{ timezone?: string }>,
                 ])
-                const metrics = [...new Set(storedGoals.map(goal => goal.metricId))]
-                const records = metrics.length
+                const definitions = [...new Set(storedGoals.map(goal => goal.definitionId))]
+                const records = definitions.length
                     ? ((await data.listObservations({
                           from: from.toISOString(),
                           to: now.toISOString(),
-                          definitionIds: metrics,
+                          definitionIds: definitions,
                       })) as NumericObservation[])
                     : []
                 return {

@@ -15,6 +15,35 @@ permissions:
     contents: read
 
 jobs:
+    generated:
+        name: Generated artifacts
+        runs-on: ubuntu-latest
+        timeout-minutes: 15
+        steps:
+            - uses: actions/checkout@v7
+              with:
+                  ref: ${{ inputs.ref }}
+                  fetch-depth: 0
+            - uses: actions/setup-node@v7
+              with:
+                  node-version: 22
+                  cache: npm
+            - run: npm ci
+            - name: Regenerate OpenAPI types
+              run: npm run api:types
+            - name: Regenerate Drizzle migrations
+              run: npm run db:generate -- --name=ci_schema_drift
+            - name: Validate Drizzle migration metadata
+              run: npm run db:check
+            - name: Verify generated artifacts are committed
+              run: |
+                  status="$(git status --porcelain -- src/lib/api.generated.ts server/db/migrations)"
+                  if [ -n "$status" ]; then
+                    printf '%s\n' "$status"
+                    git diff -- src/lib/api.generated.ts server/db/migrations
+                    exit 1
+                  fi
+
     quality:
         name: Code quality
         runs-on: ubuntu-latest
@@ -86,18 +115,11 @@ jobs:
             - uses: actions/checkout@v7
               with:
                   ref: ${{ inputs.ref }}
-                  fetch-depth: 0
             - uses: actions/setup-node@v7
               with:
                   node-version: 22
                   cache: npm
             - run: npm ci
-            - name: Validate Drizzle migration metadata
-              run: npm run db:check
-            - name: Verify generated migration matches schema
-              run: |
-                  npm run db:generate -- --name=ci_schema_drift
-                  test -z "$(git status --porcelain -- server/db/migrations)"
             - name: Apply migrations to clean PostgreSQL
               run: npm run db:migrate
 

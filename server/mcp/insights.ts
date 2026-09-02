@@ -2,8 +2,12 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import type { DataRepository, RecordRange } from '../data/types.js'
 import type { MetricCoverage } from '../data/metric-coverage.js'
-import { aggregateDailyObservations, type NumericObservation } from '../../src/domain/health.js'
-import { metricCatalog, metricDefinition } from '../../src/domain/metricCatalog.js'
+import {
+    aggregateDailyObservations,
+    dailyMetricAttributionInstant,
+    type NumericObservation,
+} from '@trackit/domain/health'
+import { metricCatalog, metricDefinition } from '@trackit/domain/metricCatalog'
 import type { McpClient } from './service.js'
 
 type InsightGranularity = 'raw' | 'day' | 'week' | 'month'
@@ -104,7 +108,7 @@ const groupDaily = (records: NumericObservation[], timezone: string, from: strin
     const last = formatter.format(new Date(new Date(to).getTime() - 1))
     const buckets = new Map<string, NumericObservation[]>()
     for (const record of records.filter(record => !record.excluded)) {
-        const day = formatter.format(new Date(record.observedAt))
+        const day = formatter.format(dailyMetricAttributionInstant(record))
         buckets.set(day, [...(buckets.get(day) ?? []), record])
     }
     return enumerateDates(first, last).map(day => {

@@ -1,6 +1,6 @@
 import { Button, Group, Stack, Text } from '@mantine/core'
-import type { NumericObservation } from '../domain/health'
-import { formatMetricValue, friendlySourceName } from '../domain/formatting'
+import type { NumericObservation } from '@trackit/domain/health'
+import { formatMetricValue, friendlySourceName } from '@trackit/domain/formatting'
 
 function sourceLabel(observation: NumericObservation) {
     const origin = observation.metadata?.dataOrigin

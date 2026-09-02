@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { metricDefinition } from './metricCatalog'
-import { compareTodayHeadlineMetrics, isTodayHeadlineMetric } from './todaySummary'
+import { metricDefinition } from '@trackit/domain/metricCatalog'
+import { compareTodayHeadlineMetrics, isTodayHeadlineMetric } from '@trackit/domain/todaySummary'
 
 describe('Today headline metrics', () => {
     it('keeps sleep stages out of the overview and preserves headline priority', () => {

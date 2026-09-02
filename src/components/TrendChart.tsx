@@ -9,7 +9,7 @@ import {
     XAxis,
     YAxis,
 } from 'recharts'
-import type { DailyPoint } from '../domain/health'
+import type { DailyPoint } from '@trackit/domain/health'
 
 const indexedSeries = (values: DailyPoint[]) => {
     const baseline = values.find(point => point.value !== null && point.value !== 0)?.value ?? null

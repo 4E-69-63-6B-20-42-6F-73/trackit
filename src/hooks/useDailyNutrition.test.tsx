@@ -19,12 +19,11 @@ const createWrapper = () => {
                         displayName: 'Alex',
                         timezone: 'Europe/Amsterdam',
                         locale: 'en-US',
-                        units: 'metric',
                     },
                     goals: [
                         {
                             id: 'protein-goal',
-                            metricId: 'protein',
+                            definitionId: 'protein',
                             aggregation: 'total',
                             comparator: 'gte',
                             target: { value: 120 },

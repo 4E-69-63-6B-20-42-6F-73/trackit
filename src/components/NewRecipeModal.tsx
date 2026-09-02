@@ -14,7 +14,7 @@ import {
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { IconPlus, IconTrash } from '@tabler/icons-react'
 import { useMemo, useState } from 'react'
-import { nutrientsPerServing, type Food } from '../domain/nutrition'
+import { nutrientsPerServing, type Food } from '@trackit/domain/nutrition'
 import { createRecipe } from '../lib/nutritionApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 

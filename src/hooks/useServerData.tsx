@@ -23,7 +23,7 @@ function QueriedServerDataProvider({ children }: { children: ReactNode }) {
         queryFn: ({ signal }) => listGoals(signal),
     })
     const preferences = preferencesQuery.data ?? null
-    const goals = goalsQuery.data ?? []
+    const goals = useMemo(() => goalsQuery.data ?? [], [goalsQuery.data])
     const loading = preferencesQuery.isPending || goalsQuery.isPending
     const unavailable = preferencesQuery.isError || goalsQuery.isError
     const value = useMemo(

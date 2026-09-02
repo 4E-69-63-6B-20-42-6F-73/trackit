@@ -12,20 +12,20 @@ import {
 } from '@tabler/icons-react'
 import { useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
-import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
-import { JournalEntryDetailModal } from '../components/JournalEntryDetailModal'
-import { JournalEventList } from '../components/JournalEventList'
-import { TodayGoalsSkeleton } from '../components/LoadingSkeletons'
-import { MetricCard } from '../components/MetricCard'
 import {
     addCalendarDays,
     calendarDateFromKey,
     calendarTodayKey,
     formatCalendarDate,
-} from '../domain/calendar'
-import { metricDefinition, type MetricCategory } from '../domain/metricCatalog'
-import { formatMetric, type MetricPreferences } from '../domain/metrics'
-import type { JournalEvent } from '../domain/types'
+} from '@trackit/domain/calendar'
+import { metricDefinition, type MetricCategory } from '@trackit/domain/metricCatalog'
+import { formatMetric, type MetricPreferences } from '@trackit/domain/metrics'
+import type { JournalEvent } from '@trackit/domain/types'
+import { DailyNutritionPanel } from '../components/DailyNutritionPanel'
+import { JournalEntryDetailModal } from '../components/JournalEntryDetailModal'
+import { JournalEventList } from '../components/JournalEventList'
+import { TodayGoalsSkeleton } from '../components/LoadingSkeletons'
+import { MetricCard } from '../components/MetricCard'
 import type { ServerStatus } from '../hooks/useJournal'
 import { useServerData } from '../hooks/useServerData'
 import { useTodayHealth } from '../hooks/useTodayHealth'
@@ -60,15 +60,15 @@ const comparisonNote = (
 }
 
 const goalTargetLabel = (
-    metricId: string,
+    definitionId: string,
     target: { value: number } | { min: number; max: number },
     preferences?: MetricPreferences,
     locale?: string,
 ) =>
     'value' in target
-        ? formatMetric(metricId, target.value, preferences, locale)
-        : `${formatMetric(metricId, target.min, preferences, locale)}–${formatMetric(
-              metricId,
+        ? formatMetric(definitionId, target.value, preferences, locale)
+        : `${formatMetric(definitionId, target.min, preferences, locale)}–${formatMetric(
+              definitionId,
               target.max,
               preferences,
               locale,
@@ -371,10 +371,10 @@ export function Today({
                             </Stack>
                         ) : health.dailyGoals.length > 0 ? (
                             health.dailyGoals.slice(0, 4).map(({ goal, evaluation }) => {
-                                const definition = metricDefinition(goal.metricId)
+                                const definition = metricDefinition(goal.definitionId)
                                 const value = evaluation?.value
                                 const target = goalTargetLabel(
-                                    goal.metricId,
+                                    goal.definitionId,
                                     goal.target,
                                     health.preferences?.metricPreferences,
                                     locale,
@@ -383,13 +383,13 @@ export function Today({
                                     <div className="today-goal-row" key={goal.id}>
                                         <div className="today-goal-copy">
                                             <Text fw={650}>
-                                                {definition?.name ?? goal.metricId}
+                                                {definition?.name ?? goal.definitionId}
                                             </Text>
                                             <Text size="xs" c="dimmed">
                                                 {value === null || value === undefined
                                                     ? `No data · target ${target}`
                                                     : `${formatMetric(
-                                                          goal.metricId,
+                                                          goal.definitionId,
                                                           value,
                                                           health.preferences?.metricPreferences,
                                                           locale,
@@ -404,7 +404,7 @@ export function Today({
                                                 color="trackit"
                                                 radius="xl"
                                                 size="sm"
-                                                aria-label={`${definition?.name ?? goal.metricId} progress`}
+                                                aria-label={`${definition?.name ?? goal.definitionId} progress`}
                                             />
                                         ) : (
                                             <Text

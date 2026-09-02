@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { dailySeries, type NumericObservation } from './health'
-import { metricCatalog, metricDefinition } from './metricCatalog'
+import { dailySeries, type NumericObservation } from '@trackit/domain/health'
+import { metricCatalog, metricDefinition } from '@trackit/domain/metricCatalog'
 
 describe('metric catalog', () => {
     it('includes every stored nutrition total', () => {

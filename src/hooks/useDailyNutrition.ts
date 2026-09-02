@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
-import { calendarDateKey, calendarDayRangeForKey } from '../domain/calendar'
-import { emptyNutrients, type Nutrients } from '../domain/nutrition'
+import { calendarDateKey, calendarDayRangeForKey } from '@trackit/domain/calendar'
+import { emptyNutrients, type Nutrients } from '@trackit/domain/nutrition'
 import { listMeals } from '../lib/nutritionApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 import { useServerData } from './useServerData'
@@ -42,7 +42,7 @@ export function useDailyNutrition(selectedDate: Date): DailyNutritionState {
                 ? calendarDateKey(new Date(goal.effectiveTo), timezone)
                 : null
             return (
-                goal.metricId === 'protein' &&
+                goal.definitionId === 'protein' &&
                 effectiveFrom <= selectedKey &&
                 (!effectiveTo || effectiveTo >= selectedKey) &&
                 (!goal.schedule.weekdays?.length || goal.schedule.weekdays.includes(weekday))

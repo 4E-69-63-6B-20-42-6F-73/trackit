@@ -17,7 +17,6 @@ const provider = (
                 displayName: 'Owner',
                 timezone: 'UTC',
                 locale: 'en',
-                units: 'metric',
                 metricPreferences,
             },
         }}

@@ -1,4 +1,4 @@
-name: Auto-format pull request
+name: Auto-format
 
 on:
     pull_request:
@@ -12,11 +12,11 @@ permissions:
     contents: read
 
 jobs:
-    prettier:
-        name: Prettier
+    regenerate:
+        name: Generated artifacts and formatting
         if: github.event.pull_request.head.repo.full_name == github.repository
         runs-on: ubuntu-latest
-        timeout-minutes: 10
+        timeout-minutes: 15
         steps:
             - name: Require formatter credential
               env:
@@ -34,20 +34,39 @@ jobs:
             - uses: actions/setup-node@v7
               with:
                   node-version: 22
+                  cache: npm
+            - run: npm ci
+            - run: npm run build:domain
+            - name: Regenerate OpenAPI types
+              run: npm run api:types
+            - name: Regenerate Drizzle migrations
+              run: npm run db:generate -- --name=generated_schema_changes
             - name: Format changed files
               env:
                   BASE_SHA: ${{ github.event.pull_request.base.sha }}
               run: |
-                  git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD -- \
-                    '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
-                    '*.md' '*.css' '*.scss' '*.yaml' '*.yml' \
-                    | xargs -0 -r npx --yes prettier@3.9.6 --write
-            - name: Commit formatting
+                  {
+                    git diff --name-only --diff-filter=ACMR -z "$BASE_SHA" HEAD -- \
+                      '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                      '*.md' '*.css' '*.scss' '*.yaml' '*.yml'
+                    git diff --name-only --diff-filter=ACMR -z -- \
+                      '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                      '*.md' '*.css' '*.scss' '*.yaml' '*.yml'
+                    git ls-files --others --exclude-standard -z -- \
+                      '*.js' '*.jsx' '*.mjs' '*.cjs' '*.ts' '*.tsx' '*.json' \
+                      '*.md' '*.css' '*.scss' '*.yaml' '*.yml'
+                  } | sort -zu | while IFS= read -r -d '' file; do
+                    if [ -f "$file" ]; then
+                      printf '%s\0' "$file"
+                    fi
+                  done | xargs -0 -r npx --yes prettier@3.9.6 --write
+            - name: Commit generated artifacts
               run: |
-                  if ! git diff --quiet; then
+                  if [ -n "$(git status --porcelain)" ]; then
+                    git status --short
                     git config user.name "trackit-formatter"
                     git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
                     git add --all
-                    git commit -m "Format with Prettier"
+                    git commit -m "Regenerate generated artifacts"
                     git push origin "HEAD:${{ github.event.pull_request.head.ref }}"
                   fi

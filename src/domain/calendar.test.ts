@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { calendarDateKey, calendarDayRange } from './calendar'
+import { calendarDateKey, calendarDayRange } from '@trackit/domain/calendar'
 
 describe('calendar day boundaries', () => {
     it('uses the configured timezone and a half-open DST-aware range', () => {

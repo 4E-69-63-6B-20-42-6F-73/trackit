@@ -1,6 +1,6 @@
 import { z } from 'zod'
-import { validateGoal } from '../../src/domain/goals.js'
-import { observationDefinition } from '../../src/domain/observationDefinitions.js'
+import { validateGoal } from '@trackit/domain/goals'
+import { observationDefinition } from '@trackit/domain/observationDefinitions'
 
 export const observationInputSchema = z
     .object({
@@ -36,6 +36,30 @@ export const observationInputSchema = z
             context.addIssue({
                 code: 'custom',
                 message: 'Numeric observations require value and unit',
+            })
+        if (input.valueType === 'number' && definition?.metric && input.unit) {
+            const allowedUnits = [
+                ...definition.metric.displayUnits,
+                ...(definition.metric.inputUnits ?? []),
+            ]
+            if (!allowedUnits.includes(input.unit))
+                context.addIssue({
+                    code: 'custom',
+                    path: ['unit'],
+                    message: `${input.definitionId} does not support ${input.unit}`,
+                })
+        }
+        if (
+            input.valueType === 'number' &&
+            input.value !== undefined &&
+            definition?.metric?.validRange &&
+            (input.value < definition.metric.validRange.min ||
+                input.value > definition.metric.validRange.max)
+        )
+            context.addIssue({
+                code: 'custom',
+                path: ['value'],
+                message: `${input.definitionId} must be between ${definition.metric.validRange.min} and ${definition.metric.validRange.max}`,
             })
         if (input.valueType === 'text' && input.textValue === undefined)
             context.addIssue({ code: 'custom', message: 'Text observations require textValue' })
@@ -168,7 +192,7 @@ const goalPeriodSchema = z.union([
 ])
 export const goalInputSchema = z
     .object({
-        metricId: z.string().trim().min(1).max(100),
+        definitionId: z.string().trim().min(1).max(100),
         aggregation: z.enum(['latest', 'average', 'total']),
         comparator: z.enum(['gte', 'lte', 'between']),
         target: goalTargetSchema,
@@ -190,8 +214,8 @@ export const goalUpdateSchema = z.union([goalInputSchema, goalRetireSchema])
 
 export const savedTrendViewInputSchema = z.object({
     name: z.string().trim().min(1).max(100),
-    metric: z.string().trim().min(1).max(100),
-    comparisonMetric: z.string().trim().min(1).max(100).optional(),
+    definitionId: z.string().trim().min(1).max(100),
+    comparisonDefinitionId: z.string().trim().min(1).max(100).optional(),
     rangeDays: z.number().int().min(2).max(3650),
     granularity: z.enum(['daily', 'weekly']).default('daily'),
 })

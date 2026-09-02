@@ -62,11 +62,8 @@ export const preferencesForPreset = (preset: 'metric' | 'imperial'): MetricPrefe
             { displayUnit: preset === 'metric' ? metric.metricUnit : metric.imperialUnit },
         ]),
     )
-export function normalizedMetricPreferences(
-    preferences?: MetricPreferences,
-    legacyUnits: 'metric' | 'imperial' = 'metric',
-) {
-    const defaults = preferencesForPreset(legacyUnits)
+export function normalizedMetricPreferences(preferences?: MetricPreferences) {
+    const defaults = preferencesForPreset('metric')
     return Object.fromEntries(
         metricCatalog.map(metric => {
             const selected = preferences?.[metric.id]
@@ -89,13 +86,9 @@ export function detectUnitPreset(preferences?: MetricPreferences): UnitPreset {
         )
     return matches('metric') ? 'metric' : matches('imperial') ? 'imperial' : 'custom'
 }
-export function displayUnitFor(
-    metricId: string,
-    preferences?: MetricPreferences,
-    legacyUnits: 'metric' | 'imperial' = 'metric',
-) {
+export function displayUnitFor(metricId: string, preferences?: MetricPreferences) {
     return (
-        normalizedMetricPreferences(preferences, legacyUnits)[metricId]?.displayUnit ??
+        normalizedMetricPreferences(preferences)[metricId]?.displayUnit ??
         metricDefinition(metricId)?.canonicalUnit ??
         ''
     )

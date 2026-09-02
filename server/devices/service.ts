@@ -8,121 +8,22 @@ import {
     deviceRequestNonces,
     deviceUploadBatches,
     healthRecords,
-    observationRelations,
     observations,
     pairingCodes,
     preferences,
     sources,
     syncCursors,
 } from '../db/schema.js'
-import { deriveRecord } from '../health-records/derive.js'
-import { projectHealthRecordToJournal } from '../health-records/journal.js'
 import { normalizeHealthRecord, normalizeHealthRecordInput } from '../health-records/normalize.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
 import { dateKeyInTimezone, nextDate } from '../data/timezone.js'
-import type { CanonicalHealthRecord, CanonicalHealthRecordInput } from '../health-records/types.js'
+import { insertHealthObservationGraph } from '../health-records/projection.js'
+import type { CanonicalHealthRecordInput } from '../health-records/types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
 const hash = (value: string) => createHash('sha256').update(value).digest('hex')
 const deletionTombstoneVersion = Number.MAX_SAFE_INTEGER
-
-async function insertHealthObservationGraph(
-    transaction: Transaction,
-    record: CanonicalHealthRecord,
-) {
-    record = normalizeHealthRecord(record)
-    const projections = deriveRecord(record)
-    const components = projections.length
-        ? await transaction
-              .insert(observations)
-              .values(
-                  projections.map(projection => ({
-                      userId: record.userId,
-                      definitionId: projection.definitionId,
-                      valueType: 'number',
-                      origin: 'external',
-                      canonicalValue: projection.value,
-                      canonicalUnit: projection.unit,
-                      originalValue: projection.originalValue ?? projection.value,
-                      originalUnit: projection.originalUnit ?? projection.unit,
-                      observedAt: projection.observedAt!,
-                      endedAt: projection.endedAt,
-                      externalId: `${record.externalId}:${projection.definitionId}:v${projection.derivationVersion}`,
-                      kind: projection.kind,
-                      sourceRecordId: record.id,
-                      derivation: projection.derivation,
-                      derivationVersion: projection.derivationVersion,
-                      version: record.externalVersion,
-                      metadata: {
-                          source: 'Health Connect',
-                          dataOrigin: record.dataOrigin,
-                          connector: 'Health Connect',
-                          provider: record.dataOrigin,
-                      },
-                  })),
-              )
-              .returning({ id: observations.id, definitionId: observations.definitionId })
-        : []
-    const journal = projectHealthRecordToJournal(record, projections)
-    const observedAt =
-        record.recordType === 'SleepSessionRecord' && record.endTime
-            ? record.endTime
-            : record.startTime
-    const [root] = await transaction
-        .insert(observations)
-        .values({
-            id: record.id,
-            userId: record.userId,
-            definitionId: 'health_record',
-            valueType: 'compound',
-            origin: 'external',
-            title: journal?.title,
-            category: journal?.category,
-            observedAt,
-            endedAt: record.endTime,
-            sourceRecordId: record.id,
-            externalId: record.externalId,
-            attributes: {
-                description: journal?.detail ?? '',
-                primaryDefinitionId: projections[0]?.definitionId,
-                sourceLabel: record.dataOrigin
-                    ? `Health Connect · ${record.dataOrigin}`
-                    : 'Health Connect',
-                recordType: record.recordType,
-            },
-            metadata: {
-                connector: 'Health Connect',
-                provider: record.dataOrigin,
-                dataOrigin: record.dataOrigin,
-            },
-            version: record.externalVersion,
-        })
-        .returning({ id: observations.id })
-    if (root && components.length)
-        await transaction.insert(observationRelations).values(
-            components.map((component, ordinal) => ({
-                parentObservationId: root.id,
-                childObservationId: component.id,
-                kind: 'component',
-                role: component.definitionId,
-                ordinal,
-            })),
-        )
-    return projections
-}
-
-export type DeviceUploadRecord = {
-    externalId: string
-    metric: string
-    value: number
-    unit: string
-    observedAt: string
-    endedAt?: string
-    version: number
-    dataOrigin: string
-    deleted?: boolean
-}
 
 export type DeviceAuthenticationFailure =
     | 'missing_credentials'
@@ -420,139 +321,6 @@ export class DeviceService {
         })
     }
 
-    async upload(deviceId: string, idempotencyKey: string, records: DeviceUploadRecord[]) {
-        return this.database.transaction(async transaction => {
-            const [existing] = await transaction
-                .select({ id: deviceUploadBatches.id })
-                .from(deviceUploadBatches)
-                .where(
-                    and(
-                        eq(deviceUploadBatches.deviceId, deviceId),
-                        eq(deviceUploadBatches.idempotencyKey, idempotencyKey),
-                    ),
-                )
-                .limit(1)
-            if (existing) return { duplicate: true, accepted: records.length }
-
-            await transaction
-                .insert(sources)
-                .values({
-                    id: deviceId,
-                    kind: 'health_connect',
-                    name: 'Health Connect',
-                    externalOrigin: 'android',
-                })
-                .onConflictDoNothing({ target: sources.id })
-
-            for (const record of records) {
-                if (record.deleted) {
-                    const deletedAt = new Date()
-                    const observedAt = new Date(record.observedAt)
-                    const endedAt = record.endedAt ? new Date(record.endedAt) : undefined
-
-                    // For sleep records, use the end time to determine the "sleep date"
-                    const effectiveObservedAt =
-                        record.metric === 'sleep' &&
-                        endedAt &&
-                        endedAt.getTime() > observedAt.getTime()
-                            ? endedAt
-                            : observedAt
-
-                    await transaction
-                        .insert(observations)
-                        .values({
-                            definitionId: record.metric,
-                            valueType: 'number',
-                            origin: 'external',
-                            canonicalValue: record.value,
-                            canonicalUnit: record.unit,
-                            originalValue: record.value,
-                            originalUnit: record.unit,
-                            observedAt: effectiveObservedAt,
-                            sourceId: deviceId,
-                            externalId: `${record.dataOrigin ?? 'unknown'}:${record.externalId}`,
-                            version: deletionTombstoneVersion,
-                            deletedAt,
-                            metadata: {
-                                source: 'Health Connect',
-                                dataOrigin: record.dataOrigin,
-                                connector: 'Health Connect',
-                                provider: record.dataOrigin,
-                            },
-                        })
-                        .onConflictDoUpdate({
-                            target: [observations.sourceId, observations.externalId],
-                            set: {
-                                version: deletionTombstoneVersion,
-                                deletedAt,
-                                updatedAt: deletedAt,
-                            },
-                        })
-                    continue
-                }
-                const observedAt = new Date(record.observedAt)
-                const endedAt = record.endedAt ? new Date(record.endedAt) : undefined
-
-                // For sleep records, use the end time to determine the "sleep date"
-                // Sleep that spans midnight is attributed to the day you wake up in
-                const effectiveObservedAt =
-                    record.metric === 'sleep' && endedAt && endedAt.getTime() > observedAt.getTime()
-                        ? endedAt
-                        : observedAt
-
-                await transaction
-                    .insert(observations)
-                    .values({
-                        definitionId: record.metric,
-                        valueType: 'number',
-                        origin: 'external',
-                        canonicalValue: record.value,
-                        canonicalUnit: record.unit,
-                        originalValue: record.value,
-                        originalUnit: record.unit,
-                        observedAt: effectiveObservedAt,
-                        endedAt,
-                        sourceId: deviceId,
-                        externalId: `${record.dataOrigin ?? 'unknown'}:${record.externalId}`,
-                        version: record.version,
-                        metadata: {
-                            source: 'Health Connect',
-                            dataOrigin: record.dataOrigin,
-                            connector: 'Health Connect',
-                            provider: record.dataOrigin,
-                        },
-                    })
-                    .onConflictDoUpdate({
-                        target: [observations.sourceId, observations.externalId],
-                        setWhere: lt(observations.version, record.version),
-                        set: {
-                            canonicalValue: record.value,
-                            canonicalUnit: record.unit,
-                            originalValue: record.value,
-                            originalUnit: record.unit,
-                            observedAt: effectiveObservedAt,
-                            endedAt,
-                            version: record.version,
-                            deletedAt: null,
-                            updatedAt: new Date(),
-                            metadata: {
-                                source: 'Health Connect',
-                                dataOrigin: record.dataOrigin,
-                                connector: 'Health Connect',
-                                provider: record.dataOrigin,
-                            },
-                        },
-                    })
-            }
-            await transaction.insert(deviceUploadBatches).values({
-                deviceId,
-                idempotencyKey,
-                recordCount: records.length,
-            })
-            return { duplicate: false, accepted: records.length }
-        })
-    }
-
     async uploadHealthRecords(
         deviceId: string,
         idempotencyKey: string,
@@ -682,52 +450,6 @@ export class DeviceService {
                         if (projection.endedAt)
                             affectedDates.add(dateKeyInTimezone(projection.endedAt, timezone))
                     }
-                    /* Legacy journal persistence retired; Journal is projected from the graph.
-                    const journal = projectHealthRecordToJournal(
-                        {
-                            ...input,
-                            id: stored.id,
-                            userId: stored.userId,
-                            startTime: stored.startTime,
-                            endTime: stored.endTime,
-                        },
-                        projections,
-                    )
-                    if (retiredTimelineWrite && journal)
-                        await transaction
-                            .insert(retiredTimelineTable)
-                            .values({
-                                id: stored.id,
-                                ...journal,
-                                sourceId: deviceId,
-                                sourceLabel: stored.dataOrigin
-                                    ? `Health Connect · ${stored.dataOrigin}`
-                                    : 'Health Connect',
-                                observedAt:
-                                    stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                        ? stored.endTime!
-                                        : stored.startTime,
-                                externalId: `${stored.provider}:${stored.externalId}`,
-                                entityType: 'health_record',
-                                entityId: stored.id,
-                            })
-                            .onConflictDoUpdate({
-                                target: retiredTimelineTable.id,
-                                set: {
-                                    ...journal,
-                                    sourceId: deviceId,
-                                    sourceLabel: stored.dataOrigin
-                                        ? `Health Connect · ${stored.dataOrigin}`
-                                        : 'Health Connect',
-                                    observedAt:
-                                        stored.recordType === 'SleepSessionRecord' && stored.endTime
-                                            ? stored.endTime!
-                                            : stored.startTime,
-                                    deletedAt: null,
-                                    updatedAt: now,
-                                },
-                            })
-                    */
                 }
             }
 

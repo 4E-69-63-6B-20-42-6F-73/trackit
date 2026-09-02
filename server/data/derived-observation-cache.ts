@@ -2,8 +2,8 @@ import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
 import { derivedObservationInputs, derivedObservations } from '../db/schema.js'
-import { deriveMetrics } from '../../src/domain/effectiveMetrics.js'
-import type { NumericObservation } from '../../src/domain/health.js'
+import { deriveMetrics } from '@trackit/domain/effectiveMetrics'
+import type { NumericObservation } from '@trackit/domain/health'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
@@ -15,7 +15,6 @@ const inputIds = (observation: NumericObservation) => {
     return Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []
 }
 
-/** Replaces one local day's rebuildable derived observations and their lineage. */
 export async function replaceDerivedObservationCache(
     database: Transaction,
     options: {

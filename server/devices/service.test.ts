@@ -8,7 +8,7 @@ import * as schema from '../db/schema.js'
 import { DeviceService } from './service.js'
 import { ProjectionWorker } from '../data/projection-state.js'
 
-describe('Android device pairing and upload', () => {
+describe('Android device pairing and canonical upload', () => {
     it('requires confirmation, consumes pairing codes, deduplicates batches, and revokes immediately', async () => {
         const client = new PGlite()
         const migrations = (await readdir('server/db/migrations'))
@@ -36,7 +36,7 @@ describe('Android device pairing and upload', () => {
                 credential,
                 deviceId: overrides.deviceId ?? randomUUID(),
                 method: overrides.method ?? 'POST',
-                path: overrides.path ?? '/api/device/upload',
+                path: overrides.path ?? '/api/device/health-records',
                 timestamp,
                 nonce: overrides.nonce ?? randomUUID(),
                 bodyHash: overrides.bodyHash ?? createHash('sha256').update('{}').digest('hex'),
@@ -154,14 +154,14 @@ describe('Android device pairing and upload', () => {
         expect(
             await authenticate(requested?.credential, {
                 deviceId: requested?.deviceId,
-                path: '/api/device/upload',
+                path: '/api/device/health-records',
                 submittedPath: '/api/device/cursor',
             }),
         ).toBeNull()
         await expect(
             authenticateDetailed(requested?.credential, {
                 deviceId: requested?.deviceId,
-                path: '/api/device/upload',
+                path: '/api/device/health-records',
                 submittedPath: '/api/device/cursor',
             }),
         ).resolves.toMatchObject({ error: 'signature_mismatch' })
@@ -170,75 +170,6 @@ describe('Android device pairing and upload', () => {
                 submittedBodyHash: createHash('sha256').update('{"tampered":true}').digest('hex'),
             }),
         ).toBeNull()
-        const batch = randomUUID()
-        const records = [
-            {
-                externalId: 'health-connect-record',
-                metric: 'steps',
-                value: 3210,
-                unit: 'count',
-                observedAt: '2026-08-20T08:00:00Z',
-                version: 1,
-                dataOrigin: 'com.example.watch',
-            },
-        ]
-        expect(await service.upload(requested!.deviceId, batch, records)).toEqual({
-            duplicate: false,
-            accepted: 1,
-        })
-        expect(await service.upload(requested!.deviceId, batch, records)).toEqual({
-            duplicate: true,
-            accepted: 1,
-        })
-        await service.upload(requested!.deviceId, randomUUID(), [
-            { ...records[0], value: 1, version: 0 },
-        ])
-        const [stored] = await database.select().from(schema.observations)
-        expect(stored).toMatchObject({
-            canonicalValue: 3210,
-            originalUnit: 'count',
-            metadata: { source: 'Health Connect', dataOrigin: 'com.example.watch' },
-        })
-        // Verify configuredAt is set when device is confirmed
-        const [confirmedDevice] = await database
-            .select()
-            .from(schema.devices)
-            .where(eq(schema.devices.id, requested?.deviceId))
-        expect(confirmedDevice?.configuredAt).toBeInstanceOf(Date)
-        await service.upload(requested!.deviceId, randomUUID(), [
-            { ...records[0], deleted: true, version: 0 },
-        ])
-        const [afterNewDelete] = await database.select().from(schema.observations)
-        expect(afterNewDelete.deletedAt).toBeInstanceOf(Date)
-        expect(afterNewDelete.version).toBe(Number.MAX_SAFE_INTEGER)
-        await service.upload(requested!.deviceId, randomUUID(), [
-            { ...records[0], value: 9999, version: 2 },
-        ])
-        const [afterEqualReplay] = await database.select().from(schema.observations)
-        expect(afterEqualReplay.deletedAt).toBeInstanceOf(Date)
-        expect(afterEqualReplay.canonicalValue).toBe(3210)
-        await service.upload(requested!.deviceId, randomUUID(), [
-            {
-                ...records[0],
-                externalId: 'deleted-before-import',
-                value: 0,
-                unit: 'deleted',
-                deleted: true,
-                version: 0,
-            },
-        ])
-        await service.upload(requested!.deviceId, randomUUID(), [
-            { ...records[0], externalId: 'deleted-before-import', version: 5 },
-        ])
-        const deletedBeforeImport = (await database.select().from(schema.observations)).find(
-            observation => observation.externalId?.endsWith(':deleted-before-import'),
-        )
-        expect(deletedBeforeImport).toMatchObject({
-            canonicalValue: 0,
-            version: Number.MAX_SAFE_INTEGER,
-        })
-        expect(deletedBeforeImport?.deletedAt).toBeInstanceOf(Date)
-
         const sourceId = 'canonical-heart-rate'
         const canonical = {
             provider: 'health_connect',

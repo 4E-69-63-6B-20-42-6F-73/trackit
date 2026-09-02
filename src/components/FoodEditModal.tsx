@@ -20,7 +20,7 @@ import {
     servingOptionsFromDrafts,
     type ServingOptionDraft,
 } from '../domain/foodServingOptions'
-import { foodNutrientKeys, type Food, type Nutrients } from '../domain/nutrition'
+import { foodNutrientKeys, type Food, type Nutrients } from '@trackit/domain/nutrition'
 import { listFoodCategories, setFoodCategories } from '../lib/foodCategoryApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 import { FoodNutritionFields } from './FoodNutritionFields'

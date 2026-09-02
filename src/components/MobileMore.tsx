@@ -1,7 +1,7 @@
 import { IconSettings } from '@tabler/icons-react'
 import { NavLink } from 'react-router-dom'
 import { nav } from '../domain/data'
-import type { Page } from '../domain/types'
+import type { Page } from '@trackit/domain/types'
 
 const paths: Partial<Record<Page, string>> = {
     Goals: '/goals',

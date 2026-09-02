@@ -9,7 +9,7 @@ import { FoodCsvImport } from '../components/FoodCsvImport'
 import { FoodEditModal } from '../components/FoodEditModal'
 import { NewFoodModal } from '../components/NewFoodModal'
 import { PageHeader } from '../components/PageHeader'
-import type { Food } from '../domain/nutrition'
+import type { Food } from '@trackit/domain/nutrition'
 import { deleteFood, searchFoods, updateFood } from '../lib/nutritionApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 

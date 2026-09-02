@@ -50,8 +50,11 @@ export function aggregateDailyObservations(records: NumericObservation[]) {
     if (aggregation === 'average')
         return values.reduce((sum, value) => sum + value, 0) / values.length
     if (aggregation === 'max') return Math.max(...values)
-    return [...records].sort((left, right) => right.observedAt.localeCompare(left.observedAt))[0]
-        .canonicalValue
+    return [...records].sort(
+        (left, right) =>
+            dailyMetricAttributionInstant(right).getTime() -
+            dailyMetricAttributionInstant(left).getTime(),
+    )[0].canonicalValue
 }
 
 export const displayValue = (
@@ -83,8 +86,10 @@ export function dailySeries(
         date.setUTCDate(date.getUTCDate() + offset)
         const key = formatter.format(date)
         const records = buckets.get(key) ?? []
-        const ordered = [...records].sort((left, right) =>
-            right.observedAt.localeCompare(left.observedAt),
+        const ordered = [...records].sort(
+            (left, right) =>
+                dailyMetricAttributionInstant(right).getTime() -
+                dailyMetricAttributionInstant(left).getTime(),
         )
         const additive = records.length > 0 && dailyAggregation(records[0].definitionId) === 'sum'
         return {

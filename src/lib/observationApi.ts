@@ -1,4 +1,4 @@
-import type { NumericObservation } from '../domain/health'
+import type { NumericObservation } from '@trackit/domain/health'
 import { $api, apiClient } from './apiClient'
 import type { paths } from './api.generated'
 import { invalidateHealthQueries } from './healthQueries'

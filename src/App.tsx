@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Box, Button, Center, Loader, Notification } from '@mantine/core'
 import { IconCircleCheck } from '@tabler/icons-react'
+import { calendarDayRangeForKey, calendarTodayKey } from '@trackit/domain/calendar'
+import type { Page } from '@trackit/domain/types'
 import { Navigate, NavLink, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { Header } from './components/Header'
 import { GoalsPageSkeleton, JournalPageSkeleton } from './components/LoadingSkeletons'
@@ -8,9 +10,7 @@ import { GlobalLogFab } from './components/logging/GlobalLogFab'
 import { LoggerHost } from './components/logging/LoggerHost'
 import { Sidebar } from './components/Sidebar'
 import { SyncStatus } from './components/SyncStatus'
-import { calendarDayRangeForKey, calendarTodayKey } from './domain/calendar'
 import { nav } from './domain/data'
-import type { Page } from './domain/types'
 import { useJournal } from './hooks/useJournal'
 import { useObservationCommands } from './hooks/useObservationCommands'
 import { useServerData } from './hooks/useServerData'
@@ -194,11 +194,6 @@ export default function App() {
                             <Route path="/library/foods" element={<LibraryFoods />} />
                             <Route path="/library/recipes" element={<LibraryRecipes />} />
                             <Route path="/library/metrics" element={<Metrics />} />
-                            <Route path="/nutrition" element={<Navigate to="/library" replace />} />
-                            <Route
-                                path="/metrics"
-                                element={<Navigate to="/library/metrics" replace />}
-                            />
                             <Route
                                 path="/settings/connections/devices"
                                 element={<DeviceManagement />}
@@ -209,32 +204,6 @@ export default function App() {
                             />
                             <Route path="/settings/connections/mcp" element={<McpAccess />} />
                             <Route path="/settings/connections/mcp/new" element={<McpNew />} />
-                            <Route
-                                path="/connections"
-                                element={<Navigate to="/settings/connections" replace />}
-                            />
-                            <Route
-                                path="/connections/devices"
-                                element={<Navigate to="/settings/connections/devices" replace />}
-                            />
-                            <Route
-                                path="/connections/devices/new"
-                                element={
-                                    <Navigate to="/settings/connections/devices/new" replace />
-                                }
-                            />
-                            <Route
-                                path="/connections/mcp"
-                                element={<Navigate to="/settings/connections/mcp" replace />}
-                            />
-                            <Route
-                                path="/connections/mcp/new"
-                                element={<Navigate to="/settings/connections/mcp/new" replace />}
-                            />
-                            <Route
-                                path="/settings/goals"
-                                element={<Navigate to="/goals" replace />}
-                            />
                             <Route path="/settings/*" element={<Settings />} />
                             <Route path="*" element={<Navigate to="/today" replace />} />
                         </Routes>

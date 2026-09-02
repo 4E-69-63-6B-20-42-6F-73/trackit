@@ -18,6 +18,7 @@ import {
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { useState, type ReactNode } from 'react'
 import { environment } from '../app/env'
+import { csrfToken } from '../lib/authApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 
 type AuthState = 'loading' | 'offline' | 'setup' | 'login' | 'recovery' | 'authenticated'
@@ -87,12 +88,6 @@ export function AuthGate({ children }: { children: ReactNode }) {
             setPassword('')
         },
     })
-
-    const csrfToken = () =>
-        document.cookie
-            .split('; ')
-            .find(value => value.startsWith('trackit_csrf='))
-            ?.split('=')[1]
 
     const registerPasskeyMutation = useMutation({
         mutationFn: async () => {
@@ -214,7 +209,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
                         <Text size="sm" c="#555b56">
                             For the full application, start PostgreSQL and the API with{' '}
                             <code>docker compose up --build</code>, or run{' '}
-                            <code>npm run dev:server</code> beside Vite.
+                            <code>npm run dev:api</code> beside Vite.
                         </Text>
                         <Button
                             loading={statusQuery.isFetching}

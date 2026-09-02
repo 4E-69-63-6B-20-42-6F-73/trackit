@@ -19,8 +19,8 @@ import {
     calendarLocalDateTimeValue,
     calendarTodayKey,
     formatCalendarDate,
-} from '../../domain/calendar'
-import { convertMetricValue, displayUnitFor, toCanonicalMetricValue } from '../../domain/metrics'
+} from '@trackit/domain/calendar'
+import { convertMetricValue, displayUnitFor, toCanonicalMetricValue } from '@trackit/domain/metrics'
 import { useServerData } from '../../hooks/useServerData'
 import type { CreateObservationInput } from '../../lib/observationApi'
 
@@ -70,8 +70,8 @@ export function ManualEntryLogger({
     const initialNow = calendarLocalDateTimeValue(new Date(), timezone)
     const [initialDay, initialTime] = initialNow.split('T')
     const [kind] = useState<ManualEntryKind>(initialKind)
-    const weightUnit = displayUnitFor('weight', preferences?.metricPreferences, preferences?.units)
-    const waterUnit = displayUnitFor('water', preferences?.metricPreferences, preferences?.units)
+    const weightUnit = displayUnitFor('weight', preferences?.metricPreferences)
+    const waterUnit = displayUnitFor('water', preferences?.metricPreferences)
     const [weightAmount, setWeightAmount] = useState<number | string>(
         weightUnit === 'lb' ? 165 : 75,
     )

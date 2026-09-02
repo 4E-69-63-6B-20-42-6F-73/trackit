@@ -6,7 +6,7 @@ import {
     rollingBaselineDelta,
     weeklySeries,
     type NumericObservation,
-} from './health'
+} from '@trackit/domain/health'
 
 const observation = (id: string, observedAt: string, value: number): NumericObservation => ({
     id,
@@ -38,24 +38,19 @@ describe('health calculations', () => {
         ])
     })
 
-    it('attributes sleep to the wake day instead of the session start day', () => {
-        const first = {
-            ...observation('first', '2026-08-15T00:30:00Z', 8.5),
+    it('attributes overnight sleep to the wake day', () => {
+        const sleep: NumericObservation = {
+            ...observation('sleep', '2026-08-30T21:20:00.000Z', 8.4167),
             definitionId: 'sleep',
             canonicalUnit: 'hours',
             originalUnit: 'hours',
-            endedAt: '2026-08-15T09:00:00Z',
+            endedAt: '2026-08-31T05:45:00.000Z',
         }
-        const second = {
-            ...observation('second', '2026-08-15T23:30:00Z', 8),
-            definitionId: 'sleep',
-            canonicalUnit: 'hours',
-            originalUnit: 'hours',
-            endedAt: '2026-08-16T07:30:00Z',
-        }
-        expect(dailySeries([first, second], new Date('2026-08-15T12:00:00Z'), 2)).toEqual([
-            { date: '2026-08-15', value: 8.5, recordIds: ['first'] },
-            { date: '2026-08-16', value: 8, recordIds: ['second'] },
+        expect(
+            dailySeries([sleep], new Date('2026-08-30T12:00:00Z'), 2, 'Europe/Amsterdam'),
+        ).toEqual([
+            { date: '2026-08-30', value: null, recordIds: [] },
+            { date: '2026-08-31', value: 8.4167, recordIds: ['sleep'] },
         ])
     })
 

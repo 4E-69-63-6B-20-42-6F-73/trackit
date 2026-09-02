@@ -2,7 +2,7 @@ import { Badge, Text } from '@mantine/core'
 import { Fragment, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 import { eventVisual } from '../domain/data'
-import type { JournalEvent } from '../domain/types'
+import type { JournalEvent } from '@trackit/domain/types'
 import { JournalEntryDetailModal } from './JournalEntryDetailModal'
 
 export function JournalEventList({

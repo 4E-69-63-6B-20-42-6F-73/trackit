@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import type { NumericObservation } from './health'
-import { evaluateGoal, goalPeriodBounds, validateGoal, type Goal } from './goals'
-import { convertMetricValue } from './metrics'
+import type { NumericObservation } from '@trackit/domain/health'
+import { evaluateGoal, goalPeriodBounds, validateGoal, type Goal } from '@trackit/domain/goals'
+import { convertMetricValue } from '@trackit/domain/metrics'
 
 const now = new Date('2026-08-24T12:00:00.000Z')
 const weightGoal = (overrides: Partial<Goal> = {}): Goal => ({
     id: 'goal-weight',
-    metricId: 'weight',
+    definitionId: 'weight',
     aggregation: 'average',
     comparator: 'lte',
     target: { value: 80 },
@@ -86,7 +86,7 @@ describe('goal period and aggregation evaluation', () => {
 
     it('totals additive observations and includes the local day boundary', () => {
         const goal = weightGoal({
-            metricId: 'steps',
+            definitionId: 'steps',
             aggregation: 'total',
             comparator: 'gte',
             target: { value: 10_000 },
@@ -111,7 +111,7 @@ describe('goal period and aggregation evaluation', () => {
         const mondayNight = new Date('2026-08-31T21:53:00.000Z')
         const goal = weightGoal({
             id: 'goal-sleep',
-            metricId: 'sleep',
+            definitionId: 'sleep',
             aggregation: 'total',
             comparator: 'gte',
             target: { value: 8 },
@@ -136,7 +136,7 @@ describe('goal period and aggregation evaluation', () => {
     it('keeps non-sleep intervals attributed to their start day', () => {
         const mondayNight = new Date('2026-08-31T21:53:00.000Z')
         const goal = weightGoal({
-            metricId: 'steps',
+            definitionId: 'steps',
             aggregation: 'total',
             comparator: 'gte',
             target: { value: 1 },

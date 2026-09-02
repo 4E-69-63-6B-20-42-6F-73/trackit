@@ -5,8 +5,8 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ServerDataProvider } from '../hooks/useServerData'
-import { evaluateGoal, type Goal } from '../domain/goals'
-import type { NumericObservation } from '../domain/health'
+import { evaluateGoal, type Goal } from '@trackit/domain/goals'
+import type { NumericObservation } from '@trackit/domain/health'
 import type { Preferences } from '../lib/preferencesApi'
 import { createGoal, deleteGoal, listGoalEvaluations, updateGoal } from '../lib/goalApi'
 import { GoalsPanel } from './GoalsPanel'
@@ -24,11 +24,10 @@ const preferences: Preferences = {
     displayName: 'Alex',
     timezone: 'UTC',
     locale: 'en-US',
-    units: 'metric',
 }
 const goal: Goal = {
     id: 'weight-goal',
-    metricId: 'weight',
+    definitionId: 'weight',
     aggregation: 'average',
     comparator: 'lte',
     target: { value: 80 },
@@ -154,7 +153,6 @@ describe('GoalsPanel', () => {
         vi.mocked(createGoal).mockImplementation(async input => ({ id: 'saved', ...input }))
         renderPanel([], {
             ...preferences,
-            units: 'imperial',
             metricPreferences: { weight: { displayUnit: 'lb' } },
         })
 
@@ -167,7 +165,7 @@ describe('GoalsPanel', () => {
         await waitFor(() => expect(createGoal).toHaveBeenCalledOnce())
         const saved = vi.mocked(createGoal).mock.calls[0][0]
         expect(saved).toMatchObject({
-            metricId: 'weight',
+            definitionId: 'weight',
             aggregation: 'average',
             comparator: 'lte',
             period: { type: 'rolling', days: 7 },
