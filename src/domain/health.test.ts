@@ -117,4 +117,22 @@ describe('health calculations', () => {
         ).toEqual({ current: 9, baseline: 7.5, delta: 1.5, sampleSize: 2 })
         expect(rollingBaselineDelta(records.slice(2), 'weight', new Date(), 'UTC')).toBeNull()
     })
+
+    it('anchors rolling baselines to the local day in a large negative offset', () => {
+        const records = [
+            observation('one', '2026-08-17T19:00:00Z', 7),
+            observation('two', '2026-08-18T19:00:00Z', 8),
+            observation('three', '2026-08-19T19:00:00Z', 9),
+        ]
+
+        expect(
+            rollingBaselineDelta(
+                records,
+                'weight',
+                new Date('2026-08-20T01:00:00Z'),
+                'Pacific/Pago_Pago',
+                3,
+            ),
+        ).toEqual({ current: 9, baseline: 7.5, delta: 1.5, sampleSize: 2 })
+    })
 })
