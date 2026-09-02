@@ -16,6 +16,11 @@ const selectedPaths: SelectedPath[] = [
     { path: '/api/observations/{id}', methods: ['delete', 'patch'] },
     { path: '/api/daily-metrics', methods: ['get'] },
     { path: '/api/metric-sources', methods: ['get'] },
+    { path: '/api/preferences', methods: ['get', 'patch'] },
+    { path: '/api/goals', methods: ['get', 'post'] },
+    { path: '/api/goals/evaluations', methods: ['get'] },
+    { path: '/api/goals/{id}', methods: ['delete', 'patch'] },
+    { path: '/api/trend-views', methods: ['get', 'post'] },
 ]
 
 const journal: JournalRepository = {
