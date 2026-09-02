@@ -7,6 +7,7 @@ export type McpAccessEvent =
     paths['/api/mcp/access-log']['get']['responses'][200]['content']['application/json']['data'][number]
 export type McpIssueInput =
     paths['/api/mcp/clients']['post']['requestBody']['content']['application/json']
+export type McpScope = McpIssueInput['scopes'][number]
 
 type SignalInput = AbortSignal | { signal: AbortSignal }
 
