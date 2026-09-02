@@ -2,31 +2,8 @@ import { randomUUID } from 'node:crypto'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { z } from 'zod'
 import { PostgresDataRepository } from '../data/postgres-repository.js'
-import type { DataRepository } from '../data/types.js'
+import type { FoodRecord, FoodRepository } from '../data/types.js'
 import type { McpAccessService, McpClient } from './service.js'
-
-type FoodRecord = Record<string, unknown> & {
-    id: string
-    name: string
-    brand: string | null
-    barcode: string | null
-    catalogSource: string | null
-    catalogId: string | null
-    caloriesPer100g: number | null
-    proteinPer100g: number | null
-    carbsPer100g: number | null
-    fatPer100g: number | null
-    fiberPer100g: number | null
-    sugarPer100g: number | null
-    saturatedFatPer100g: number | null
-    sodiumPer100g: number | null
-    potassiumPer100g: number | null
-    servingName: string
-    servingGrams: number
-    favorite: boolean
-    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
-    version: number
-}
 
 const nullableText = (maximum: number) => z.string().trim().max(maximum).nullable().optional()
 const nullableNutrient = z.number().finite().nonnegative().nullable().optional()
@@ -107,7 +84,9 @@ const sameValue = (left: unknown, right: unknown) =>
 const changedValues = (food: FoodRecord, changes: FoodChanges) =>
     Object.fromEntries(
         Object.entries(changes).filter(
-            ([field, value]) => value !== undefined && !sameValue(food[field], value),
+            ([field, value]) =>
+                value !== undefined &&
+                !sameValue(food[field as keyof FoodRecord], value),
         ),
     ) as FoodChanges
 
@@ -138,7 +117,7 @@ const duplicateFood = (foods: FoodRecord[], id: string, food: FoodRecord, change
 export function registerFoodUpdateTools(
     server: McpServer,
     client: McpClient,
-    data: DataRepository,
+    data: Pick<FoodRepository, 'listFoods'>,
     access?: McpAccessService,
 ) {
     const canWrite = () => client.scopes.includes('meals:write') && Boolean(access)
@@ -155,7 +134,7 @@ export function registerFoodUpdateTools(
         },
         async ({ foodId, changes }) => {
             if (!canWrite() || !access) return denied('Scope meals:write is required.')
-            const foods = (await data.listFoods()) as FoodRecord[]
+            const foods = await data.listFoods()
             const food = foods.find(candidate => candidate.id === foodId)
             if (!food) return denied('The selected food does not exist.')
 
@@ -240,7 +219,7 @@ export function registerFoodUpdateTools(
 
                         const input = parsed.data
                         const transactionalData = new PostgresDataRepository(transaction)
-                        const foods = (await transactionalData.listFoods()) as FoodRecord[]
+                        const foods = await transactionalData.listFoods()
                         const food = foods.find(candidate => candidate.id === input.foodId)
                         if (!food || food.version !== input.foodVersion) {
                             throw new Error('food_changed')
