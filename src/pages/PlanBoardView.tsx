@@ -114,12 +114,20 @@ function PlanMealCard({
                 </Menu.Target>
                 <Menu.Dropdown>
                     {(status === 'planned' || status === 'partial') && (
-                        <Menu.Item leftSection={<IconCheck size={15} />} onClick={() => onLog(item)}>
-                            {item.meal.reference.type === 'category' ? 'Log progress' : 'Log as eaten'}
+                        <Menu.Item
+                            leftSection={<IconCheck size={15} />}
+                            onClick={() => onLog(item)}
+                        >
+                            {item.meal.reference.type === 'category'
+                                ? 'Log progress'
+                                : 'Log as eaten'}
                         </Menu.Item>
                     )}
                     {(status === 'planned' || status === 'skipped') && (
-                        <Menu.Item leftSection={<IconEdit size={15} />} onClick={() => onEdit(item)}>
+                        <Menu.Item
+                            leftSection={<IconEdit size={15} />}
+                            onClick={() => onEdit(item)}
+                        >
                             Edit or move
                         </Menu.Item>
                     )}
@@ -129,7 +137,10 @@ function PlanMealCard({
                         </Menu.Item>
                     )}
                     {status === 'skipped' && (
-                        <Menu.Item leftSection={<IconRestore size={15} />} onClick={() => onRestore(item)}>
+                        <Menu.Item
+                            leftSection={<IconRestore size={15} />}
+                            onClick={() => onRestore(item)}
+                        >
                             Restore
                         </Menu.Item>
                     )}
@@ -157,8 +168,20 @@ function slotItems(items: MealPlanItem[], date: string, mealType: MealType) {
         )
 }
 
-function DesktopPlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'schedulesCount' | 'weekLabel' | 'weekStart' | 'onOpenSchedules' | 'onNavigateDate'>) {
-    const { dates, todayKey, locale, items, onAdd, onEdit, onLog, onSkip, onRestore, onDelete } = props
+function DesktopPlan(
+    props: Omit<
+        PlanBoardViewProps,
+        | 'compact'
+        | 'loading'
+        | 'schedulesCount'
+        | 'weekLabel'
+        | 'weekStart'
+        | 'onOpenSchedules'
+        | 'onNavigateDate'
+    >,
+) {
+    const { dates, todayKey, locale, items, onAdd, onEdit, onLog, onSkip, onRestore, onDelete } =
+        props
     return (
         <>
             <div className="plan-board">
@@ -183,7 +206,9 @@ function DesktopPlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'sc
                                 </div>
                                 {isToday && (
                                     <span className="plan-today-chip">
-                                        {formatCalendarDate(date, locale, { weekday: 'short' }).toUpperCase()}
+                                        {formatCalendarDate(date, locale, {
+                                            weekday: 'short',
+                                        }).toUpperCase()}
                                     </span>
                                 )}
                             </div>
@@ -193,7 +218,9 @@ function DesktopPlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'sc
                         <Fragment key={mealType}>
                             <div className="plan-meal-label">
                                 <strong className="plan-meal-label-name">{mealType}</strong>
-                                <span className="plan-meal-label-description">{mealDescriptions[mealType]}</span>
+                                <span className="plan-meal-label-description">
+                                    {mealDescriptions[mealType]}
+                                </span>
                             </div>
                             {dates.map(date => {
                                 const planned = slotItems(items, date, mealType)
@@ -254,7 +281,12 @@ function DesktopPlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'sc
     )
 }
 
-function MobilePlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'schedulesCount' | 'weekLabel' | 'weekStart' | 'onOpenSchedules'>) {
+function MobilePlan(
+    props: Omit<
+        PlanBoardViewProps,
+        'compact' | 'loading' | 'schedulesCount' | 'weekLabel' | 'weekStart' | 'onOpenSchedules'
+    >,
+) {
     const {
         dates,
         todayKey,
@@ -303,7 +335,9 @@ function MobilePlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'sch
                         ? 'Today'
                         : formatCalendarDate(selectedDate, locale, { weekday: 'long' })}
                 </div>
-                <h2>{formatCalendarDate(selectedDate, locale, { month: 'long', day: 'numeric' })}</h2>
+                <h2>
+                    {formatCalendarDate(selectedDate, locale, { month: 'long', day: 'numeric' })}
+                </h2>
             </div>
             {mealTypes.map(mealType => {
                 const planned = slotItems(items, selectedDate, mealType)
@@ -345,7 +379,16 @@ function MobilePlan(props: Omit<PlanBoardViewProps, 'compact' | 'loading' | 'sch
 }
 
 export function PlanBoardView(props: PlanBoardViewProps) {
-    const { compact, loading, weekStart, todayKey, weekLabel, schedulesCount, onNavigateDate, onOpenSchedules } = props
+    const {
+        compact,
+        loading,
+        weekStart,
+        todayKey,
+        weekLabel,
+        schedulesCount,
+        onNavigateDate,
+        onOpenSchedules,
+    } = props
     return (
         <>
             <div className="plan-toolbar">
@@ -373,7 +416,11 @@ export function PlanBoardView(props: PlanBoardViewProps) {
                         Schedules{schedulesCount ? ` (${schedulesCount})` : ''}
                     </Button>
                     {weekStart !== weekStartKey(todayKey) && (
-                        <Button variant="default" size="sm" onClick={() => onNavigateDate(todayKey)}>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => onNavigateDate(todayKey)}
+                        >
                             This week
                         </Button>
                     )}
