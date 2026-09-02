@@ -1,50 +1,31 @@
-import { environment } from '../app/env'
 import type { MealPlanItem, MealType, PlanReferenceType } from '@trackit/domain/planning'
-import { authRequest } from './authApi'
-import { sharedJsonRequest } from './sharedRequest'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
 export type PlanReference = { type: PlanReferenceType; id: string }
+export type PlanSchedule =
+    paths['/api/plan-schedules']['get']['responses'][200]['content']['application/json']['data'][number]
+type ApiPlanItem =
+    paths['/api/plan-items']['get']['responses'][200]['content']['application/json']['data'][number]
 
-export type PlanSchedule = {
-    id: string
-    startDate: string
-    scheduledTime: string | null
-    weekdays: number[]
-    version: number
-    meal: {
-        mealType: MealType
-        reference: {
-            type: PlanReferenceType
-            id: string
-            name: string
-        }
-        amount: number
-        unit: 'g' | 'serving'
-    }
-}
+const toPlanItem = (item: ApiPlanItem): MealPlanItem => item
 
 export async function listPlanItems(
     range: { from?: string; to?: string } = {},
     signal?: AbortSignal,
 ) {
-    const query = new URLSearchParams(
-        Object.entries(range).filter((entry): entry is [string, string] => Boolean(entry[1])),
-    )
-    return (
-        await sharedJsonRequest<{ data: MealPlanItem[] }>(
-            `${environment.VITE_API_URL}/api/plan-items?${query}`,
-            signal,
-        )
-    ).data
+    const { data, response } = await apiClient.GET('/api/plan-items', {
+        params: { query: range },
+        signal,
+    })
+    if (!response.ok || !data) throw new Error('Plan unavailable')
+    return data.data.map(toPlanItem)
 }
 
 export async function listPlanSchedules(signal?: AbortSignal) {
-    return (
-        await sharedJsonRequest<{ data: PlanSchedule[] }>(
-            `${environment.VITE_API_URL}/api/plan-schedules`,
-            signal,
-        )
-    ).data
+    const { data, response } = await apiClient.GET('/api/plan-schedules', { signal })
+    if (!response.ok || !data) throw new Error('Recurring meal schedules unavailable')
+    return data.data
 }
 
 export async function createPlanMeal(input: {
@@ -55,13 +36,9 @@ export async function createPlanMeal(input: {
     amount: number
     position?: number
 }) {
-    const response = await authRequest('/api/plan-items', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-    if (!response.ok) throw new Error('Could not add this meal to your plan.')
-    return ((await response.json()) as { data: MealPlanItem }).data
+    const { data, response } = await apiClient.POST('/api/plan-items', { body: input })
+    if (!response.ok || !data) throw new Error('Could not add this meal to your plan.')
+    return toPlanItem(data.data)
 }
 
 export async function createPlanSchedule(input: {
@@ -72,20 +49,15 @@ export async function createPlanSchedule(input: {
     amount: number
     weekdays: number[]
 }) {
-    const response = await authRequest('/api/plan-schedules', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-    if (!response.ok) throw new Error('Could not create this recurring meal schedule.')
-    return ((await response.json()) as { data: PlanSchedule }).data
+    const { data, response } = await apiClient.POST('/api/plan-schedules', { body: input })
+    if (!response.ok || !data) throw new Error('Could not create this recurring meal schedule.')
+    return data.data
 }
 
 export async function stopPlanSchedule(schedule: PlanSchedule, fromDate: string) {
-    const response = await authRequest(`/api/plan-schedules/${schedule.id}`, {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: schedule.version, fromDate }),
+    const { response } = await apiClient.DELETE('/api/plan-schedules/{id}', {
+        params: { path: { id: schedule.id } },
+        body: { version: schedule.version, fromDate },
     })
     if (response.status === 409)
         throw new Error('This schedule changed elsewhere. Refresh and try again.')
@@ -104,54 +76,46 @@ export async function updatePlanMeal(
         position: number
     }>,
 ) {
-    const response = await authRequest(`/api/plan-items/${item.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: item.version, ...changes }),
+    const { data, response } = await apiClient.PATCH('/api/plan-items/{id}', {
+        params: { path: { id: item.id } },
+        body: { version: item.version, ...changes },
     })
     if (response.status === 409)
         throw new Error('This plan changed elsewhere. Refresh and try again.')
-    if (!response.ok) throw new Error('Could not update this planned meal.')
-    return ((await response.json()) as { data: MealPlanItem }).data
+    if (!response.ok || !data) throw new Error('Could not update this planned meal.')
+    return toPlanItem(data.data)
 }
 
 export async function setPlanMealSkipped(item: MealPlanItem, skipped: boolean) {
-    const response = await authRequest(`/api/plan-items/${item.id}/skip`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: item.version, skipped }),
+    const { data, response } = await apiClient.POST('/api/plan-items/{id}/skip', {
+        params: { path: { id: item.id } },
+        body: { version: item.version, skipped },
     })
     if (response.status === 409)
         throw new Error('This plan changed elsewhere. Refresh and try again.')
-    if (!response.ok) throw new Error('Could not update this planned meal.')
-    return ((await response.json()) as { data: MealPlanItem }).data
+    if (!response.ok || !data) throw new Error('Could not update this planned meal.')
+    return toPlanItem(data.data)
 }
 
 export async function logPlannedMeal(
     item: MealPlanItem,
     input: { eatenAt: string; amount?: number; foodId?: string },
 ) {
-    const response = await authRequest(`/api/plan-items/${item.id}/log`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: item.version, ...input }),
+    const { data, response } = await apiClient.POST('/api/plan-items/{id}/log', {
+        params: { path: { id: item.id } },
+        body: { version: item.version, ...input },
     })
     if (response.status === 409) throw new Error('This planned meal was already changed or logged.')
     if (response.status === 400) throw new Error('Choose a food for this flexible target.')
     if (response.status === 404) throw new Error('That food does not belong to this food group.')
-    if (!response.ok) throw new Error('Could not log this planned meal.')
-    return (
-        (await response.json()) as {
-            data: { observationId: string; fulfilledAmount: number }
-        }
-    ).data
+    if (!response.ok || !data) throw new Error('Could not log this planned meal.')
+    return data.data
 }
 
 export async function deletePlanMeal(item: MealPlanItem) {
-    const response = await authRequest(`/api/plan-items/${item.id}`, {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: item.version }),
+    const { response } = await apiClient.DELETE('/api/plan-items/{id}', {
+        params: { path: { id: item.id } },
+        body: { version: item.version },
     })
     if (response.status === 409)
         throw new Error('This plan changed elsewhere. Refresh and try again.')
