@@ -128,17 +128,20 @@ export default tseslint.config(
                                 'useState',
                                 'useSyncExternalStore',
                             ],
-                            message: 'View components are props-only. Put state and effects in a container or controller.',
+                            message:
+                                'View components are props-only. Put state and effects in a container or controller.',
                         },
                         {
                             name: '@tanstack/react-query',
-                            message: 'View components receive server data and mutations through props.',
+                            message:
+                                'View components receive server data and mutations through props.',
                         },
                     ],
                     patterns: [
                         {
                             group: ['**/hooks/**', '**/lib/*Api'],
-                            message: 'View components receive application state and API behavior through props.',
+                            message:
+                                'View components receive application state and API behavior through props.',
                         },
                     ],
                 },

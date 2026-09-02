@@ -1,4 +1,9 @@
-import { nutrientsFor, roundedNutrients, type Food, type Nutrients } from '@trackit/domain/nutrition'
+import {
+    nutrientsFor,
+    roundedNutrients,
+    type Food,
+    type Nutrients,
+} from '@trackit/domain/nutrition'
 import type { MealRecord, RecipeRecord } from '../../lib/nutritionApi'
 
 export type FoodLoggerSelection =

@@ -128,7 +128,13 @@ function TrendSummary({
                     </Text>
                     <Badge
                         size="xs"
-                        color={coverageRatio >= 0.75 ? 'teal' : coverageRatio >= 0.4 ? 'yellow' : 'gray'}
+                        color={
+                            coverageRatio >= 0.75
+                                ? 'teal'
+                                : coverageRatio >= 0.4
+                                  ? 'yellow'
+                                  : 'gray'
+                        }
                     >
                         {confidence}
                     </Badge>
@@ -198,13 +204,18 @@ export function TrendsView(props: TrendsViewProps) {
             {pageEmpty ? (
                 <section className="panel page-empty">
                     <IconChartLine size={28} />
-                    <h2>{availableMetricsError ? 'Trends are unavailable' : 'No trends to show yet'}</h2>
+                    <h2>
+                        {availableMetricsError ? 'Trends are unavailable' : 'No trends to show yet'}
+                    </h2>
                     <Text c="dimmed" size="sm">
                         {availableMetricsError
                             ? 'TrackIt could not load your observations. Review the server and connection status.'
                             : 'Trends appear after observations have been recorded or imported.'}
                     </Text>
-                    <Button leftSection={<IconPlugConnected size={17} />} onClick={onReviewConnections}>
+                    <Button
+                        leftSection={<IconPlugConnected size={17} />}
+                        onClick={onReviewConnections}
+                    >
                         Review Connections
                     </Button>
                 </section>
@@ -243,7 +254,10 @@ export function TrendsView(props: TrendsViewProps) {
                                     </Menu.Target>
                                     <Menu.Dropdown>
                                         {savedViews.map(view => (
-                                            <Menu.Item key={view.id} onClick={() => onLoadView(view.id)}>
+                                            <Menu.Item
+                                                key={view.id}
+                                                onClick={() => onLoadView(view.id)}
+                                            >
                                                 {view.name}
                                             </Menu.Item>
                                         ))}
@@ -272,7 +286,9 @@ export function TrendsView(props: TrendsViewProps) {
                                                 { label: 'Weekly', value: 'weekly' },
                                             ]}
                                             value={granularity}
-                                            onChange={value => onGranularityChange(value as TrendGranularity)}
+                                            onChange={value =>
+                                                onGranularityChange(value as TrendGranularity)
+                                            }
                                         />
                                     </Menu.Item>
                                     <Menu.Divider />
@@ -301,11 +317,17 @@ export function TrendsView(props: TrendsViewProps) {
                     />
 
                     {rangeUnavailable ? (
-                        <Alert color="orange">Trend observations for this range could not be loaded.</Alert>
+                        <Alert color="orange">
+                            Trend observations for this range could not be loaded.
+                        </Alert>
                     ) : rangeEmpty ? (
                         <div className="trend-metric-empty">
                             <Text fw={650}>
-                                No {activeDefinitionId ? metricLabel(activeDefinitionId).toLowerCase() : 'metric'} data in this range
+                                No{' '}
+                                {activeDefinitionId
+                                    ? metricLabel(activeDefinitionId).toLowerCase()
+                                    : 'metric'}{' '}
+                                data in this range
                             </Text>
                             <Text size="sm" c="dimmed">
                                 {isNutritionMetric
@@ -316,7 +338,9 @@ export function TrendsView(props: TrendsViewProps) {
                             </Text>
                             {!isManualMetric && (
                                 <Button size="xs" variant="default" onClick={onReviewEmptyRange}>
-                                    {isNutritionMetric ? 'View meals in Journal' : 'Review Connections'}
+                                    {isNutritionMetric
+                                        ? 'View meals in Journal'
+                                        : 'Review Connections'}
                                 </Button>
                             )}
                         </div>
@@ -328,7 +352,11 @@ export function TrendsView(props: TrendsViewProps) {
                             metric={activeDefinitionId ? metricLabel(activeDefinitionId) : ''}
                             onInspect={isNutritionMetric ? undefined : onInspect}
                             comparisonPoints={comparisonDefinitionId ? comparisonPoints : undefined}
-                            comparisonLabel={comparisonDefinitionId ? metricLabel(comparisonDefinitionId) : undefined}
+                            comparisonLabel={
+                                comparisonDefinitionId
+                                    ? metricLabel(comparisonDefinitionId)
+                                    : undefined
+                            }
                             periodLabel={granularity === 'weekly' ? 'week' : 'day'}
                             valueLabel={valueLabel}
                             formatValue={value => formatDisplayValue(value, { withUnit: false })}
@@ -388,7 +416,12 @@ export function TrendsView(props: TrendsViewProps) {
                                         These are the records behind the selected chart point.
                                     </Text>
                                 </div>
-                                <Button size="xs" variant="subtle" color="gray" onClick={onCloseInspector}>
+                                <Button
+                                    size="xs"
+                                    variant="subtle"
+                                    color="gray"
+                                    onClick={onCloseInspector}
+                                >
                                     Close
                                 </Button>
                             </div>
@@ -401,7 +434,8 @@ export function TrendsView(props: TrendsViewProps) {
                     )}
 
                     <Text size="xs" c="dimmed" className="trends-footnote">
-                        Missing periods are shown rather than estimated. Summary values use only periods that contain observations.
+                        Missing periods are shown rather than estimated. Summary values use only
+                        periods that contain observations.
                     </Text>
                 </section>
             )}

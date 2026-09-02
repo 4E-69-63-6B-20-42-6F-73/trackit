@@ -12,7 +12,14 @@ import {
     Text,
     TextInput,
 } from '@mantine/core'
-import { IconBarcode, IconCamera, IconCheck, IconPlus, IconSearch, IconStar } from '@tabler/icons-react'
+import {
+    IconBarcode,
+    IconCamera,
+    IconCheck,
+    IconPlus,
+    IconSearch,
+    IconStar,
+} from '@tabler/icons-react'
 import { roundedNutrients, type Nutrients } from '@trackit/domain/nutrition'
 import type { RefObject } from 'react'
 import {
@@ -194,9 +201,10 @@ function CatalogResults({
                         <span>
                             <strong>{food.name}</strong>
                             <small>
-                                {food.brand || 'No brand'} · {Math.round(food.per100g.calories ?? 0)}{' '}
-                                kcal per 100 g · {Math.round(preview.calories ?? 0)} kcal per{' '}
-                                {food.servingGrams} g serving
+                                {food.brand || 'No brand'} ·{' '}
+                                {Math.round(food.per100g.calories ?? 0)} kcal per 100 g ·{' '}
+                                {Math.round(preview.calories ?? 0)} kcal per {food.servingGrams} g
+                                serving
                             </small>
                         </span>
                         <span>Save & choose</span>
@@ -461,7 +469,11 @@ export function FoodLoggerView(props: FoodLoggerViewProps) {
                                     {quickAmounts(selection).map(preset => (
                                         <Button
                                             key={`${preset.label}-${preset.value}`}
-                                            variant={Number(amount) === preset.value ? 'light' : 'default'}
+                                            variant={
+                                                Number(amount) === preset.value
+                                                    ? 'light'
+                                                    : 'default'
+                                            }
                                             color="trackit"
                                             size="compact-sm"
                                             radius="xl"
@@ -531,7 +543,9 @@ export function FoodLoggerView(props: FoodLoggerViewProps) {
                                     >
                                         <span>
                                             <strong>Search food catalog for “{queryValue}”</strong>
-                                            <small>Find a branded food and save it as you log</small>
+                                            <small>
+                                                Find a branded food and save it as you log
+                                            </small>
                                         </span>
                                         <span>→</span>
                                     </button>
@@ -702,7 +716,9 @@ export function FoodLoggerView(props: FoodLoggerViewProps) {
                             <div className="food-log-empty-library">
                                 <IconCheck size={20} />
                                 <div>
-                                    <Text fw={700}>Your food library is ready for its first item</Text>
+                                    <Text fw={700}>
+                                        Your food library is ready for its first item
+                                    </Text>
                                     <Text size="sm" c="dimmed">
                                         Search above, scan a barcode, or create a custom food.
                                     </Text>

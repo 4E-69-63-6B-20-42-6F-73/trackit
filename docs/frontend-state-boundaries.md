@@ -10,7 +10,7 @@ Stateful components, pages, and hooks may own:
 - React Query reads and mutations.
 - API calls and cache invalidation.
 - Navigation and application-level commands.
-- Derivation that decides *what* data should be requested or mutated.
+- Derivation that decides _what_ data should be requested or mutated.
 
 These files should pass already-prepared data and callbacks into views.
 

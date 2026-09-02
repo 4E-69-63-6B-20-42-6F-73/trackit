@@ -32,7 +32,9 @@ export const recordedMetricIds = (records: Array<{ definitionId: string }>) => [
 export const preferredMetricId = (recordedDefinitionIds: string[]) =>
     ['sleep', 'steps', 'weight', 'resting_heart_rate', 'energy'].find(candidate =>
         recordedDefinitionIds.includes(candidate),
-    ) ?? recordedDefinitionIds[0] ?? null
+    ) ??
+    recordedDefinitionIds[0] ??
+    null
 
 export const resolveActiveMetric = (
     selected: string | null,

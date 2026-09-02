@@ -453,9 +453,7 @@ export function FoodLogger({
                 onClose={close}
                 onToggleDetails={() => setDetailsOpen(value => !value)}
                 onMealTypeChange={value => setMealType(value as MealRecord['mealType'])}
-                onRecordedDateChange={value =>
-                    setRecordedAt(`${value}T${recordedTime || '12:00'}`)
-                }
+                onRecordedDateChange={value => setRecordedAt(`${value}T${recordedTime || '12:00'}`)}
                 onRecordedTimeChange={value => setRecordedAt(`${recordedDate}T${value}`)}
                 onQueryChange={changeQuery}
                 onClearSelection={clearSelection}

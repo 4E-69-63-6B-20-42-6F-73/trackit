@@ -163,7 +163,9 @@ export function Trends() {
         setShowAnalysis(false)
         setGranularity(view.granularity)
         setInspectedIds(null)
-        const nextRange = Object.entries(trendRanges).find(([, value]) => value === view.rangeDays)?.[0]
+        const nextRange = Object.entries(trendRanges).find(
+            ([, value]) => value === view.rangeDays,
+        )?.[0]
         if (nextRange) setRange(nextRange as TrendRangeLabel)
     }
 
@@ -175,7 +177,8 @@ export function Trends() {
         inspectedIds && activeDefinitionId
             ? observations.filter(
                   record =>
-                      record.definitionId === activeDefinitionId && inspectedIds.includes(record.id),
+                      record.definitionId === activeDefinitionId &&
+                      inspectedIds.includes(record.id),
               )
             : []
     const valueLabel =
