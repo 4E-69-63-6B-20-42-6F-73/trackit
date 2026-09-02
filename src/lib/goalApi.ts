@@ -3,8 +3,8 @@ import type { paths } from './api.generated'
 import { apiClient } from './apiClient'
 
 export type GoalRecord = Goal
+export type GoalInput = Omit<GoalRecord, 'id'>
 
-export type GoalInput = paths['/api/goals']['post']['requestBody']['content']['application/json']
 type GoalApiRecord =
     paths['/api/goals']['get']['responses'][200]['content']['application/json']['data'][number]
 
