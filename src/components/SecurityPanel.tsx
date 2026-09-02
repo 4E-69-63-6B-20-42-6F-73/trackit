@@ -1,12 +1,7 @@
 import { Alert, Badge, Button, Divider, Group, Select, Skeleton, Stack, Text } from '@mantine/core'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
-import {
-    listAuthAudit,
-    listAuthSessions,
-    logoutAll,
-    revokeAuthSession,
-} from '../lib/authApi'
+import { listAuthAudit, listAuthSessions, logoutAll, revokeAuthSession } from '../lib/authApi'
 import { serverQueryKeys } from '../lib/serverQueries'
 
 const deviceName = (agent: string | null) => {
