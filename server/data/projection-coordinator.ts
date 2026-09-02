@@ -141,7 +141,8 @@ export class DailyProjectionCoordinator {
             const earliestHeightDate = changedHeights
                 .map(record => dateKeyInTimezone(record.observedAt, timezone))
                 .sort()[0]
-            for (const date of await this.laterWeightDates(earliestHeightDate, timezone)) dates.add(date)
+            for (const date of await this.laterWeightDates(earliestHeightDate, timezone))
+                dates.add(date)
         }
         return dates
     }
@@ -154,7 +155,8 @@ export class DailyProjectionCoordinator {
 
     async refreshDates(dates: Iterable<string>) {
         const queued = await this.invalidateDates(dates)
-        for (const date of [...queued].sort()) await rebuildEffectiveDailyMetric(this.database, date)
+        for (const date of [...queued].sort())
+            await rebuildEffectiveDailyMetric(this.database, date)
         return queued
     }
 
