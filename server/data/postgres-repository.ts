@@ -6,6 +6,7 @@ import { dailyMetrics, observations } from '../db/schema.js'
 import { dateKeyInTimezone } from './timezone.js'
 import { DailyProjectionCoordinator } from './projection-coordinator.js'
 import { PostgresDataRepository as PersistenceDataRepository } from './postgres-repository-core.js'
+import type { DataRepository } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 
@@ -20,7 +21,7 @@ type ObservationImpact = Pick<
  * The persistence core still owns CRUD transactions. This class owns when projection state is
  * refreshed or invalidated, and keeps daily metric reads side-effect free.
  */
-export class PostgresDataRepository extends PersistenceDataRepository {
+export class PostgresDataRepository extends PersistenceDataRepository implements DataRepository {
     private readonly projections: DailyProjectionCoordinator
 
     constructor(private readonly projectionDatabase: Database) {
