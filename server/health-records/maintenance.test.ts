@@ -39,7 +39,7 @@ describe('ProviderRecordMaintenanceService', () => {
                 },
                 {
                     connector: 'health_connect',
-                    provider: 'com.example.watch',
+                    provider: 'android.health.connect',
                     recordType: 'SleepSessionRecord',
                     externalId: 'spans-into-range',
                     externalVersion: 2,
@@ -127,6 +127,11 @@ describe('ProviderRecordMaintenanceService', () => {
             .from(schema.observations)
             .where(eq(schema.observations.id, sleep.id))
         expect(root.attributes).toMatchObject({ sourceLabel: 'Health Connect · com.example.watch' })
+        expect(root.metadata).toMatchObject({
+            connector: 'Health Connect',
+            provider: 'android.health.connect',
+            dataOrigin: 'com.example.watch',
+        })
 
         await client.close()
     })
