@@ -1,6 +1,7 @@
 import type { MetricPreferences } from '@trackit/domain/metrics'
 import type { paths } from './api.generated'
 import { apiClient } from './apiClient'
+import { cachePreferences } from './serverQueries'
 
 type PreferencesApiRecord =
     paths['/api/preferences']['get']['responses'][200]['content']['application/json']['data']
@@ -51,6 +52,6 @@ export async function updatePreferences(input: Partial<Preferences>): Promise<Pr
     const { data, response } = await apiClient.PATCH('/api/preferences', { body: input })
     if (!response.ok || !data) throw new Error('Preferences could not be saved')
     const saved = toPreferences(data.data)
-    window.dispatchEvent(new CustomEvent('trackit:preferences-saved', { detail: saved }))
+    await cachePreferences(saved)
     return saved
 }
