@@ -49,7 +49,13 @@ const propertyName = (node: ts.PropertyName) =>
 
 for (const file of await sourceFiles(root)) {
     const source = await readFile(file, 'utf8')
-    const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    const sourceFile = ts.createSourceFile(
+        file,
+        source,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS,
+    )
     const visit = (node: ts.Node) => {
         if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
             const method = node.expression.name.text.toLowerCase()
@@ -61,7 +67,8 @@ for (const file of await sourceFiles(root)) {
                 if (options && ts.isObjectLiteralExpression(options)) {
                     const urlProperty = options.properties.find(
                         property =>
-                            ts.isPropertyAssignment(property) && propertyName(property.name) === 'url',
+                            ts.isPropertyAssignment(property) &&
+                            propertyName(property.name) === 'url',
                     ) as ts.PropertyAssignment | undefined
                     const methodProperty = options.properties.find(
                         property =>
