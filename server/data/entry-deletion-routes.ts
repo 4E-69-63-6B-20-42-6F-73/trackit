@@ -3,9 +3,11 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type { FastifyInstance } from 'fastify'
 import type * as schemaType from '../db/schema.js'
 import { observations } from '../db/schema.js'
-import type { DataRepository } from './types.js'
+import type { MealRepository, ObservationRepository } from './types.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
+type EntryDeletionRepository = Pick<ObservationRepository, 'removeObservation'> &
+    Pick<MealRepository, 'removeMeal'>
 
 async function entryType(database: Database, id: string) {
     const [record] = await database
@@ -26,7 +28,7 @@ async function entryType(database: Database, id: string) {
 export function registerEntryDeletionRoutes(
     app: FastifyInstance,
     database: Database,
-    data: Pick<DataRepository, 'removeObservation' | 'removeMeal'>,
+    data: EntryDeletionRepository,
 ) {
     app.delete<{ Params: { id: string } }>('/api/observations/:id', async (request, reply) => {
         const type = await entryType(database, request.params.id)
