@@ -24,7 +24,6 @@ const preferences: Preferences = {
     displayName: 'Alex',
     timezone: 'UTC',
     locale: 'en-US',
-    units: 'metric',
 }
 const goal: Goal = {
     id: 'weight-goal',

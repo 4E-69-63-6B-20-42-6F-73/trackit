@@ -63,7 +63,7 @@ export function Metrics() {
     const saving = saveMutation.isPending
     const loading = sharedLoading || sourceQuery.isPending
     const sourceSummaries = useMemo(() => sourceQuery.data ?? [], [sourceQuery.data])
-    const selected = normalizedMetricPreferences(preferences?.metricPreferences, 'metric')
+    const selected = normalizedMetricPreferences(preferences?.metricPreferences)
     const preset = detectUnitPreset(selected)
     const categories = useMemo(() => [...new Set(metricCatalog.map(metric => metric.category))], [])
     const metricSources = useMemo(

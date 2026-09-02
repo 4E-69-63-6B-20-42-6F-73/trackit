@@ -19,7 +19,6 @@ const createWrapper = () => {
                         displayName: 'Alex',
                         timezone: 'Europe/Amsterdam',
                         locale: 'en-US',
-                        units: 'metric',
                     },
                     goals: [
                         {

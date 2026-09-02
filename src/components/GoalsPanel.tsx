@@ -455,11 +455,7 @@ export function GoalsPanel() {
         setScheduleMode(scheduleModeFor(goal.schedule.weekdays))
         setSelectedWeekdays(goalDays)
         setAdvanced(true)
-        const unit = displayUnitFor(
-            goal.definitionId,
-            preferences?.metricPreferences,
-            preferences?.units,
-        )
+        const unit = displayUnitFor(goal.definitionId, preferences?.metricPreferences)
         if ('value' in goal.target)
             setTarget(
                 convertMetricValue(goal.definitionId, goal.target.value, goal.canonicalUnit, unit),

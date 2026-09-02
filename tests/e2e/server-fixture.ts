@@ -176,7 +176,6 @@ export async function useAuthenticatedServer(
                       displayName: 'Owner',
                       timezone: 'UTC',
                       locale: 'en',
-                      units: 'metric',
                       mcpEnabled: false,
                       experience: { onboardingComplete: true, onboardingStep: 5 },
                   })
