@@ -1,87 +1,60 @@
-import { authRequest } from './authApi'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
-export type McpClientRecord = {
-    id: string
-    name: string
-    scopes: string[]
-    dateFrom: string | null
-    dateTo: string | null
-    expiresAt: string | null
-    revokedAt: string | null
-    lastUsedAt: string | null
-    createdAt: string
-}
-
-export type McpAccessEvent = {
-    id: string
-    actor: string
-    action: string
-    targetId: string | null
-    createdAt: string
-}
+export type McpClientRecord =
+    paths['/api/mcp/status']['get']['responses'][200]['content']['application/json']['clients'][number]
+export type McpAccessEvent =
+    paths['/api/mcp/access-log']['get']['responses'][200]['content']['application/json']['data'][number]
+export type McpIssueInput =
+    paths['/api/mcp/clients']['post']['requestBody']['content']['application/json']
 
 type SignalInput = AbortSignal | { signal: AbortSignal }
 
 const signalFrom = (input?: SignalInput) => (input && 'signal' in input ? input.signal : input)
 
 export async function listMcpAccessEvents(signal?: AbortSignal): Promise<McpAccessEvent[]> {
-    const response = await authRequest('/api/mcp/access-log', { signal })
-    if (!response.ok) throw new Error('MCP access log unavailable')
-    const events = (await response.json()) as { data: McpAccessEvent[] }
-    return events.data
+    const { data, response } = await apiClient.GET('/api/mcp/access-log', { signal })
+    if (!response.ok || !data) throw new Error('MCP access log unavailable')
+    return data.data
 }
 
 export async function getMcpStatus(input?: SignalInput) {
-    const response = await authRequest('/api/mcp/status', { signal: signalFrom(input) })
-    if (!response.ok) throw new Error('MCP settings unavailable')
-    return (await response.json()) as {
-        enabled: boolean
-        clients: McpClientRecord[]
-        allowedOrigins: string[]
-    }
+    const { data, response } = await apiClient.GET('/api/mcp/status', {
+        signal: signalFrom(input),
+    })
+    if (!response.ok || !data) throw new Error('MCP settings unavailable')
+    return data
 }
 
 export async function setMcpAllowedOrigins(origins: string[]) {
-    const response = await authRequest('/api/mcp/browser-origins', {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ origins }),
+    const { data, response } = await apiClient.PUT('/api/mcp/browser-origins', {
+        body: { origins },
     })
-    if (!response.ok) throw new Error('Could not update MCP browser origins')
-    return (await response.json()) as { allowedOrigins: string[] }
+    if (!response.ok || !data) throw new Error('Could not update MCP browser origins')
+    return data
 }
 
 export async function setMcpEnabled(enabled: boolean) {
-    const response = await authRequest('/api/mcp/status', {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ enabled }),
-    })
+    const { response } = await apiClient.PATCH('/api/mcp/status', { body: { enabled } })
     if (!response.ok) throw new Error('Could not update MCP settings')
 }
 
-export async function issueMcpClient(input: {
-    name: string
-    scopes: string[]
-    expiresAt?: string
-    dateFrom?: string
-    dateTo?: string
-}) {
-    const response = await authRequest('/api/mcp/clients', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-    if (!response.ok) throw new Error('Could not issue MCP credential')
-    return (await response.json()) as { client: McpClientRecord; token: string }
+export async function issueMcpClient(input: McpIssueInput) {
+    const { data, response } = await apiClient.POST('/api/mcp/clients', { body: input })
+    if (!response.ok || !data) throw new Error('Could not issue MCP credential')
+    return data
 }
 
 export async function revokeMcpClient(id: string) {
-    const response = await authRequest(`/api/mcp/clients/${id}`, { method: 'DELETE' })
+    const { response } = await apiClient.DELETE('/api/mcp/clients/{id}', {
+        params: { path: { id } },
+    })
     if (!response.ok) throw new Error('Could not revoke MCP credential')
 }
 
 export async function deleteMcpClient(id: string) {
-    const response = await authRequest(`/api/mcp/clients/${id}/permanent`, { method: 'DELETE' })
+    const { response } = await apiClient.DELETE('/api/mcp/clients/{id}/permanent', {
+        params: { path: { id } },
+    })
     if (!response.ok) throw new Error('Could not delete MCP credential')
 }
