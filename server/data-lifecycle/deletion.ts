@@ -1,6 +1,7 @@
 import { and, count, eq, inArray, isNull, max, min, ne, or } from 'drizzle-orm'
 import type { SQL } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import { calendarDateKey } from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import {
     auditEvents,
@@ -30,7 +31,6 @@ import {
     syncCursors,
 } from '../db/schema.js'
 import { markProjectionDatesDirty } from '../data/projection-state.js'
-import { dateKeyInTimezone } from '../data/timezone.js'
 import { planItems } from '../planning/schema.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
@@ -87,7 +87,7 @@ export class DataDeletionService {
         )
         await markProjectionDatesDirty(
             transaction,
-            linked.map(item => dateKeyInTimezone(item.observedAt, saved?.timezone ?? 'UTC')),
+            linked.map(item => calendarDateKey(item.observedAt, saved?.timezone ?? 'UTC')),
         )
     }
 
