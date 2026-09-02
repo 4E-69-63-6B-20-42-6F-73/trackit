@@ -48,14 +48,10 @@ const journalDetail = z.union([
     z.object({
         kind: z.literal('meal'),
         mealType,
-        serving: z
-            .object({ amount: z.number(), unit: z.enum(['g', 'serving']) })
-            .optional(),
+        serving: z.object({ amount: z.number(), unit: z.enum(['g', 'serving']) }).optional(),
         nutrients: z.record(z.string(), z.number()),
         nutritionQuality,
-        sourceItem: z
-            .object({ kind: z.enum(['food', 'recipe']), id: z.string() })
-            .optional(),
+        sourceItem: z.object({ kind: z.enum(['food', 'recipe']), id: z.string() }).optional(),
     }),
 ])
 
@@ -135,7 +131,9 @@ const recipeRecord = recipeBase.extend({
     nutrientsPerServing: z.record(z.string(), z.number().nullable()),
     nutritionQuality,
 })
-const createdRecipeRecord = recipeBase.extend({ items: z.array(recipeItem.omit({ foodName: true })) })
+const createdRecipeRecord = recipeBase.extend({
+    items: z.array(recipeItem.omit({ foodName: true })),
+})
 
 const foodImportResult = z.object({
     results: z.array(
@@ -267,17 +265,22 @@ const healthRecordInput = z.object({
     lastModifiedTime: dateTime.optional(),
     deleted: z.boolean().optional(),
 })
-const healthRecordBatch = z.object({ idempotencyKey: uuid, records: z.array(healthRecordInput).max(1000) })
+const healthRecordBatch = z.object({
+    idempotencyKey: uuid,
+    records: z.array(healthRecordInput).max(1000),
+})
 const healthRecordUploadResult = z.object({ duplicate: z.boolean(), accepted: z.number().int() })
 const healthRecordReconcile = z.object({
     recordType: z.string(),
     since: dateTime,
     presentExternalIds: z.array(z.string()),
 })
-const healthRecordReconcileResult = z.object({
-    missing: z.number().int().optional(),
-    removed: z.number().int().optional(),
-}).passthrough()
+const healthRecordReconcileResult = z
+    .object({
+        missing: z.number().int().optional(),
+        removed: z.number().int().optional(),
+    })
+    .passthrough()
 const cursorUpdate = z.object({
     recordType: z.string(),
     cursor: z.string().nullable(),
@@ -387,7 +390,9 @@ export const clientApiContractSchemas = {
     createdRecipeResponse: dataResponse(createdRecipeRecord),
     recipeUpdateResponse: dataResponse(recipeBase),
     recipeFavoriteInput: z.object({ favorite: z.boolean(), version: z.number().int().positive() }),
-    recipeFavoriteResponse: dataResponse(z.object({ favorite: z.boolean(), version: z.number().int() })),
+    recipeFavoriteResponse: dataResponse(
+        z.object({ favorite: z.boolean(), version: z.number().int() }),
+    ),
     foodCategoriesResponse: dataResponse(z.array(foodCategory)),
     foodCategoryMembershipInput: foodCategoryMembership,
     foodCategoryMembershipResponse: dataResponse(foodCategoryMembership),
