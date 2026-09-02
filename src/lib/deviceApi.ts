@@ -1,22 +1,8 @@
-import { authRequest } from './authApi'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
-export type DeviceRecord = {
-    id: string
-    name: string
-    keyFingerprint: string
-    status: string
-    confirmedAt: string | null
-    configuredAt: string | null
-    revokedAt: string | null
-    lastSeenAt: string | null
-    createdAt: string
-    sync: {
-        recordType: string
-        status: string
-        lastSyncedAt: string | null
-        diagnostic: string | null
-    }[]
-}
+export type DeviceRecord =
+    paths['/api/devices']['get']['responses'][200]['content']['application/json']['data'][number]
 
 export type HealthConnectStatus =
     | 'Connected'
@@ -59,33 +45,41 @@ export function healthConnectStatus(
 }
 
 export async function createPairingCode() {
-    const response = await authRequest('/api/devices/pair', { method: 'POST' })
-    if (!response.ok) throw new Error('Could not create pairing code')
-    return (await response.json()) as { code: string; expiresAt: string; serverIdentity: string }
+    const { data, response } = await apiClient.POST('/api/devices/pair')
+    if (!response.ok || !data) throw new Error('Could not create pairing code')
+    return data
 }
 
 export async function listDevices(signal?: AbortSignal): Promise<DeviceRecord[]> {
-    const response = await authRequest('/api/devices', { signal })
-    if (!response.ok) throw new Error('Devices unavailable')
-    return ((await response.json()) as { data: DeviceRecord[] }).data
+    const { data, response } = await apiClient.GET('/api/devices', { signal })
+    if (!response.ok || !data) throw new Error('Devices unavailable')
+    return data.data
 }
 
 export async function confirmDevice(id: string) {
-    const response = await authRequest(`/api/devices/${id}/confirm`, { method: 'POST' })
+    const { response } = await apiClient.POST('/api/devices/{id}/confirm', {
+        params: { path: { id } },
+    })
     if (!response.ok) throw new Error('Could not confirm device')
 }
 
 export async function rejectDevice(id: string) {
-    const response = await authRequest(`/api/devices/${id}/reject`, { method: 'POST' })
+    const { response } = await apiClient.POST('/api/devices/{id}/reject', {
+        params: { path: { id } },
+    })
     if (!response.ok) throw new Error('Could not reject device')
 }
 
 export async function revokeDevice(id: string) {
-    const response = await authRequest(`/api/devices/${id}`, { method: 'DELETE' })
+    const { response } = await apiClient.DELETE('/api/devices/{id}', {
+        params: { path: { id } },
+    })
     if (!response.ok) throw new Error('Could not revoke device')
 }
 
 export async function deleteDevice(id: string) {
-    const response = await authRequest(`/api/devices/${id}/permanent`, { method: 'DELETE' })
+    const { response } = await apiClient.DELETE('/api/devices/{id}/permanent', {
+        params: { path: { id } },
+    })
     if (!response.ok) throw new Error('Could not delete device')
 }
