@@ -6,22 +6,7 @@ import type { JournalRepository } from '../server/journal/types.js'
 
 type JsonObject = Record<string, unknown>
 
-type SelectedPath = {
-    path: string
-    methods: string[]
-}
-
-const selectedPaths: SelectedPath[] = [
-    { path: '/api/observations', methods: ['get', 'post'] },
-    { path: '/api/observations/{id}', methods: ['delete', 'patch'] },
-    { path: '/api/daily-metrics', methods: ['get'] },
-    { path: '/api/metric-sources', methods: ['get'] },
-    { path: '/api/preferences', methods: ['get', 'patch'] },
-    { path: '/api/goals', methods: ['get', 'post'] },
-    { path: '/api/goals/evaluations', methods: ['get'] },
-    { path: '/api/goals/{id}', methods: ['delete', 'patch'] },
-    { path: '/api/trend-views', methods: ['get', 'post'] },
-]
+const httpMethods = new Set(['get', 'post', 'put', 'patch', 'delete', 'options', 'head'])
 
 const journal: JournalRepository = {
     list: async () => [],
@@ -197,17 +182,20 @@ const operationType = (pathItem: JsonObject, operation: JsonObject, document: Js
 const renderPaths = (document: JsonObject): string => {
     const paths = asObject(document.paths)
     if (!paths) throw new Error('OpenAPI document has no paths')
-    const entries = selectedPaths.map(({ path, methods }) => {
-        const pathItem = asObject(paths[path])
-        if (!pathItem) throw new Error(`OpenAPI path is missing: ${path}`)
-        const operations = methods.map(method => {
-            const operation = asObject(pathItem[method])
-            if (!operation)
-                throw new Error(`OpenAPI operation is missing: ${method.toUpperCase()} ${path}`)
-            return `${method}: ${operationType(pathItem, operation, document)}`
+    const entries = Object.entries(paths)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([path, rawPathItem]) => {
+            const pathItem = asObject(rawPathItem)
+            if (!pathItem) throw new Error(`OpenAPI path item is invalid: ${path}`)
+            const operations = Object.entries(pathItem)
+                .filter(([method, value]) => httpMethods.has(method) && asObject(value))
+                .sort(([left], [right]) => left.localeCompare(right))
+                .map(([method, value]) =>
+                    `${method}: ${operationType(pathItem, asObject(value)!, document)}`,
+                )
+            if (!operations.length) throw new Error(`OpenAPI path has no operations: ${path}`)
+            return `${propertyKey(path)}: { ${operations.join('; ')} }`
         })
-        return `${propertyKey(path)}: { ${operations.join('; ')} }`
-    })
     return `export interface paths { ${entries.join('; ')} }\n`
 }
 
