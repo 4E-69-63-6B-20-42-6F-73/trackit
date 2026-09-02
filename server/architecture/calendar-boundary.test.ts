@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
@@ -32,13 +32,22 @@ describe('calendar architecture', () => {
         ).toEqual([])
     })
 
-    it('keeps the legacy server timezone module as a zero-logic facade', () => {
-        const path = join(process.cwd(), 'server', 'data', 'timezone.ts')
-        const source = readFileSync(path, 'utf8')
+    it('requires server code to import the shared calendar directly', () => {
+        const root = join(process.cwd(), 'server')
+        const compatibilityPath = join(root, 'data', 'timezone.ts')
+        const violations = sourceFiles(root).flatMap(path => {
+            const source = readFileSync(path, 'utf8')
+            return /from\s+['"][^'"]*timezone\.js['"]/.test(source)
+                ? [relative(process.cwd(), path)]
+                : []
+        })
 
-        expect(source).toContain("from '@trackit/domain/calendar'")
-        expect(source).not.toMatch(
-            /Intl\.DateTimeFormat|Date\.UTC|setUTCDate|getUTCDate|formatToParts/,
+        expect(existsSync(compatibilityPath), 'The server timezone facade must stay deleted.').toBe(
+            false,
         )
+        expect(
+            violations,
+            'Server calendar consumers must import @trackit/domain/calendar directly.',
+        ).toEqual([])
     })
 })
