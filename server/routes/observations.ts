@@ -23,7 +23,11 @@ import {
     observationUpdateSchema,
     parseObservationDefinitionIds,
 } from '../contracts/observations.js'
-import type { HealthProjectionRepository, ObservationRepository } from '../data/types.js'
+import type {
+    HealthProjectionRepository,
+    ObservationRepository,
+    RawObservationRecord,
+} from '../data/types.js'
 import { mergeGeneratedObservationPaths, openApiContract } from '../openapi.js'
 
 type BadRequest = (
@@ -41,15 +45,17 @@ type ObservationRouteOptions = {
     badRequest: BadRequest
 }
 
+type ObservationMutationRecord = Pick<RawObservationRecord, 'id' | 'version' | 'excluded'>
+
 const mutationResult = (
-    value: unknown,
+    value: ObservationMutationRecord | undefined,
     defaults?: Pick<ObservationMutationResult, 'version' | 'excluded'>,
 ): ObservationMutationResult => {
-    const record = value as { id: string; version?: number; excluded?: boolean }
+    if (!value) throw new Error('observation_persistence_invariant')
     return {
-        id: record.id,
-        version: record.version ?? defaults?.version ?? 1,
-        excluded: record.excluded ?? defaults?.excluded ?? false,
+        id: value.id,
+        version: value.version ?? defaults?.version ?? 1,
+        excluded: value.excluded ?? defaults?.excluded ?? false,
     }
 }
 
@@ -87,6 +93,7 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
             const bounded: {
                 from?: string
                 to?: string
+
                 definitionIds?: string[]
             } = {
                 from: request.query.from,
@@ -177,7 +184,6 @@ export const observationRoutes: FastifyPluginAsync<ObservationRouteOptions> = as
         async (request, reply) => {
             if (request.validationError) return badRequest(request, reply)
             const created = await data.createObservation(request.body)
-            if (!created) return reply.code(409).send({ error: 'observation_conflict' })
             return reply
                 .code(201)
                 .send({ data: mutationResult(created, { version: 1, excluded: false }) })
