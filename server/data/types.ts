@@ -322,7 +322,13 @@ export type DailyMetricRecord = typeof dailyMetrics.$inferSelect
 export type RawObservationRecord = typeof observations.$inferSelect
 export type PreferencesRecord = typeof preferences.$inferSelect
 export type FoodRecord = typeof foods.$inferSelect
-export type GoalRecord = typeof goals.$inferSelect
+
+type PersistedGoalRecord = typeof goals.$inferSelect
+export type GoalRecord = Omit<PersistedGoalRecord, 'effectiveFrom' | 'effectiveTo'> & {
+    effectiveFrom: Date | string
+    effectiveTo: Date | string | null
+}
+
 export type SavedTrendViewRecord = typeof savedTrendViews.$inferSelect
 
 export type MetricSourceSummary = {
@@ -362,7 +368,7 @@ type NutrientKey =
 export type RecipeRecord = typeof recipes.$inferSelect & {
     items: Array<typeof recipeItems.$inferSelect & { foodName: string }>
     nutrientsPerServing: Record<NutrientKey, number | null>
-    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
+    nutritionQuality: string
 }
 
 export type CreatedRecipeRecord = typeof recipes.$inferSelect & {
