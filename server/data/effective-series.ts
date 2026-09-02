@@ -1,6 +1,10 @@
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import {
+    calendarDateKey as dateKeyInTimezone,
+    calendarDateKeysThrough as datesThrough,
+} from '@trackit/domain/calendar'
+import {
     effectiveBaseMetricSeries,
     effectiveMetricSeriesInTimezone,
 } from '@trackit/domain/effectiveMetrics'
@@ -18,7 +22,6 @@ import {
 } from '../db/schema.js'
 import type { RecordRange } from './types.js'
 import { DERIVED_OBSERVATION_CACHE_VERSION } from './derived-observation-cache.js'
-import { dateKeyInTimezone, datesThrough } from './timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]

@@ -1,5 +1,9 @@
 import { and, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
+import {
+    calendarDateKey as dateKeyInTimezone,
+    calendarDayRangeForKey as localDayRange,
+} from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import {
     dailyMetrics,
@@ -13,7 +17,6 @@ import {
     rebuildEffectiveDailyMetric,
 } from './daily-projection.js'
 import { markProjectionDatesDirty } from './projection-queue.js'
-import { dateKeyInTimezone, localDayRange } from './timezone.js'
 
 type Database = PostgresJsDatabase<typeof schemaType>
 type ProjectionDateRange = { from?: string; to?: string }

@@ -1,5 +1,5 @@
+import { addCalendarDays, calendarDateKey } from '@trackit/domain/calendar'
 import { z } from 'zod'
-import { dateKeyInTimezone } from './timezone.js'
 
 const recordTypesSchema = z.array(z.string().trim().min(1)).min(1).max(64).optional()
 
@@ -41,20 +41,14 @@ export type MaintenanceDateRange = z.infer<typeof maintenanceDateRangeSchema>
 export type ProviderRecordMaintenanceRange = z.infer<typeof providerRecordMaintenanceSchema>
 export type ResolvedMaintenanceDateRange = { from?: string; to?: string }
 
-const shiftDate = (date: string, days: number) => {
-    const value = new Date(`${date}T00:00:00.000Z`)
-    value.setUTCDate(value.getUTCDate() + days)
-    return value.toISOString().slice(0, 10)
-}
-
 export function resolveMaintenanceDateRange(
     range: MaintenanceDateRange,
     timezone: string,
     now = new Date(),
 ): ResolvedMaintenanceDateRange {
     if ('lastDays' in range) {
-        const to = dateKeyInTimezone(now, timezone)
-        return { from: shiftDate(to, -(range.lastDays - 1)), to }
+        const to = calendarDateKey(now, timezone)
+        return { from: addCalendarDays(to, -(range.lastDays - 1)), to }
     }
     return { from: range.from, to: range.to }
 }

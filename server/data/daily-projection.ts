@@ -1,6 +1,10 @@
 import { and, eq } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import {
+    calendarDateKey as dateKeyInTimezone,
+    calendarDayRangeForKey as localDayRange,
+} from '@trackit/domain/calendar'
+import {
     aggregateDailyObservations,
     dailyMetricAttributionInstant,
     type NumericObservation,
@@ -15,7 +19,6 @@ import {
     preferences,
     projectionDirtyDates,
 } from '../db/schema.js'
-import { dateKeyInTimezone, localDayRange } from './timezone.js'
 import { getEffectiveBaseMetricSeries } from './effective-series.js'
 import { replaceDerivedObservationCache } from './derived-observation-cache.js'
 
