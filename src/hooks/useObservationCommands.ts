@@ -15,9 +15,6 @@ type Command = {
 export function useObservationCommands() {
     const commandMutation = useMutation({
         mutationFn: (command: Command) => command.run(),
-        onSuccess: () => {
-            window.dispatchEvent(new Event('trackit:observations-changed'))
-        },
     })
 
     const run = async (command: Command) => {
