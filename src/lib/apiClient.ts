@@ -2,7 +2,7 @@ import createFetchClient from 'openapi-fetch'
 import createClient from 'openapi-react-query'
 import { environment } from '../app/env'
 import type { paths } from './api.generated'
-import { csrfToken } from './authApi'
+import { csrfToken } from './csrf'
 import { invalidateHealthQueries } from './healthQueries'
 
 const affectsHealthQueries = (path: string, method: string) => {
