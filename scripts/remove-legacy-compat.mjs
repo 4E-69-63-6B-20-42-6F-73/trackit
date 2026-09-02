@@ -37,12 +37,12 @@ await replaceExact('server/app.ts', "        '/api/device/upload',\n", '')
 await replaceRegex(
     'server/app.ts',
     /\n        const uploadRecordSchema = z\.object\(\{[\s\S]*?\n        \}\)\n(?=        const healthRecordSchema)/,
-    '',
+    '\n',
 )
 await replaceRegex(
     'server/app.ts',
     /\n        app\.post\('\/api\/device\/upload',[\s\S]*?\n        \}\)\n(?=        app\.post\('\/api\/device\/health-records')/,
-    '',
+    '\n',
 )
 
 await replaceRegex(
