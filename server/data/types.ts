@@ -3,7 +3,7 @@ import type { NumericObservation } from '@trackit/domain/health'
 import type { MealSourceItem } from '@trackit/domain/types'
 import { validateGoal } from '@trackit/domain/goals'
 import { observationDefinition } from '@trackit/domain/observationDefinitions'
-import {
+import type {
     dailyMetrics,
     foods,
     goals,
