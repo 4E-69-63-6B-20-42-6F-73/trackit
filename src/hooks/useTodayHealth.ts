@@ -49,9 +49,12 @@ export function useTodayHealth(selectedDate: Date = new Date()) {
         queryKey: [...healthQueryKeys.goalEvaluations, selectedKey],
         queryFn: ({ signal }) => listGoalEvaluations(signal, evaluationAt),
     })
-    const daily = dailyQuery.data ?? []
-    const details = observationsQuery.data ?? []
-    const goalEvaluations = goalEvaluationsQuery.data ?? ({} as Record<string, GoalEvaluation>)
+    const daily = useMemo(() => dailyQuery.data ?? [], [dailyQuery.data])
+    const details = useMemo(() => observationsQuery.data ?? [], [observationsQuery.data])
+    const goalEvaluations = useMemo(
+        () => goalEvaluationsQuery.data ?? ({} as Record<string, GoalEvaluation>),
+        [goalEvaluationsQuery.data],
+    )
     const loading =
         dailyQuery.isPending || observationsQuery.isPending || goalEvaluationsQuery.isPending
     const unavailable =

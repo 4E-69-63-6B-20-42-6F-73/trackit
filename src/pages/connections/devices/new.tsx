@@ -18,6 +18,7 @@ export function DeviceNew() {
     const createMutation = useMutation({
         mutationFn: createPairingCode,
     })
+    const createPairing = createMutation.mutate
     const pairing = createMutation.data ?? null
     const expired = Boolean(pairing && now >= new Date(pairing.expiresAt).getTime())
 
@@ -47,8 +48,8 @@ export function DeviceNew() {
     useEffect(() => {
         if (initialCreateStartedRef.current) return
         initialCreateStartedRef.current = true
-        createMutation.mutate()
-    }, [])
+        createPairing()
+    }, [createPairing])
 
     useEffect(() => {
         if (!pairing || expired || (actionMutation.isSuccess && actionMutation.data === 'approve'))

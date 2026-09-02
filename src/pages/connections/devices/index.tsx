@@ -91,7 +91,7 @@ export function Devices() {
         queryKey: serverQueryKeys.devices,
         queryFn: ({ signal }) => listDevices(signal),
     })
-    const devices = devicesQuery.data ?? []
+    const devices = useMemo(() => devicesQuery.data ?? [], [devicesQuery.data])
     const loading = devicesQuery.isPending
     const selectedDevice = devices.find(device => device.id === selectedDeviceId) ?? null
     const confirmationDevice = confirmation

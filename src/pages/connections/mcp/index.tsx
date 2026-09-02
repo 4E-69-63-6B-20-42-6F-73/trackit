@@ -96,7 +96,7 @@ export function McpAccess() {
     })
     const status = statusQuery.data
     const enabled = status?.enabled ?? false
-    const clients = status?.clients ?? []
+    const clients = useMemo(() => status?.clients ?? [], [status])
     const events = eventsQuery.data ?? []
     const allowedOrigins = draftOrigins ?? status?.allowedOrigins ?? []
     const loading = statusQuery.isPending || eventsQuery.isPending

@@ -70,7 +70,10 @@ export function Trends() {
         queryKey: serverQueryKeys.trendViews,
         queryFn: () => listTrendViews(),
     })
-    const availableMetrics = availableMetricsQuery.data ?? []
+    const availableMetrics = useMemo(
+        () => availableMetricsQuery.data ?? [],
+        [availableMetricsQuery.data],
+    )
     const savedViews = savedViewsQuery.data ?? []
     const recordedDefinitionIds = useMemo(
         () => [...new Set(availableMetrics.map(record => record.definitionId))],

@@ -127,7 +127,9 @@ npm run check
 ```
 
 This runs formatting, linting, migration consistency, secret scanning, unit tests, and the production
-build. Pull-request CI additionally runs PostgreSQL integration/migration checks, Playwright E2E
+build. Pull-request CI additionally regenerates OpenAPI types and Drizzle migration metadata and fails
+if regeneration leaves the tree dirty. Same-repository PRs use Auto-format to commit regenerated
+artifacts automatically. CI also runs PostgreSQL integration/migration checks, Playwright E2E
 coverage, container smoke/security checks, and Android validation.
 
 Useful individual commands:
