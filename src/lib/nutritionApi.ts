@@ -1,55 +1,21 @@
-import { environment } from '../app/env'
-import type { Food, FoodServingOption, Nutrients } from '@trackit/domain/nutrition'
-import type { MealSourceItem } from '@trackit/domain/types'
-import { authRequest } from './authApi'
-import { sharedJsonRequest } from './sharedRequest'
+import type { Food, Nutrients } from '@trackit/domain/nutrition'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
-type FoodRecord = {
-    id: string
-    name: string
-    brand: string | null
-    barcode: string | null
-    catalogSource: string | null
-    catalogId: string | null
-    caloriesPer100g: number | null
-    proteinPer100g: number | null
-    carbsPer100g: number | null
-    fatPer100g: number | null
-    fiberPer100g: number | null
-    sugarPer100g: number | null
-    saturatedFatPer100g: number | null
-    sodiumPer100g: number | null
-    potassiumPer100g: number | null
-    servingName: string
-    servingGrams: number
-    servingOptions?: FoodServingOption[] | null
-    favorite: boolean
-    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
-    version: number
-}
+type FoodRecord =
+    paths['/api/foods']['get']['responses'][200]['content']['application/json']['data'][number]
+type CatalogFoodRecord =
+    paths['/api/food-catalog/search']['get']['responses'][200]['content']['application/json']['data'][number]
+type ApiRecipeRecord =
+    paths['/api/recipes']['get']['responses'][200]['content']['application/json']['data'][number]
+type FoodInput = paths['/api/foods']['post']['requestBody']['content']['application/json']
 
-export type MealRecord = {
-    id: string
-    name: string
-    mealType: 'Breakfast' | 'Lunch' | 'Dinner' | 'Snack'
-    eatenAt: string
-    nutrientSnapshot: Partial<Nutrients>
-    favorite: boolean
-    version: number
-    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
-    serving?: { amount: number; unit: 'g' | 'serving' }
-    sourceItem?: MealSourceItem
-}
-
-export type RecipeRecord = {
-    id: string
-    name: string
-    servings: number
-    favorite: boolean
-    version: number
+export type MealRecord =
+    paths['/api/meals']['get']['responses'][200]['content']['application/json']['data'][number]
+export type FoodImportResult =
+    paths['/api/foods/import']['post']['responses'][200]['content']['application/json']['data']
+export type RecipeRecord = Omit<ApiRecipeRecord, 'nutrientsPerServing'> & {
     nutrientsPerServing: Nutrients
-    nutritionQuality: 'complete' | 'estimated' | 'incomplete'
-    items: { id: string; foodId: string; foodName: string; grams: number }[]
 }
 
 const toFood = (record: FoodRecord): Food => ({
@@ -72,102 +38,33 @@ const toFood = (record: FoodRecord): Food => ({
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
-    servingOptions: record.servingOptions ?? [],
+    servingOptions: record.servingOptions,
     favorite: record.favorite,
     nutritionQuality: record.nutritionQuality,
     version: record.version,
 })
 
-export async function searchFoods(query = '') {
-    const response = await fetch(
-        `${environment.VITE_API_URL}/api/foods${query ? `?q=${encodeURIComponent(query)}` : ''}`,
-        { credentials: 'same-origin' },
-    )
-    if (!response.ok) throw new Error('Food search unavailable')
-    const body = (await response.json()) as { data: FoodRecord[] }
-    return body.data.map(toFood)
-}
-
-export async function createFood(food: Omit<Food, 'id'>) {
-    const response = await authRequest('/api/foods', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-            name: food.name,
-            brand: food.brand,
-            barcode: food.barcode,
-            catalogSource: food.catalogSource,
-            catalogId: food.catalogId,
-            servingName: food.servingName,
-            servingGrams: food.servingGrams,
-            servingOptions: food.servingOptions ?? [],
-            favorite: food.favorite,
-            nutritionQuality: food.nutritionQuality ?? 'complete',
-            caloriesPer100g: food.per100g.calories,
-            proteinPer100g: food.per100g.protein,
-            carbsPer100g: food.per100g.carbs,
-            fatPer100g: food.per100g.fat,
-            fiberPer100g: food.per100g.fiber,
-            sugarPer100g: food.per100g.sugar,
-            saturatedFatPer100g: food.per100g.saturatedFat,
-            sodiumPer100g: food.per100g.sodium,
-            potassiumPer100g: food.per100g.potassium,
-        }),
-    })
-    if (!response.ok) throw new Error('Could not create food')
-    return toFood(((await response.json()) as { data: FoodRecord }).data)
-}
-
-export type FoodImportResult = {
-    results: Array<{
-        index: number
-        status: 'created' | 'updated' | 'skipped' | 'failed'
-        id?: string
-        reason?: string
-    }>
-    created: number
-    updated: number
-    skipped: number
-    failed: number
-}
-
-export async function importFoods(
-    foods: Array<Omit<Food, 'id' | 'version'>>,
-    duplicateStrategy: 'skip' | 'update' | 'create',
-): Promise<FoodImportResult> {
-    const response = await authRequest('/api/foods/import', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-            duplicateStrategy,
-            foods: foods.map(food => ({
-                name: food.name,
-                brand: food.brand,
-                barcode: food.barcode,
-                catalogSource: food.catalogSource,
-                catalogId: food.catalogId,
-                servingName: food.servingName,
-                servingGrams: food.servingGrams,
-                servingOptions: food.servingOptions ?? [],
-                favorite: food.favorite,
-                nutritionQuality: food.nutritionQuality ?? 'complete',
-                caloriesPer100g: food.per100g.calories,
-                proteinPer100g: food.per100g.protein,
-                carbsPer100g: food.per100g.carbs,
-                fatPer100g: food.per100g.fat,
-                fiberPer100g: food.per100g.fiber,
-                sugarPer100g: food.per100g.sugar,
-                saturatedFatPer100g: food.per100g.saturatedFat,
-                sodiumPer100g: food.per100g.sodium,
-                potassiumPer100g: food.per100g.potassium,
-            })),
-        }),
-    })
-    if (!response.ok) throw new Error('The server could not import this catalog.')
-    return ((await response.json()) as { data: FoodImportResult }).data
-}
-
-type CatalogFoodRecord = Omit<FoodRecord, 'id' | 'favorite' | 'version'>
+const foodInput = (food: Omit<Food, 'id'>): FoodInput => ({
+    name: food.name,
+    brand: food.brand,
+    barcode: food.barcode,
+    catalogSource: food.catalogSource,
+    catalogId: food.catalogId,
+    servingName: food.servingName,
+    servingGrams: food.servingGrams,
+    servingOptions: food.servingOptions ?? [],
+    favorite: food.favorite,
+    nutritionQuality: food.nutritionQuality ?? 'complete',
+    caloriesPer100g: food.per100g.calories,
+    proteinPer100g: food.per100g.protein,
+    carbsPer100g: food.per100g.carbs,
+    fatPer100g: food.per100g.fat,
+    fiberPer100g: food.per100g.fiber,
+    sugarPer100g: food.per100g.sugar,
+    saturatedFatPer100g: food.per100g.saturatedFat,
+    sodiumPer100g: food.per100g.sodium,
+    potassiumPer100g: food.per100g.potassium,
+})
 
 const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> => ({
     name: record.name,
@@ -188,77 +85,100 @@ const catalogToFood = (record: CatalogFoodRecord): Omit<Food, 'id' | 'version'> 
     },
     servingName: record.servingName,
     servingGrams: record.servingGrams,
-    servingOptions: record.servingOptions ?? [],
+    servingOptions: record.servingOptions,
     favorite: false,
     nutritionQuality: record.nutritionQuality,
 })
 
+const toRecipe = (record: ApiRecipeRecord): RecipeRecord => ({
+    ...record,
+    nutrientsPerServing: {
+        calories: record.nutrientsPerServing.calories ?? 0,
+        protein: record.nutrientsPerServing.protein ?? 0,
+        carbs: record.nutrientsPerServing.carbs ?? 0,
+        fat: record.nutrientsPerServing.fat ?? 0,
+        fiber: record.nutrientsPerServing.fiber ?? 0,
+        sugar: record.nutrientsPerServing.sugar ?? 0,
+        saturatedFat: record.nutrientsPerServing.saturatedFat ?? 0,
+        sodium: record.nutrientsPerServing.sodium ?? 0,
+        potassium: record.nutrientsPerServing.potassium ?? 0,
+    },
+})
+
+const numericNutrients = (nutrients: Partial<Nutrients>) =>
+    Object.fromEntries(
+        Object.entries(nutrients).filter((entry): entry is [string, number] =>
+            Number.isFinite(entry[1]),
+        ),
+    )
+
+export async function searchFoods(query = '') {
+    const { data, response } = await apiClient.GET('/api/foods', {
+        params: { query: { q: query || undefined } },
+    })
+    if (!response.ok || !data) throw new Error('Food search unavailable')
+    return data.data.map(toFood)
+}
+
+export async function createFood(food: Omit<Food, 'id'>) {
+    const { data, response } = await apiClient.POST('/api/foods', { body: foodInput(food) })
+    if (!response.ok || !data) throw new Error('Could not create food')
+    return toFood(data.data)
+}
+
+export async function importFoods(
+    foods: Array<Omit<Food, 'id' | 'version'>>,
+    duplicateStrategy: 'skip' | 'update' | 'create',
+): Promise<FoodImportResult> {
+    const { data, response } = await apiClient.POST('/api/foods/import', {
+        body: { duplicateStrategy, foods: foods.map(foodInput) },
+    })
+    if (!response.ok || !data) throw new Error('The server could not import this catalog.')
+    return data.data
+}
+
 export async function lookupCatalogBarcode(barcode: string) {
-    const response = await authRequest(`/api/food-catalog/barcode/${encodeURIComponent(barcode)}`)
+    const { data, response } = await apiClient.GET('/api/food-catalog/barcode/{barcode}', {
+        params: { path: { barcode } },
+    })
     if (response.status === 404) return null
     if (response.status === 503)
         throw new Error('No external food catalog is configured on this server.')
-    if (!response.ok) throw new Error('The food catalog is unavailable. Try again later.')
-    return catalogToFood(((await response.json()) as { data: CatalogFoodRecord }).data)
+    if (!response.ok || !data) throw new Error('The food catalog is unavailable. Try again later.')
+    return catalogToFood(data.data)
 }
 
 export async function searchFoodCatalog(query: string) {
-    const response = await authRequest(`/api/food-catalog/search?q=${encodeURIComponent(query)}`)
+    const { data, response } = await apiClient.GET('/api/food-catalog/search', {
+        params: { query: { q: query } },
+    })
     if (response.status === 503)
         throw new Error('No external food catalog is configured on this server.')
-    if (!response.ok) throw new Error('The food catalog is unavailable. Try again later.')
-    return ((await response.json()) as { data: CatalogFoodRecord[] }).data.map(catalogToFood)
+    if (!response.ok || !data) throw new Error('The food catalog is unavailable. Try again later.')
+    return data.data.map(catalogToFood)
 }
 
 export async function updateFood(food: Food, changes: Omit<Food, 'id' | 'version'>) {
     if (!food.version) throw new Error('This food is not stored on the server.')
-    const response = await authRequest(`/api/foods/${food.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-            version: food.version,
-            name: changes.name,
-            brand: changes.brand,
-            barcode: changes.barcode,
-            catalogSource: changes.catalogSource,
-            catalogId: changes.catalogId,
-            servingName: changes.servingName,
-            servingGrams: changes.servingGrams,
-            servingOptions: changes.servingOptions ?? [],
-            favorite: changes.favorite,
-            nutritionQuality: changes.nutritionQuality ?? 'complete',
-            caloriesPer100g: changes.per100g.calories,
-            proteinPer100g: changes.per100g.protein,
-            carbsPer100g: changes.per100g.carbs,
-            fatPer100g: changes.per100g.fat,
-            fiberPer100g: changes.per100g.fiber,
-            sugarPer100g: changes.per100g.sugar,
-            saturatedFatPer100g: changes.per100g.saturatedFat,
-            sodiumPer100g: changes.per100g.sodium,
-            potassiumPer100g: changes.per100g.potassium,
-        }),
+    const { data, response } = await apiClient.PATCH('/api/foods/{id}', {
+        params: { path: { id: food.id } },
+        body: { version: food.version, ...foodInput(changes) },
     })
     if (response.status === 409) throw new Error('Food changed elsewhere. Reload and try again.')
-    if (!response.ok) throw new Error('Could not update food')
-    return toFood(((await response.json()) as { data: FoodRecord }).data)
+    if (!response.ok || !data) throw new Error('Could not update food')
+    return toFood(data.data)
 }
 
 export async function deleteFood(food: Food) {
     if (!food.version) throw new Error('This food is not stored on the server.')
-    const response = await authRequest(`/api/foods/${food.id}`, {
-        method: 'DELETE',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version: food.version }),
+    const { error, response } = await apiClient.DELETE('/api/foods/{id}', {
+        params: { path: { id: food.id } },
+        body: { version: food.version },
     })
-    if (response.status === 409) {
-        const body = (await response.json()) as {
-            error?: string
-            recipes?: Array<{ id: string; name: string }>
-            plannedMeals?: number
-        }
-        if (body.error === 'food_in_use') {
-            const names = body.recipes?.map(recipe => recipe.name).filter(Boolean) ?? []
-            const planCount = body.plannedMeals ?? 0
+    if (response.status === 409 && error) {
+        if (error.error === 'food_in_use' && 'recipes' in error) {
+            const names = error.recipes?.map(recipe => recipe.name).filter(Boolean) ?? []
+            const planCount = error.plannedMeals ?? 0
             if (names.length && planCount)
                 throw new Error(
                     `This food is used by ${names.join(', ')} and ${planCount} planned ${planCount === 1 ? 'meal' : 'meals'}. Remove those references before deleting it.`,
@@ -281,7 +201,7 @@ export async function deleteFood(food: Food) {
 
 export async function logMeal(
     name: string,
-    mealType: string,
+    mealType: MealRecord['mealType'],
     nutrients: Partial<Nutrients>,
     nutritionQuality: 'complete' | 'estimated' | 'incomplete' = 'complete',
     foodId?: string,
@@ -289,21 +209,19 @@ export async function logMeal(
     serving?: { amount: number; unit: 'g' | 'serving' },
     recipeId?: string,
 ) {
-    const response = await authRequest('/api/meals', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
+    const { response } = await apiClient.POST('/api/meals', {
+        body: {
             id: crypto.randomUUID(),
             name,
             mealType,
             eatenAt,
-            nutrients,
+            nutrients: numericNutrients(nutrients),
             nutritionQuality,
             favorite: false,
             foodId,
             recipeId,
             serving,
-        }),
+        },
     })
     if (!response.ok) throw new Error('Could not log meal')
 }
@@ -323,27 +241,26 @@ export async function updateMeal(
         recipeId: string | null
     }>,
 ) {
-    const response = await authRequest(`/api/meals/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ version, ...changes }),
+    const { data, response } = await apiClient.PATCH('/api/meals/{id}', {
+        params: { path: { id } },
+        body: { version, ...changes },
     })
-    if (!response.ok) throw new Error('Could not update meal')
-    return ((await response.json()) as { data: MealRecord }).data
+    if (!response.ok || !data) throw new Error('Could not update meal')
+    return data.data
 }
 
 export async function deleteMeal(id: string): Promise<void> {
-    const response = await authRequest(`/api/meals/${id}`, { method: 'DELETE' })
+    const { response } = await apiClient.DELETE('/api/meals/{id}', {
+        params: { path: { id } },
+    })
     if (!response.ok && response.status !== 404)
         throw new Error(`Meal delete failed (${response.status})`)
 }
 
 export async function listRecipes(): Promise<RecipeRecord[]> {
-    const response = await fetch(`${environment.VITE_API_URL}/api/recipes`, {
-        credentials: 'same-origin',
-    })
-    if (!response.ok) throw new Error('Recipes unavailable')
-    return ((await response.json()) as { data: RecipeRecord[] }).data
+    const { data, response } = await apiClient.GET('/api/recipes')
+    if (!response.ok || !data) throw new Error('Recipes unavailable')
+    return data.data.map(toRecipe)
 }
 
 export async function createRecipe(input: {
@@ -352,33 +269,25 @@ export async function createRecipe(input: {
     favorite: boolean
     items: { foodId: string; grams: number }[]
 }) {
-    const response = await authRequest('/api/recipes', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-    if (!response.ok) throw new Error('Could not create recipe')
-    return ((await response.json()) as { data: RecipeRecord }).data
+    const { data, response } = await apiClient.POST('/api/recipes', { body: input })
+    if (!response.ok || !data) throw new Error('Could not create recipe')
+    return data.data
 }
 
 export async function updateRecipeYield(recipe: RecipeRecord, servings: number) {
-    const response = await authRequest(`/api/recipes/${recipe.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ servings, version: recipe.version }),
+    const { response } = await apiClient.PATCH('/api/recipes/{id}', {
+        params: { path: { id: recipe.id } },
+        body: { servings, version: recipe.version },
     })
     if (response.status === 409) throw new Error('Recipe changed elsewhere. Reload and try again.')
     if (!response.ok) throw new Error('Could not update recipe yield')
 }
 
 export async function listMeals(range: { from?: string; to?: string } = {}, signal?: AbortSignal) {
-    const query = new URLSearchParams(
-        Object.entries(range).filter((entry): entry is [string, string] => Boolean(entry[1])),
-    )
-    return (
-        await sharedJsonRequest<{ data: MealRecord[] }>(
-            `${environment.VITE_API_URL}/api/meals?${query}`,
-            signal,
-        )
-    ).data
+    const { data, response } = await apiClient.GET('/api/meals', {
+        params: { query: range },
+        signal,
+    })
+    if (!response.ok || !data) throw new Error('Meals unavailable')
+    return data.data
 }
