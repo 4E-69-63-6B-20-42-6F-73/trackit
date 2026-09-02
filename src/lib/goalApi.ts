@@ -1,6 +1,7 @@
 import type { Goal, GoalEvaluation } from '@trackit/domain/goals'
 import type { paths } from './api.generated'
 import { apiClient } from './apiClient'
+import { cacheGoal, removeGoalFromCache } from './serverQueries'
 
 export type GoalRecord = Goal
 export type GoalInput = Omit<GoalRecord, 'id'>
@@ -32,7 +33,7 @@ export async function createGoal(input: GoalInput) {
     const { data, response } = await apiClient.POST('/api/goals', { body: input })
     if (!response.ok || !data) throw new Error('Could not create goal')
     const saved = toGoal(data.data)
-    window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
+    await cacheGoal(saved)
     return saved
 }
 
@@ -43,7 +44,7 @@ export async function retireGoal(goal: GoalRecord) {
     })
     if (!response.ok || !data) throw new Error('Could not retire goal')
     const saved = toGoal(data.data)
-    window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
+    await cacheGoal(saved)
     return saved
 }
 
@@ -54,7 +55,7 @@ export async function updateGoal(id: string, input: GoalInput) {
     })
     if (!response.ok || !data) throw new Error('Could not update goal')
     const saved = toGoal(data.data)
-    window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
+    await cacheGoal(saved)
     return saved
 }
 
@@ -63,5 +64,5 @@ export async function deleteGoal(goal: GoalRecord) {
         params: { path: { id: goal.id } },
     })
     if (!response.ok) throw new Error('Only retired goals can be deleted')
-    window.dispatchEvent(new CustomEvent('trackit:goal-deleted', { detail: goal.id }))
+    await removeGoalFromCache(goal.id)
 }
