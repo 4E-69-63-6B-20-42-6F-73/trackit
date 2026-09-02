@@ -1,12 +1,7 @@
 import { and, eq, gte, isNotNull, isNull, sql } from 'drizzle-orm'
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import type * as schemaType from '../db/schema.js'
-import {
-    dailyMetrics,
-    dailyProjectionRuns,
-    observations,
-    preferences,
-} from '../db/schema.js'
+import { dailyMetrics, dailyProjectionRuns, observations, preferences } from '../db/schema.js'
 import {
     EFFECTIVE_DAILY_DERIVATION_VERSION,
     rebuildEffectiveDailyMetric,

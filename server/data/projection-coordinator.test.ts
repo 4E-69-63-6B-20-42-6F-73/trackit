@@ -58,9 +58,7 @@ describe('DailyProjectionCoordinator', () => {
 
         expect(result).toEqual({ queuedDates: 3 })
         expect(
-            (await database.select().from(schema.projectionDirtyDates))
-                .map(row => row.date)
-                .sort(),
+            (await database.select().from(schema.projectionDirtyDates)).map(row => row.date).sort(),
         ).toEqual(['2026-08-22', '2026-08-23', '2026-08-24'])
         await client.close()
     })

@@ -202,7 +202,9 @@ describe('metric source summaries and daily projections', () => {
             definitionIds: ['bmi', 'calorie_balance'],
         })) as Array<{ definitionId: string; canonicalValue: number }>
 
-        expect(records.find(record => record.definitionId === 'bmi')?.canonicalValue).toBeCloseTo(25)
+        expect(records.find(record => record.definitionId === 'bmi')?.canonicalValue).toBeCloseTo(
+            25,
+        )
         expect(
             records.find(record => record.definitionId === 'calorie_balance')?.canonicalValue,
         ).toBe(1600)
@@ -257,14 +259,16 @@ describe('metric source summaries and daily projections', () => {
         })
         await rebuildEffectiveDailyMetric(database as never, '2026-08-25')
 
-        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual([
-            expect.objectContaining({
-                date: '2026-08-25',
-                definitionId: 'steps',
-                value: 7000,
-                derivationVersion: 2,
-            }),
-        ])
+        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
+            [
+                expect.objectContaining({
+                    date: '2026-08-25',
+                    definitionId: 'steps',
+                    value: 7000,
+                    derivationVersion: 2,
+                }),
+            ],
+        )
         await client.close()
     })
 
@@ -280,7 +284,9 @@ describe('metric source summaries and daily projections', () => {
         })
         const repository = new PostgresDataRepository(database as never)
 
-        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual([])
+        expect(await repository.listDailyMetrics({ from: '2026-08-25', to: '2026-08-25' })).toEqual(
+            [],
+        )
         expect(await database.select().from(schema.dailyProjectionRuns)).toEqual([])
         expect(await database.select().from(schema.projectionDirtyDates)).toEqual([])
 
@@ -410,7 +416,9 @@ describe('nutrition snapshot persistence', () => {
         await repository.createMeal(retryMeal)
         await repository.createMeal(retryMeal)
         expect(
-            ((await repository.listMeals()) as { id: string }[]).filter(meal => meal.id === retryId),
+            ((await repository.listMeals()) as { id: string }[]).filter(
+                meal => meal.id === retryId,
+            ),
         ).toHaveLength(1)
 
         const recipe = await repository.createRecipe({
