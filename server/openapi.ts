@@ -1,4 +1,17 @@
+import { z } from 'zod'
+import { appDataContractSchemas } from './contracts/app-data.js'
 import { observationOpenApiPaths } from './contracts/observations.js'
+
+const jsonContent = (schema: z.ZodType) => ({
+    'application/json': { schema: z.toJSONSchema(schema) },
+})
+
+const pathIdParameter = {
+    name: 'id',
+    in: 'path',
+    required: true,
+    schema: { type: 'string' },
+} as const
 
 export const openApiContract = {
     openapi: '3.1.0',
@@ -115,13 +128,134 @@ export const openApiContract = {
             },
         },
         '/api/preferences': {
-            get: { responses: { '200': { description: 'Preferences' } } },
-            patch: { responses: { '200': { description: 'Updated' } } },
+            get: {
+                responses: {
+                    '200': {
+                        description: 'Preferences',
+                        content: jsonContent(appDataContractSchemas.preferencesResponse),
+                    },
+                },
+            },
+            patch: {
+                requestBody: {
+                    required: true,
+                    content: jsonContent(appDataContractSchemas.preferencesInput),
+                },
+                responses: {
+                    '200': {
+                        description: 'Updated',
+                        content: jsonContent(appDataContractSchemas.preferencesResponse),
+                    },
+                    '400': {
+                        description: 'Invalid preferences',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
+                },
+            },
+        },
+        '/api/goals': {
+            get: {
+                responses: {
+                    '200': {
+                        description: 'Goals',
+                        content: jsonContent(appDataContractSchemas.goalsResponse),
+                    },
+                },
+            },
+            post: {
+                requestBody: {
+                    required: true,
+                    content: jsonContent(appDataContractSchemas.goalInput),
+                },
+                responses: {
+                    '201': {
+                        description: 'Created goal',
+                        content: jsonContent(appDataContractSchemas.goalResponse),
+                    },
+                    '400': {
+                        description: 'Invalid goal',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
+                },
+            },
         },
         '/api/goals/evaluations': {
             get: {
+                parameters: [
+                    {
+                        name: 'at',
+                        in: 'query',
+                        required: false,
+                        schema: { type: 'string', format: 'date-time' },
+                    },
+                ],
                 responses: {
-                    '200': { description: 'Server-evaluated goals over effective observations' },
+                    '200': {
+                        description: 'Server-evaluated goals over effective observations',
+                        content: jsonContent(appDataContractSchemas.goalEvaluationsResponse),
+                    },
+                    '400': {
+                        description: 'Invalid evaluation instant',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
+                },
+            },
+        },
+        '/api/goals/{id}': {
+            parameters: [pathIdParameter],
+            patch: {
+                requestBody: {
+                    required: true,
+                    content: jsonContent(appDataContractSchemas.goalUpdate),
+                },
+                responses: {
+                    '200': {
+                        description: 'Updated goal',
+                        content: jsonContent(appDataContractSchemas.goalResponse),
+                    },
+                    '400': {
+                        description: 'Invalid goal',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
+                    '409': {
+                        description: 'Goal update conflict',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
+                },
+            },
+            delete: {
+                responses: {
+                    '204': { description: 'Deleted retired goal' },
+                    '409': {
+                        description: 'Only retired goals can be deleted',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
+                },
+            },
+        },
+        '/api/trend-views': {
+            get: {
+                responses: {
+                    '200': {
+                        description: 'Saved trend views',
+                        content: jsonContent(appDataContractSchemas.savedTrendViewsResponse),
+                    },
+                },
+            },
+            post: {
+                requestBody: {
+                    required: true,
+                    content: jsonContent(appDataContractSchemas.savedTrendViewInput),
+                },
+                responses: {
+                    '201': {
+                        description: 'Saved trend view',
+                        content: jsonContent(appDataContractSchemas.savedTrendViewResponse),
+                    },
+                    '400': {
+                        description: 'Invalid trend view',
+                        content: jsonContent(appDataContractSchemas.errorResponse),
+                    },
                 },
             },
         },
