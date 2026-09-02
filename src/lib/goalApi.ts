@@ -1,54 +1,67 @@
 import type { Goal, GoalEvaluation } from '@trackit/domain/goals'
-import { authRequest } from './authApi'
+import type { paths } from './api.generated'
+import { apiClient } from './apiClient'
 
 export type GoalRecord = Goal
+
+type GoalApiRecord =
+    paths['/api/goals']['get']['responses'][200]['content']['application/json']['data'][number]
+type GoalInput = paths['/api/goals']['post']['requestBody']['content']['application/json']
+
+const toGoal = (record: GoalApiRecord): GoalRecord => record
+
 export async function listGoals(signal?: AbortSignal): Promise<GoalRecord[]> {
-    const response = await authRequest('/api/goals', { signal })
-    if (!response.ok) throw new Error('Goals unavailable')
-    return ((await response.json()) as { data: GoalRecord[] }).data
+    const { data, response } = await apiClient.GET('/api/goals', { signal })
+    if (!response.ok || !data) throw new Error('Goals unavailable')
+    return data.data.map(toGoal)
 }
-export async function listGoalEvaluations(signal?: AbortSignal, at?: string) {
-    const query = at ? `?at=${encodeURIComponent(at)}` : ''
-    const response = await authRequest(`/api/goals/evaluations${query}`, { signal })
-    if (!response.ok) throw new Error('Goal evaluations unavailable')
-    return ((await response.json()) as { data: Record<string, GoalEvaluation> }).data
+
+export async function listGoalEvaluations(
+    signal?: AbortSignal,
+    at?: string,
+): Promise<Record<string, GoalEvaluation>> {
+    const { data, response } = await apiClient.GET('/api/goals/evaluations', {
+        params: { query: { at } },
+        signal,
+    })
+    if (!response.ok || !data) throw new Error('Goal evaluations unavailable')
+    return data.data
 }
+
 export async function createGoal(input: Omit<GoalRecord, 'id'>) {
-    const response = await authRequest('/api/goals', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
-    })
-    if (!response.ok) throw new Error('Could not create goal')
-    const saved = ((await response.json()) as { data: GoalRecord }).data
+    const { data, response } = await apiClient.POST('/api/goals', { body: input as GoalInput })
+    if (!response.ok || !data) throw new Error('Could not create goal')
+    const saved = toGoal(data.data)
     window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
     return saved
 }
+
 export async function retireGoal(goal: GoalRecord) {
-    const response = await authRequest(`/api/goals/${goal.id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ effectiveTo: new Date().toISOString() }),
+    const { data, response } = await apiClient.PATCH('/api/goals/{id}', {
+        params: { path: { id: goal.id } },
+        body: { effectiveTo: new Date().toISOString() },
     })
-    if (!response.ok) throw new Error('Could not retire goal')
-    const saved = ((await response.json()) as { data: GoalRecord }).data
+    if (!response.ok || !data) throw new Error('Could not retire goal')
+    const saved = toGoal(data.data)
     window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
     return saved
 }
+
 export async function updateGoal(id: string, input: Omit<GoalRecord, 'id'>) {
-    const response = await authRequest(`/api/goals/${id}`, {
-        method: 'PATCH',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(input),
+    const { data, response } = await apiClient.PATCH('/api/goals/{id}', {
+        params: { path: { id } },
+        body: input as GoalInput,
     })
-    if (!response.ok) throw new Error('Could not update goal')
-    const saved = ((await response.json()) as { data: GoalRecord }).data
+    if (!response.ok || !data) throw new Error('Could not update goal')
+    const saved = toGoal(data.data)
     window.dispatchEvent(new CustomEvent('trackit:goal-saved', { detail: saved }))
     return saved
 }
 
 export async function deleteGoal(goal: GoalRecord) {
-    const response = await authRequest(`/api/goals/${goal.id}`, { method: 'DELETE' })
+    const { response } = await apiClient.DELETE('/api/goals/{id}', {
+        params: { path: { id: goal.id } },
+    })
     if (!response.ok) throw new Error('Only retired goals can be deleted')
     window.dispatchEvent(new CustomEvent('trackit:goal-deleted', { detail: goal.id }))
 }
