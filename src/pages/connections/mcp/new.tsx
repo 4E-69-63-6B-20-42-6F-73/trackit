@@ -15,10 +15,17 @@ import {
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { IconArrowLeft, IconCopy, IconRobot } from '@tabler/icons-react'
 import { useNavigate } from 'react-router-dom'
-import { getMcpStatus, issueMcpClient } from '../../../lib/mcpApi'
+import { getMcpStatus, issueMcpClient, type McpScope } from '../../../lib/mcpApi'
 import { serverQueryKeys } from '../../../lib/serverQueries'
 
-const scopes = [
+type ScopeOption = {
+    value: McpScope
+    label: string
+    description: string
+    group: 'View and analyze' | 'Change data'
+}
+
+const scopes: ScopeOption[] = [
     {
         value: 'observations',
         label: 'Measurements & insights',
@@ -74,7 +81,7 @@ export function McpNew() {
     const navigate = useNavigate()
     const queryClient = useQueryClient()
     const [name, setName] = useState('')
-    const [selectedScopes, setSelectedScopes] = useState<string[]>(['observations'])
+    const [selectedScopes, setSelectedScopes] = useState<McpScope[]>(['observations'])
     const [dateFromEnabled, setDateFromEnabled] = useState(false)
     const [dateFrom, setDateFrom] = useState('')
     const [dateToEnabled, setDateToEnabled] = useState(false)
