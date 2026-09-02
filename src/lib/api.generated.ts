@@ -459,7 +459,7 @@ export interface paths {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }
-                409: {
+                404: {
                     headers: { [name: string]: unknown }
                     content: { 'application/json': { error: string } }
                 }

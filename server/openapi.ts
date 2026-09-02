@@ -54,7 +54,9 @@ export const openApiContract = {
         '/api/health': {
             get: {
                 security: [],
-                responses: { '200': jsonResponse('Healthy', z.object({ status: z.literal('ok') })) },
+                responses: {
+                    '200': jsonResponse('Healthy', z.object({ status: z.literal('ok') })),
+                },
             },
         },
         '/api/ready': {
@@ -175,7 +177,11 @@ export const openApiContract = {
         '/api/export': {
             get: {
                 parameters: [
-                    queryParameter('format', { type: 'string', enum: ['json', 'csv'], default: 'json' }),
+                    queryParameter('format', {
+                        type: 'string',
+                        enum: ['json', 'csv'],
+                        default: 'json',
+                    }),
                 ],
                 responses: {
                     '200': {
@@ -200,10 +206,7 @@ export const openApiContract = {
                     ),
                 ],
                 responses: {
-                    '200': jsonResponse(
-                        'Data category summary',
-                        z.object({ data: z.unknown() }),
-                    ),
+                    '200': jsonResponse('Data category summary', z.object({ data: z.unknown() })),
                     '400': errorResponse('Invalid category'),
                 },
             },
@@ -235,7 +238,10 @@ export const openApiContract = {
             post: {
                 requestBody: requestBody(client.maintenanceDateRange),
                 responses: {
-                    '200': jsonResponse('Projection rebuild queued', client.projectionRebuildResponse),
+                    '200': jsonResponse(
+                        'Projection rebuild queued',
+                        client.projectionRebuildResponse,
+                    ),
                     '400': errorResponse('Invalid range'),
                 },
             },
@@ -244,7 +250,10 @@ export const openApiContract = {
             post: {
                 requestBody: requestBody(client.providerRecordMaintenance),
                 responses: {
-                    '200': jsonResponse('Provider records rederived', client.providerRederiveResponse),
+                    '200': jsonResponse(
+                        'Provider records rederived',
+                        client.providerRederiveResponse,
+                    ),
                     '400': errorResponse('Invalid range'),
                 },
             },
@@ -261,7 +270,9 @@ export const openApiContract = {
         },
         '/api/mcp/access-log': {
             get: {
-                responses: { '200': jsonResponse('MCP access events', client.mcpAccessLogResponse) },
+                responses: {
+                    '200': jsonResponse('MCP access events', client.mcpAccessLogResponse),
+                },
             },
         },
         '/api/mcp/browser-origins': {
@@ -309,7 +320,9 @@ export const openApiContract = {
             },
         },
         '/api/devices/pair': {
-            post: { responses: { '200': jsonResponse('Pairing code created', client.pairingCode) } },
+            post: {
+                responses: { '200': jsonResponse('Pairing code created', client.pairingCode) },
+            },
         },
         '/api/devices/pair/request': {
             post: {
@@ -382,7 +395,10 @@ export const openApiContract = {
                 parameters: deviceAuthParameters,
                 requestBody: requestBody(client.healthRecordReconcile),
                 responses: {
-                    '200': jsonResponse('Health records reconciled', client.healthRecordReconcileResult),
+                    '200': jsonResponse(
+                        'Health records reconciled',
+                        client.healthRecordReconcileResult,
+                    ),
                     '400': errorResponse('Invalid reconciliation request'),
                     '401': errorResponse('Device authentication failed'),
                 },
@@ -488,7 +504,10 @@ export const openApiContract = {
                 requestBody: requestBody(appDataContractSchemas.preferencesInput),
                 responses: {
                     '200': jsonResponse('Updated', appDataContractSchemas.preferencesResponse),
-                    '400': jsonResponse('Invalid preferences', appDataContractSchemas.errorResponse),
+                    '400': jsonResponse(
+                        'Invalid preferences',
+                        appDataContractSchemas.errorResponse,
+                    ),
                 },
             },
         },
@@ -523,7 +542,10 @@ export const openApiContract = {
                     '204': noContent('Deleted'),
                     '400': errorResponse('Invalid food delete'),
                     '404': errorResponse('Food not found'),
-                    '409': jsonResponse('Version conflict or food is in use', client.foodDeleteConflict),
+                    '409': jsonResponse(
+                        'Version conflict or food is in use',
+                        client.foodDeleteConflict,
+                    ),
                 },
             },
         },
@@ -540,7 +562,10 @@ export const openApiContract = {
             parameters: [pathParameter('barcode')],
             get: {
                 responses: {
-                    '200': jsonResponse('Normalized catalog food preview', client.catalogFoodResponse),
+                    '200': jsonResponse(
+                        'Normalized catalog food preview',
+                        client.catalogFoodResponse,
+                    ),
                     '404': errorResponse('Food not found'),
                     '502': errorResponse('Catalog unavailable'),
                     '503': errorResponse('Catalog not configured'),
@@ -551,7 +576,10 @@ export const openApiContract = {
             get: {
                 parameters: [queryParameter('q', { type: 'string', minLength: 2 }, true)],
                 responses: {
-                    '200': jsonResponse('Normalized catalog food previews', client.catalogFoodsResponse),
+                    '200': jsonResponse(
+                        'Normalized catalog food previews',
+                        client.catalogFoodsResponse,
+                    ),
                     '400': errorResponse('Query too short'),
                     '502': errorResponse('Catalog unavailable'),
                     '503': errorResponse('Catalog not configured'),
@@ -560,7 +588,9 @@ export const openApiContract = {
         },
         '/api/food-categories': {
             get: {
-                responses: { '200': jsonResponse('Food categories', client.foodCategoriesResponse) },
+                responses: {
+                    '200': jsonResponse('Food categories', client.foodCategoriesResponse),
+                },
             },
         },
         '/api/foods/{id}/categories': {
@@ -568,7 +598,10 @@ export const openApiContract = {
             put: {
                 requestBody: requestBody(client.foodCategoryMembershipInput),
                 responses: {
-                    '200': jsonResponse('Food categories updated', client.foodCategoryMembershipResponse),
+                    '200': jsonResponse(
+                        'Food categories updated',
+                        client.foodCategoryMembershipResponse,
+                    ),
                     '400': errorResponse('Invalid food categories'),
                     '404': errorResponse('Food not found'),
                 },
@@ -657,13 +690,19 @@ export const openApiContract = {
         '/api/trend-views': {
             get: {
                 responses: {
-                    '200': jsonResponse('Saved trend views', appDataContractSchemas.savedTrendViewsResponse),
+                    '200': jsonResponse(
+                        'Saved trend views',
+                        appDataContractSchemas.savedTrendViewsResponse,
+                    ),
                 },
             },
             post: {
                 requestBody: requestBody(appDataContractSchemas.savedTrendViewInput),
                 responses: {
-                    '201': jsonResponse('Saved trend view', appDataContractSchemas.savedTrendViewResponse),
+                    '201': jsonResponse(
+                        'Saved trend view',
+                        appDataContractSchemas.savedTrendViewResponse,
+                    ),
                     '400': jsonResponse('Invalid trend view', appDataContractSchemas.errorResponse),
                 },
             },
@@ -682,7 +721,8 @@ export const openApiContract = {
                 },
             },
             post: {
-                description: 'Creates a planned meal referencing a saved food, recipe, or food group.',
+                description:
+                    'Creates a planned meal referencing a saved food, recipe, or food group.',
                 requestBody: requestBody(client.planItemInput),
                 responses: {
                     '201': jsonResponse('Plan item created', client.planItemResponse),
@@ -740,12 +780,17 @@ export const openApiContract = {
         },
         '/api/plan-schedules': {
             get: {
-                responses: { '200': jsonResponse('Recurring meal schedules', client.planSchedulesResponse) },
+                responses: {
+                    '200': jsonResponse('Recurring meal schedules', client.planSchedulesResponse),
+                },
             },
             post: {
                 requestBody: requestBody(client.planScheduleInput),
                 responses: {
-                    '201': jsonResponse('Recurring meal schedule created', client.planScheduleResponse),
+                    '201': jsonResponse(
+                        'Recurring meal schedule created',
+                        client.planScheduleResponse,
+                    ),
                     '400': errorResponse('Invalid recurring meal schedule'),
                     '404': errorResponse('Reference not found'),
                 },
