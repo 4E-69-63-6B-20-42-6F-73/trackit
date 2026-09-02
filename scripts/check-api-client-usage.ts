@@ -37,8 +37,8 @@ for (const file of await sourceFiles(webRoot, ['.ts', '.tsx'])) {
     if (/\bauthRequest\s*\(/.test(source)) violations.push(`${name}: uses authRequest`)
     if (/from\s+['"][^'"]*sharedRequest['"]/.test(source))
         violations.push(`${name}: imports sharedRequest`)
-    if (!allowedRawTransport.has(name) && /\bfetch\s*\(/.test(source) && /\/api\//.test(source))
-        violations.push(`${name}: uses raw fetch for an API route`)
+    if (!allowedRawTransport.has(name) && /\bfetch\s*\(/.test(source))
+        violations.push(`${name}: uses raw fetch instead of apiClient`)
 }
 
 for (const file of await sourceFiles(androidRoot, ['.kt'])) {
