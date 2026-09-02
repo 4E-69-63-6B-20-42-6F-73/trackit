@@ -44,6 +44,9 @@ const addRoute = (method: string, rawPath: string, file: string) => {
 const stringValue = (node: ts.Node | undefined) =>
     node && ts.isStringLiteralLike(node) ? node.text : undefined
 
+const propertyName = (node: ts.PropertyName) =>
+    ts.isIdentifier(node) || ts.isStringLiteralLike(node) ? node.text : undefined
+
 for (const file of await sourceFiles(root)) {
     const source = await readFile(file, 'utf8')
     const sourceFile = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
@@ -58,13 +61,12 @@ for (const file of await sourceFiles(root)) {
                 if (options && ts.isObjectLiteralExpression(options)) {
                     const urlProperty = options.properties.find(
                         property =>
-                            ts.isPropertyAssignment(property) &&
-                            stringValue(property.name) === 'url',
+                            ts.isPropertyAssignment(property) && propertyName(property.name) === 'url',
                     ) as ts.PropertyAssignment | undefined
                     const methodProperty = options.properties.find(
                         property =>
                             ts.isPropertyAssignment(property) &&
-                            stringValue(property.name) === 'method',
+                            propertyName(property.name) === 'method',
                     ) as ts.PropertyAssignment | undefined
                     const rawPath = stringValue(urlProperty?.initializer)
                     if (rawPath && methodProperty) {
