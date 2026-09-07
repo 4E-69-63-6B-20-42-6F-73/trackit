@@ -4,7 +4,6 @@ import android.app.Application
 import androidx.health.connect.client.HealthConnectClient
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,7 +26,6 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
     private val _uiState = MutableStateFlow(CompanionUiState())
     private var pendingPermissionAction: PendingPermissionAction? = null
     private var syncJob: Job? = null
-    private val cancelling = AtomicBoolean(false)
 
     val uiState: StateFlow<CompanionUiState> = _uiState.asStateFlow()
     val supportedTypeNames: List<String>
@@ -72,7 +70,11 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
                 } else {
                     previous
                 }
-            }.sortedBy { supportedTypeNames.indexOf(it.recordType).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE }
+            }.sortedBy {
+                supportedTypeNames.indexOf(it.recordType).takeIf { index -> index >= 0 }
+                    ?: Int.MAX_VALUE
+            }
+            val lastSuccessfulSyncAt = syncState.lastSuccessfulSyncAt()
 
             _uiState.update { current ->
                 current.copy(
@@ -85,7 +87,7 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
                     selectedTypes = selected,
                     backgroundSyncEnabled = credentials.backgroundSyncEnabled(),
                     categories = categories,
-                    lastSuccessfulSyncAt = syncState.lastSuccessfulSyncAt(),
+                    lastSuccessfulSyncAt = lastSuccessfulSyncAt,
                     lastBackgroundSyncAt = syncState.lastBackgroundSyncAt(),
                     nextBackgroundSyncAt = syncState.nextBackgroundSyncAt(),
                     statusMessage = when {
@@ -94,7 +96,7 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
                         !healthAvailable -> "Health Connect is unavailable"
                         categories.any { it.status == CategorySyncStatus.ERROR } -> "Some categories need a retry"
                         categories.any { it.status == CategorySyncStatus.PERMISSION_REQUIRED } -> "Health Connect access needs attention"
-                        current.lastSuccessfulSyncAt != null || syncState.lastSuccessfulSyncAt() != null -> "Ready to sync"
+                        lastSuccessfulSyncAt != null -> "Ready to sync"
                         else -> "Paired and ready for first sync"
                     },
                 )
@@ -103,6 +105,15 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun onPaired() {
+        _uiState.update {
+            it.copy(
+                paired = credentials.isPaired(),
+                serverUrl = credentials.read("serverUrl"),
+                deviceId = credentials.read("deviceId"),
+                serverIdentity = credentials.read("fingerprint"),
+                statusMessage = "Paired. Choose the Health Connect categories to sync",
+            )
+        }
         syncLog.record(
             SyncLogLevel.INFO,
             SyncEventType.PAIRING,
@@ -128,8 +139,8 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun requestSync(recordTypes: Set<String> = _uiState.value.selectedTypes) {
         if (_uiState.value.syncRunning || recordTypes.isEmpty()) return
-        if (!_uiState.value.paired) {
-            _uiState.update { it.copy(statusMessage = "Pair this device before syncing") }
+        if (!credentials.isPaired()) {
+            _uiState.update { it.copy(paired = false, statusMessage = "Pair this device before syncing") }
             return
         }
         if (!_uiState.value.healthAvailable) {
@@ -253,7 +264,6 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun cancelSync() {
         if (syncJob?.isActive != true) return
-        cancelling.set(true)
         syncJob?.cancel(CancellationException("Sync cancelled by user"))
     }
 
@@ -305,7 +315,6 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun startSync(recordTypes: Set<String>) {
         if (syncJob?.isActive == true) return
-        cancelling.set(false)
         val initial = recordTypes.map { recordType ->
             CategorySyncUiState(recordType, status = CategorySyncStatus.WAITING)
         }
@@ -422,7 +431,6 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
                 _uiState.update { it.copy(statusMessage = "Sync cancelled safely") }
                 throw e
             } finally {
-                cancelling.set(false)
                 _uiState.update { it.copy(syncRunning = false) }
                 syncJob = null
             }
@@ -479,6 +487,7 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
 
     private fun mergeCategoryStates(states: Collection<CategorySyncUiState>) {
         val replacements = states.associateBy { it.recordType }
+        val persisted = syncState.categoryStates()
         _uiState.update { current ->
             val selected = current.selectedTypes
             val existing = current.categories.associateBy { it.recordType }
@@ -486,9 +495,12 @@ class CompanionViewModel(application: Application) : AndroidViewModel(applicatio
                 categories = selected.map { recordType ->
                     replacements[recordType]
                         ?: existing[recordType]
-                        ?: syncState.categoryStates()[recordType]
+                        ?: persisted[recordType]
                         ?: CategorySyncUiState(recordType)
-                }.sortedBy { supportedTypeNames.indexOf(it.recordType).takeIf { index -> index >= 0 } ?: Int.MAX_VALUE },
+                }.sortedBy {
+                    supportedTypeNames.indexOf(it.recordType).takeIf { index -> index >= 0 }
+                        ?: Int.MAX_VALUE
+                },
             )
         }
     }
