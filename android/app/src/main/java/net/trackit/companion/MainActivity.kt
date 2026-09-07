@@ -59,7 +59,9 @@ class MainActivity : ComponentActivity() {
                     }
 
                     LaunchedEffect(state.permissionRequest) {
-                        state.permissionRequest?.let(permissionLauncher::launch)
+                        state.permissionRequest?.let { permissions ->
+                            permissionLauncher.launch(permissions)
+                        }
                     }
 
                     LaunchedEffect(resumeSignal) {
