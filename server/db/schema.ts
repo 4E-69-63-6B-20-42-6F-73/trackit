@@ -386,6 +386,35 @@ export const deviceUploadBatches = pgTable(
     ],
 )
 
+export const deviceReconcileSessions = pgTable(
+    'device_reconcile_sessions',
+    {
+        id: uuid('id').primaryKey().defaultRandom(),
+        deviceId: uuid('device_id')
+            .notNull()
+            .references(() => devices.id, { onDelete: 'cascade' }),
+        recordType: text('record_type').notNull(),
+        since: timestamp('since', { withTimezone: true }).notNull(),
+        createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    },
+    table => [
+        index('device_reconcile_session_device_created_idx').on(table.deviceId, table.createdAt),
+    ],
+)
+
+export const deviceReconcileIds = pgTable(
+    'device_reconcile_ids',
+    {
+        sessionId: uuid('session_id')
+            .notNull()
+            .references(() => deviceReconcileSessions.id, { onDelete: 'cascade' }),
+        externalId: text('external_id').notNull(),
+    },
+    table => [
+        uniqueIndex('device_reconcile_id_identity_idx').on(table.sessionId, table.externalId),
+    ],
+)
+
 export const syncCursors = pgTable(
     'sync_cursors',
     {
