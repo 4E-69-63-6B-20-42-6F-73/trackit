@@ -12,29 +12,48 @@ import java.util.concurrent.TimeUnit
 
 class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
     CoroutineWorker(context, parameters) {
-    override suspend fun doWork(): Result = runCatching {
+    override suspend fun doWork(): Result {
         val store = CredentialStore(applicationContext)
-        if (!store.backgroundSyncEnabled()) return Result.success()
+        val syncLog = SyncLogStore(applicationContext)
+        return try {
+            if (!store.backgroundSyncEnabled()) return Result.success()
 
-        val sync = HealthConnectSync(applicationContext)
-        if (sync.availability() != androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE) {
-            return Result.success()
+            val sync = HealthConnectSync(applicationContext)
+            if (sync.availability() != androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE) {
+                syncLog.warning("Background sync skipped because Health Connect is unavailable")
+                return Result.success()
+            }
+            if (!sync.supportsBackgroundRead()) {
+                syncLog.warning("Background sync skipped because background Health Connect reads are unsupported")
+                return Result.success()
+            }
+
+            val selected = store.selectedRecordTypes()
+            val recordTypes = sync.supportedRecordTypes
+                .filter { it.simpleName in selected }
+                .toSet()
+            if (recordTypes.isEmpty()) return Result.success()
+
+            val required = sync.permissionsFor(recordTypes, includeBackground = true)
+            if (!sync.hasPermissions(required)) {
+                syncLog.warning("Background sync skipped because selected Health Connect permissions are missing")
+                return Result.success()
+            }
+
+            syncLog.info("Background sync started for ${recordTypes.size} categories")
+            val results = sync.syncSelected(recordTypes)
+            val failed = results.values.count { it == "error" }
+            val paused = results.values.count { it == "permission_revoked" }
+            when {
+                failed > 0 -> syncLog.error("Background sync finished with $failed failed categories")
+                paused > 0 -> syncLog.warning("Background sync finished with $paused paused categories")
+                else -> syncLog.info("Background sync completed")
+            }
+            Result.success()
+        } catch (e: Exception) {
+            syncLog.error("Background sync failed: ${e.message ?: "Unknown error"}")
+            Result.retry()
         }
-        if (!sync.supportsBackgroundRead()) return Result.success()
-
-        val selected = store.selectedRecordTypes()
-        val recordTypes = sync.supportedRecordTypes
-            .filter { it.simpleName in selected }
-            .toSet()
-        if (recordTypes.isEmpty()) return Result.success()
-
-        val required = sync.permissionsFor(recordTypes, includeBackground = true)
-        if (!sync.hasPermissions(required)) return Result.success()
-
-        sync.syncSelected(recordTypes)
-        Result.success()
-    }.getOrElse {
-        Result.retry()
     }
 
     companion object {
