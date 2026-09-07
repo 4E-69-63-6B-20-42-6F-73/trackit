@@ -195,6 +195,26 @@ export default function App() {
                             <Route path="/library/recipes" element={<LibraryRecipes />} />
                             <Route path="/library/metrics" element={<Metrics />} />
                             <Route
+                                path="/connections"
+                                element={<Navigate to="/settings/connections" replace />}
+                            />
+                            <Route
+                                path="/connections/devices"
+                                element={<Navigate to="/settings/connections/devices" replace />}
+                            />
+                            <Route
+                                path="/connections/devices/new"
+                                element={<Navigate to="/settings/connections/devices/new" replace />}
+                            />
+                            <Route
+                                path="/connections/mcp"
+                                element={<Navigate to="/settings/connections/mcp" replace />}
+                            />
+                            <Route
+                                path="/connections/mcp/new"
+                                element={<Navigate to="/settings/connections/mcp/new" replace />}
+                            />
+                            <Route
                                 path="/settings/connections/devices"
                                 element={<DeviceManagement />}
                             />
