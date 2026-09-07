@@ -248,11 +248,36 @@ jobs:
             - uses: android-actions/setup-android@v4
             - run: chmod +x android/gradlew
             - name: Unit tests and debug build
-              run: cd android && ./gradlew testDebugUnitTest assembleDebug
-            - name: Upload debug APK
-              if: github.event_name == 'push'
+              run: cd android && ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest
+            - name: Build signed update APK
+              env:
+                  ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+                  ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+                  ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+                  ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+              run: |
+                  if [ -z "$ANDROID_KEYSTORE_BASE64" ]; then
+                    echo "Android signing secrets are unavailable; signed CI APK will be skipped."
+                    exit 0
+                  fi
+                  keystore="$RUNNER_TEMP/trackit-ci-release.jks"
+                  printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$keystore"
+                  export ANDROID_KEYSTORE_PATH="$keystore"
+                  export TRACKIT_VERSION_CODE="$(( $(date +%s) / 60 * 10 + GITHUB_RUN_NUMBER % 10 ))"
+                  export TRACKIT_VERSION_NAME="0.1.0-ci.${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"
+                  cd android
+                  ./gradlew assembleRelease
+                  cp app/build/outputs/apk/release/app-release.apk ../trackit-android-ci.apk
+            - name: Verify signed update APK
+              if: hashFiles('trackit-android-ci.apk') != ''
+              run: |
+                  apksigner="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -1)"
+                  test -n "$apksigner"
+                  "$apksigner" verify --verbose --print-certs trackit-android-ci.apk
+            - name: Upload signed update APK
+              if: hashFiles('trackit-android-ci.apk') != ''
               uses: actions/upload-artifact@v7
               with:
-                  name: trackit-android-debug
-                  path: android/app/build/outputs/apk/debug/app-debug.apk
-                  retention-days: 7
+                  name: trackit-android-ci-${{ github.run_number }}-${{ github.run_attempt }}
+                  path: trackit-android-ci.apk
+                  retention-days: 14
