@@ -12,8 +12,8 @@ android {
         applicationId = "net.trackit.companion"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = System.getenv("TRACKIT_VERSION_CODE")?.toIntOrNull() ?: 1
+        versionName = System.getenv("TRACKIT_VERSION_NAME") ?: "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
