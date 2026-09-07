@@ -16,6 +16,7 @@ permissions:
 jobs:
     verify:
         uses: ./.github/workflows/verify.yml
+        secrets: inherit
         with:
             ref: ${{ github.sha }}
             base_sha: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
