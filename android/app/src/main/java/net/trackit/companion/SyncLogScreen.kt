@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import java.time.Instant
 import java.time.ZoneId
@@ -38,7 +39,7 @@ fun SyncLogScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text("Sync log", style = MaterialTheme.typography.headlineMedium)
-        Text("Recent sync activity, retries, permission problems, and server errors are kept on this device.")
+        Text("Recent sync activity, retries, permission problems, network failures, and server errors are kept on this device.")
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -65,16 +66,22 @@ fun SyncLogScreen(
             Text("No sync events yet.")
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxSize().testTag("sync_log_entries"),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 items(entries) { entry ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Text(
-                            "${entry.level.label()} • ${formatTimestamp(entry.timestamp)}",
+                            "${entry.level.label()} · ${entry.type.label()} · ${formatLogTimestamp(entry.timestamp)}",
                             style = MaterialTheme.typography.labelMedium,
                         )
+                        entry.category?.let {
+                            Text(recordTypeLabel(it), style = MaterialTheme.typography.labelSmall)
+                        }
                         Text(entry.message, style = MaterialTheme.typography.bodyMedium)
+                        entry.detail?.let {
+                            Text(it, style = MaterialTheme.typography.bodySmall)
+                        }
                         HorizontalDivider()
                     }
                 }
@@ -89,8 +96,23 @@ private fun SyncLogLevel.label(): String = when (this) {
     SyncLogLevel.ERROR -> "Error"
 }
 
+private fun SyncEventType.label(): String = when (this) {
+    SyncEventType.GENERAL -> "General"
+    SyncEventType.SYNC_STARTED -> "Sync started"
+    SyncEventType.SYNC_COMPLETED -> "Sync completed"
+    SyncEventType.CATEGORY -> "Category"
+    SyncEventType.RETRY -> "Retry"
+    SyncEventType.PERMISSION -> "Permission"
+    SyncEventType.NETWORK -> "Network"
+    SyncEventType.SERVER -> "Server"
+    SyncEventType.BACKGROUND -> "Background"
+    SyncEventType.CANCELLED -> "Cancelled"
+    SyncEventType.PAIRING -> "Pairing"
+    SyncEventType.RESET -> "Reset"
+}
+
 private val syncLogTimeFormatter = DateTimeFormatter.ofPattern("MMM d, HH:mm:ss")
     .withZone(ZoneId.systemDefault())
 
-private fun formatTimestamp(timestamp: Long): String =
+private fun formatLogTimestamp(timestamp: Long): String =
     syncLogTimeFormatter.format(Instant.ofEpochMilli(timestamp))
