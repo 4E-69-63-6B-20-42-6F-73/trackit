@@ -95,7 +95,7 @@ class TrackItApi(context: Context) {
         endpoint = OpenApiEndpoints.DEVICE_CURSOR_PUT,
         body = JSONObject()
             .put("recordType", recordType)
-            .put("cursor", cursor)
+            .put("cursor", cursor ?: JSONObject.NULL)
             .put("status", status),
     )
 
