@@ -163,6 +163,7 @@ export async function createApp(
         '/api/devices/pair/request',
         '/api/device/status',
         '/api/device/health-records',
+        '/api/device/health-records/reconcile',
         '/api/device/cursor',
     ])
     const sessionCookie = 'trackit_session'
@@ -387,7 +388,7 @@ export async function createApp(
                         error: 'invalid_category',
                         validation: category.error,
                     })
-                await deletion.deleteCategory(category.data)
+                await deletion.deleteCategory(request.params.category)
                 return reply.code(204).send()
             },
         )
