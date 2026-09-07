@@ -204,7 +204,9 @@ export default function App() {
                             />
                             <Route
                                 path="/connections/devices/new"
-                                element={<Navigate to="/settings/connections/devices/new" replace />}
+                                element={
+                                    <Navigate to="/settings/connections/devices/new" replace />
+                                }
                             />
                             <Route
                                 path="/connections/mcp"
