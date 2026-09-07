@@ -86,16 +86,17 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
                 },
             )
             results.forEach { (recordType, outcome) ->
-                if (outcome.result == CategorySyncResult.PERMISSION_REVOKED) {
-                    syncState.saveCategory(
+                when (outcome.result) {
+                    CategorySyncResult.COMPLETE -> Unit
+                    CategorySyncResult.PERMISSION_REVOKED -> syncState.saveCategory(
                         CategorySyncUiState(
                             recordType = recordType,
                             status = CategorySyncStatus.PERMISSION_REQUIRED,
                             message = outcome.message,
                         ),
                     )
-                } else if (outcome.result == CategorySyncResult.ERROR) {
-                    syncState.saveCategory(
+
+                    CategorySyncResult.ERROR -> syncState.saveCategory(
                         CategorySyncUiState(
                             recordType = recordType,
                             status = CategorySyncStatus.ERROR,
@@ -111,35 +112,31 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
             syncState.saveLastBackgroundSyncAt(now)
             syncState.saveNextBackgroundSyncAt(now + SyncStateStore.BACKGROUND_INTERVAL_MILLIS)
 
-            when {
-                failed > 0 -> {
-                    syncLog.record(
-                        SyncLogLevel.ERROR,
-                        SyncEventType.BACKGROUND,
-                        "Background sync finished with $failed failed categories",
-                    )
-                    Result.retry()
-                }
-
-                paused > 0 -> {
-                    syncLog.record(
-                        SyncLogLevel.WARNING,
-                        SyncEventType.BACKGROUND,
-                        "Background sync finished with $paused categories waiting for permission",
-                    )
-                    Result.success()
-                }
-
-                else -> {
-                    syncState.saveLastSuccessfulSyncAt(now)
-                    syncLog.record(
-                        SyncLogLevel.INFO,
-                        SyncEventType.BACKGROUND,
-                        "Background sync completed",
-                    )
-                    Result.success()
-                }
+            if (BackgroundSyncPolicy.disposition(results.values) == BackgroundSyncDisposition.RETRY) {
+                syncLog.record(
+                    SyncLogLevel.ERROR,
+                    SyncEventType.BACKGROUND,
+                    "Background sync finished with $failed failed categories",
+                )
+                return Result.retry()
             }
+
+            if (paused > 0) {
+                syncLog.record(
+                    SyncLogLevel.WARNING,
+                    SyncEventType.BACKGROUND,
+                    "Background sync finished with $paused categories waiting for permission",
+                )
+                return Result.success()
+            }
+
+            syncState.saveLastSuccessfulSyncAt(now)
+            syncLog.record(
+                SyncLogLevel.INFO,
+                SyncEventType.BACKGROUND,
+                "Background sync completed",
+            )
+            Result.success()
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
