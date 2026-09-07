@@ -36,7 +36,6 @@ jobs:
                   node-version: 22
                   cache: npm
             - run: npm ci
-            - run: npm audit fix --package-lock-only --omit=dev
             - run: npm run build:domain
             - name: Regenerate OpenAPI types
               run: npm run api:types
