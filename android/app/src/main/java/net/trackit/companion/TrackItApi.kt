@@ -80,6 +80,18 @@ class TrackItApi(context: Context) {
             uploadLimitPreferences.edit().putInt(recordType, limit).apply()
         },
     )
+    private val reconcileLimitPreferences = context.getSharedPreferences(
+        "trackit-reconcile-batch-limits",
+        Context.MODE_PRIVATE,
+    )
+    private val reconcileBatchLimits = AdaptiveUploadBatchLimits(
+        readLimit = { recordType ->
+            reconcileLimitPreferences.getInt(recordType, -1).takeIf { it > 0 }
+        },
+        writeLimit = { recordType, limit ->
+            reconcileLimitPreferences.edit().putInt(recordType, limit).apply()
+        },
+    )
     private val keyStore by lazy {
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     }
@@ -133,13 +145,36 @@ class TrackItApi(context: Context) {
         recordType: String,
         since: Instant,
         presentExternalIds: Set<String>,
-    ) = request(
-        endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_RECONCILE_POST,
-        body = JSONObject()
-            .put("recordType", recordType)
-            .put("since", HealthTime.serialize(since))
-            .put("presentExternalIds", JSONArray(presentExternalIds.toList())),
-    )
+    ) {
+        val startResponse = request(
+            endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_RECONCILE_START_POST,
+            body = JSONObject()
+                .put("recordType", recordType)
+                .put("since", HealthTime.serialize(since)),
+        )
+        val reconcileId = JSONObject(startResponse).getString("reconcileId")
+        val externalIds = presentExternalIds.toList()
+        val maxIds = reconcileBatchLimits.limitFor(recordType)
+        val batches = externalIds.chunked(maxIds)
+        if (batches.size > 1) {
+            syncLog.record(
+                SyncLogLevel.INFO,
+                SyncEventType.CATEGORY,
+                "Reconciling ${externalIds.size} $recordType IDs as ${batches.size} requests with a $maxIds-ID limit",
+            )
+        }
+        batches.forEach { batch ->
+            appendReconcileAdaptive(
+                recordType = recordType,
+                reconcileId = reconcileId,
+                externalIds = batch,
+            )
+        }
+        request(
+            endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_RECONCILE_COMPLETE_POST,
+            body = JSONObject().put("reconcileId", reconcileId),
+        )
+    }
 
     private suspend fun uploadAdaptive(
         recordType: String,
@@ -188,6 +223,43 @@ class TrackItApi(context: Context) {
                     idempotencyKey = batch.idempotencyKey,
                     records = batch.records,
                     onRetry = onRetry,
+                )
+            }
+        }
+    }
+
+    private suspend fun appendReconcileAdaptive(
+        recordType: String,
+        reconcileId: String,
+        externalIds: List<String>,
+    ) {
+        if (externalIds.isEmpty()) return
+        try {
+            request(
+                endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_RECONCILE_CHUNK_POST,
+                body = JSONObject()
+                    .put("reconcileId", reconcileId)
+                    .put("presentExternalIds", JSONArray(externalIds)),
+            )
+        } catch (e: HttpResponseException) {
+            if (e.statusCode != 413) throw e
+            if (externalIds.size == 1) {
+                throw IOException(
+                    "A single $recordType reconcile ID is too large for the server. ${e.message}",
+                    e,
+                )
+            }
+            val reducedLimit = reconcileBatchLimits.downgrade(recordType, externalIds.size)
+            syncLog.record(
+                SyncLogLevel.WARNING,
+                SyncEventType.SERVER,
+                "$recordType reconcile limit reduced to $reducedLimit after the server rejected ${externalIds.size} IDs",
+            )
+            externalIds.chunked(reducedLimit).forEach { batch ->
+                appendReconcileAdaptive(
+                    recordType = recordType,
+                    reconcileId = reconcileId,
+                    externalIds = batch,
                 )
             }
         }
