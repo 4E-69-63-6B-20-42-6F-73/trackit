@@ -163,6 +163,7 @@ export async function createApp(
         '/api/devices/pair/request',
         '/api/device/status',
         '/api/device/health-records',
+        '/api/device/health-records/reconcile',
         '/api/device/cursor',
     ])
     const sessionCookie = 'trackit_session'
