@@ -73,11 +73,11 @@ export class DeviceService extends DeviceServiceCore {
     private readonly inFlightUploads = new Map<string, Promise<UploadResult>>()
 
     constructor(
-        private readonly database: Database,
+        private readonly db: Database,
         serverIdentity: string,
     ) {
-        super(database, serverIdentity)
-        this.projections = new DailyProjectionCoordinator(database)
+        super(db, serverIdentity)
+        this.projections = new DailyProjectionCoordinator(db)
     }
 
     override async uploadHealthRecords(
@@ -132,7 +132,7 @@ export class DeviceService extends DeviceServiceCore {
         idempotencyKey: string,
         records: CanonicalHealthRecordInput[],
     ): Promise<UploadTransactionResult> {
-        return this.database.transaction(async transaction => {
+        return this.db.transaction(async transaction => {
             const [existingBatch] = await transaction
                 .select({ id: deviceUploadBatches.id })
                 .from(deviceUploadBatches)
@@ -343,8 +343,6 @@ export class DeviceService extends DeviceServiceCore {
                         ...input,
                         id: record.id,
                         userId: record.userId,
-                        connector: record.connector,
-                        provider: record.provider,
                         startTime: record.startTime,
                         endTime: record.endTime,
                     }
@@ -399,7 +397,7 @@ export class DeviceService extends DeviceServiceCore {
         presentExternalIds: string[],
     ) {
         const present = new Set(presentExternalIds)
-        const outcome = await this.database.transaction(async transaction => {
+        const outcome = await this.db.transaction(async transaction => {
             const candidates = await transaction
                 .select()
                 .from(healthRecords)
