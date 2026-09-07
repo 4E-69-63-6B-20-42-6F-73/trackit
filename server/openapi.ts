@@ -404,6 +404,53 @@ export const openApiContract = {
                 },
             },
         },
+        '/api/device/health-records/reconcile/start': {
+            post: {
+                security: [],
+                parameters: deviceAuthParameters,
+                requestBody: requestBody(client.healthRecordReconcileStart),
+                responses: {
+                    '201': jsonResponse(
+                        'Health record reconciliation session created',
+                        client.healthRecordReconcileStartResult,
+                    ),
+                    '400': errorResponse('Invalid reconciliation request'),
+                    '401': errorResponse('Device authentication failed'),
+                },
+            },
+        },
+        '/api/device/health-records/reconcile/chunk': {
+            post: {
+                security: [],
+                parameters: deviceAuthParameters,
+                requestBody: requestBody(client.healthRecordReconcileChunk),
+                responses: {
+                    '200': jsonResponse(
+                        'Health record reconciliation IDs accepted',
+                        client.healthRecordReconcileChunkResult,
+                    ),
+                    '400': errorResponse('Invalid reconciliation chunk'),
+                    '401': errorResponse('Device authentication failed'),
+                    '404': errorResponse('Reconciliation session not found'),
+                },
+            },
+        },
+        '/api/device/health-records/reconcile/complete': {
+            post: {
+                security: [],
+                parameters: deviceAuthParameters,
+                requestBody: requestBody(client.healthRecordReconcileComplete),
+                responses: {
+                    '200': jsonResponse(
+                        'Health records reconciled',
+                        client.healthRecordReconcileResult,
+                    ),
+                    '400': errorResponse('Invalid reconciliation completion request'),
+                    '401': errorResponse('Device authentication failed'),
+                    '404': errorResponse('Reconciliation session not found'),
+                },
+            },
+        },
         '/api/device/cursor': {
             put: {
                 security: [],

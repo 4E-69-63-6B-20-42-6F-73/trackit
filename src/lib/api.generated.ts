@@ -493,6 +493,120 @@ export interface paths {
             }
         }
     }
+    '/api/device/health-records/reconcile/chunk': {
+        post: {
+            parameters: {
+                query?: never
+                header?: {
+                    Authorization?: string
+                    'x-device-id'?: string
+                    'x-device-key-fingerprint'?: string
+                    'x-device-nonce'?: string
+                    'x-device-signature'?: string
+                    'x-device-timestamp'?: string
+                }
+                path?: never
+                cookie?: never
+            }
+            requestBody: {
+                content: {
+                    'application/json': { presentExternalIds: Array<string>; reconcileId: string }
+                }
+            }
+            responses: {
+                200: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { accepted: number } }
+                }
+                400: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+                401: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+                404: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+            }
+        }
+    }
+    '/api/device/health-records/reconcile/complete': {
+        post: {
+            parameters: {
+                query?: never
+                header?: {
+                    Authorization?: string
+                    'x-device-id'?: string
+                    'x-device-key-fingerprint'?: string
+                    'x-device-nonce'?: string
+                    'x-device-signature'?: string
+                    'x-device-timestamp'?: string
+                }
+                path?: never
+                cookie?: never
+            }
+            requestBody: { content: { 'application/json': { reconcileId: string } } }
+            responses: {
+                200: {
+                    headers: { [name: string]: unknown }
+                    content: {
+                        'application/json': {
+                            missing?: number
+                            removed?: number
+                            [key: string]: unknown
+                        }
+                    }
+                }
+                400: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+                401: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+                404: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+            }
+        }
+    }
+    '/api/device/health-records/reconcile/start': {
+        post: {
+            parameters: {
+                query?: never
+                header?: {
+                    Authorization?: string
+                    'x-device-id'?: string
+                    'x-device-key-fingerprint'?: string
+                    'x-device-nonce'?: string
+                    'x-device-signature'?: string
+                    'x-device-timestamp'?: string
+                }
+                path?: never
+                cookie?: never
+            }
+            requestBody: { content: { 'application/json': { recordType: string; since: string } } }
+            responses: {
+                201: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { reconcileId: string } }
+                }
+                400: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+                401: {
+                    headers: { [name: string]: unknown }
+                    content: { 'application/json': { error: string; requestId?: string } }
+                }
+            }
+        }
+    }
     '/api/device/status': {
         get: {
             parameters: {

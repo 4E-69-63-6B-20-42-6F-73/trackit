@@ -275,6 +275,17 @@ const healthRecordReconcile = z.object({
     since: dateTime,
     presentExternalIds: z.array(z.string()),
 })
+const healthRecordReconcileStart = z.object({
+    recordType: z.string(),
+    since: dateTime,
+})
+const healthRecordReconcileStartResult = z.object({ reconcileId: uuid })
+const healthRecordReconcileChunk = z.object({
+    reconcileId: uuid,
+    presentExternalIds: z.array(z.string()).max(1000),
+})
+const healthRecordReconcileChunkResult = z.object({ accepted: z.number().int() })
+const healthRecordReconcileComplete = z.object({ reconcileId: uuid })
 const healthRecordReconcileResult = z
     .object({
         missing: z.number().int().optional(),
@@ -417,6 +428,11 @@ export const clientApiContractSchemas = {
     healthRecordBatch,
     healthRecordUploadResult,
     healthRecordReconcile,
+    healthRecordReconcileStart,
+    healthRecordReconcileStartResult,
+    healthRecordReconcileChunk,
+    healthRecordReconcileChunkResult,
+    healthRecordReconcileComplete,
     healthRecordReconcileResult,
     cursorUpdate,
     deviceAuthHeaders,

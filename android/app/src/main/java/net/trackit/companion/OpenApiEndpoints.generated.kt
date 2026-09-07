@@ -11,6 +11,9 @@ object OpenApiEndpoints {
     val DEVICE_CURSOR_PUT = OpenApiEndpoint("PUT", "/api/device/cursor")
     val DEVICE_HEALTH_RECORDS_POST = OpenApiEndpoint("POST", "/api/device/health-records")
     val DEVICE_HEALTH_RECORDS_RECONCILE_POST = OpenApiEndpoint("POST", "/api/device/health-records/reconcile")
+    val DEVICE_HEALTH_RECORDS_RECONCILE_CHUNK_POST = OpenApiEndpoint("POST", "/api/device/health-records/reconcile/chunk")
+    val DEVICE_HEALTH_RECORDS_RECONCILE_COMPLETE_POST = OpenApiEndpoint("POST", "/api/device/health-records/reconcile/complete")
+    val DEVICE_HEALTH_RECORDS_RECONCILE_START_POST = OpenApiEndpoint("POST", "/api/device/health-records/reconcile/start")
     val DEVICE_STATUS_GET = OpenApiEndpoint("GET", "/api/device/status")
     val DEVICES_PAIR_REQUEST_POST = OpenApiEndpoint("POST", "/api/devices/pair/request")
 }

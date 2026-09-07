@@ -164,6 +164,9 @@ export async function createApp(
         '/api/device/status',
         '/api/device/health-records',
         '/api/device/health-records/reconcile',
+        '/api/device/health-records/reconcile/start',
+        '/api/device/health-records/reconcile/chunk',
+        '/api/device/health-records/reconcile/complete',
         '/api/device/cursor',
     ])
     const sessionCookie = 'trackit_session'
@@ -725,6 +728,54 @@ export async function createApp(
                 input.data.since,
                 input.data.presentExternalIds,
             )
+        })
+        app.post('/api/device/health-records/reconcile/start', async (request, reply) => {
+            const device = await authenticateDevice(request, requestBodyHash(request))
+            if (!device) return reply.code(401).send({ error: 'unauthorized' })
+            const input = z
+                .object({
+                    recordType: z.string().min(1).max(150),
+                    since: z.string().datetime(),
+                })
+                .safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            return reply
+                .code(201)
+                .send(
+                    await devices.startHealthRecordReconcile(
+                        device.id,
+                        input.data.recordType,
+                        input.data.since,
+                    ),
+                )
+        })
+        app.post('/api/device/health-records/reconcile/chunk', async (request, reply) => {
+            const device = await authenticateDevice(request, requestBodyHash(request))
+            if (!device) return reply.code(401).send({ error: 'unauthorized' })
+            const input = z
+                .object({
+                    reconcileId: z.string().uuid(),
+                    presentExternalIds: z.array(z.string().min(1).max(500)).max(1000),
+                })
+                .safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            const result = await devices.appendHealthRecordReconcile(
+                device.id,
+                input.data.reconcileId,
+                input.data.presentExternalIds,
+            )
+            return result ?? reply.code(404).send({ error: 'reconcile_not_found' })
+        })
+        app.post('/api/device/health-records/reconcile/complete', async (request, reply) => {
+            const device = await authenticateDevice(request, requestBodyHash(request))
+            if (!device) return reply.code(401).send({ error: 'unauthorized' })
+            const input = z.object({ reconcileId: z.string().uuid() }).safeParse(request.body)
+            if (!input.success) return badRequest(request, reply, { validation: input.error })
+            const result = await devices.completeHealthRecordReconcile(
+                device.id,
+                input.data.reconcileId,
+            )
+            return result ?? reply.code(404).send({ error: 'reconcile_not_found' })
         })
         app.post('/api/health-records/rebuild', async () => ({
             data: await devices.rebuildHealthRecordObservations(),

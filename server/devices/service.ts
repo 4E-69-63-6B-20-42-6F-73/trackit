@@ -3,6 +3,8 @@ import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js'
 import { addCalendarDays, calendarDateKey } from '@trackit/domain/calendar'
 import type * as schemaType from '../db/schema.js'
 import {
+    deviceReconcileIds,
+    deviceReconcileSessions,
     deviceUploadBatches,
     healthRecords,
     observations,
@@ -38,6 +40,7 @@ type UploadTransactionResult = {
 }
 const deletionTombstoneVersion = Number.MAX_SAFE_INTEGER
 const QUERY_CHUNK_SIZE = 1000
+const RECONCILE_SESSION_TTL_MS = 24 * 60 * 60 * 1000
 
 const nowMs = () => performance.now()
 const durationMs = (startedAt: number) => Math.round((nowMs() - startedAt) * 100) / 100
@@ -387,6 +390,89 @@ export class DeviceService extends DeviceServiceCore {
     override async rebuildHealthRecordObservations() {
         const result = await super.rebuildHealthRecordObservations()
         await this.projections.invalidateCarryForwardDependents()
+        return result
+    }
+
+    async startHealthRecordReconcile(deviceId: string, recordType: string, since: string) {
+        const staleBefore = new Date(Date.now() - RECONCILE_SESSION_TTL_MS)
+        await this.db
+            .delete(deviceReconcileSessions)
+            .where(lt(deviceReconcileSessions.createdAt, staleBefore))
+        const [session] = await this.db
+            .insert(deviceReconcileSessions)
+            .values({
+                deviceId,
+                recordType,
+                since: new Date(since),
+            })
+            .returning({ id: deviceReconcileSessions.id })
+        return { reconcileId: session.id }
+    }
+
+    async appendHealthRecordReconcile(
+        deviceId: string,
+        reconcileId: string,
+        presentExternalIds: string[],
+    ) {
+        const [session] = await this.db
+            .select({ id: deviceReconcileSessions.id })
+            .from(deviceReconcileSessions)
+            .where(
+                and(
+                    eq(deviceReconcileSessions.id, reconcileId),
+                    eq(deviceReconcileSessions.deviceId, deviceId),
+                ),
+            )
+            .limit(1)
+        if (!session) return null
+
+        const externalIds = [...new Set(presentExternalIds)]
+        if (externalIds.length) {
+            await this.db
+                .insert(deviceReconcileIds)
+                .values(externalIds.map(externalId => ({ sessionId: reconcileId, externalId })))
+                .onConflictDoNothing({
+                    target: [deviceReconcileIds.sessionId, deviceReconcileIds.externalId],
+                })
+        }
+        return { accepted: externalIds.length }
+    }
+
+    async completeHealthRecordReconcile(deviceId: string, reconcileId: string) {
+        const [session] = await this.db
+            .select({
+                id: deviceReconcileSessions.id,
+                recordType: deviceReconcileSessions.recordType,
+                since: deviceReconcileSessions.since,
+            })
+            .from(deviceReconcileSessions)
+            .where(
+                and(
+                    eq(deviceReconcileSessions.id, reconcileId),
+                    eq(deviceReconcileSessions.deviceId, deviceId),
+                ),
+            )
+            .limit(1)
+        if (!session) return null
+
+        const ids = await this.db
+            .select({ externalId: deviceReconcileIds.externalId })
+            .from(deviceReconcileIds)
+            .where(eq(deviceReconcileIds.sessionId, reconcileId))
+        const result = await this.reconcileHealthRecords(
+            deviceId,
+            session.recordType,
+            session.since.toISOString(),
+            ids.map(item => item.externalId),
+        )
+        await this.db
+            .delete(deviceReconcileSessions)
+            .where(
+                and(
+                    eq(deviceReconcileSessions.id, reconcileId),
+                    eq(deviceReconcileSessions.deviceId, deviceId),
+                ),
+            )
         return result
     }
 
