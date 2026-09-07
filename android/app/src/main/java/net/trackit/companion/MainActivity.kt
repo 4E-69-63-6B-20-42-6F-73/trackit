@@ -2,6 +2,7 @@ package net.trackit.companion
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -94,6 +95,10 @@ class MainActivity : ComponentActivity() {
                         .toSet()
                     val basePermissions = healthSync.permissionsFor(selectedClasses)
 
+                    BackHandler(enabled = screen != CompanionScreen.HOME) {
+                        screen = CompanionScreen.HOME
+                    }
+
                     fun startSync() {
                         if (syncRunning || selectedClasses.isEmpty()) return
                         syncRunning = true
@@ -108,7 +113,7 @@ class MainActivity : ComponentActivity() {
                                     cancelled = { cancelSync },
                                     onProgress = { completed, total, recordType ->
                                         syncProgress = if (total == 0) 0f else completed.toFloat() / total
-                                        status = "Processed $completed of $total: ${recordType.removeSuffix("Record")}" 
+                                        status = "Processed $completed of $total: ${recordType.removeSuffix("Record")}"
                                     },
                                 )
                                 results.forEach { (recordType, result) ->
