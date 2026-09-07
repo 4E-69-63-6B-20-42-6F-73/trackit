@@ -32,6 +32,24 @@ object UploadBatchPlanner {
     }
 }
 
+class AdaptiveUploadBatchLimits(
+    private val readLimit: (String) -> Int?,
+    private val writeLimit: (String, Int) -> Unit,
+) {
+    fun limitFor(recordType: String): Int =
+        (readLimit(recordType) ?: UploadBatchPlanner.MAX_UPLOAD_RECORDS)
+            .coerceIn(1, UploadBatchPlanner.MAX_UPLOAD_RECORDS)
+
+    @Synchronized
+    fun downgrade(recordType: String, failedBatchSize: Int): Int {
+        require(failedBatchSize > 1)
+        val current = limitFor(recordType)
+        val reduced = minOf(current, (failedBatchSize / 2).coerceAtLeast(1))
+        writeLimit(recordType, reduced)
+        return reduced
+    }
+}
+
 data class ApiRetryDecision(
     val reason: String,
     val delayMillis: Long,
