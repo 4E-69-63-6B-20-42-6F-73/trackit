@@ -8,7 +8,7 @@ data class PlannedUpload<T>(
 )
 
 object UploadBatchPlanner {
-    const val MAX_UPLOAD_RECORDS = 250
+    const val MAX_UPLOAD_RECORDS = 1000
 
     fun <T> plan(
         idempotencyKey: String,

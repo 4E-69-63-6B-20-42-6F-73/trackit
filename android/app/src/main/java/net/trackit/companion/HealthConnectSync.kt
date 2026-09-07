@@ -18,6 +18,8 @@ import java.time.Instant
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeout
 import org.json.JSONArray
 import org.json.JSONObject
@@ -112,9 +114,30 @@ private class HealthConnectReadTimeoutException(
     recordType: String,
 ) : Exception("Health Connect did not respond within 60 seconds for $recordType")
 
+private class SyncPhaseTimings {
+    val startedAt = System.nanoTime()
+    var healthReadNanos = 0L
+    var serializeNanos = 0L
+    var uploadNanos = 0L
+    var reconcileNanos = 0L
+    var cursorNanos = 0L
+
+    fun log(category: String, records: Int) {
+        Log.i(
+            "TrackItSyncPerf",
+            "category=$category records=$records healthReadMs=${ms(healthReadNanos)} " +
+                "serializeMs=${ms(serializeNanos)} uploadMs=${ms(uploadNanos)} " +
+                "reconcileMs=${ms(reconcileNanos)} cursorMs=${ms(cursorNanos)} " +
+                "totalMs=${ms(System.nanoTime() - startedAt)}",
+        )
+    }
+
+    private fun ms(value: Long): Long = value / 1_000_000L
+}
+
 class HealthConnectSync(private val context: Context) {
     companion object {
-        private const val UPLOAD_BATCH_SIZE = 250
+        private const val UPLOAD_BATCH_SIZE = UploadBatchPlanner.MAX_UPLOAD_RECORDS
         private const val READ_PAGE_SIZE = 1000
         private const val READ_TIMEOUT_MS = 60_000L
         private const val LOG_TAG = "TrackItHistorical"
@@ -228,6 +251,7 @@ class HealthConnectSync(private val context: Context) {
             if (cancelled()) throw CancellationException("Import cancelled")
 
             val category = recordType.simpleName.orEmpty()
+            val timings = SyncPhaseTimings()
             var discovered = 0
             var uploaded = 0
 
@@ -241,104 +265,111 @@ class HealthConnectSync(private val context: Context) {
             )
 
             try {
-                var pageToken: String? = null
-
-                do {
-                    if (cancelled()) throw CancellationException("Import cancelled")
-
-                    val requestedPageToken = pageToken
-
-                    Log.i(
-                        LOG_TAG,
-                        "Reading $category page=${requestedPageToken ?: "first"}",
-                    )
-
-                    val response = readPage(
-                        recordType = recordType,
-                        filter = TimeRangeFilter.after(since),
-                        pageToken = requestedPageToken,
-                    )
-
-                    Log.i(
-                        LOG_TAG,
-                        "$category returned ${response.records.size} records, next=${response.pageToken}",
-                    )
-
-                    if (
-                        response.pageToken != null &&
-                        response.pageToken == requestedPageToken
-                    ) {
-                        throw IllegalStateException(
-                            "Health Connect repeated the page token for $category",
-                        )
-                    }
-
-                    discovered += response.records.size
-
-                    onProgress(
-                        HistoricalImportProgress(
-                            category = category,
-                            categoryIndex = index,
-                            totalCategories = orderedTypes.size,
-                            phase = HistoricalImportPhase.READING,
-                            discoveredRecords = discovered,
-                            uploadedRecords = uploaded,
-                        ),
-                    )
-
-                    val uploads = response.records.map { record ->
-                        requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
-                            "Unable to serialize ${record::class.simpleName}"
-                        }
-                    }
-
-                    uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
-                        if (cancelled()) throw CancellationException("Import cancelled")
-
-                        if (batch.isNotEmpty()) {
-                            api.upload(
-                                idempotencyKey = UUID.randomUUID().toString(),
-                                records = batch,
-                                onRetry = { retry ->
-                                    onProgress(
-                                        HistoricalImportProgress(
-                                            category = category,
-                                            categoryIndex = index,
-                                            totalCategories = orderedTypes.size,
-                                            phase = HistoricalImportPhase.WAITING_TO_RETRY,
-                                            discoveredRecords = discovered,
-                                            uploadedRecords = uploaded,
-                                            issue = retry.reason,
-                                            retryAfterSeconds = ((retry.retryAfterMillis + 999) / 1000).toInt(),
-                                            retryAttempt = retry.attempt,
-                                        ),
-                                    )
-                                },
+                coroutineScope {
+                    var requestedPageToken: String? = null
+                    var pending = async {
+                        timedHealthRead(timings) {
+                            readPage(
+                                recordType = recordType,
+                                filter = TimeRangeFilter.after(since),
+                                pageToken = requestedPageToken,
                             )
                         }
+                    }
 
-                        uploaded += batch.size
+                    while (true) {
+                        if (cancelled()) throw CancellationException("Import cancelled")
+                        val response = pending.await()
+                        val nextPageToken = response.pageToken
+                        if (nextPageToken != null && nextPageToken == requestedPageToken) {
+                            throw IllegalStateException(
+                                "Health Connect repeated the page token for $category",
+                            )
+                        }
+                        val nextPending = nextPageToken?.let { token ->
+                            async {
+                                timedHealthRead(timings) {
+                                    readPage(
+                                        recordType = recordType,
+                                        filter = TimeRangeFilter.after(since),
+                                        pageToken = token,
+                                    )
+                                }
+                            }
+                        }
 
+                        Log.i(
+                            LOG_TAG,
+                            "$category returned ${response.records.size} records, next=$nextPageToken",
+                        )
+                        discovered += response.records.size
                         onProgress(
                             HistoricalImportProgress(
                                 category = category,
                                 categoryIndex = index,
                                 totalCategories = orderedTypes.size,
-                                phase = HistoricalImportPhase.UPLOADING,
+                                phase = HistoricalImportPhase.READING,
                                 discoveredRecords = discovered,
                                 uploadedRecords = uploaded,
                             ),
                         )
-                    }
 
-                    pageToken = response.pageToken
-                } while (pageToken != null)
+                        val serializeStartedAt = System.nanoTime()
+                        val uploads = response.records.map { record ->
+                            requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
+                                "Unable to serialize ${record::class.simpleName}"
+                            }
+                        }
+                        timings.serializeNanos += System.nanoTime() - serializeStartedAt
+
+                        uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+                            if (cancelled()) throw CancellationException("Import cancelled")
+                            if (batch.isNotEmpty()) {
+                                val uploadStartedAt = System.nanoTime()
+                                api.upload(
+                                    idempotencyKey = UUID.randomUUID().toString(),
+                                    records = batch,
+                                    onRetry = { retry ->
+                                        onProgress(
+                                            HistoricalImportProgress(
+                                                category = category,
+                                                categoryIndex = index,
+                                                totalCategories = orderedTypes.size,
+                                                phase = HistoricalImportPhase.WAITING_TO_RETRY,
+                                                discoveredRecords = discovered,
+                                                uploadedRecords = uploaded,
+                                                issue = retry.reason,
+                                                retryAfterSeconds = ((retry.retryAfterMillis + 999) / 1000).toInt(),
+                                                retryAttempt = retry.attempt,
+                                            ),
+                                        )
+                                    },
+                                )
+                                timings.uploadNanos += System.nanoTime() - uploadStartedAt
+                            }
+                            uploaded += batch.size
+                            onProgress(
+                                HistoricalImportProgress(
+                                    category = category,
+                                    categoryIndex = index,
+                                    totalCategories = orderedTypes.size,
+                                    phase = HistoricalImportPhase.UPLOADING,
+                                    discoveredRecords = discovered,
+                                    uploadedRecords = uploaded,
+                                ),
+                            )
+                        }
+
+                        if (nextPending == null) break
+                        requestedPageToken = nextPageToken
+                        pending = nextPending
+                    }
+                }
 
                 outcomes[category] = HistoricalImportCategoryResult(
                     discoveredRecords = discovered,
                     uploadedRecords = uploaded,
                 )
-
                 onProgress(
                     HistoricalImportProgress(
                         category = category,
@@ -349,6 +380,7 @@ class HealthConnectSync(private val context: Context) {
                         uploadedRecords = uploaded,
                     ),
                 )
+                timings.log("historical:$category", uploaded)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: SecurityException) {
@@ -365,6 +397,7 @@ class HealthConnectSync(private val context: Context) {
                         issue = issue,
                     ),
                 )
+                timings.log("historical:$category", uploaded)
             } catch (e: Exception) {
                 val issue = e.message ?: "Unknown error"
                 outcomes[category] = HistoricalImportCategoryResult(discovered, uploaded, issue)
@@ -379,6 +412,7 @@ class HealthConnectSync(private val context: Context) {
                         issue = issue,
                     ),
                 )
+                timings.log("historical:$category", uploaded)
             }
         }
 
@@ -391,6 +425,7 @@ class HealthConnectSync(private val context: Context) {
         onProgress: (SyncProgressUpdate) -> Unit,
     ) {
         val key = recordType.simpleName.orEmpty()
+        val timings = SyncPhaseTimings()
         var discovered = 0
         var uploaded = 0
         val savedToken = state.cursor(key)
@@ -399,102 +434,131 @@ class HealthConnectSync(private val context: Context) {
         onProgress(SyncProgressUpdate(key, CategorySyncStatus.WAITING))
 
         if (savedToken == null) {
-            token = newChangesToken(recordType)
-            val counts = rereadWindow(recordType, cancelled, onProgress, discovered, uploaded)
+            token = timedHealthRead(timings) { newChangesToken(recordType) }
+            val counts = rereadWindow(
+                recordType,
+                cancelled,
+                onProgress,
+                discovered,
+                uploaded,
+                timings,
+            )
             discovered = counts.first
             uploaded = counts.second
         } else {
             token = savedToken
         }
 
-        api.updateCursor(key, token, "syncing")
+        coroutineScope {
+            var pending = async { timedHealthRead(timings) { health.getChanges(token) } }
 
-        while (true) {
-            if (cancelled()) throw CancellationException("Sync cancelled")
-
-            val response = health.getChanges(token)
-
-            if (response.changesTokenExpired) {
-                token = newChangesToken(recordType)
-                val counts = rereadWindow(recordType, cancelled, onProgress, discovered, uploaded)
-                discovered = counts.first
-                uploaded = counts.second
-                api.updateCursor(key, token, "syncing")
-                continue
-            }
-
-            val uploads = response.changes.mapNotNull { change ->
-                when (change) {
-                    is UpsertionChange -> HealthRecordAdapterRegistry.serialize(change.record)
-                    is DeletionChange -> TrackItHealthRecord(
-                        recordType = key,
-                        externalId = change.recordId,
-                        externalVersion = 9_007_199_254_740_991L,
-                        startTime = Instant.EPOCH.toString(),
-                        endTime = null,
-                        dataOrigin = null,
-                        recordingMethod = null,
-                        device = JSONObject(),
-                        payload = JSONObject(),
-                        lastModifiedTime = null,
-                        deleted = true,
-                    )
-                    else -> null
-                }
-            }
-
-            discovered += uploads.size
-            onProgress(
-                SyncProgressUpdate(
-                    recordType = key,
-                    status = CategorySyncStatus.READING,
-                    discoveredRecords = discovered,
-                    uploadedRecords = uploaded,
-                    remainingRecords = uploads.size,
-                    hasMore = response.hasMore,
-                ),
-            )
-
-            uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+            while (true) {
                 if (cancelled()) throw CancellationException("Sync cancelled")
-                if (batch.isNotEmpty()) {
-                    api.upload(
-                        UUID.randomUUID().toString(),
-                        batch,
-                        onRetry = { retry ->
-                            onProgress(
-                                SyncProgressUpdate(
-                                    recordType = key,
-                                    status = CategorySyncStatus.RETRYING,
-                                    discoveredRecords = discovered,
-                                    uploadedRecords = uploaded,
-                                    remainingRecords = (discovered - uploaded).coerceAtLeast(0),
-                                    hasMore = response.hasMore,
-                                    message = "${retry.reason}; retry ${retry.attempt + 1}/${retry.maxAttempts}",
-                                ),
-                            )
-                        },
-                    )
-                    uploaded += batch.size
-                    onProgress(
-                        SyncProgressUpdate(
-                            recordType = key,
-                            status = CategorySyncStatus.UPLOADING,
-                            discoveredRecords = discovered,
-                            uploadedRecords = uploaded,
-                            remainingRecords = (discovered - uploaded).coerceAtLeast(0),
-                            hasMore = response.hasMore,
-                        ),
-                    )
-                }
-            }
+                val response = pending.await()
 
-            token = response.nextChangesToken
-            if (!response.hasMore) break
+                if (response.changesTokenExpired) {
+                    token = timedHealthRead(timings) { newChangesToken(recordType) }
+                    val counts = rereadWindow(
+                        recordType,
+                        cancelled,
+                        onProgress,
+                        discovered,
+                        uploaded,
+                        timings,
+                    )
+                    discovered = counts.first
+                    uploaded = counts.second
+                    pending = async { timedHealthRead(timings) { health.getChanges(token) } }
+                    continue
+                }
+
+                val nextToken = response.nextChangesToken
+                val nextPending = if (response.hasMore) {
+                    async { timedHealthRead(timings) { health.getChanges(nextToken) } }
+                } else {
+                    null
+                }
+
+                val serializeStartedAt = System.nanoTime()
+                val uploads = response.changes.mapNotNull { change ->
+                    when (change) {
+                        is UpsertionChange -> HealthRecordAdapterRegistry.serialize(change.record)
+                        is DeletionChange -> TrackItHealthRecord(
+                            recordType = key,
+                            externalId = change.recordId,
+                            externalVersion = 9_007_199_254_740_991L,
+                            startTime = Instant.EPOCH.toString(),
+                            endTime = null,
+                            dataOrigin = null,
+                            recordingMethod = null,
+                            device = JSONObject(),
+                            payload = JSONObject(),
+                            lastModifiedTime = null,
+                            deleted = true,
+                        )
+                        else -> null
+                    }
+                }
+                timings.serializeNanos += System.nanoTime() - serializeStartedAt
+
+                discovered += uploads.size
+                onProgress(
+                    SyncProgressUpdate(
+                        recordType = key,
+                        status = CategorySyncStatus.READING,
+                        discoveredRecords = discovered,
+                        uploadedRecords = uploaded,
+                        remainingRecords = uploads.size,
+                        hasMore = response.hasMore,
+                    ),
+                )
+
+                uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+                    if (cancelled()) throw CancellationException("Sync cancelled")
+                    if (batch.isNotEmpty()) {
+                        val uploadStartedAt = System.nanoTime()
+                        api.upload(
+                            UUID.randomUUID().toString(),
+                            batch,
+                            onRetry = { retry ->
+                                onProgress(
+                                    SyncProgressUpdate(
+                                        recordType = key,
+                                        status = CategorySyncStatus.RETRYING,
+                                        discoveredRecords = discovered,
+                                        uploadedRecords = uploaded,
+                                        remainingRecords = (discovered - uploaded).coerceAtLeast(0),
+                                        hasMore = response.hasMore,
+                                        message = "${retry.reason}; retry ${retry.attempt + 1}/${retry.maxAttempts}",
+                                    ),
+                                )
+                            },
+                        )
+                        timings.uploadNanos += System.nanoTime() - uploadStartedAt
+                        uploaded += batch.size
+                        onProgress(
+                            SyncProgressUpdate(
+                                recordType = key,
+                                status = CategorySyncStatus.UPLOADING,
+                                discoveredRecords = discovered,
+                                uploadedRecords = uploaded,
+                                remainingRecords = (discovered - uploaded).coerceAtLeast(0),
+                                hasMore = response.hasMore,
+                            ),
+                        )
+                    }
+                }
+
+                token = nextToken
+                if (nextPending == null) break
+                pending = nextPending
+            }
         }
 
         state.saveCursor(key, token)
+        val cursorStartedAt = System.nanoTime()
         api.updateCursor(key, token, "complete")
+        timings.cursorNanos += System.nanoTime() - cursorStartedAt
         onProgress(
             SyncProgressUpdate(
                 recordType = key,
@@ -503,6 +567,7 @@ class HealthConnectSync(private val context: Context) {
                 uploadedRecords = uploaded,
             ),
         )
+        timings.log(key, uploaded)
     }
 
     private suspend fun newChangesToken(recordType: KClass<out Record>): String =
@@ -514,114 +579,144 @@ class HealthConnectSync(private val context: Context) {
         onProgress: (SyncProgressUpdate) -> Unit,
         initialDiscovered: Int,
         initialUploaded: Int,
+        timings: SyncPhaseTimings,
     ): Pair<Int, Int> {
         val since = Instant.now().minus(Duration.ofDays(30))
         val filter = TimeRangeFilter.after(since)
-        var pageToken: String? = null
         val presentExternalIds = mutableSetOf<String>()
         var discovered = initialDiscovered
         var uploaded = initialUploaded
         val category = recordType.simpleName.orEmpty()
 
-        do {
-            if (cancelled()) throw CancellationException("Sync cancelled")
-
-            val requestedPageToken = pageToken
-            onProgress(
-                SyncProgressUpdate(
-                    recordType = category,
-                    status = CategorySyncStatus.READING,
-                    discoveredRecords = discovered,
-                    uploadedRecords = uploaded,
-                    remainingRecords = (discovered - uploaded).coerceAtLeast(0),
-                    hasMore = true,
-                    message = if (requestedPageToken == null) "Checking the recent 30-day window" else null,
-                ),
-            )
-
-            Log.i(
-                LOG_TAG,
-                "Reading $category reread page=${requestedPageToken ?: "first"}",
-            )
-
-            val response = readPage(
-                recordType = recordType,
-                filter = filter,
-                pageToken = requestedPageToken,
-            )
-
-            Log.i(
-                LOG_TAG,
-                "$category reread returned ${response.records.size} records, next=${response.pageToken}",
-            )
-
-            if (
-                response.pageToken != null &&
-                response.pageToken == requestedPageToken
-            ) {
-                throw IllegalStateException(
-                    "Health Connect repeated the page token for $category",
-                )
-            }
-
-            val uploads = response.records.map { record ->
-                presentExternalIds += record.metadata.id
-                requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
-                    "Unable to serialize ${record::class.simpleName}"
+        coroutineScope {
+            var requestedPageToken: String? = null
+            var pending = async {
+                timedHealthRead(timings) {
+                    readPage(
+                        recordType = recordType,
+                        filter = filter,
+                        pageToken = requestedPageToken,
+                    )
                 }
             }
-            discovered += uploads.size
 
-            onProgress(
-                SyncProgressUpdate(
-                    recordType = category,
-                    status = CategorySyncStatus.READING,
-                    discoveredRecords = discovered,
-                    uploadedRecords = uploaded,
-                    remainingRecords = (discovered - uploaded).coerceAtLeast(0),
-                    hasMore = response.pageToken != null,
-                ),
-            )
-
-            uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+            while (true) {
                 if (cancelled()) throw CancellationException("Sync cancelled")
-                if (batch.isNotEmpty()) {
-                    api.upload(
-                        UUID.randomUUID().toString(),
-                        batch,
-                        onRetry = { retry ->
-                            onProgress(
-                                SyncProgressUpdate(
-                                    recordType = category,
-                                    status = CategorySyncStatus.RETRYING,
-                                    discoveredRecords = discovered,
-                                    uploadedRecords = uploaded,
-                                    remainingRecords = (discovered - uploaded).coerceAtLeast(0),
-                                    hasMore = response.pageToken != null,
-                                    message = "${retry.reason}; retry ${retry.attempt + 1}/${retry.maxAttempts}",
-                                ),
-                            )
-                        },
-                    )
-                    uploaded += batch.size
-                    onProgress(
-                        SyncProgressUpdate(
-                            recordType = category,
-                            status = CategorySyncStatus.UPLOADING,
-                            discoveredRecords = discovered,
-                            uploadedRecords = uploaded,
-                            remainingRecords = (discovered - uploaded).coerceAtLeast(0),
-                            hasMore = response.pageToken != null,
-                        ),
+                onProgress(
+                    SyncProgressUpdate(
+                        recordType = category,
+                        status = CategorySyncStatus.READING,
+                        discoveredRecords = discovered,
+                        uploadedRecords = uploaded,
+                        remainingRecords = (discovered - uploaded).coerceAtLeast(0),
+                        hasMore = true,
+                        message = if (requestedPageToken == null) "Checking the recent 30-day window" else null,
+                    ),
+                )
+
+                val response = pending.await()
+                val nextPageToken = response.pageToken
+                if (nextPageToken != null && nextPageToken == requestedPageToken) {
+                    throw IllegalStateException(
+                        "Health Connect repeated the page token for $category",
                     )
                 }
+                val nextPending = nextPageToken?.let { token ->
+                    async {
+                        timedHealthRead(timings) {
+                            readPage(
+                                recordType = recordType,
+                                filter = filter,
+                                pageToken = token,
+                            )
+                        }
+                    }
+                }
+
+                Log.i(
+                    LOG_TAG,
+                    "$category reread returned ${response.records.size} records, next=$nextPageToken",
+                )
+
+                val serializeStartedAt = System.nanoTime()
+                val uploads = response.records.map { record ->
+                    presentExternalIds += record.metadata.id
+                    requireNotNull(HealthRecordAdapterRegistry.serialize(record)) {
+                        "Unable to serialize ${record::class.simpleName}"
+                    }
+                }
+                timings.serializeNanos += System.nanoTime() - serializeStartedAt
+                discovered += uploads.size
+
+                onProgress(
+                    SyncProgressUpdate(
+                        recordType = category,
+                        status = CategorySyncStatus.READING,
+                        discoveredRecords = discovered,
+                        uploadedRecords = uploaded,
+                        remainingRecords = (discovered - uploaded).coerceAtLeast(0),
+                        hasMore = nextPageToken != null,
+                    ),
+                )
+
+                uploads.chunked(UPLOAD_BATCH_SIZE).forEach { batch ->
+                    if (cancelled()) throw CancellationException("Sync cancelled")
+                    if (batch.isNotEmpty()) {
+                        val uploadStartedAt = System.nanoTime()
+                        api.upload(
+                            UUID.randomUUID().toString(),
+                            batch,
+                            onRetry = { retry ->
+                                onProgress(
+                                    SyncProgressUpdate(
+                                        recordType = category,
+                                        status = CategorySyncStatus.RETRYING,
+                                        discoveredRecords = discovered,
+                                        uploadedRecords = uploaded,
+                                        remainingRecords = (discovered - uploaded).coerceAtLeast(0),
+                                        hasMore = nextPageToken != null,
+                                        message = "${retry.reason}; retry ${retry.attempt + 1}/${retry.maxAttempts}",
+                                    ),
+                                )
+                            },
+                        )
+                        timings.uploadNanos += System.nanoTime() - uploadStartedAt
+                        uploaded += batch.size
+                        onProgress(
+                            SyncProgressUpdate(
+                                recordType = category,
+                                status = CategorySyncStatus.UPLOADING,
+                                discoveredRecords = discovered,
+                                uploadedRecords = uploaded,
+                                remainingRecords = (discovered - uploaded).coerceAtLeast(0),
+                                hasMore = nextPageToken != null,
+                            ),
+                        )
+                    }
+                }
+
+                if (nextPending == null) break
+                requestedPageToken = nextPageToken
+                pending = nextPending
             }
+        }
 
-            pageToken = response.pageToken
-        } while (pageToken != null)
-
+        val reconcileStartedAt = System.nanoTime()
         api.reconcile(category, since, presentExternalIds)
+        timings.reconcileNanos += System.nanoTime() - reconcileStartedAt
         return discovered to uploaded
+    }
+
+    private suspend fun <T> timedHealthRead(
+        timings: SyncPhaseTimings,
+        block: suspend () -> T,
+    ): T {
+        val startedAt = System.nanoTime()
+        return try {
+            block()
+        } finally {
+            timings.healthReadNanos += System.nanoTime() - startedAt
+        }
     }
 
     @Suppress("UNCHECKED_CAST")
