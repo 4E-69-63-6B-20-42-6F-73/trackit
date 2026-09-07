@@ -195,7 +195,10 @@ export class DeviceService extends DeviceServiceCore {
                       )
                 : []
             const existingByIdentity = new Map(
-                existingRecords.map(record => [identity(record.connector, record.externalId), record]),
+                existingRecords.map(record => [
+                    identity(record.connector, record.externalId),
+                    record,
+                ]),
             )
             const changedInputs = normalized.filter(input => {
                 const existing = existingByIdentity.get(identity(input.provider, input.externalId))
@@ -333,7 +336,9 @@ export class DeviceService extends DeviceServiceCore {
             const canonicalRecords: CanonicalHealthRecord[] = storedRows
                 .filter(record => !record.deletedAt)
                 .map(record => {
-                    const input = inputByIdentity.get(identity(record.connector, record.externalId))!
+                    const input = inputByIdentity.get(
+                        identity(record.connector, record.externalId),
+                    )!
                     return {
                         ...input,
                         id: record.id,
