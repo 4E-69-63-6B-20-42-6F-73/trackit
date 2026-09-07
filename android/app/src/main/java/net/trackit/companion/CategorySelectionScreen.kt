@@ -87,4 +87,6 @@ fun CategorySelectionScreen(
 
 private fun categoryLabel(value: String): String = value
     .removeSuffix("Record")
-    .replace(Regex("([a-z0-9])([A-Z])"), "$1 $2")
+    .replace(Regex("([a-z0-9])([A-Z])")) { match ->
+        "${match.groupValues[1]} ${match.groupValues[2]}"
+    }
