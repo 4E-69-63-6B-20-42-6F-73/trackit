@@ -15,7 +15,6 @@ import java.time.Instant
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Base64
-import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -69,6 +68,18 @@ class TrackItApi(context: Context) {
     private val credentials = CredentialStore(context)
     private val syncLog = SyncLogStore(context)
     private val secureRandom = SecureRandom()
+    private val uploadLimitPreferences = context.getSharedPreferences(
+        "trackit-upload-batch-limits",
+        Context.MODE_PRIVATE,
+    )
+    private val uploadBatchLimits = AdaptiveUploadBatchLimits(
+        readLimit = { recordType ->
+            uploadLimitPreferences.getInt(recordType, -1).takeIf { it > 0 }
+        },
+        writeLimit = { recordType, limit ->
+            uploadLimitPreferences.edit().putInt(recordType, limit).apply()
+        },
+    )
     private val keyStore by lazy {
         KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
     }
@@ -78,16 +89,27 @@ class TrackItApi(context: Context) {
         records: List<TrackItHealthRecord>,
         onRetry: suspend (ApiRetryEvent) -> Unit = {},
     ) {
-        val batches = UploadBatchPlanner.plan(idempotencyKey, records)
+        if (records.isEmpty()) return
+        val recordType = records.first().recordType
+        require(records.all { it.recordType == recordType }) {
+            "Upload records must share a recordType"
+        }
+        val maxRecords = uploadBatchLimits.limitFor(recordType)
+        val batches = UploadBatchPlanner.plan(
+            idempotencyKey = idempotencyKey,
+            records = records,
+            maxRecords = maxRecords,
+        )
         if (batches.size > 1) {
             syncLog.record(
                 SyncLogLevel.INFO,
                 SyncEventType.CATEGORY,
-                "Uploading ${records.size} records as ${batches.size} smaller requests",
+                "Uploading ${records.size} $recordType records as ${batches.size} requests with a $maxRecords-record limit",
             )
         }
         batches.forEach { batch ->
             uploadAdaptive(
+                recordType = recordType,
                 idempotencyKey = batch.idempotencyKey,
                 records = batch.records,
                 onRetry = onRetry,
@@ -120,6 +142,7 @@ class TrackItApi(context: Context) {
     )
 
     private suspend fun uploadAdaptive(
+        recordType: String,
         idempotencyKey: String,
         records: List<TrackItHealthRecord>,
         onRetry: suspend (ApiRetryEvent) -> Unit,
@@ -148,26 +171,25 @@ class TrackItApi(context: Context) {
                 )
             }
 
+            val reducedLimit = uploadBatchLimits.downgrade(recordType, records.size)
             syncLog.record(
                 SyncLogLevel.WARNING,
                 SyncEventType.SERVER,
-                "Server rejected a ${records.size}-record upload as too large; splitting it again",
-            )
-            val midpoint = records.size / 2
-            val first = records.subList(0, midpoint)
-            val second = records.subList(midpoint, records.size)
-
-            uploadAdaptive(
-                idempotencyKey = UUID.randomUUID().toString(),
-                records = first,
-                onRetry = onRetry,
+                "$recordType upload limit reduced to $reducedLimit after the server rejected ${records.size} records",
             )
 
-            uploadAdaptive(
-                idempotencyKey = UUID.randomUUID().toString(),
-                records = second,
-                onRetry = onRetry,
-            )
+            UploadBatchPlanner.plan(
+                idempotencyKey = idempotencyKey,
+                records = records,
+                maxRecords = reducedLimit,
+            ).forEach { batch ->
+                uploadAdaptive(
+                    recordType = recordType,
+                    idempotencyKey = batch.idempotencyKey,
+                    records = batch.records,
+                    onRetry = onRetry,
+                )
+            }
         }
     }
 
@@ -265,7 +287,7 @@ class TrackItApi(context: Context) {
                 syncLog.record(
                     SyncLogLevel.WARNING,
                     SyncEventType.NETWORK,
-                    "${endpoint.path}: ${decision.reason}; retry ${attempt + 1}/$MAX_ATTEMPTS in ${formatDelay(decision.delayMillis)}",
+                    "${endpoint.path}: ${event.reason}; retry ${attempt + 1}/$MAX_ATTEMPTS in ${formatDelay(decision.delayMillis)}",
                     detail = e.message ?: "I/O error",
                 )
                 onRetry(event)
