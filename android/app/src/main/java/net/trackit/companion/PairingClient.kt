@@ -19,9 +19,10 @@ class PairingClient(private val context: Context) {
     suspend fun pair(serverUrl: String, serverIdentity: String, code: String): PairingResult =
         withContext(Dispatchers.IO) {
             val deviceKey = deviceKey()
+            val deviceName = android.os.Build.MODEL.trim().take(100).ifBlank { "Android device" }
             val body = JSONObject()
                 .put("code", code)
-                .put("name", android.os.Build.MODEL)
+                .put("name", deviceName)
                 .put("keyFingerprint", deviceKey.fingerprint)
                 .put("publicKey", deviceKey.publicKey)
                 .put("serverIdentity", serverIdentity)
