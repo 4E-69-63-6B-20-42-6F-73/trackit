@@ -1,12 +1,14 @@
 package net.trackit.companion
 
 import android.content.Context
+import android.util.Log
 import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URI
 import java.net.UnknownHostException
 import java.security.KeyStore
 import java.security.MessageDigest
+import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.Signature
 import java.time.Instant
@@ -60,10 +62,16 @@ private class HttpResponseException(
 class TrackItApi(context: Context) {
     companion object {
         private const val MAX_ATTEMPTS = 6
+        private const val PERF_LOG_TAG = "TrackItSyncPerf"
+        private const val HEX = "0123456789abcdef"
     }
 
     private val credentials = CredentialStore(context)
     private val syncLog = SyncLogStore(context)
+    private val secureRandom = SecureRandom()
+    private val keyStore by lazy {
+        KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+    }
 
     suspend fun upload(
         idempotencyKey: String,
@@ -119,13 +127,14 @@ class TrackItApi(context: Context) {
         if (records.isEmpty()) return
 
         try {
-            request(
+            val response = request(
                 endpoint = OpenApiEndpoints.DEVICE_HEALTH_RECORDS_POST,
                 body = JSONObject()
                     .put("idempotencyKey", idempotencyKey)
                     .put("records", JSONArray(records.map(::toJson))),
                 onRetry = onRetry,
             )
+            logServerTimings(response)
         } catch (e: HttpResponseException) {
             if (e.statusCode != 413) {
                 throw e
@@ -166,14 +175,19 @@ class TrackItApi(context: Context) {
         endpoint: OpenApiEndpoint,
         body: JSONObject,
         onRetry: suspend (ApiRetryEvent) -> Unit = {},
-    ) = withContext(Dispatchers.IO) {
+    ): String = withContext(Dispatchers.IO) {
         var lastError: IOException? = null
 
         repeat(MAX_ATTEMPTS) { zeroBasedAttempt ->
             val attempt = zeroBasedAttempt + 1
 
             try {
-                performRequest(endpoint, body)
+                val startedAt = System.nanoTime()
+                val response = performRequest(endpoint, body)
+                Log.i(
+                    PERF_LOG_TAG,
+                    "api path=${endpoint.path} attempt=$attempt durationMs=${elapsedMs(startedAt)}",
+                )
                 if (attempt > 1) {
                     syncLog.record(
                         SyncLogLevel.INFO,
@@ -181,7 +195,7 @@ class TrackItApi(context: Context) {
                         "${endpoint.path} recovered on attempt $attempt",
                     )
                 }
-                return@withContext
+                return@withContext response
             } catch (e: HttpResponseException) {
                 lastError = e
                 val decision = ApiRetryPolicy.forHttp(
@@ -265,24 +279,19 @@ class TrackItApi(context: Context) {
     private fun performRequest(
         endpoint: OpenApiEndpoint,
         body: JSONObject,
-    ) {
+    ): String {
         val timestamp = System.currentTimeMillis().toString()
 
         val nonce = ByteArray(24)
-            .also { SecureRandom().nextBytes(it) }
+            .also(secureRandom::nextBytes)
             .let {
                 Base64.getUrlEncoder()
                     .withoutPadding()
                     .encodeToString(it)
             }
 
-        val bodyBytes =
-            body.toString().toByteArray(Charsets.UTF_8)
-
-        val bodyHash = MessageDigest
-            .getInstance("SHA-256")
-            .digest(bodyBytes)
-            .joinToString("") { "%02x".format(it) }
+        val bodyBytes = body.toString().toByteArray(Charsets.UTF_8)
+        val bodyHash = sha256Hex(bodyBytes)
 
         val deviceId =
             credentials.read("deviceId")
@@ -305,22 +314,16 @@ class TrackItApi(context: Context) {
             deviceId,
         ).joinToString("\n")
 
-        val store = KeyStore
-            .getInstance("AndroidKeyStore")
-            .apply { load(null) }
-
         val signer = Signature
             .getInstance("SHA256withECDSA")
             .apply {
                 initSign(
-                    store.getKey(
+                    keyStore.getKey(
                         PairingClient.KEY_ALIAS,
                         null,
-                    ) as java.security.PrivateKey,
+                    ) as PrivateKey,
                 )
-                update(
-                    canonical.toByteArray(Charsets.UTF_8),
-                )
+                update(canonical.toByteArray(Charsets.UTF_8))
             }
 
         val signature = Base64
@@ -385,11 +388,37 @@ class TrackItApi(context: Context) {
                 )
             }
 
-            connection.inputStream?.use { it.readBytes() }
+            return connection.inputStream
+                ?.bufferedReader(Charsets.UTF_8)
+                ?.use { it.readText() }
+                .orEmpty()
         } finally {
             connection.disconnect()
         }
     }
+
+    private fun sha256Hex(value: ByteArray): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(value)
+        val result = CharArray(digest.size * 2)
+        digest.forEachIndexed { index, byte ->
+            val unsigned = byte.toInt() and 0xff
+            result[index * 2] = HEX[unsigned ushr 4]
+            result[index * 2 + 1] = HEX[unsigned and 0x0f]
+        }
+        return result.concatToString()
+    }
+
+    private fun logServerTimings(response: String) {
+        if (response.isBlank()) return
+        runCatching {
+            val json = JSONObject(response)
+            if (!json.has("timings")) return@runCatching
+            Log.i(PERF_LOG_TAG, "server ${json.getJSONObject("timings")}")
+        }
+    }
+
+    private fun elapsedMs(startedAt: Long): Long =
+        (System.nanoTime() - startedAt) / 1_000_000L
 
     private fun retryAfterMillis(
         connection: HttpURLConnection,
