@@ -60,20 +60,38 @@ private class HttpResponseException(
 class TrackItApi(context: Context) {
     companion object {
         private const val MAX_ATTEMPTS = 6
+        private const val MAX_UPLOAD_RECORDS = 250
     }
 
     private val credentials = CredentialStore(context)
+    private val syncLog = SyncLogStore(context)
 
     suspend fun upload(
         idempotencyKey: String,
         records: List<TrackItHealthRecord>,
         onRetry: suspend (ApiRetryEvent) -> Unit = {},
     ) {
-        uploadAdaptive(
-            idempotencyKey = idempotencyKey,
-            records = records,
-            onRetry = onRetry,
+        if (records.isEmpty()) return
+        if (records.size <= MAX_UPLOAD_RECORDS) {
+            uploadAdaptive(
+                idempotencyKey = idempotencyKey,
+                records = records,
+                onRetry = onRetry,
+            )
+            return
+        }
+
+        val batches = records.chunked(MAX_UPLOAD_RECORDS)
+        syncLog.info(
+            "Uploading ${records.size} records as ${batches.size} smaller requests to reduce server processing time",
         )
+        batches.forEachIndexed { index, batch ->
+            uploadAdaptive(
+                idempotencyKey = "$idempotencyKey:$index",
+                records = batch,
+                onRetry = onRetry,
+            )
+        }
     }
 
     suspend fun updateCursor(
@@ -128,6 +146,7 @@ class TrackItApi(context: Context) {
                 )
             }
 
+            syncLog.warning("Server rejected a ${records.size}-record upload as too large; splitting it again")
             val midpoint = records.size / 2
             val first = records.subList(0, midpoint)
             val second = records.subList(midpoint, records.size)
@@ -158,70 +177,73 @@ class TrackItApi(context: Context) {
 
             try {
                 performRequest(endpoint, body)
+                if (attempt > 1) {
+                    syncLog.info("${endpoint.path}: request recovered on attempt $attempt")
+                }
                 return@withContext
             } catch (e: HttpResponseException) {
                 lastError = e
+                val retryDelay = when {
+                    e.statusCode == 429 -> e.retryAfterMillis ?: 30_000L
+                    e.statusCode in 500..599 ->
+                        e.retryAfterMillis ?: (1_000L shl zeroBasedAttempt.coerceAtMost(4))
+                    else -> null
+                }
+                val detail = sanitizeErrorBody(e.responseBody)
 
-                val retryDelay =
-                    when {
-                        e.statusCode == 429 ->
-                            e.retryAfterMillis ?: 30_000L
-
-                        e.statusCode in 500..599 ->
-                            e.retryAfterMillis
-                                ?: (1_000L shl zeroBasedAttempt.coerceAtMost(4))
-
-                        else ->
-                            throw e
-                    }
-
-                if (attempt == MAX_ATTEMPTS) {
+                if (retryDelay == null) {
+                    syncLog.error(
+                        "${endpoint.path}: HTTP ${e.statusCode}${detail.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}",
+                    )
                     throw e
                 }
 
-                onRetry(
-                    ApiRetryEvent(
-                        reason = when {
-                            e.statusCode == 429 ->
-                                "Server is busy"
+                if (attempt == MAX_ATTEMPTS) {
+                    syncLog.error(
+                        "${endpoint.path}: HTTP ${e.statusCode} after $MAX_ATTEMPTS attempts${detail.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}",
+                    )
+                    throw e
+                }
 
-                            e.statusCode in 500..599 ->
-                                "Server is temporarily unavailable"
-
-                            else ->
-                                "Request failed"
-                        },
-                        retryAfterMillis = retryDelay,
-                        attempt = attempt,
-                        maxAttempts = MAX_ATTEMPTS,
-                    ),
+                val event = ApiRetryEvent(
+                    reason = when {
+                        e.statusCode == 429 -> "Server is busy"
+                        e.statusCode in 500..599 -> "Server is temporarily unavailable"
+                        else -> "Request failed"
+                    },
+                    retryAfterMillis = retryDelay,
+                    attempt = attempt,
+                    maxAttempts = MAX_ATTEMPTS,
                 )
-
+                syncLog.warning(
+                    "${endpoint.path}: ${event.reason} (HTTP ${e.statusCode}); retry ${attempt + 1}/$MAX_ATTEMPTS in ${formatDelay(retryDelay)}${detail.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()}",
+                )
+                onRetry(event)
                 delay(retryDelay)
             } catch (e: IOException) {
                 lastError = e
+                val retryDelay = 1_000L shl zeroBasedAttempt.coerceAtMost(4)
+                val reason = if (e is UnknownHostException) {
+                    "Can't resolve the server address"
+                } else {
+                    "Connection interrupted"
+                }
 
                 if (attempt == MAX_ATTEMPTS) {
+                    syncLog.error("${endpoint.path}: $reason after $MAX_ATTEMPTS attempts: ${e.message ?: "I/O error"}")
                     throw e
                 }
 
-                val retryDelay =
-                    1_000L shl zeroBasedAttempt.coerceAtMost(4)
-
-                onRetry(
-                    ApiRetryEvent(
-                        reason =
-                            if (e is UnknownHostException) {
-                                "Can't resolve the server address"
-                            } else {
-                                "Connection interrupted"
-                            },
-                        retryAfterMillis = retryDelay,
-                        attempt = attempt,
-                        maxAttempts = MAX_ATTEMPTS,
-                    ),
+                val event = ApiRetryEvent(
+                    reason = reason,
+                    retryAfterMillis = retryDelay,
+                    attempt = attempt,
+                    maxAttempts = MAX_ATTEMPTS,
                 )
-
+                syncLog.warning(
+                    "${endpoint.path}: $reason; retry ${attempt + 1}/$MAX_ATTEMPTS in ${formatDelay(retryDelay)}: ${e.message ?: "I/O error"}",
+                )
+                onRetry(event)
                 delay(retryDelay)
             }
         }
@@ -391,6 +413,14 @@ class TrackItApi(context: Context) {
         return (dateDelay ?: 30_000L)
             .coerceIn(1_000L, 300_000L)
     }
+
+    private fun sanitizeErrorBody(value: String): String = value
+        .replace(Regex("\\s+"), " ")
+        .trim()
+        .take(300)
+
+    private fun formatDelay(value: Long): String =
+        if (value < 1_000L) "$value ms" else "${(value + 999L) / 1_000L}s"
 
     private fun toJson(
         record: TrackItHealthRecord,
