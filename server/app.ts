@@ -388,7 +388,7 @@ export async function createApp(
                         error: 'invalid_category',
                         validation: category.error,
                     })
-                await deletion.deleteCategory(request.params.category)
+                await deletion.deleteCategory(category.data)
                 return reply.code(204).send()
             },
         )
