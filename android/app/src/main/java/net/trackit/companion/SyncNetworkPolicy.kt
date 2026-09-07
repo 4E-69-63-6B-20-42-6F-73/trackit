@@ -1,5 +1,7 @@
 package net.trackit.companion
 
+import java.util.UUID
+
 data class PlannedUpload<T>(
     val idempotencyKey: String,
     val records: List<T>,
@@ -14,10 +16,18 @@ object UploadBatchPlanner {
         maxRecords: Int = MAX_UPLOAD_RECORDS,
     ): List<PlannedUpload<T>> {
         require(maxRecords > 0)
+        require(runCatching { UUID.fromString(idempotencyKey) }.isSuccess) {
+            "idempotencyKey must be a UUID"
+        }
         if (records.isEmpty()) return emptyList()
         if (records.size <= maxRecords) return listOf(PlannedUpload(idempotencyKey, records))
         return records.chunked(maxRecords).mapIndexed { index, batch ->
-            PlannedUpload("$idempotencyKey:$index", batch)
+            PlannedUpload(
+                UUID.nameUUIDFromBytes(
+                    "$idempotencyKey:$index".toByteArray(Charsets.UTF_8),
+                ).toString(),
+                batch,
+            )
         }
     }
 }
