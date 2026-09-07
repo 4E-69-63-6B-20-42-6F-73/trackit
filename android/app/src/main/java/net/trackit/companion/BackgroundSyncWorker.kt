@@ -15,16 +15,25 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
     override suspend fun doWork(): Result {
         val store = CredentialStore(applicationContext)
         val syncLog = SyncLogStore(applicationContext)
+        val syncState = SyncStateStore(applicationContext)
         return try {
             if (!store.backgroundSyncEnabled()) return Result.success()
 
             val sync = HealthConnectSync(applicationContext)
             if (sync.availability() != androidx.health.connect.client.HealthConnectClient.SDK_AVAILABLE) {
-                syncLog.warning("Background sync skipped because Health Connect is unavailable")
+                syncLog.record(
+                    SyncLogLevel.WARNING,
+                    SyncEventType.BACKGROUND,
+                    "Background sync skipped because Health Connect is unavailable",
+                )
                 return Result.success()
             }
             if (!sync.supportsBackgroundRead()) {
-                syncLog.warning("Background sync skipped because background Health Connect reads are unsupported")
+                syncLog.record(
+                    SyncLogLevel.WARNING,
+                    SyncEventType.BACKGROUND,
+                    "Background sync skipped because background Health Connect reads are unsupported",
+                )
                 return Result.success()
             }
 
@@ -36,22 +45,107 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
 
             val required = sync.permissionsFor(recordTypes, includeBackground = true)
             if (!sync.hasPermissions(required)) {
-                syncLog.warning("Background sync skipped because selected Health Connect permissions are missing")
+                syncLog.record(
+                    SyncLogLevel.WARNING,
+                    SyncEventType.PERMISSION,
+                    "Background sync paused because Health Connect permissions are missing",
+                )
+                val granted = sync.grantedPermissions()
+                recordTypes.forEach { type ->
+                    val name = type.simpleName.orEmpty()
+                    val status = if (sync.permissionsFor(setOf(type)).all { it in granted }) {
+                        CategorySyncStatus.IDLE
+                    } else {
+                        CategorySyncStatus.PERMISSION_REQUIRED
+                    }
+                    syncState.saveCategory(CategorySyncUiState(name, status = status))
+                }
                 return Result.success()
             }
 
-            syncLog.info("Background sync started for ${recordTypes.size} categories")
-            val results = sync.syncSelected(recordTypes)
-            val failed = results.values.count { it == "error" }
-            val paused = results.values.count { it == "permission_revoked" }
-            when {
-                failed > 0 -> syncLog.error("Background sync finished with $failed failed categories")
-                paused > 0 -> syncLog.warning("Background sync finished with $paused paused categories")
-                else -> syncLog.info("Background sync completed")
+            syncLog.record(
+                SyncLogLevel.INFO,
+                SyncEventType.BACKGROUND,
+                "Background sync started for ${recordTypes.size} categories",
+            )
+            val results = sync.syncSelected(
+                recordTypes,
+                onProgress = { progress ->
+                    syncState.saveCategory(
+                        CategorySyncUiState(
+                            recordType = progress.recordType,
+                            status = progress.status,
+                            discoveredRecords = progress.discoveredRecords,
+                            uploadedRecords = progress.uploadedRecords,
+                            remainingRecords = progress.remainingRecords,
+                            hasMore = progress.hasMore,
+                            message = progress.message,
+                        ),
+                    )
+                },
+            )
+            results.forEach { (recordType, outcome) ->
+                if (outcome.result == CategorySyncResult.PERMISSION_REVOKED) {
+                    syncState.saveCategory(
+                        CategorySyncUiState(
+                            recordType = recordType,
+                            status = CategorySyncStatus.PERMISSION_REQUIRED,
+                            message = outcome.message,
+                        ),
+                    )
+                } else if (outcome.result == CategorySyncResult.ERROR) {
+                    syncState.saveCategory(
+                        CategorySyncUiState(
+                            recordType = recordType,
+                            status = CategorySyncStatus.ERROR,
+                            message = outcome.message,
+                        ),
+                    )
+                }
             }
-            Result.success()
+
+            val failed = results.values.count { it.result == CategorySyncResult.ERROR }
+            val paused = results.values.count { it.result == CategorySyncResult.PERMISSION_REVOKED }
+            val now = System.currentTimeMillis()
+            syncState.saveLastBackgroundSyncAt(now)
+            syncState.saveNextBackgroundSyncAt(now + SyncStateStore.BACKGROUND_INTERVAL_MILLIS)
+
+            when {
+                failed > 0 -> {
+                    syncLog.record(
+                        SyncLogLevel.ERROR,
+                        SyncEventType.BACKGROUND,
+                        "Background sync finished with $failed failed categories",
+                    )
+                    Result.retry()
+                }
+
+                paused > 0 -> {
+                    syncLog.record(
+                        SyncLogLevel.WARNING,
+                        SyncEventType.BACKGROUND,
+                        "Background sync finished with $paused categories waiting for permission",
+                    )
+                    Result.success()
+                }
+
+                else -> {
+                    syncState.saveLastSuccessfulSyncAt(now)
+                    syncLog.record(
+                        SyncLogLevel.INFO,
+                        SyncEventType.BACKGROUND,
+                        "Background sync completed",
+                    )
+                    Result.success()
+                }
+            }
         } catch (e: Exception) {
-            syncLog.error("Background sync failed: ${e.message ?: "Unknown error"}")
+            syncLog.record(
+                SyncLogLevel.ERROR,
+                SyncEventType.BACKGROUND,
+                "Background sync failed",
+                detail = e.message ?: "Unknown error",
+            )
             Result.retry()
         }
     }
@@ -72,10 +166,14 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
                 ExistingPeriodicWorkPolicy.UPDATE,
                 work,
             )
+            SyncStateStore(context).saveNextBackgroundSyncAt(
+                System.currentTimeMillis() + SyncStateStore.BACKGROUND_INTERVAL_MILLIS,
+            )
         }
 
         fun cancel(context: Context) {
             WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_WORK_NAME)
+            SyncStateStore(context).saveNextBackgroundSyncAt(null)
         }
     }
 }
