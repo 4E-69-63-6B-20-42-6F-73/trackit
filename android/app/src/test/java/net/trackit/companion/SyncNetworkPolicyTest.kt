@@ -10,13 +10,13 @@ import org.junit.Test
 class SyncNetworkPolicyTest {
     @Test
     fun `large upload is split with stable API-valid idempotency keys`() {
-        val records = (0 until 601).toList()
+        val records = (0 until 2601).toList()
         val baseKey = "123e4567-e89b-12d3-a456-426614174000"
 
         val first = UploadBatchPlanner.plan(baseKey, records)
         val second = UploadBatchPlanner.plan(baseKey, records)
 
-        assertEquals(listOf(250, 250, 101), first.map { it.records.size })
+        assertEquals(listOf(1000, 1000, 601), first.map { it.records.size })
         assertEquals(first.map { it.idempotencyKey }, second.map { it.idempotencyKey })
         assertTrue(first.all { runCatching { UUID.fromString(it.idempotencyKey) }.isSuccess })
         assertEquals(records, first.flatMap { it.records })
