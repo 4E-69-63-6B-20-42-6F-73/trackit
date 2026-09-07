@@ -176,6 +176,13 @@
             "when": 1788296463624,
             "tag": "0024_generated_schema_changes",
             "breakpoints": true
+        },
+        {
+            "idx": 25,
+            "version": "7",
+            "when": 1788791243826,
+            "tag": "0025_generated_schema_changes",
+            "breakpoints": true
         }
     ]
 }

@@ -739,13 +739,15 @@ export async function createApp(
                 })
                 .safeParse(request.body)
             if (!input.success) return badRequest(request, reply, { validation: input.error })
-            return reply.code(201).send(
-                await devices.startHealthRecordReconcile(
-                    device.id,
-                    input.data.recordType,
-                    input.data.since,
-                ),
-            )
+            return reply
+                .code(201)
+                .send(
+                    await devices.startHealthRecordReconcile(
+                        device.id,
+                        input.data.recordType,
+                        input.data.since,
+                    ),
+                )
         })
         app.post('/api/device/health-records/reconcile/chunk', async (request, reply) => {
             const device = await authenticateDevice(request, requestBodyHash(request))

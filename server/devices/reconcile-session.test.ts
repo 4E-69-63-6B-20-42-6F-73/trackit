@@ -63,7 +63,9 @@ describe('chunked health record reconciliation', () => {
                 .where(eq(schema.deviceReconcileIds.sessionId, reconcileId)),
         ).toHaveLength(1)
 
-        await expect(service.completeHealthRecordReconcile(deviceId, reconcileId)).resolves.toMatchObject({
+        await expect(
+            service.completeHealthRecordReconcile(deviceId, reconcileId),
+        ).resolves.toMatchObject({
             reconciled: 1,
         })
 
