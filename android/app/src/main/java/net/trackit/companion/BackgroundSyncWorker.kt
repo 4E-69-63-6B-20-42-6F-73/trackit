@@ -9,6 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CancellationException
 
 class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
     CoroutineWorker(context, parameters) {
@@ -139,6 +140,8 @@ class BackgroundSyncWorker(context: Context, parameters: WorkerParameters) :
                     Result.success()
                 }
             }
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             syncLog.record(
                 SyncLogLevel.ERROR,
