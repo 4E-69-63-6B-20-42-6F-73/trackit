@@ -2,6 +2,7 @@ package net.trackit.companion
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Arrangement
@@ -14,11 +15,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -38,6 +39,13 @@ import androidx.health.connect.client.PermissionController
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
+private enum class CompanionScreen {
+    HOME,
+    CATEGORIES,
+    HISTORICAL,
+    SYNC_LOG,
+}
+
 class MainActivity : ComponentActivity() {
     private var resumeSignal by mutableIntStateOf(0)
 
@@ -52,6 +60,7 @@ class MainActivity : ComponentActivity() {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
                     val credentialStore = remember { CredentialStore(this@MainActivity) }
+                    val syncLog = remember { SyncLogStore(this@MainActivity) }
                     var paired by remember {
                         mutableStateOf(
                             runCatching {
@@ -71,7 +80,7 @@ class MainActivity : ComponentActivity() {
                     var syncProgress by remember { mutableFloatStateOf(0f) }
                     var syncRunning by remember { mutableStateOf(false) }
                     var showPairingDialog by remember { mutableStateOf(false) }
-                    var showHistoricalUpload by remember { mutableStateOf(false) }
+                    var screen by remember { mutableStateOf(CompanionScreen.HOME) }
                     var selectedTypes by remember {
                         mutableStateOf(credentialStore.selectedRecordTypes())
                     }
@@ -79,10 +88,16 @@ class MainActivity : ComponentActivity() {
                     val healthSync = remember { HealthConnectSync(this@MainActivity) }
                     val healthAvailable = healthSync.availability() == HealthConnectClient.SDK_AVAILABLE
                     val backgroundReadAvailable = healthAvailable && healthSync.supportsBackgroundRead()
+                    val supportedTypeNames = healthSync.supportedRecordTypes
+                        .mapNotNull { it.simpleName }
                     val selectedClasses = healthSync.supportedRecordTypes
                         .filter { it.simpleName in selectedTypes }
                         .toSet()
                     val basePermissions = healthSync.permissionsFor(selectedClasses)
+
+                    BackHandler(enabled = screen != CompanionScreen.HOME) {
+                        screen = CompanionScreen.HOME
+                    }
 
                     fun startSync() {
                         if (syncRunning || selectedClasses.isEmpty()) return
@@ -90,6 +105,7 @@ class MainActivity : ComponentActivity() {
                         cancelSync = false
                         syncProgress = 0f
                         status = "Syncing selected categories…"
+                        syncLog.info("Manual sync started for ${selectedClasses.size} categories")
                         scope.launch {
                             try {
                                 val results = healthSync.syncSelected(
@@ -97,26 +113,44 @@ class MainActivity : ComponentActivity() {
                                     cancelled = { cancelSync },
                                     onProgress = { completed, total, recordType ->
                                         syncProgress = if (total == 0) 0f else completed.toFloat() / total
-                                        status = "Imported $completed of $total: ${recordType.removeSuffix("Record")}" 
+                                        status = "Processed $completed of $total: ${recordType.removeSuffix("Record")}"
                                     },
                                 )
+                                results.forEach { (recordType, result) ->
+                                    val label = recordType.removeSuffix("Record")
+                                    when (result) {
+                                        "complete" -> syncLog.info("$label sync completed")
+                                        "permission_revoked" -> syncLog.warning("$label sync paused because Health Connect access was revoked")
+                                        "cancelled" -> syncLog.warning("$label sync was cancelled")
+                                        else -> syncLog.error("$label sync failed. Open the sync log for network or server retry details")
+                                    }
+                                }
                                 val paused = results.values.count { it == "permission_revoked" }
                                 val failed = results.values.count { it == "error" }
                                 val backgroundGranted = backgroundSync &&
                                     backgroundReadAvailable &&
                                     healthSync.hasBackgroundReadPermission()
                                 status = when {
-                                    cancelSync -> "Import cancelled safely"
+                                    cancelSync -> "Sync cancelled safely"
                                     failed > 0 -> "Sync finished; $failed categories need a retry. Other categories were saved."
                                     paused > 0 -> "Sync finished; $paused categories are paused until access is granted."
                                     backgroundSync && !backgroundReadAvailable -> "Sync complete. Background reads are not supported on this device."
                                     backgroundSync && !backgroundGranted -> "Sync complete. Background access was not granted."
                                     else -> "Sync complete"
                                 }
+                                when {
+                                    cancelSync -> syncLog.warning("Manual sync cancelled")
+                                    failed > 0 -> syncLog.error("Manual sync finished with $failed failed categories")
+                                    paused > 0 -> syncLog.warning("Manual sync finished with $paused paused categories")
+                                    else -> syncLog.info("Manual sync completed")
+                                }
                             } catch (_: CancellationException) {
-                                status = "Import cancelled safely"
+                                status = "Sync cancelled safely"
+                                syncLog.warning("Manual sync cancelled")
                             } catch (e: Exception) {
-                                status = "Sync failed: ${e.message ?: "Unknown error"}"
+                                val message = e.message ?: "Unknown error"
+                                status = "Sync failed: $message"
+                                syncLog.error("Manual sync failed: $message")
                             } finally {
                                 syncRunning = false
                             }
@@ -145,6 +179,7 @@ class MainActivity : ComponentActivity() {
                                 startSync()
                             } else {
                                 status = "Some selected Health Connect categories were not granted."
+                                syncLog.warning("Sync not started because some selected Health Connect permissions were not granted")
                             }
                         }
                     }
@@ -163,129 +198,154 @@ class MainActivity : ComponentActivity() {
                                 applyBackgroundScheduling(granted)
                                 startSync()
                             } else {
+                                syncLog.info("Requesting Health Connect access for ${selectedClasses.size} categories")
                                 permissionLauncher.launch(requested)
                             }
                         }
                     }
 
-                    LaunchedEffect(resumeSignal, paired, healthAvailable) {
-                        if (resumeSignal == 0) return@LaunchedEffect
-                        if (!paired || !healthAvailable || selectedClasses.isEmpty() || syncRunning) return@LaunchedEffect
-                        val granted = healthSync.grantedPermissions()
-                        if (granted.containsAll(basePermissions)) {
-                            applyBackgroundScheduling(granted)
-                            startSync()
+                    LaunchedEffect(
+                        resumeSignal,
+                        paired,
+                        healthAvailable,
+                        selectedTypes,
+                        backgroundSync,
+                    ) {
+                        if (resumeSignal == 0 || !paired || !healthAvailable || selectedClasses.isEmpty()) {
+                            return@LaunchedEffect
                         }
+                        val granted = healthSync.grantedPermissions()
+                        applyBackgroundScheduling(granted)
                     }
 
-                    if (showHistoricalUpload) {
-                        HistoricalUploadScreen(
+                    when (screen) {
+                        CompanionScreen.CATEGORIES -> CategorySelectionScreen(
+                            categories = supportedTypeNames,
+                            selected = selectedTypes,
+                            onSave = { selection ->
+                                selectedTypes = selection
+                                credentialStore.saveSelectedRecordTypes(selection)
+                                screen = CompanionScreen.HOME
+                            },
+                            onBack = { screen = CompanionScreen.HOME },
+                        )
+
+                        CompanionScreen.HISTORICAL -> HistoricalUploadScreen(
                             healthSync = healthSync,
                             recordTypes = selectedClasses,
-                            onBack = { showHistoricalUpload = false },
+                            onBack = { screen = CompanionScreen.HOME },
                         )
-                    } else {
-                        Box(Modifier.fillMaxSize()) {
-                        Column(
-                            Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 96.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Text("TrackIt Companion", style = MaterialTheme.typography.headlineMedium)
-                            Text(status)
-                            Text(
-                                if (paired) {
-                                    "Use the + button to pair with a different TrackIt server."
-                                } else {
-                                    "Use the + button to pair this device with TrackIt."
-                                },
-                            )
-                            Text("Choose what to import", style = MaterialTheme.typography.titleMedium)
-                            Text(
-                                if (healthAvailable) {
-                                    "Health Connect is available. Access is requested only for selected categories."
-                                } else {
-                                    "Health Connect is not available on this device. Pairing remains available."
-                                },
-                            )
-                            healthSync.supportedRecordTypes.forEach { recordType ->
-                                val name = recordType.simpleName.orEmpty()
-                                FilterChip(
-                                    selected = name in selectedTypes,
-                                    onClick = {
-                                        selectedTypes = if (name in selectedTypes) {
-                                            selectedTypes - name
-                                        } else {
-                                            selectedTypes + name
-                                        }
-                                        credentialStore.saveSelectedRecordTypes(selectedTypes)
+
+                        CompanionScreen.SYNC_LOG -> SyncLogScreen(
+                            store = syncLog,
+                            onBack = { screen = CompanionScreen.HOME },
+                        )
+
+                        CompanionScreen.HOME -> Box(Modifier.fillMaxSize()) {
+                            Column(
+                                Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 96.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text("TrackIt Companion", style = MaterialTheme.typography.headlineMedium)
+                                Text(status)
+                                Text(
+                                    if (paired) {
+                                        "This device is paired. Use the + button to connect to a different TrackIt server."
+                                    } else {
+                                        "Use the + button to pair this device with TrackIt."
                                     },
-                                    label = { Text(name.removeSuffix("Record")) },
                                 )
-                            }
-                            Text(
-                                when {
-                                    !backgroundReadAvailable && healthAvailable -> "Background Health Connect reads are not supported on this device."
-                                    backgroundSync -> "Background sync is enabled and will run when access is granted."
-                                    else -> "Background access is optional. Foreground sync works without it."
-                                },
-                            )
-                            Switch(
-                                checked = backgroundSync,
-                                enabled = backgroundReadAvailable,
-                                onCheckedChange = { enabled ->
-                                    backgroundSync = enabled
-                                    credentialStore.saveBackgroundSyncEnabled(enabled)
-                                    if (!enabled) {
-                                        BackgroundSyncWorker.cancel(this@MainActivity)
+
+                                Text("Health Connect", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    if (healthAvailable) {
+                                        "Health Connect is available. Access is requested only for categories you select."
+                                    } else {
+                                        "Health Connect is not available on this device. Pairing remains available."
+                                    },
+                                )
+                                Text("${selectedClasses.size} of ${healthSync.supportedRecordTypes.size} categories selected")
+                                OutlinedButton(
+                                    enabled = healthAvailable && !syncRunning,
+                                    onClick = { screen = CompanionScreen.CATEGORIES },
+                                ) {
+                                    Text("Choose categories")
+                                }
+
+                                Text("Background sync", style = MaterialTheme.typography.titleMedium)
+                                Text(
+                                    when {
+                                        !backgroundReadAvailable && healthAvailable -> "Background Health Connect reads are not supported on this device."
+                                        backgroundSync -> "Background sync is enabled and runs when Health Connect access and network connectivity are available."
+                                        else -> "Background access is optional. Manual sync works without it."
+                                    },
+                                )
+                                Switch(
+                                    checked = backgroundSync,
+                                    enabled = backgroundReadAvailable,
+                                    onCheckedChange = { enabled ->
+                                        backgroundSync = enabled
+                                        credentialStore.saveBackgroundSyncEnabled(enabled)
+                                        if (!enabled) {
+                                            BackgroundSyncWorker.cancel(this@MainActivity)
+                                        }
+                                    },
+                                )
+
+                                Text("Sync", style = MaterialTheme.typography.titleMedium)
+                                Button(
+                                    enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
+                                    onClick = { requestOrStartSync() },
+                                ) {
+                                    Text(if (syncRunning) "Syncing…" else "Sync now")
+                                }
+                                OutlinedButton(
+                                    enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
+                                    onClick = { screen = CompanionScreen.HISTORICAL },
+                                ) {
+                                    Text("Historical upload")
+                                }
+                                OutlinedButton(onClick = { screen = CompanionScreen.SYNC_LOG }) {
+                                    Text("View sync log")
+                                }
+
+                                if (!paired) {
+                                    Text("Pair this device before starting a Health Connect sync.")
+                                }
+                                if (selectedClasses.isEmpty()) {
+                                    Text("Choose at least one Health Connect category before syncing.")
+                                }
+                                if (syncRunning) {
+                                    LinearProgressIndicator(progress = { syncProgress })
+                                    Button(onClick = { cancelSync = true }) {
+                                        Text("Cancel sync")
                                     }
-                                },
-                            )
-                            Button(
-                                enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
-                                onClick = { requestOrStartSync() },
-                            ) {
-                                Text(if (syncRunning) "Syncing…" else "Sync now")
-                            }
-                            Button(
-                                enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
-                                onClick = { showHistoricalUpload = true },
-                            ) {
-                                Text("Historical upload")
-                            }
-                            if (!paired) {
-                                Text("Pair this device before starting a Health Connect sync.")
-                            }
-                            if (syncRunning) {
-                                LinearProgressIndicator(progress = { syncProgress })
-                                Button(onClick = { cancelSync = true }) {
-                                    Text("Cancel import")
                                 }
                             }
-                        }
 
-                        FloatingActionButton(
-                            onClick = { showPairingDialog = true },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp),
-                        ) {
-                            Icon(Icons.Default.Add, contentDescription = "Pair device")
+                            FloatingActionButton(
+                                onClick = { showPairingDialog = true },
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp),
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Pair device")
+                            }
                         }
                     }
 
-                        if (showPairingDialog) {
-                            PairingDialog(
-                                activity = this@MainActivity,
-                                onDismiss = { showPairingDialog = false },
-                                onPaired = {
-                                    paired = true
-                                    status = "Paired successfully. Ready to sync."
-                                },
-                            )
-                        }
+                    if (showPairingDialog) {
+                        PairingDialog(
+                            activity = this@MainActivity,
+                            onDismiss = { showPairingDialog = false },
+                            onPaired = {
+                                paired = true
+                                status = "Paired successfully. Ready to sync."
+                            },
+                        )
                     }
                 }
             }
