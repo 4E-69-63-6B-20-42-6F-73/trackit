@@ -42,13 +42,20 @@ class HistoricalImportWorker(
             ?.filterNotNull()
             ?.toSet()
             .orEmpty()
-
+        val syncLog = SyncLogStore(applicationContext)
+        val syncState = SyncStateStore(applicationContext)
         val healthSync = HealthConnectSync(applicationContext)
 
         val types: List<KClass<out Record>> = healthSync.supportedRecordTypes
             .filter { it.qualifiedName in selectedNames }
 
         if (types.isEmpty()) {
+            syncLog.record(
+                SyncLogLevel.ERROR,
+                SyncEventType.CATEGORY,
+                "Historical upload could not start",
+                detail = "No record types selected",
+            )
             return Result.failure(
                 Data.Builder()
                     .putString(RESULT_ERROR, "No record types selected")
@@ -56,6 +63,13 @@ class HistoricalImportWorker(
                     .build(),
             )
         }
+
+        syncLog.record(
+            SyncLogLevel.INFO,
+            SyncEventType.SYNC_STARTED,
+            "Historical upload started for ${types.size} categories",
+            detail = if (days == Int.MAX_VALUE) "All available history" else "$days days",
+        )
 
         val states = linkedMapOf<String, HistoricalImportProgress>()
 
@@ -75,6 +89,51 @@ class HistoricalImportWorker(
         ) {
             if (progress != null) {
                 states[progress.category] = progress
+                val permissionRequired = progress.phase == HistoricalImportPhase.ERROR &&
+                    progress.issue?.contains("access was revoked", ignoreCase = true) == true
+                syncState.saveCategory(
+                    CategorySyncUiState(
+                        recordType = progress.category,
+                        status = when (progress.phase) {
+                            HistoricalImportPhase.PENDING -> CategorySyncStatus.WAITING
+                            HistoricalImportPhase.READING -> CategorySyncStatus.READING
+                            HistoricalImportPhase.UPLOADING -> CategorySyncStatus.UPLOADING
+                            HistoricalImportPhase.WAITING_TO_RETRY -> CategorySyncStatus.RETRYING
+                            HistoricalImportPhase.COMPLETE -> CategorySyncStatus.COMPLETE
+                            HistoricalImportPhase.ERROR -> if (permissionRequired) {
+                                CategorySyncStatus.PERMISSION_REQUIRED
+                            } else {
+                                CategorySyncStatus.ERROR
+                            }
+                        },
+                        discoveredRecords = progress.discoveredRecords,
+                        uploadedRecords = progress.uploadedRecords,
+                        remainingRecords = (progress.discoveredRecords - progress.uploadedRecords).coerceAtLeast(0),
+                        message = progress.issue,
+                    ),
+                )
+                if (progress.phase == HistoricalImportPhase.WAITING_TO_RETRY) {
+                    syncLog.record(
+                        SyncLogLevel.WARNING,
+                        SyncEventType.RETRY,
+                        "${recordTypeLabel(progress.category)} historical upload is retrying",
+                        category = progress.category,
+                        detail = progress.issue,
+                    )
+                }
+                if (progress.phase == HistoricalImportPhase.ERROR) {
+                    syncLog.record(
+                        if (permissionRequired) SyncLogLevel.WARNING else SyncLogLevel.ERROR,
+                        if (permissionRequired) SyncEventType.PERMISSION else SyncEventType.CATEGORY,
+                        if (permissionRequired) {
+                            "${recordTypeLabel(progress.category)} historical upload needs Health Connect access"
+                        } else {
+                            "${recordTypeLabel(progress.category)} historical upload failed"
+                        },
+                        category = progress.category,
+                        detail = progress.issue,
+                    )
+                }
             }
 
             setProgress(
@@ -100,14 +159,13 @@ class HistoricalImportWorker(
                     val notificationText =
                         when (progress.phase) {
                             HistoricalImportPhase.WAITING_TO_RETRY ->
-                                "${progress.category.removeSuffix("Record")}: retrying soon"
+                                "${recordTypeLabel(progress.category)}: retrying soon"
 
                             HistoricalImportPhase.COMPLETE ->
-                                "${progress.category.removeSuffix("Record")}: complete"
+                                "${recordTypeLabel(progress.category)}: complete"
 
                             else ->
-                                "${progress.category.removeSuffix("Record")}: " +
-                                    "${progress.uploadedRecords} uploaded"
+                                "${recordTypeLabel(progress.category)}: ${progress.uploadedRecords} uploaded"
                         }
 
                     setForeground(
@@ -120,8 +178,24 @@ class HistoricalImportWorker(
                 .map { it as String? }
                 .toTypedArray()
 
-            val finalJson =
-                HistoricalProgressCodec.encode(states.values)
+            val finalJson = HistoricalProgressCodec.encode(states.values)
+            if (result.issues.isEmpty()) {
+                val now = System.currentTimeMillis()
+                syncState.saveLastSuccessfulSyncAt(now)
+                syncLog.record(
+                    SyncLogLevel.INFO,
+                    SyncEventType.SYNC_COMPLETED,
+                    "Historical upload completed",
+                    detail = "${result.uploadedRecords} records uploaded",
+                )
+            } else {
+                syncLog.record(
+                    SyncLogLevel.WARNING,
+                    SyncEventType.SYNC_COMPLETED,
+                    "Historical upload completed with ${result.issues.size} category issues",
+                    detail = "${result.uploadedRecords} records uploaded",
+                )
+            }
 
             Result.success(
                 Data.Builder()
@@ -148,8 +222,19 @@ class HistoricalImportWorker(
                     .build(),
             )
         } catch (e: CancellationException) {
+            syncLog.record(
+                SyncLogLevel.WARNING,
+                SyncEventType.CANCELLED,
+                "Historical upload cancelled",
+            )
             throw e
         } catch (e: Exception) {
+            syncLog.record(
+                SyncLogLevel.ERROR,
+                SyncEventType.CATEGORY,
+                "Historical upload failed",
+                detail = e.message ?: "Unknown error",
+            )
             Result.failure(
                 Data.Builder()
                     .putString(

@@ -20,6 +20,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -45,10 +46,16 @@ fun CategorySelectionScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            OutlinedButton(onClick = { draft = categories.toSet() }) {
+            OutlinedButton(
+                onClick = { draft = categories.toSet() },
+                modifier = Modifier.testTag("select_all_categories"),
+            ) {
                 Text("Select all")
             }
-            OutlinedButton(onClick = { draft = emptySet() }) {
+            OutlinedButton(
+                onClick = { draft = emptySet() },
+                modifier = Modifier.testTag("clear_categories"),
+            ) {
                 Text("Clear")
             }
         }
@@ -64,12 +71,16 @@ fun CategorySelectionScreen(
                     onCheckedChange = { checked ->
                         draft = if (checked) draft + category else draft - category
                     },
+                    modifier = Modifier.testTag("category_checkbox_$category"),
                 )
-                Text(categoryLabel(category), style = MaterialTheme.typography.bodyLarge)
+                Text(recordTypeLabel(category), style = MaterialTheme.typography.bodyLarge)
             }
         }
 
-        Text("${draft.size} of ${categories.size} selected")
+        Text(
+            "${draft.size} of ${categories.size} selected",
+            modifier = Modifier.testTag("category_selection_count"),
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -78,15 +89,12 @@ fun CategorySelectionScreen(
             OutlinedButton(onClick = onBack) {
                 Text("Cancel")
             }
-            Button(onClick = { onSave(draft) }) {
+            Button(
+                onClick = { onSave(draft) },
+                modifier = Modifier.testTag("save_categories"),
+            ) {
                 Text("Save categories")
             }
         }
     }
 }
-
-private fun categoryLabel(value: String): String = value
-    .removeSuffix("Record")
-    .replace(Regex("([a-z0-9])([A-Z])")) { match ->
-        "${match.groupValues[1]} ${match.groupValues[2]}"
-    }

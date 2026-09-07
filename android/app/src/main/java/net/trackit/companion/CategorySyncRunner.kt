@@ -7,23 +7,29 @@ object CategorySyncRunner {
         categories: Set<T>,
         cancelled: () -> Boolean,
         sync: suspend (T) -> Unit,
-        onResult: suspend (category: T, result: String, completed: Int, total: Int) -> Unit,
-    ): Map<T, String> {
-        val results = linkedMapOf<T, String>()
-        categories.forEachIndexed { index, category ->
-            if (cancelled()) return@forEachIndexed
-            val result = try {
+        onResult: suspend (category: T, outcome: CategorySyncOutcome, completed: Int, total: Int) -> Unit,
+    ): Map<T, CategorySyncOutcome> {
+        val results = linkedMapOf<T, CategorySyncOutcome>()
+        for ((index, category) in categories.withIndex()) {
+            if (cancelled()) throw CancellationException("Sync cancelled")
+            val outcome = try {
                 sync(category)
-                "complete"
-            } catch (_: CancellationException) {
-                "cancelled"
-            } catch (_: SecurityException) {
-                "permission_revoked"
-            } catch (_: Exception) {
-                "error"
+                CategorySyncOutcome(CategorySyncResult.COMPLETE)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: SecurityException) {
+                CategorySyncOutcome(
+                    CategorySyncResult.PERMISSION_REVOKED,
+                    e.message ?: "Health Connect access was revoked",
+                )
+            } catch (e: Exception) {
+                CategorySyncOutcome(
+                    CategorySyncResult.ERROR,
+                    e.message ?: "Unknown sync error",
+                )
             }
-            results[category] = result
-            onResult(category, result, index + 1, categories.size)
+            results[category] = outcome
+            onResult(category, outcome, index + 1, categories.size)
         }
         return results
     }

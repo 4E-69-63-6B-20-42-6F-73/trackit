@@ -5,45 +5,26 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.Button
-import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.PermissionController
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.launch
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 private enum class CompanionScreen {
     HOME,
     CATEGORIES,
     HISTORICAL,
     SYNC_LOG,
+    CONNECTION,
 }
 
 class MainActivity : ComponentActivity() {
@@ -59,175 +40,68 @@ class MainActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 Surface(Modifier.fillMaxSize()) {
-                    val credentialStore = remember { CredentialStore(this@MainActivity) }
-                    val syncLog = remember { SyncLogStore(this@MainActivity) }
-                    var paired by remember {
-                        mutableStateOf(
-                            runCatching {
-                                credentialStore.read("deviceId") != null &&
-                                    credentialStore.read("serverUrl") != null &&
-                                    credentialStore.read("credential") != null
-                            }.getOrDefault(false),
-                        )
-                    }
-                    var status by remember {
-                        mutableStateOf(if (paired) "Paired. Ready to sync." else "Not paired")
-                    }
-                    var cancelSync by remember { mutableStateOf(false) }
-                    var backgroundSync by remember {
-                        mutableStateOf(credentialStore.backgroundSyncEnabled())
-                    }
-                    var syncProgress by remember { mutableFloatStateOf(0f) }
-                    var syncRunning by remember { mutableStateOf(false) }
-                    var showPairingDialog by remember { mutableStateOf(false) }
-                    var screen by remember { mutableStateOf(CompanionScreen.HOME) }
-                    var selectedTypes by remember {
-                        mutableStateOf(credentialStore.selectedRecordTypes())
-                    }
-                    val scope = rememberCoroutineScope()
+                    val companionViewModel: CompanionViewModel = viewModel()
+                    val state by companionViewModel.uiState.collectAsStateWithLifecycle()
                     val healthSync = remember { HealthConnectSync(this@MainActivity) }
-                    val healthAvailable = healthSync.availability() == HealthConnectClient.SDK_AVAILABLE
-                    val backgroundReadAvailable = healthAvailable && healthSync.supportsBackgroundRead()
-                    val supportedTypeNames = healthSync.supportedRecordTypes
-                        .mapNotNull { it.simpleName }
+                    val syncLog = remember { SyncLogStore(this@MainActivity) }
+                    var screen by remember { mutableStateOf(CompanionScreen.HOME) }
+                    var showPairingDialog by remember { mutableStateOf(false) }
+                    var firstSyncAfterPairing by remember { mutableStateOf(false) }
+
                     val selectedClasses = healthSync.supportedRecordTypes
-                        .filter { it.simpleName in selectedTypes }
+                        .filter { it.simpleName in state.selectedTypes }
                         .toSet()
-                    val basePermissions = healthSync.permissionsFor(selectedClasses)
+
+                    val permissionLauncher = rememberLauncherForActivityResult(
+                        PermissionController.createRequestPermissionResultContract(),
+                    ) {
+                        companionViewModel.onPermissionResult()
+                    }
+
+                    LaunchedEffect(state.permissionRequest) {
+                        state.permissionRequest?.let { permissions ->
+                            permissionLauncher.launch(permissions)
+                        }
+                    }
+
+                    LaunchedEffect(resumeSignal) {
+                        if (resumeSignal > 0) companionViewModel.refresh()
+                    }
 
                     BackHandler(enabled = screen != CompanionScreen.HOME) {
                         screen = CompanionScreen.HOME
                     }
 
-                    fun startSync() {
-                        if (syncRunning || selectedClasses.isEmpty()) return
-                        syncRunning = true
-                        cancelSync = false
-                        syncProgress = 0f
-                        status = "Syncing selected categories…"
-                        syncLog.info("Manual sync started for ${selectedClasses.size} categories")
-                        scope.launch {
-                            try {
-                                val results = healthSync.syncSelected(
-                                    selectedClasses,
-                                    cancelled = { cancelSync },
-                                    onProgress = { completed, total, recordType ->
-                                        syncProgress = if (total == 0) 0f else completed.toFloat() / total
-                                        status = "Processed $completed of $total: ${recordType.removeSuffix("Record")}"
-                                    },
-                                )
-                                results.forEach { (recordType, result) ->
-                                    val label = recordType.removeSuffix("Record")
-                                    when (result) {
-                                        "complete" -> syncLog.info("$label sync completed")
-                                        "permission_revoked" -> syncLog.warning("$label sync paused because Health Connect access was revoked")
-                                        "cancelled" -> syncLog.warning("$label sync was cancelled")
-                                        else -> syncLog.error("$label sync failed. Open the sync log for network or server retry details")
-                                    }
-                                }
-                                val paused = results.values.count { it == "permission_revoked" }
-                                val failed = results.values.count { it == "error" }
-                                val backgroundGranted = backgroundSync &&
-                                    backgroundReadAvailable &&
-                                    healthSync.hasBackgroundReadPermission()
-                                status = when {
-                                    cancelSync -> "Sync cancelled safely"
-                                    failed > 0 -> "Sync finished; $failed categories need a retry. Other categories were saved."
-                                    paused > 0 -> "Sync finished; $paused categories are paused until access is granted."
-                                    backgroundSync && !backgroundReadAvailable -> "Sync complete. Background reads are not supported on this device."
-                                    backgroundSync && !backgroundGranted -> "Sync complete. Background access was not granted."
-                                    else -> "Sync complete"
-                                }
-                                when {
-                                    cancelSync -> syncLog.warning("Manual sync cancelled")
-                                    failed > 0 -> syncLog.error("Manual sync finished with $failed failed categories")
-                                    paused > 0 -> syncLog.warning("Manual sync finished with $paused paused categories")
-                                    else -> syncLog.info("Manual sync completed")
-                                }
-                            } catch (_: CancellationException) {
-                                status = "Sync cancelled safely"
-                                syncLog.warning("Manual sync cancelled")
-                            } catch (e: Exception) {
-                                val message = e.message ?: "Unknown error"
-                                status = "Sync failed: $message"
-                                syncLog.error("Manual sync failed: $message")
-                            } finally {
-                                syncRunning = false
-                            }
-                        }
-                    }
-
-                    fun applyBackgroundScheduling(granted: Set<String>) {
-                        val canRunInBackground = backgroundSync &&
-                            backgroundReadAvailable &&
-                            healthSync.permissionsFor(selectedClasses, includeBackground = true)
-                                .all { it in granted }
-                        if (canRunInBackground) {
-                            BackgroundSyncWorker.schedule(this@MainActivity)
-                        } else {
-                            BackgroundSyncWorker.cancel(this@MainActivity)
-                        }
-                    }
-
-                    val permissionLauncher = rememberLauncherForActivityResult(
-                        PermissionController.createRequestPermissionResultContract(),
-                    ) {
-                        scope.launch {
-                            val granted = healthSync.grantedPermissions()
-                            applyBackgroundScheduling(granted)
-                            if (granted.containsAll(basePermissions)) {
-                                startSync()
-                            } else {
-                                status = "Some selected Health Connect categories were not granted."
-                                syncLog.warning("Sync not started because some selected Health Connect permissions were not granted")
-                            }
-                        }
-                    }
-
-                    fun requestOrStartSync() {
-                        if (!paired || !healthAvailable || selectedClasses.isEmpty() || syncRunning) return
-                        credentialStore.saveSelectedRecordTypes(selectedTypes)
-                        credentialStore.saveBackgroundSyncEnabled(backgroundSync)
-                        scope.launch {
-                            val requested = healthSync.permissionsFor(
-                                selectedClasses,
-                                includeBackground = backgroundSync && backgroundReadAvailable,
-                            )
-                            val granted = healthSync.grantedPermissions()
-                            if (granted.containsAll(requested)) {
-                                applyBackgroundScheduling(granted)
-                                startSync()
-                            } else {
-                                syncLog.info("Requesting Health Connect access for ${selectedClasses.size} categories")
-                                permissionLauncher.launch(requested)
-                            }
-                        }
-                    }
-
-                    LaunchedEffect(
-                        resumeSignal,
-                        paired,
-                        healthAvailable,
-                        selectedTypes,
-                        backgroundSync,
-                    ) {
-                        if (resumeSignal == 0 || !paired || !healthAvailable || selectedClasses.isEmpty()) {
-                            return@LaunchedEffect
-                        }
-                        val granted = healthSync.grantedPermissions()
-                        applyBackgroundScheduling(granted)
-                    }
-
                     when (screen) {
+                        CompanionScreen.HOME -> HomeScreen(
+                            state = state,
+                            onPair = { showPairingDialog = true },
+                            onChooseCategories = { screen = CompanionScreen.CATEGORIES },
+                            onSync = { companionViewModel.requestSync() },
+                            onRetryFailed = companionViewModel::retryFailed,
+                            onRecoverPermissions = companionViewModel::recoverPermissions,
+                            onHistorical = { screen = CompanionScreen.HISTORICAL },
+                            onViewLog = { screen = CompanionScreen.SYNC_LOG },
+                            onConnection = { screen = CompanionScreen.CONNECTION },
+                            onBackgroundChanged = companionViewModel::setBackgroundSyncEnabled,
+                            onCancelSync = companionViewModel::cancelSync,
+                        )
+
                         CompanionScreen.CATEGORIES -> CategorySelectionScreen(
-                            categories = supportedTypeNames,
-                            selected = selectedTypes,
+                            categories = companionViewModel.supportedTypeNames,
+                            selected = state.selectedTypes,
                             onSave = { selection ->
-                                selectedTypes = selection
-                                credentialStore.saveSelectedRecordTypes(selection)
+                                companionViewModel.saveCategories(
+                                    selection,
+                                    startFirstSync = firstSyncAfterPairing,
+                                )
+                                firstSyncAfterPairing = false
                                 screen = CompanionScreen.HOME
                             },
-                            onBack = { screen = CompanionScreen.HOME },
+                            onBack = {
+                                firstSyncAfterPairing = false
+                                screen = CompanionScreen.HOME
+                            },
                         )
 
                         CompanionScreen.HISTORICAL -> HistoricalUploadScreen(
@@ -241,100 +115,19 @@ class MainActivity : ComponentActivity() {
                             onBack = { screen = CompanionScreen.HOME },
                         )
 
-                        CompanionScreen.HOME -> Box(Modifier.fillMaxSize()) {
-                            Column(
-                                Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 96.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Text("TrackIt Companion", style = MaterialTheme.typography.headlineMedium)
-                                Text(status)
-                                Text(
-                                    if (paired) {
-                                        "This device is paired. Use the + button to connect to a different TrackIt server."
-                                    } else {
-                                        "Use the + button to pair this device with TrackIt."
-                                    },
-                                )
-
-                                Text("Health Connect", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    if (healthAvailable) {
-                                        "Health Connect is available. Access is requested only for categories you select."
-                                    } else {
-                                        "Health Connect is not available on this device. Pairing remains available."
-                                    },
-                                )
-                                Text("${selectedClasses.size} of ${healthSync.supportedRecordTypes.size} categories selected")
-                                OutlinedButton(
-                                    enabled = healthAvailable && !syncRunning,
-                                    onClick = { screen = CompanionScreen.CATEGORIES },
-                                ) {
-                                    Text("Choose categories")
-                                }
-
-                                Text("Background sync", style = MaterialTheme.typography.titleMedium)
-                                Text(
-                                    when {
-                                        !backgroundReadAvailable && healthAvailable -> "Background Health Connect reads are not supported on this device."
-                                        backgroundSync -> "Background sync is enabled and runs when Health Connect access and network connectivity are available."
-                                        else -> "Background access is optional. Manual sync works without it."
-                                    },
-                                )
-                                Switch(
-                                    checked = backgroundSync,
-                                    enabled = backgroundReadAvailable,
-                                    onCheckedChange = { enabled ->
-                                        backgroundSync = enabled
-                                        credentialStore.saveBackgroundSyncEnabled(enabled)
-                                        if (!enabled) {
-                                            BackgroundSyncWorker.cancel(this@MainActivity)
-                                        }
-                                    },
-                                )
-
-                                Text("Sync", style = MaterialTheme.typography.titleMedium)
-                                Button(
-                                    enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
-                                    onClick = { requestOrStartSync() },
-                                ) {
-                                    Text(if (syncRunning) "Syncing…" else "Sync now")
-                                }
-                                OutlinedButton(
-                                    enabled = paired && healthAvailable && selectedClasses.isNotEmpty() && !syncRunning,
-                                    onClick = { screen = CompanionScreen.HISTORICAL },
-                                ) {
-                                    Text("Historical upload")
-                                }
-                                OutlinedButton(onClick = { screen = CompanionScreen.SYNC_LOG }) {
-                                    Text("View sync log")
-                                }
-
-                                if (!paired) {
-                                    Text("Pair this device before starting a Health Connect sync.")
-                                }
-                                if (selectedClasses.isEmpty()) {
-                                    Text("Choose at least one Health Connect category before syncing.")
-                                }
-                                if (syncRunning) {
-                                    LinearProgressIndicator(progress = { syncProgress })
-                                    Button(onClick = { cancelSync = true }) {
-                                        Text("Cancel sync")
-                                    }
-                                }
-                            }
-
-                            FloatingActionButton(
-                                onClick = { showPairingDialog = true },
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(16.dp),
-                            ) {
-                                Icon(Icons.Default.Add, contentDescription = "Pair device")
-                            }
-                        }
+                        CompanionScreen.CONNECTION -> ConnectionScreen(
+                            state = state,
+                            onBack = { screen = CompanionScreen.HOME },
+                            onPairDifferent = { showPairingDialog = true },
+                            onUnpair = {
+                                companionViewModel.unpair()
+                                screen = CompanionScreen.HOME
+                            },
+                            onReset = {
+                                companionViewModel.resetCompanion()
+                                screen = CompanionScreen.HOME
+                            },
+                        )
                     }
 
                     if (showPairingDialog) {
@@ -342,8 +135,9 @@ class MainActivity : ComponentActivity() {
                             activity = this@MainActivity,
                             onDismiss = { showPairingDialog = false },
                             onPaired = {
-                                paired = true
-                                status = "Paired successfully. Ready to sync."
+                                firstSyncAfterPairing = true
+                                companionViewModel.onPaired()
+                                screen = CompanionScreen.CATEGORIES
                             },
                         )
                     }

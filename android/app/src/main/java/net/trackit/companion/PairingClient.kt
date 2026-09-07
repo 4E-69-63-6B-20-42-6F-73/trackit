@@ -14,96 +14,113 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 
 class PairingClient(private val context: Context) {
+    private val syncLog = SyncLogStore(context)
+
     suspend fun pair(serverUrl: String, serverIdentity: String, code: String): PairingResult =
         withContext(Dispatchers.IO) {
             val deviceKey = deviceKey()
+            val deviceName = android.os.Build.MODEL.trim().take(100).ifBlank { "Android device" }
             val body = JSONObject()
                 .put("code", code)
-                .put("name", android.os.Build.MODEL)
+                .put("name", deviceName)
                 .put("keyFingerprint", deviceKey.fingerprint)
                 .put("publicKey", deviceKey.publicKey)
                 .put("serverIdentity", serverIdentity)
             val endpoint = OpenApiEndpoints.DEVICES_PAIR_REQUEST_POST
             val connection = URI("${serverUrl.trimEnd('/')}${endpoint.path}").toURL()
                 .openConnection() as HttpURLConnection
-            connection.requestMethod = endpoint.method
-            connection.setRequestProperty("Content-Type", "application/json")
-            connection.connectTimeout = 15_000
-            connection.readTimeout = 15_000
-            connection.doOutput = true
-            connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
+            try {
+                connection.requestMethod = endpoint.method
+                connection.setRequestProperty("Content-Type", "application/json")
+                connection.connectTimeout = 15_000
+                connection.readTimeout = 15_000
+                connection.doOutput = true
+                connection.outputStream.use { it.write(body.toString().toByteArray(Charsets.UTF_8)) }
 
-            val responseCode = connection.responseCode
-            val responseText = (if (responseCode in 200..299) connection.inputStream else connection.errorStream)
-                ?.bufferedReader()
-                ?.use { it.readText() }
-                .orEmpty()
-            val response = responseText.takeIf { it.isNotBlank() }?.let(::JSONObject)
-            val deviceId = response?.optString("deviceId")?.takeIf { it.isNotBlank() }
-            val credential = response?.optString("credential")?.takeIf { it.isNotBlank() }
-            val status = response?.optString("status")?.takeIf { it.isNotBlank() }
-            val serverIdentityInResponse = response
-                ?.optString("serverIdentity")
-                ?.takeIf { it.isNotBlank() }
+                val responseCode = connection.responseCode
+                val responseText = (if (responseCode in 200..299) connection.inputStream else connection.errorStream)
+                    ?.bufferedReader()
+                    ?.use { it.readText() }
+                    .orEmpty()
+                val response = responseText.takeIf { it.isNotBlank() }?.let(::JSONObject)
+                val deviceId = response?.optString("deviceId")?.takeIf { it.isNotBlank() }
+                val credential = response?.optString("credential")?.takeIf { it.isNotBlank() }
+                val status = response?.optString("status")?.takeIf { it.isNotBlank() }
+                val serverIdentityInResponse = response
+                    ?.optString("serverIdentity")
+                    ?.takeIf { it.isNotBlank() }
 
-            when {
-                responseCode in 200..299 &&
-                    deviceId != null &&
-                    credential != null &&
-                    serverIdentityInResponse != null -> {
-                    if (status == "confirmed" || status == "active") {
-                        PairingResult.Success(
-                            deviceId = deviceId,
-                            credential = credential,
-                            serverIdentity = serverIdentityInResponse,
-                        )
-                    } else {
-                        PairingResult.Pending(
-                            deviceId = deviceId,
-                            credential = credential,
-                            keyFingerprint = deviceKey.fingerprint,
-                            serverIdentity = serverIdentityInResponse,
-                        )
+                val result = when {
+                    responseCode in 200..299 &&
+                        deviceId != null &&
+                        credential != null &&
+                        serverIdentityInResponse != null -> {
+                        if (status == "confirmed" || status == "active") {
+                            PairingResult.Success(
+                                deviceId = deviceId,
+                                credential = credential,
+                                serverIdentity = serverIdentityInResponse,
+                            )
+                        } else {
+                            PairingResult.Pending(
+                                deviceId = deviceId,
+                                credential = credential,
+                                keyFingerprint = deviceKey.fingerprint,
+                                serverIdentity = serverIdentityInResponse,
+                            )
+                        }
                     }
+
+                    responseCode == 202 -> PairingResult.Failure(
+                        message = "The server returned an incomplete pairing response.",
+                        serverIdentity = serverIdentityInResponse,
+                    )
+
+                    responseCode == 401 -> {
+                        val errorType = response?.optString("error")?.takeIf { it.isNotBlank() }
+                        val reason = when (errorType) {
+                            "expired" -> "Pairing code has expired. Please generate a new code."
+                            "invalid" -> "Invalid or expired pairing code. Please check the code and try again."
+                            "already_paired" -> "This device is already paired. Use a new pairing code."
+                            "identity_mismatch" -> "Server identity mismatch. Please verify the server address and identity."
+                            else -> response?.optString("message")?.takeIf { it.isNotBlank() }
+                                ?: "Invalid or expired pairing code."
+                        }
+                        PairingResult.Failure(reason, serverIdentityInResponse)
+                    }
+
+                    responseCode == 400 -> PairingResult.Failure(
+                        message = "Invalid pairing request. Please check the code and try again.",
+                        serverIdentity = null,
+                    )
+
+                    responseCode == 409 -> PairingResult.Failure(
+                        message = "Server identity mismatch. Please verify the server address and identity.",
+                        serverIdentity = serverIdentityInResponse,
+                    )
+
+                    responseCode in setOf(500, 502, 503, 504) -> PairingResult.Failure(
+                        message = "Server error. The server may be unavailable or overloaded.",
+                        serverIdentity = null,
+                    )
+
+                    else -> PairingResult.Failure(
+                        message = "Connection failed ($responseCode). Please check your connection and try again.",
+                        serverIdentity = null,
+                    )
                 }
 
-                responseCode == 202 -> PairingResult.Failure(
-                    message = "The server returned an incomplete pairing response.",
-                    serverIdentity = serverIdentityInResponse,
-                )
-
-                responseCode == 401 -> {
-                    val errorType = response?.optString("error")?.takeIf { it.isNotBlank() }
-                    val reason = when (errorType) {
-                        "expired" -> "Pairing code has expired. Please generate a new code."
-                        "invalid" -> "Invalid or expired pairing code. Please check the code and try again."
-                        "already_paired" -> "This device is already paired. Use a new pairing code."
-                        "identity_mismatch" -> "Server identity mismatch. Please verify the server address and identity."
-                        else -> response?.optString("message")?.takeIf { it.isNotBlank() }
-                            ?: "Invalid or expired pairing code."
-                    }
-                    PairingResult.Failure(reason, serverIdentityInResponse)
+                if (result is PairingResult.Failure) {
+                    syncLog.record(
+                        level = if (responseCode >= 500) SyncLogLevel.ERROR else SyncLogLevel.WARNING,
+                        type = if (responseCode >= 500) SyncEventType.SERVER else SyncEventType.PAIRING,
+                        message = "Pairing request failed",
+                        detail = "HTTP $responseCode: ${result.message}",
+                    )
                 }
-
-                responseCode == 400 -> PairingResult.Failure(
-                    message = "Invalid pairing request. Please check the code and try again.",
-                    serverIdentity = null,
-                )
-
-                responseCode == 409 -> PairingResult.Failure(
-                    message = "Server identity mismatch. Please verify the server address and identity.",
-                    serverIdentity = serverIdentityInResponse,
-                )
-
-                responseCode in setOf(500, 502, 503, 504) -> PairingResult.Failure(
-                    message = "Server error. The server may be unavailable or overloaded.",
-                    serverIdentity = null,
-                )
-
-                else -> PairingResult.Failure(
-                    message = "Connection failed (${responseCode}). Please check your connection and try again.",
-                    serverIdentity = null,
-                )
+                result
+            } finally {
+                connection.disconnect()
             }
         }
 
@@ -128,7 +145,9 @@ class PairingClient(private val context: Context) {
 
     private data class DeviceKey(val fingerprint: String, val publicKey: String)
 
-    companion object { const val KEY_ALIAS = "trackit-device-key" }
+    companion object {
+        const val KEY_ALIAS = "trackit-device-key"
+    }
 }
 
 sealed class PairingResult {
