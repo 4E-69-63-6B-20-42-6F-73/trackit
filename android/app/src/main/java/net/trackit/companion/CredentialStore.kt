@@ -29,20 +29,48 @@ class CredentialStore(context: Context) {
             .apply()
     }
 
-    fun read(key: String): String? = preferences.getString(key, null)?.let {
-        if (key == "credential") decrypt(it) else it
+    fun read(key: String): String? = preferences.getString(key, null)?.let { value ->
+        if (key == "credential") runCatching { decrypt(value) }.getOrNull() else value
     }
+
+    fun isPaired(): Boolean =
+        read("deviceId") != null && read("serverUrl") != null && read("credential") != null
+
     fun cursor(recordType: String): String? = preferences.getString("cursor:$recordType", null)
-    fun saveCursor(recordType: String, cursor: String) = preferences.edit().putString("cursor:$recordType", cursor).apply()
+
+    fun saveCursor(recordType: String, cursor: String) =
+        preferences.edit().putString("cursor:$recordType", cursor).apply()
+
     fun saveSelectedRecordTypes(recordTypes: Set<String>) =
         preferences.edit().putStringSet("selectedRecordTypes", recordTypes).apply()
+
     fun selectedRecordTypes(): Set<String> =
         preferences.getStringSet("selectedRecordTypes", setOf("StepsRecord"))?.toSet()
             ?: setOf("StepsRecord")
+
     fun saveBackgroundSyncEnabled(enabled: Boolean) =
         preferences.edit().putBoolean("backgroundSyncEnabled", enabled).apply()
+
     fun backgroundSyncEnabled(): Boolean =
         preferences.getBoolean("backgroundSyncEnabled", false)
+
+    fun clearPairing() {
+        val editor = preferences.edit()
+            .remove("serverUrl")
+            .remove("deviceId")
+            .remove("credential")
+            .remove("fingerprint")
+            .putBoolean("backgroundSyncEnabled", false)
+        preferences.all.keys.filter { it.startsWith("cursor:") }.forEach(editor::remove)
+        editor.apply()
+    }
+
+    fun reset() {
+        preferences.edit().clear().commit()
+        val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
+        if (store.containsAlias(KEY_ALIAS)) store.deleteEntry(KEY_ALIAS)
+        if (store.containsAlias(PairingClient.KEY_ALIAS)) store.deleteEntry(PairingClient.KEY_ALIAS)
+    }
 
     private fun encryptionKey(): javax.crypto.SecretKey {
         val store = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
@@ -70,11 +98,16 @@ class CredentialStore(context: Context) {
     }
 
     private fun decrypt(value: String): String {
-        val parts = value.split(":").map { Base64.getDecoder().decode(it) }
+        val parts = value.split(":")
+        require(parts.size == 2)
+        val iv = Base64.getDecoder().decode(parts[0])
+        val ciphertext = Base64.getDecoder().decode(parts[1])
         val cipher = Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(Cipher.DECRYPT_MODE, encryptionKey(), GCMParameterSpec(128, parts[0]))
-        return String(cipher.doFinal(parts[1]))
+        cipher.init(Cipher.DECRYPT_MODE, encryptionKey(), GCMParameterSpec(128, iv))
+        return String(cipher.doFinal(ciphertext))
     }
 
-    companion object { private const val KEY_ALIAS = "trackit-credential-key" }
+    companion object {
+        private const val KEY_ALIAS = "trackit-credential-key"
+    }
 }
