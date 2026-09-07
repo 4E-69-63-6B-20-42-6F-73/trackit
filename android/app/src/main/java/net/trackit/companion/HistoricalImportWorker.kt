@@ -89,6 +89,8 @@ class HistoricalImportWorker(
         ) {
             if (progress != null) {
                 states[progress.category] = progress
+                val permissionRequired = progress.phase == HistoricalImportPhase.ERROR &&
+                    progress.issue?.contains("access was revoked", ignoreCase = true) == true
                 syncState.saveCategory(
                     CategorySyncUiState(
                         recordType = progress.category,
@@ -98,7 +100,11 @@ class HistoricalImportWorker(
                             HistoricalImportPhase.UPLOADING -> CategorySyncStatus.UPLOADING
                             HistoricalImportPhase.WAITING_TO_RETRY -> CategorySyncStatus.RETRYING
                             HistoricalImportPhase.COMPLETE -> CategorySyncStatus.COMPLETE
-                            HistoricalImportPhase.ERROR -> CategorySyncStatus.ERROR
+                            HistoricalImportPhase.ERROR -> if (permissionRequired) {
+                                CategorySyncStatus.PERMISSION_REQUIRED
+                            } else {
+                                CategorySyncStatus.ERROR
+                            }
                         },
                         discoveredRecords = progress.discoveredRecords,
                         uploadedRecords = progress.uploadedRecords,
@@ -117,9 +123,13 @@ class HistoricalImportWorker(
                 }
                 if (progress.phase == HistoricalImportPhase.ERROR) {
                     syncLog.record(
-                        SyncLogLevel.ERROR,
-                        SyncEventType.CATEGORY,
-                        "${recordTypeLabel(progress.category)} historical upload failed",
+                        if (permissionRequired) SyncLogLevel.WARNING else SyncLogLevel.ERROR,
+                        if (permissionRequired) SyncEventType.PERMISSION else SyncEventType.CATEGORY,
+                        if (permissionRequired) {
+                            "${recordTypeLabel(progress.category)} historical upload needs Health Connect access"
+                        } else {
+                            "${recordTypeLabel(progress.category)} historical upload failed"
+                        },
                         category = progress.category,
                         detail = progress.issue,
                     )
